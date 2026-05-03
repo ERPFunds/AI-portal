@@ -12,13 +12,13 @@ export interface Role {
 }
 
 export const ROLES: Record<RoleKey, Role> = {
-  meghan:  { name: 'Michele Parad',   title: 'CIO / Principal',       avatar: 'MP', bg: '#2A2210', color: '#C9A84C', access: 'Admin',     sidebar: 'all',        email: 'meghan@erpindustrials.com' },
+  meghan:  { name: 'Michele Parad',   title: 'CIO / Principal',       avatar: 'MP', bg: '#2A2210', color: '#C9A84C', access: 'Admin',     sidebar: 'all',        email: 'michele.parad@gmail.com' },
   william: { name: 'William',         title: 'Founder',               avatar: 'W',  bg: '#1E1235', color: '#9B72E0', access: 'Read Only', sidebar: 'executive',  email: 'william@erpindustrials.com' },
-  brennan: { name: 'Brennan Berry',   title: 'COO / Head of Leasing', avatar: 'BB', bg: '#0A1F22', color: '#3EB5C4', access: 'Manager',   sidebar: 'property',   email: 'brennan@erpindustrials.com' },
-  michele: { name: 'Michele Simpkins',title: 'Controller',            avatar: 'MS', bg: '#0D1F35', color: '#5B9BD5', access: 'Manager',   sidebar: 'finance',    email: 'michele@erpindustrials.com' },
-  liz:     { name: 'Liz Cordova',     title: 'Project Manager',       avatar: 'LC', bg: '#0D2218', color: '#3DAE7A', access: 'Standard',  sidebar: 'ops',        email: 'liz@erpindustrials.com' },
+  brennan: { name: 'Brennan Berry',   title: 'COO / Head of Leasing', avatar: 'BB', bg: '#0A1F22', color: '#3EB5C4', access: 'Manager',   sidebar: 'property',   email: 'bberry@erpindustrials.com' },
+  michele: { name: 'Michele Simpkins',title: 'Controller',            avatar: 'MS', bg: '#0D1F35', color: '#5B9BD5', access: 'Manager',   sidebar: 'finance',    email: 'msimpkins@erpindustrials.com' },
+  liz:     { name: 'Liz Cordova',     title: 'Project Manager',       avatar: 'LC', bg: '#0D2218', color: '#3DAE7A', access: 'Standard',  sidebar: 'ops',        email: 'lcordova@erpindustrials.com' },
   hannah:  { name: 'Hannah',          title: 'Leasing Coordinator',   avatar: 'H',  bg: '#0A1F22', color: '#3EB5C4', access: 'Standard',  sidebar: 'leasing',    email: 'hannah@erpindustrials.com' },
-  sylvia:  { name: 'Sylvia Montoya',  title: 'Senior Accountant',     avatar: 'SM', bg: '#0D1F35', color: '#5B9BD5', access: 'Standard',  sidebar: 'accounting', email: 'sylvia@erpindustrials.com' },
+  sylvia:  { name: 'Sylvia Montoya',  title: 'Senior Accountant',     avatar: 'SM', bg: '#0D1F35', color: '#5B9BD5', access: 'Standard',  sidebar: 'accounting', email: 'smontoya@erpindustrials.com' },
 }
 
 export const ROLE_CARDS: Array<{ key: RoleKey; description: string; accessLabel: string; accessBg: string; accessColor: string }> = [
