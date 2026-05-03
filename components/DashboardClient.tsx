@@ -440,28 +440,54 @@ function AgentConfigTab({
 
 // ─── Dashboard / AI Command Center ────────────────────────────────────────────
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string; streaming?: boolean }
+type ChatMessage = {
+  role: 'user' | 'assistant'
+  content: string
+  streaming?: boolean
+  toolsUsed?: string[]   // tool labels shown under message
+}
+
+const TOOL_ICON: Record<string, string> = {
+  get_rent_roll:        '🏢',
+  get_lp_directory:     '👥',
+  get_capital_calls:    '💰',
+  get_leasing_pipeline: '🔑',
+  get_work_orders:      '🔧',
+  get_fund_performance: '📊',
+  get_flagged_items:    '🔐',
+}
+const TOOL_SHORT: Record<string, string> = {
+  get_rent_roll:        'Rent roll',
+  get_lp_directory:     'LP directory',
+  get_capital_calls:    'Capital calls',
+  get_leasing_pipeline: 'Leasing pipeline',
+  get_work_orders:      'Work orders',
+  get_fund_performance: 'Fund performance',
+  get_flagged_items:    'Flagged items',
+}
 
 function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: string }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [toolActivity, setToolActivity] = useState<string | null>(null)
   const feedRef = React.useRef<HTMLDivElement>(null)
 
   React.useEffect(() => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight
     }
-  }, [messages])
+  }, [messages, toolActivity])
 
   async function sendMessage() {
     const text = input.trim()
     if (!text || loading) return
     setInput('')
+    setToolActivity(null)
 
     const userMsg: ChatMessage = { role: 'user', content: text }
     const history = [...messages, userMsg]
-    setMessages([...history, { role: 'assistant', content: '', streaming: true }])
+    setMessages([...history, { role: 'assistant', content: '', streaming: true, toolsUsed: [] }])
     setLoading(true)
 
     try {
@@ -477,20 +503,51 @@ function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: stri
 
       const reader = res.body.getReader()
       const decoder = new TextDecoder()
+      let buffer = ''
       let full = ''
+      const completedTools: string[] = []
 
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
-        full += decoder.decode(value, { stream: true })
-        setMessages([...history, { role: 'assistant', content: full, streaming: true }])
+
+        buffer += decoder.decode(value, { stream: true })
+
+        // Parse complete SSE events (delimited by \n\n)
+        const parts = buffer.split('\n\n')
+        buffer = parts.pop() ?? ''
+
+        for (const part of parts) {
+          const line = part.trim()
+          if (!line.startsWith('data: ')) continue
+          try {
+            const event = JSON.parse(line.slice(6))
+            if (event.type === 'tool_start') {
+              setToolActivity(event.label ?? event.name)
+            } else if (event.type === 'tool_done') {
+              completedTools.push(event.name)
+              setToolActivity(null)
+            } else if (event.type === 'text') {
+              full += event.text
+              setMessages([...history, { role: 'assistant', content: full, streaming: true, toolsUsed: [...completedTools] }])
+            } else if (event.type === 'done') {
+              setMessages([...history, { role: 'assistant', content: full, streaming: false, toolsUsed: [...completedTools] }])
+            } else if (event.type === 'error') {
+              setMessages([...history, { role: 'assistant', content: 'Something went wrong — please try again.', streaming: false, toolsUsed: [] }])
+            }
+          } catch { /* skip malformed */ }
+        }
       }
 
-      setMessages([...history, { role: 'assistant', content: full, streaming: false }])
+      // Ensure final state
+      setMessages((prev) =>
+        prev.map((m, i) => (i === prev.length - 1 ? { ...m, streaming: false } : m))
+      )
     } catch {
-      setMessages([...history, { role: 'assistant', content: 'Something went wrong — please try again.', streaming: false }])
+      setMessages([...history, { role: 'assistant', content: 'Something went wrong — please try again.', streaming: false, toolsUsed: [] }])
     } finally {
       setLoading(false)
+      setToolActivity(null)
     }
   }
 
@@ -540,8 +597,25 @@ function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: stri
                     lineHeight: 1.6,
                     whiteSpace: 'pre-wrap',
                   }}>
+                    {/* Tool pills — shown above text when tools were used */}
+                    {msg.role === 'assistant' && msg.toolsUsed && msg.toolsUsed.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                        {msg.toolsUsed.map((t) => (
+                          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#f0f9fa', border: '1px solid #A6C3C9', borderRadius: 10, padding: '2px 8px', fontSize: 10, color: '#4a7c87', fontWeight: 500 }}>
+                            {TOOL_ICON[t] ?? '🔗'} {TOOL_SHORT[t] ?? t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {/* Live tool activity indicator */}
+                    {msg.role === 'assistant' && msg.streaming && toolActivity && !msg.content && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#6b7280', fontSize: 12 }}>
+                        <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#A6C3C9', animation: 'pulse 1s infinite' }} />
+                        {toolActivity}
+                      </div>
+                    )}
                     {msg.content}
-                    {msg.streaming && <span style={{ opacity: 0.5, animation: 'pulse 1s infinite' }}>▋</span>}
+                    {msg.streaming && msg.content && <span style={{ opacity: 0.5 }}>▋</span>}
                   </div>
                 </div>
               ))}

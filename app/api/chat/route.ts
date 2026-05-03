@@ -2,22 +2,32 @@ import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient as createSupabaseServer } from '@/lib/supabase/server'
 import { buildSystemPrompt } from '@/lib/prompts/systemPrompts'
+import { TOOLS, TOOL_LABELS, executeTool } from '@/lib/tools/agentTools'
 import type { RoleKey } from '@/lib/data/roles'
+import type {
+  MessageParam,
+  ContentBlock,
+  ToolUseBlock,
+} from '@anthropic-ai/sdk/resources/messages'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+// SSE helper — each event is a JSON line prefixed with "data: "
+function sseEvent(enc: TextEncoder, data: object): Uint8Array {
+  return enc.encode('data: ' + JSON.stringify(data) + '\n\n')
+}
 
 export async function POST(req: NextRequest) {
-  // Authenticate the request
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const supabase = await createSupabaseServer()
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  // Get the user's role
   const { data: profile } = await supabase
     .from('profiles')
     .select('role_key')
@@ -25,43 +35,105 @@ export async function POST(req: NextRequest) {
     .single()
 
   const roleKey = (profile?.role_key as RoleKey) ?? 'meghan'
+  const system = buildSystemPrompt(roleKey)
 
-  // Parse request body
+  // ── Parse body ────────────────────────────────────────────────────────────
   const body = await req.json()
-  const { messages } = body as {
+  const { messages: rawMessages } = body as {
     messages: Array<{ role: 'user' | 'assistant'; content: string }>
   }
 
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+  if (!rawMessages?.length) {
     return NextResponse.json({ error: 'No messages provided' }, { status: 400 })
   }
 
-  // Build system prompt scoped to this user's role
-  const systemPrompt = buildSystemPrompt(roleKey)
+  const enc = new TextEncoder()
 
-  // Stream the response
-  const stream = anthropic.messages.stream({
-    model: 'claude-opus-4-5',
-    max_tokens: 1024,
-    system: systemPrompt,
-    messages,
-  })
-
-  const encoder = new TextEncoder()
-
+  // ── Agentic streaming response ────────────────────────────────────────────
   const readable = new ReadableStream({
     async start(controller) {
       try {
-        for await (const chunk of stream) {
-          if (
-            chunk.type === 'content_block_delta' &&
-            chunk.delta.type === 'text_delta'
-          ) {
-            controller.enqueue(encoder.encode(chunk.delta.text))
+        // Convert chat history to Anthropic MessageParam format
+        let messages: MessageParam[] = rawMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }))
+
+        // Agentic loop — runs until model stops calling tools
+        while (true) {
+          // Non-streaming pass to resolve any tool calls
+          const response = await anthropic.messages.create({
+            model: 'claude-opus-4-5',
+            max_tokens: 2048,
+            system,
+            messages,
+            tools: TOOLS,
+          })
+
+          if (response.stop_reason === 'tool_use') {
+            const toolUseBlocks = response.content.filter(
+              (b): b is ToolUseBlock => b.type === 'tool_use'
+            )
+            const toolResults: ContentBlock[] = []
+
+            for (const tu of toolUseBlocks) {
+              // Tell client a tool is running
+              controller.enqueue(
+                sseEvent(enc, {
+                  type: 'tool_start',
+                  name: tu.name,
+                  label: TOOL_LABELS[tu.name] ?? `Running ${tu.name}…`,
+                })
+              )
+
+              const result = await executeTool(
+                tu.name,
+                tu.input as Record<string, string>
+              )
+
+              // Tell client the tool is done
+              controller.enqueue(sseEvent(enc, { type: 'tool_done', name: tu.name }))
+
+              toolResults.push({
+                type: 'tool_result',
+                tool_use_id: tu.id,
+                content: JSON.stringify(result),
+              } as unknown as ContentBlock)
+            }
+
+            // Append tool results and loop again
+            messages = [
+              ...messages,
+              { role: 'assistant', content: response.content },
+              { role: 'user', content: toolResults },
+            ]
+            continue
           }
+
+          // No more tool calls — stream the final text response
+          const textStream = anthropic.messages.stream({
+            model: 'claude-opus-4-5',
+            max_tokens: 2048,
+            system,
+            messages,
+          })
+
+          for await (const chunk of textStream) {
+            if (
+              chunk.type === 'content_block_delta' &&
+              chunk.delta.type === 'text_delta'
+            ) {
+              controller.enqueue(
+                sseEvent(enc, { type: 'text', text: chunk.delta.text })
+              )
+            }
+          }
+
+          controller.enqueue(sseEvent(enc, { type: 'done' }))
+          break
         }
       } catch (err) {
-        controller.error(err)
+        controller.enqueue(sseEvent(enc, { type: 'error', message: String(err) }))
       } finally {
         controller.close()
       }
@@ -70,9 +142,9 @@ export async function POST(req: NextRequest) {
 
   return new Response(readable, {
     headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
+      'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
     },
   })
 }
