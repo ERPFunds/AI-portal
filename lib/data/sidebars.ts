@@ -24,6 +24,8 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🧾', label: 'Accounting',          view: 'accounting' },
     { section: 'Platform' },
     { icon: '📚', label: 'Knowledge Base',      view: 'kb' },
+    { icon: '📋', label: 'SOPs',                view: 'sops' },
+    { icon: '⚙️', label: 'Settings',            view: 'settings' },
   ],
   executive: [
     { section: 'Overview' },
