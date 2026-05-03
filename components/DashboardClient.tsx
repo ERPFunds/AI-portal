@@ -78,9 +78,9 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
             className={`nav-item ${currentView === item.view ? 'active' : ''}`}
             onClick={() => setCurrentView(item.view)}
           >
-            <span className="nav-dot" />
             <span className="nav-icon">{item.icon}</span>
             {item.label}
+            <span className="nav-dot" />
           </div>
         )
       })}
@@ -104,7 +104,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
           {role.avatar}
         </div>
         <span>{role.name}</span>
-        <span style={{ color: '#555', fontSize: 10 }}>▼</span>
+        <span style={{ color: '#9ca3af', fontSize: 10 }}>▼</span>
       </div>
       <div className="topbar-notif">🔔<div className="notif-dot" /></div>
       <div className="topbar-logout" onClick={handleLogout}>Sign Out</div>
@@ -186,7 +186,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.runs ?? drawerAgent.runs}</div><div className="drawer-stat-label">Runs (7d)</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.sent ?? '—'}</div><div className="drawer-stat-label">Auto-Sent (7d)</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.queue ?? '—'}</div><div className="drawer-stat-label">In Queue</div></div>
-          <div className="drawer-stat"><div className="drawer-stat-val" style={{ color: drawerAgent.status === 'active' ? '#3DAE7A' : '#888' }}>{drawerAgent.status === 'active' ? 'Active' : 'Idle'}</div><div className="drawer-stat-label">Status</div></div>
+          <div className="drawer-stat"><div className="drawer-stat-val" style={{ color: drawerAgent.status === 'active' ? '#3DAE7A' : '#9ca3af' }}>{drawerAgent.status === 'active' ? 'Active' : 'Idle'}</div><div className="drawer-stat-label">Status</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerAgent.auto}</div><div className="drawer-stat-label">Autonomy</div></div>
         </div>
         <div className="drawer-tabs">
@@ -207,23 +207,26 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
                 const key = `${drawerAgentId}-${wi}`
                 const isOpen = openWorkflows[key]
                 const triggerColors: Record<string, string> = {
-                  email: '#0D1F35', schedule: '#1E1235', data: '#0A1F22', manual: '#251808', webhook: '#0D2218',
+                  email: '#eff6ff', schedule: '#faf5ff', data: '#f0f9fa', manual: '#fff7ed', webhook: '#f0fdf4',
                 }
                 const triggerTextColors: Record<string, string> = {
-                  email: '#5B9BD5', schedule: '#9B72E0', data: '#3EB5C4', manual: '#E08A3C', webhook: '#3DAE7A',
+                  email: '#1d4ed8', schedule: '#7c3aed', data: '#0e7490', manual: '#c2410c', webhook: '#15803d',
+                }
+                const triggerBorderColors: Record<string, string> = {
+                  email: '#bfdbfe', schedule: '#ddd6fe', data: '#a5f3fc', manual: '#fed7aa', webhook: '#bbf7d0',
                 }
                 return (
                   <div key={wi} className="wf-card">
                     <div className="wf-header" onClick={() => toggleWorkflow(key)}>
                       <span
                         className="wf-trigger-chip"
-                        style={{ background: triggerColors[wf.triggerType] ?? '#1A1E24', color: triggerTextColors[wf.triggerType] ?? '#888' }}
+                        style={{ background: triggerColors[wf.triggerType] ?? '#f3f4f6', color: triggerTextColors[wf.triggerType] ?? '#6b7280', border: `1px solid ${triggerBorderColors[wf.triggerType] ?? '#e5e7eb'}` }}
                       >
                         {wf.triggerType}
                       </span>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#E8E6E1' }}>{wf.name}</div>
-                        <div style={{ fontSize: 11, color: '#666', marginTop: 2 }}>{wf.trigger} · {wf.freq}</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{wf.name}</div>
+                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{wf.trigger} · {wf.freq}</div>
                       </div>
                       <span className={`badge ${wf.status === 'active' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 9 }}>{wf.status}</span>
                       <span className="wf-expand-icon" style={{ transform: isOpen ? 'rotate(180deg)' : undefined }}>▼</span>
@@ -252,7 +255,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
                   </div>
                 )
               }) : (
-                <div style={{ color: '#666', fontSize: 13, padding: 16 }}>No workflow data for this agent.</div>
+                <div style={{ color: '#9ca3af', fontSize: 13, padding: 16 }}>No workflow data for this agent.</div>
               )}
             </div>
           )}
@@ -309,7 +312,7 @@ function DashboardView() {
       <div className="ai-agents-rail">
         <div className="ai-rail-header">
           <h4>Agents</h4>
-          <span style={{ fontSize: 10, color: '#4b5563' }}>{AGENTS.length} agents</span>
+          <span style={{ fontSize: 10, color: '#9ca3af' }}>{AGENTS.length} agents</span>
         </div>
         <div className="ai-agents-list">
           {AGENTS.map((agent) => (
@@ -332,10 +335,10 @@ function DashboardView() {
           <div className="ai-live-dot">Live</div>
         </div>
         <div className="ai-feed">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: '#4b5563' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: '#9ca3af' }}>
             <div style={{ fontSize: 32 }}>⚡</div>
             <div style={{ fontSize: 14, fontWeight: 600, color: '#6b7280' }}>No agent activity yet</div>
-            <div style={{ fontSize: 12, color: '#4b5563', textAlign: 'center', maxWidth: 280 }}>Activity will appear here once agents are deployed and connected to your data sources</div>
+            <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', maxWidth: 280 }}>Activity will appear here once agents are deployed and connected to your data sources</div>
           </div>
         </div>
         <div className="ai-cmd">
@@ -351,7 +354,7 @@ function DashboardView() {
           <span className="ai-queue-count">0</span>
         </div>
         <div className="ai-queue-list">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: 20, color: '#4b5563' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: 20, color: '#9ca3af' }}>
             <div style={{ fontSize: 24 }}>✓</div>
             <div style={{ fontSize: 12, textAlign: 'center' }}>Review queue is empty</div>
           </div>
@@ -373,13 +376,13 @@ function AiBubble({
 }) {
   return (
     <div className={`ai-bubble ${isSystem ? 'system' : ''}`}>
-      <div className="ai-bubble-icon" style={isSystem ? { background: '#0A0D14', fontSize: 11, color: '#555' } : {}}>{icon}</div>
+      <div className="ai-bubble-icon" style={isSystem ? { background: '#f3f4f6', fontSize: 11, color: '#9ca3af' } : {}}>{icon}</div>
       <div className="ai-bubble-body">
         <div className="ai-bubble-meta">
-          <span className="ai-bubble-agent" style={isSystem ? { color: '#555' } : {}}>{agent}</span>
+          <span className="ai-bubble-agent" style={isSystem ? { color: '#9ca3af' } : {}}>{agent}</span>
           <span className="ai-bubble-time">{time}</span>
         </div>
-        <div className="ai-bubble-text" style={isSystem ? { color: '#666' } : {}}>{children}</div>
+        <div className="ai-bubble-text" style={isSystem ? { color: '#9ca3af' } : {}}>{children}</div>
         {actions && actions.length > 0 && (
           <div className="ai-bubble-action">
             {actions.map((a, i) => (
@@ -437,7 +440,7 @@ function InboxView({
     return (
       <div>
         <div className="page-header"><h2>Inbox</h2><p>All agent communications</p></div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 200px)', color: '#666', fontSize: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 200px)', color: '#9ca3af', fontSize: 14 }}>
           No inbox items for this role.
         </div>
       </div>
@@ -490,7 +493,7 @@ function InboxView({
               </div>
             ))}
             {filteredInbox.length === 0 && (
-              <div style={{ padding: 20, color: '#555', fontSize: 12, textAlign: 'center' }}>No matching items</div>
+              <div style={{ padding: 20, color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>No matching items</div>
             )}
           </div>
         </div>
@@ -499,15 +502,15 @@ function InboxView({
             <>
               <div className="inbox-thread-header">
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{selected.subject}</div>
-                  <div style={{ fontSize: 11, color: '#888', marginTop: 3 }}>{selected.from} · {selected.time}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{selected.subject}</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>{selected.from} · {selected.time}</div>
                 </div>
                 <span className={`badge ${selected.agentBadge}`}>{selected.agent}</span>
               </div>
               <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
-                <div style={{ background: '#0E1117', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #1E2433' }}>
-                  <div style={{ fontSize: 11, color: '#888', marginBottom: 8 }}>From: {selected.from}</div>
-                  <div style={{ fontSize: 13, color: '#C8C6C1', lineHeight: 1.6 }}>
+                <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>From: {selected.from}</div>
+                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
                     {getInboxThreadContent(selected.subject)}
                   </div>
                 </div>
@@ -531,7 +534,7 @@ function InboxView({
               )}
             </>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#555', fontSize: 13 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#9ca3af', fontSize: 13 }}>
               Select a message to view
             </div>
           )}
@@ -675,12 +678,93 @@ function AccountingView() {
 
 // ─── Knowledge Base ───────────────────────────────────────────────────────────
 
+const KB_CATEGORIES = [
+  { icon: '📊', label: 'Investor Relations KB',  desc: 'LP profiles, fund terms, investor communications, subscription docs',              agents: ['LP Market Intelligence', 'Investor Relations'] },
+  { icon: '💰', label: 'IR & Capital KB',         desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['Capital Raising', 'Investor Relations'] },
+  { icon: '🔐', label: 'Finance & Controls KB',   desc: 'Approval thresholds, GL coding rules, invoice policies, audit documentation',       agents: ['Financial Controls', 'Accounting Operations'] },
+  { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Brokerage'] },
+  { icon: '📈', label: 'Analytics KB',            desc: 'Cap rate benchmarks, valuation models, fund performance data, market reports',      agents: ['Investment Analytics', 'CIO & Chief of Staff'] },
+  { icon: '🎯', label: 'Strategy KB',             desc: 'Board presentations, fund narratives, IC materials, strategic planning docs',       agents: ['CIO & Chief of Staff'] },
+  { icon: '📋', label: 'Executive KB',            desc: 'Meeting transcripts, calendar context, follow-up templates, board prep materials',  agents: ['Executive Assistant'] },
+  { icon: '📣', label: 'Marketing KB',            desc: 'Brand assets, LP newsletter templates, LinkedIn drafts, conference materials',      agents: ['Marketing'] },
+  { icon: '📁', label: 'Fund Admin KB',           desc: 'Subscription docs, K-1s, capital account statements, compliance filings',          agents: ['Fund Administration'] },
+  { icon: '🔑', label: 'Leasing KB',              desc: 'Lease templates, market comps, prospect intake forms, renewal playbooks',          agents: ['Leasing'] },
+  { icon: '🏗️', label: 'Operations KB',           desc: 'Vendor contracts, work order SOPs, COI requirements, inspection reports',          agents: ['Property Operations', 'COO Operations'] },
+  { icon: '👥', label: 'People Ops KB',           desc: 'Employee handbook, benefits guides, onboarding checklists, HR policies',           agents: ['People Ops'] },
+  { icon: '🧾', label: 'Accounting KB',           desc: 'Chart of accounts, Yardi procedures, month-end close checklist, AR/AP templates',  agents: ['Accounting Operations'] },
+]
+
 function KnowledgeBaseView() {
+  const [docs, setDocs] = useState<Record<string, string[]>>({})
+  const [dragging, setDragging] = useState<string | null>(null)
+
+  function handleFiles(kbLabel: string, files: FileList | null) {
+    if (!files) return
+    const names = Array.from(files).map((f) => f.name)
+    setDocs((prev) => ({ ...prev, [kbLabel]: [...(prev[kbLabel] ?? []), ...names] }))
+  }
+
+  function removeDoc(kbLabel: string, name: string) {
+    setDocs((prev) => ({ ...prev, [kbLabel]: (prev[kbLabel] ?? []).filter((n) => n !== name) }))
+  }
+
   return (
     <div>
-      <div className="page-header"><h2>Knowledge Bases</h2><p>Processed and indexed versions of your documents — this is what agents actually read when they work</p></div>
-      <SourceBar source="Document Vault · Yardi reports · Salesforce exports · OneDrive" agents="All 16 agents — each agent assigned to 1–2 KBs" synced="Platform: Supabase pgvector · Claude (Anthropic)" link="Browse Source Files" />
-      <EmptyDataView source="Document Vault · OneDrive" message="Knowledge bases will appear here once documents are indexed" />
+      <div className="page-header">
+        <h2>Knowledge Bases</h2>
+        <p>Upload documents to each knowledge base — agents read these when they work</p>
+      </div>
+      <div style={{ background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 13 }}>💡</span>
+        <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word docs, and Excel files are all supported.</span>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+        {KB_CATEGORIES.map((kb) => {
+          const kbDocs = docs[kb.label] ?? []
+          return (
+            <div key={kb.label} className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{kb.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{kb.label}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{kb.desc}</div>
+                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+                    {kb.agents.map((a) => <span key={a} className="badge badge-blue" style={{ fontSize: 9 }}>{a}</span>)}
+                  </div>
+                </div>
+                <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap' }}>{kbDocs.length} doc{kbDocs.length !== 1 ? 's' : ''}</span>
+              </div>
+
+              {/* Upload zone */}
+              <label
+                className={`upload-zone${dragging === kb.label ? ' drag-over' : ''}`}
+                style={{ padding: '16px 12px' }}
+                onDragOver={(e) => { e.preventDefault(); setDragging(kb.label) }}
+                onDragLeave={() => setDragging(null)}
+                onDrop={(e) => { e.preventDefault(); setDragging(null); handleFiles(kb.label, e.dataTransfer.files) }}
+              >
+                <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(kb.label, e.target.files)} />
+                <span style={{ fontSize: 18 }}>📄</span>
+                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Drop files here or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></div>
+                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>PDF, Word, Excel, CSV</div>
+              </label>
+
+              {/* Doc list */}
+              {kbDocs.length > 0 && (
+                <div className="doc-list">
+                  {kbDocs.map((name) => (
+                    <div key={name} className="doc-item">
+                      <span style={{ fontSize: 14 }}>📄</span>
+                      <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                      <button className="doc-item-remove" onClick={() => removeDoc(kb.label, name)} title="Remove">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -707,6 +791,44 @@ function SettingsView({
   settingsTab: string
   setSettingsTab: (tab: string) => void
 }) {
+  const [prefs, setPrefs] = useState({ digest: true, confidence: false, autoCollapse: true })
+  const [notifs, setNotifs] = useState({
+    invoice:     { email: true,  sms: true,  push: true  },
+    draft:       { email: true,  sms: false, push: true  },
+    sla:         { email: true,  sms: true,  push: true  },
+    lpInquiry:   { email: true,  sms: false, push: false },
+    capitalCall: { email: true,  sms: false, push: true  },
+    weeklyDigest:{ email: true,  sms: false, push: false },
+  })
+  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({})
+  const [agentConfig, setAgentConfig] = useState<Record<string, { auto: string; escal: string }>>(() =>
+    Object.fromEntries(AGENTS.map((a) => [a.id, { auto: a.auto, escal: a.escal }]))
+  )
+  const [saved, setSaved] = useState(false)
+
+  function togglePref(key: keyof typeof prefs) {
+    setPrefs((p) => ({ ...p, [key]: !p[key] }))
+  }
+  function toggleNotif(key: keyof typeof notifs, ch: 'email' | 'sms' | 'push') {
+    setNotifs((n) => ({ ...n, [key]: { ...n[key], [ch]: !n[key][ch] } }))
+  }
+  function toggleAgent(id: string) {
+    setExpandedAgents((p) => ({ ...p, [id]: !p[id] }))
+  }
+  function saveChanges() {
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
+  }
+
+  const notifRows: { key: keyof typeof notifs; event: string; sub: string }[] = [
+    { key: 'invoice',      event: 'Invoice approval required',   sub: 'Financial Controls flags an invoice above threshold' },
+    { key: 'draft',        event: 'Draft ready for review',       sub: 'Any agent queues a communication for your approval' },
+    { key: 'sla',          event: 'SLA breach detected',          sub: 'A work order exceeds its SLA deadline' },
+    { key: 'lpInquiry',    event: 'New LP inquiry',               sub: 'Investor Relations receives a new investor email' },
+    { key: 'capitalCall',  event: 'Capital call funded',          sub: 'LP wires received for an active capital call' },
+    { key: 'weeklyDigest', event: 'Weekly agent digest',          sub: 'Sunday summary of all agent activity' },
+  ]
+
   return (
     <div>
       <div className="page-header"><h2>Settings</h2><p>Manage your profile, team access, agent configuration, and integrations</p></div>
@@ -725,12 +847,12 @@ function SettingsView({
                   <div className="ov-stat">
                     <div className="ov-stat-val" style={{ fontSize: 16, marginTop: 2 }}>{role.name}</div>
                     <div className="ov-stat-label">{role.title}</div>
-                    <div style={{ marginTop: 6 }}><span className="badge badge-gold">{role.access}</span></div>
+                    <div style={{ marginTop: 6 }}><span className="badge badge-teal">{role.access}</span></div>
                   </div>
                   <div className="ov-divider" />
                   <div className="ov-stat"><div className="ov-stat-val">Today</div><div className="ov-stat-label">Last Login</div><div className="ov-stat-sub" style={{ color: '#3DAE7A' }}>Active session</div></div>
                   <div className="ov-divider" />
-                  <div className="ov-stat"><div className="ov-stat-val">{AGENTS.length}</div><div className="ov-stat-label">Agents Accessible</div><div className="ov-stat-sub" style={{ color: '#888' }}>{role.sidebar === 'all' ? 'All portals' : 'Role-filtered'}</div></div>
+                  <div className="ov-stat"><div className="ov-stat-val">{AGENTS.length}</div><div className="ov-stat-label">Agents Accessible</div><div className="ov-stat-sub" style={{ color: '#9ca3af' }}>{role.sidebar === 'all' ? 'All portals' : 'Role-filtered'}</div></div>
                 </div>
               </div>
               <div className="settings-section">
@@ -739,9 +861,9 @@ function SettingsView({
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 20 }}>
                   <div style={{ width: 64, height: 64, borderRadius: '50%', background: role.bg, color: role.color, fontSize: 20, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{role.avatar}</div>
                   <div>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{role.name}</div>
-                    <div style={{ fontSize: 12, color: '#888' }}>{role.title}</div>
-                    <div style={{ marginTop: 6 }}><span className={`badge`} style={{ background: role.bg, color: role.color, border: `1px solid ${role.color}44` }}>{role.access}</span></div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{role.name}</div>
+                    <div style={{ fontSize: 12, color: '#9ca3af' }}>{role.title}</div>
+                    <div style={{ marginTop: 6 }}><span className="badge badge-teal">{role.access}</span></div>
                   </div>
                   <button className="btn btn-ghost" style={{ marginLeft: 'auto' }}>Change Photo</button>
                 </div>
@@ -749,21 +871,34 @@ function SettingsView({
                   <div className="field"><label>Display Name</label><input defaultValue={role.name} /></div>
                   <div className="field"><label>Job Title</label><input defaultValue={role.title} /></div>
                   <div className="field"><label>Email</label><input defaultValue={userEmail} readOnly /></div>
-                  <div className="field"><label>Timezone</label><select><option>America/Chicago (CST)</option><option>America/Denver (MST)</option><option>America/New_York (EST)</option></select></div>
+                  <div className="field">
+                    <label>Timezone</label>
+                    <select defaultValue="America/Chicago (CST)">
+                      <option>America/Chicago (CST)</option>
+                      <option>America/Denver (MST)</option>
+                      <option>America/New_York (EST)</option>
+                      <option>America/Los_Angeles (PST)</option>
+                    </select>
+                  </div>
+                  <div className="field field-full"><label>Phone (for SMS alerts)</label><input placeholder="+1 (555) 000-0000" /></div>
                 </div>
-                <button className="btn btn-primary">Save Changes</button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button className="btn btn-primary" onClick={saveChanges}>Save Changes</button>
+                  {saved && <span style={{ fontSize: 12, color: '#3DAE7A', fontWeight: 500 }}>✓ Saved</span>}
+                </div>
               </div>
               <div className="divider" />
               <div className="settings-section">
                 <h3>Preferences</h3>
-                {[
-                  { label: 'Weekly Agent Digest', sub: 'Receive a Sunday evening summary of all agent activity', on: true },
-                  { label: 'Show Agent Draft Confidence', sub: 'Display AI confidence score alongside each draft', on: false },
-                  { label: 'Auto-collapse Handled Emails', sub: 'Automatically minimize emails marked as handled in inbox', on: true },
-                ].map((pref) => (
-                  <div key={pref.label} className="toggle-row">
+                <p>Customize how the portal behaves for you</p>
+                {([
+                  { key: 'digest'      as const, label: 'Weekly Agent Digest',          sub: 'Receive a Sunday evening summary of all agent activity' },
+                  { key: 'confidence'  as const, label: 'Show Agent Draft Confidence',  sub: 'Display AI confidence score alongside each draft' },
+                  { key: 'autoCollapse'as const, label: 'Auto-collapse Handled Emails', sub: 'Automatically minimize emails marked as handled in inbox' },
+                ]).map((pref) => (
+                  <div key={pref.label} className="toggle-row" onClick={() => togglePref(pref.key)}>
                     <div className="toggle-label"><h4>{pref.label}</h4><p>{pref.sub}</p></div>
-                    <div className={`toggle ${pref.on ? 'on' : ''}`} />
+                    <div className={`toggle ${prefs[pref.key] ? 'on' : ''}`} />
                   </div>
                 ))}
               </div>
@@ -773,18 +908,57 @@ function SettingsView({
             <div>
               <div className="settings-section">
                 <h3>Agent Configuration</h3>
-                <p>Manage autonomy levels and escalation rules for each agent</p>
+                <p>Manage autonomy levels and escalation contacts for each agent</p>
               </div>
               {AGENTS.map((agent) => (
                 <div key={agent.id} className="agent-config-row">
-                  <div className="agent-config-header">
+                  <div className="agent-config-header" onClick={() => toggleAgent(agent.id)}>
                     <span className={`badge ${agent.badge}`}>{agent.icon}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#E8E6E1', flex: 1 }}>{agent.name}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', flex: 1 }}>{agent.name}</span>
                     <span className={`badge ${agent.status === 'active' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 9 }}>{agent.status}</span>
-                    <span style={{ fontSize: 11, color: '#666', marginLeft: 8 }}>Autonomy: {agent.auto}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>Autonomy: {agentConfig[agent.id]?.auto ?? agent.auto}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>{expandedAgents[agent.id] ? '▲' : '▼'}</span>
                   </div>
+                  {expandedAgents[agent.id] && (
+                    <div className="agent-config-body open">
+                      <div className="config-grid">
+                        <div className="config-item">
+                          <label>Autonomy Level</label>
+                          <select
+                            value={agentConfig[agent.id]?.auto ?? agent.auto}
+                            onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], auto: e.target.value } }))}
+                          >
+                            <option>High</option>
+                            <option>Medium</option>
+                            <option>Low</option>
+                          </select>
+                        </div>
+                        <div className="config-item">
+                          <label>Escalation Contact</label>
+                          <select
+                            value={agentConfig[agent.id]?.escal ?? agent.escal}
+                            onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], escal: e.target.value } }))}
+                          >
+                            <option>Meghan</option>
+                            <option>William</option>
+                            <option>Brennan</option>
+                            <option>Michele</option>
+                            <option>Liz</option>
+                          </select>
+                        </div>
+                        <div className="config-item">
+                          <label>Knowledge Base</label>
+                          <div className="config-val">{agent.kb}</div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button className="btn btn-primary" onClick={saveChanges}>Save Agent Config</button>
+                {saved && <span style={{ fontSize: 12, color: '#3DAE7A', fontWeight: 500 }}>✓ Saved</span>}
+              </div>
             </div>
           )}
           {settingsTab === 's-connections' && (
@@ -795,12 +969,12 @@ function SettingsView({
               </div>
               <div className="conn-grid">
                 {[
-                  { icon: '🏢', name: 'Yardi Voyager', status: 'connected', meta: 'Rent roll, GL, work orders, AP/AR — primary property management system', sync: 'Synced every 30 min' },
-                  { icon: '📊', name: 'Salesforce', status: 'connected', meta: 'LP profiles, fund pipeline, leasing prospects, and email logs', sync: 'Synced every 15 min' },
-                  { icon: '📁', name: 'OneDrive', status: 'connected', meta: 'Document vault source — fund docs, leases, vendor contracts, and reports', sync: 'Real-time via webhook' },
-                  { icon: '✍️', name: 'DocuSign', status: 'connected', meta: 'Lease execution, capital call notices, and K-1 delivery workflows', sync: 'Webhook connected' },
-                  { icon: '🎤', name: 'Fathom', status: 'connected', meta: 'Meeting transcripts for executive assistant and CIO follow-up workflows', sync: 'Webhook connected' },
-                  { icon: '📅', name: 'Microsoft 365', status: 'connected', meta: 'Calendar triggers for meeting prep and email send/receive for all agents', sync: 'Real-time via Graph API' },
+                  { icon: '🏢', name: 'Yardi Voyager',   status: 'connected',    meta: 'Rent roll, GL, work orders, AP/AR — primary property management system', sync: 'Synced every 30 min' },
+                  { icon: '📊', name: 'Salesforce',       status: 'connected',    meta: 'LP profiles, fund pipeline, leasing prospects, and email logs',           sync: 'Synced every 15 min' },
+                  { icon: '📁', name: 'OneDrive',          status: 'connected',    meta: 'Document vault source — fund docs, leases, vendor contracts, and reports', sync: 'Real-time via webhook' },
+                  { icon: '✍️', name: 'DocuSign',          status: 'connected',    meta: 'Lease execution, capital call notices, and K-1 delivery workflows',        sync: 'Webhook connected' },
+                  { icon: '🎤', name: 'Fathom',            status: 'connected',    meta: 'Meeting transcripts for executive assistant and CIO follow-up workflows',   sync: 'Webhook connected' },
+                  { icon: '📅', name: 'Microsoft 365',     status: 'connected',    meta: 'Calendar triggers for meeting prep and email send/receive for all agents',  sync: 'Real-time via Graph API' },
                 ].map((conn) => (
                   <div key={conn.name} className="conn-card">
                     <div className="conn-header">
@@ -832,11 +1006,11 @@ function SettingsView({
                   <tbody>
                     {Object.entries(ROLES).map(([key, r]) => (
                       <tr key={key}>
-                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 28, height: 28, borderRadius: '50%', background: r.bg, color: r.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.avatar}</div><span style={{ fontWeight: 600, color: '#E8E6E1' }}>{r.name}</span></div></td>
-                        <td style={{ color: '#888' }}>{r.title}</td>
-                        <td style={{ color: '#666' }}>{r.email}</td>
-                        <td><span className="badge" style={{ background: r.bg, color: r.color, border: `1px solid ${r.color}44` }}>{r.access}</span></td>
-                        <td style={{ color: '#666', textTransform: 'capitalize' }}>{r.sidebar}</td>
+                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 28, height: 28, borderRadius: '50%', background: r.bg, color: r.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.avatar}</div><span style={{ fontWeight: 600, color: '#111827' }}>{r.name}</span></div></td>
+                        <td style={{ color: '#6b7280' }}>{r.title}</td>
+                        <td style={{ color: '#6b7280' }}>{r.email}</td>
+                        <td><span className="badge badge-teal">{r.access}</span></td>
+                        <td style={{ color: '#6b7280', textTransform: 'capitalize' }}>{r.sidebar}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -850,26 +1024,23 @@ function SettingsView({
                 <h3>Notification Preferences</h3>
                 <p>Configure when and how agents notify you of activity</p>
               </div>
-              {[
-                { event: 'Invoice approval required', sub: 'Financial Controls flags an invoice above threshold', email: true, sms: true, push: true },
-                { event: 'Draft ready for review', sub: 'Any agent queues a communication for your approval', email: true, sms: false, push: true },
-                { event: 'SLA breach detected', sub: 'A work order exceeds its SLA deadline', email: true, sms: true, push: true },
-                { event: 'New LP inquiry', sub: 'Investor Relations receives a new investor email', email: true, sms: false, push: false },
-                { event: 'Capital call funded', sub: 'LP wires received for an active capital call', email: true, sms: false, push: true },
-                { event: 'Weekly agent digest', sub: 'Sunday summary of all agent activity', email: true, sms: false, push: false },
-              ].map((row) => (
+              {notifRows.map((row) => (
                 <div key={row.event} className="toggle-row">
                   <div className="toggle-label"><h4>{row.event}</h4><p>{row.sub}</p></div>
                   <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
-                    {[['Email', row.email], ['SMS', row.sms], ['Push', row.push]].map(([label, on]) => (
-                      <div key={String(label)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                        <div style={{ fontSize: 10, color: '#555' }}>{label}</div>
-                        <div className={`toggle ${on ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
+                    {(['email', 'sms', 'push'] as const).map((ch) => (
+                      <div key={ch} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }} onClick={() => toggleNotif(row.key, ch)}>
+                        <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'capitalize' }}>{ch}</div>
+                        <div className={`toggle ${notifs[row.key][ch] ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
                       </div>
                     ))}
                   </div>
                 </div>
               ))}
+              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button className="btn btn-primary" onClick={saveChanges}>Save Notifications</button>
+                {saved && <span style={{ fontSize: 12, color: '#3DAE7A', fontWeight: 500 }}>✓ Saved</span>}
+              </div>
             </div>
           )}
         </div>
@@ -892,41 +1063,75 @@ const SOP_CATEGORIES = [
 ]
 
 function SOPsView() {
+  const [docs, setDocs] = useState<Record<string, string[]>>({})
+  const [dragging, setDragging] = useState<string | null>(null)
+
+  function handleFiles(catLabel: string, files: FileList | null) {
+    if (!files) return
+    const names = Array.from(files).map((f) => f.name)
+    setDocs((prev) => ({ ...prev, [catLabel]: [...(prev[catLabel] ?? []), ...names] }))
+  }
+
+  function removeDoc(catLabel: string, name: string) {
+    setDocs((prev) => ({ ...prev, [catLabel]: (prev[catLabel] ?? []).filter((n) => n !== name) }))
+  }
+
   return (
     <div>
       <div className="page-header">
         <h2>Standard Operating Procedures</h2>
         <p>Company-wide SOPs — accessible by agents and team members</p>
       </div>
-      <div style={{ background: '#1f2937', border: '1px solid #374151', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>📌</span>
-        <span style={{ fontSize: 12, color: '#9ca3af' }}>SOPs stored here are indexed into agent knowledge bases. Keeping them current ensures agents follow the latest procedures.</span>
+        <span style={{ fontSize: 12, color: '#92400e' }}>SOPs stored here are indexed into agent knowledge bases. Keeping them current ensures agents follow the latest procedures.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        {SOP_CATEGORIES.map((cat) => (
-          <div
-            key={cat.label}
-            className="card"
-            style={{ margin: 0, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 8 }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 8, background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                {cat.icon}
+        {SOP_CATEGORIES.map((cat) => {
+          const catDocs = docs[cat.label] ?? []
+          return (
+            <div key={cat.label} className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+                  {cat.icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cat.label}</div>
+                </div>
+                <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
+                  {catDocs.length} doc{catDocs.length !== 1 ? 's' : ''}
+                </span>
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#f9fafb' }}>{cat.label}</div>
-              </div>
-              <span style={{ fontSize: 11, color: '#4b5563', background: '#111827', border: '1px solid #374151', borderRadius: 6, padding: '2px 8px' }}>
-                0 docs
-              </span>
+              <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{cat.desc}</div>
+
+              {/* Upload zone */}
+              <label
+                className={`upload-zone${dragging === cat.label ? ' drag-over' : ''}`}
+                style={{ padding: '12px 10px' }}
+                onDragOver={(e) => { e.preventDefault(); setDragging(cat.label) }}
+                onDragLeave={() => setDragging(null)}
+                onDrop={(e) => { e.preventDefault(); setDragging(null); handleFiles(cat.label, e.dataTransfer.files) }}
+              >
+                <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" style={{ display: 'none' }} onChange={(e) => handleFiles(cat.label, e.target.files)} />
+                <span style={{ fontSize: 16 }}>📎</span>
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>Drop SOP or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></div>
+              </label>
+
+              {/* Doc list */}
+              {catDocs.length > 0 && (
+                <div className="doc-list">
+                  {catDocs.map((name) => (
+                    <div key={name} className="doc-item">
+                      <span style={{ fontSize: 13 }}>📄</span>
+                      <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+                      <button className="doc-item-remove" onClick={() => removeDoc(cat.label, name)} title="Remove">✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
-            <div style={{ fontSize: 11, color: '#4b5563', lineHeight: 1.5 }}>{cat.desc}</div>
-            <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add SOP</button>
-              <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px', color: '#4b5563' }}>Browse</button>
-            </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -939,8 +1144,8 @@ function EmptyDataView({ source, message }: { source: string; message: string })
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 280px)', gap: 14 }}>
       <div style={{ fontSize: 36 }}>📭</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#6b7280' }}>No data yet</div>
-      <div style={{ fontSize: 12, color: '#4b5563', textAlign: 'center', maxWidth: 380, lineHeight: 1.6 }}>{message}</div>
-      <div style={{ fontSize: 11, color: '#374151', background: '#1f2937', border: '1px solid #374151', borderRadius: 8, padding: '6px 16px', marginTop: 4 }}>
+      <div style={{ fontSize: 12, color: '#6b7280', textAlign: 'center', maxWidth: 380, lineHeight: 1.6 }}>{message}</div>
+      <div style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, padding: '6px 16px', marginTop: 4 }}>
         Source: {source}
       </div>
     </div>
@@ -957,7 +1162,7 @@ function SourceBar({ source, agents, synced, link }: { source: string; agents: s
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <span className="source-readonly">Read-only here</span>
-        <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 11, color: '#5B9BD5', textDecoration: 'none', border: '1px solid #1A3050', borderRadius: 6, padding: '3px 10px' }}>{link}</a>
+        <a href="#" onClick={(e) => e.preventDefault()} style={{ fontSize: 11, color: '#0e7490', textDecoration: 'none', border: '1px solid #a5f3fc', borderRadius: 6, padding: '3px 10px' }}>{link}</a>
       </div>
     </div>
   )
@@ -969,9 +1174,9 @@ function StubView({ title, icon, desc }: { title: string; icon: string; desc: st
       <div className="page-header"><h2>{icon} {title}</h2><p>{desc}</p></div>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 220px)', gap: 16 }}>
         <div style={{ fontSize: 48 }}>{icon}</div>
-        <div style={{ fontSize: 18, fontWeight: 600, color: '#fff' }}>{title}</div>
-        <div style={{ fontSize: 13, color: '#666', maxWidth: 400, textAlign: 'center' }}>{desc}</div>
-        <div style={{ fontSize: 11, color: '#555', background: '#131820', border: '1px solid #1E2433', borderRadius: 8, padding: '8px 16px', marginTop: 8 }}>
+        <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>{title}</div>
+        <div style={{ fontSize: 13, color: '#6b7280', maxWidth: 400, textAlign: 'center' }}>{desc}</div>
+        <div style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 16px', marginTop: 8 }}>
           Phase 2 — data integration coming soon
         </div>
       </div>
