@@ -801,8 +801,8 @@ function SettingsView({
     weeklyDigest:{ email: true,  sms: false, push: false },
   })
   const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({})
-  const [agentConfig, setAgentConfig] = useState<Record<string, { auto: string; escal: string }>>(() =>
-    Object.fromEntries(AGENTS.map((a) => [a.id, { auto: a.auto, escal: a.escal }]))
+  const [agentConfig, setAgentConfig] = useState<Record<string, { auto: string; escal: string; active: boolean }>>(() =>
+    Object.fromEntries(AGENTS.map((a) => [a.id, { auto: a.auto, escal: a.escal, active: a.status === 'active' }]))
   )
   const [saved, setSaved] = useState(false)
 
@@ -910,51 +910,65 @@ function SettingsView({
                 <h3>Agent Configuration</h3>
                 <p>Manage autonomy levels and escalation contacts for each agent</p>
               </div>
-              {AGENTS.map((agent) => (
-                <div key={agent.id} className="agent-config-row">
-                  <div className="agent-config-header" onClick={() => toggleAgent(agent.id)}>
-                    <span className={`badge ${agent.badge}`}>{agent.icon}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', flex: 1 }}>{agent.name}</span>
-                    <span className={`badge ${agent.status === 'active' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 9 }}>{agent.status}</span>
-                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>Autonomy: {agentConfig[agent.id]?.auto ?? agent.auto}</span>
-                    <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>{expandedAgents[agent.id] ? '▲' : '▼'}</span>
-                  </div>
-                  {expandedAgents[agent.id] && (
-                    <div className="agent-config-body open">
-                      <div className="config-grid">
-                        <div className="config-item">
-                          <label>Autonomy Level</label>
-                          <select
-                            value={agentConfig[agent.id]?.auto ?? agent.auto}
-                            onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], auto: e.target.value } }))}
-                          >
-                            <option>High</option>
-                            <option>Medium</option>
-                            <option>Low</option>
-                          </select>
-                        </div>
-                        <div className="config-item">
-                          <label>Escalation Contact</label>
-                          <select
-                            value={agentConfig[agent.id]?.escal ?? agent.escal}
-                            onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], escal: e.target.value } }))}
-                          >
-                            <option>Meghan</option>
-                            <option>William</option>
-                            <option>Brennan</option>
-                            <option>Michele</option>
-                            <option>Liz</option>
-                          </select>
-                        </div>
-                        <div className="config-item">
-                          <label>Knowledge Base</label>
-                          <div className="config-val">{agent.kb}</div>
+              {AGENTS.map((agent) => {
+                const cfg = agentConfig[agent.id]
+                const isActive = cfg?.active ?? (agent.status === 'active')
+                return (
+                  <div key={agent.id} className="agent-config-row" style={{ opacity: isActive ? 1 : 0.55 }}>
+                    <div className="agent-config-header" onClick={() => toggleAgent(agent.id)}>
+                      <span className={`badge ${agent.badge}`}>{agent.icon}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', flex: 1 }}>{agent.name}</span>
+                      {/* Active / Inactive toggle — stop propagation so it doesn't expand the row */}
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], active: !isActive } }))
+                        }}
+                      >
+                        <div className={`toggle ${isActive ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
+                        <span style={{ fontSize: 10, color: isActive ? '#15803d' : '#9ca3af', fontWeight: 600, minWidth: 40 }}>{isActive ? 'Active' : 'Inactive'}</span>
+                      </div>
+                      <span style={{ fontSize: 11, color: '#9ca3af' }}>Autonomy: {cfg?.auto ?? agent.auto}</span>
+                      <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>{expandedAgents[agent.id] ? '▲' : '▼'}</span>
+                    </div>
+                    {expandedAgents[agent.id] && (
+                      <div className="agent-config-body open">
+                        <div className="config-grid">
+                          <div className="config-item">
+                            <label>Autonomy Level</label>
+                            <select
+                              value={cfg?.auto ?? agent.auto}
+                              onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], auto: e.target.value } }))}
+                            >
+                              <option>High</option>
+                              <option>Medium</option>
+                              <option>Low</option>
+                            </select>
+                          </div>
+                          <div className="config-item">
+                            <label>Escalation Contact</label>
+                            <select
+                              value={cfg?.escal ?? agent.escal}
+                              onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], escal: e.target.value } }))}
+                            >
+                              <option>Meghan</option>
+                              <option>William</option>
+                              <option>Brennan</option>
+                              <option>Michele</option>
+                              <option>Liz</option>
+                            </select>
+                          </div>
+                          <div className="config-item">
+                            <label>Knowledge Base</label>
+                            <div className="config-val">{agent.kb}</div>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                )
+              })}
               <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
                 <button className="btn btn-primary" onClick={saveChanges}>Save Agent Config</button>
                 {saved && <span style={{ fontSize: 12, color: '#3DAE7A', fontWeight: 500 }}>✓ Saved</span>}
@@ -962,61 +976,10 @@ function SettingsView({
             </div>
           )}
           {settingsTab === 's-connections' && (
-            <div>
-              <div className="settings-section">
-                <h3>Connected Systems</h3>
-                <p>Integration status for all data sources used by agents</p>
-              </div>
-              <div className="conn-grid">
-                {[
-                  { icon: '🏢', name: 'Yardi Voyager',   status: 'connected',    meta: 'Rent roll, GL, work orders, AP/AR — primary property management system', sync: 'Synced every 30 min' },
-                  { icon: '📊', name: 'Salesforce',       status: 'connected',    meta: 'LP profiles, fund pipeline, leasing prospects, and email logs',           sync: 'Synced every 15 min' },
-                  { icon: '📁', name: 'OneDrive',          status: 'connected',    meta: 'Document vault source — fund docs, leases, vendor contracts, and reports', sync: 'Real-time via webhook' },
-                  { icon: '✍️', name: 'DocuSign',          status: 'connected',    meta: 'Lease execution, capital call notices, and K-1 delivery workflows',        sync: 'Webhook connected' },
-                  { icon: '🎤', name: 'Fathom',            status: 'connected',    meta: 'Meeting transcripts for executive assistant and CIO follow-up workflows',   sync: 'Webhook connected' },
-                  { icon: '📅', name: 'Microsoft 365',     status: 'connected',    meta: 'Calendar triggers for meeting prep and email send/receive for all agents',  sync: 'Real-time via Graph API' },
-                ].map((conn) => (
-                  <div key={conn.name} className="conn-card">
-                    <div className="conn-header">
-                      <div className="conn-icon">{conn.icon}</div>
-                      <div>
-                        <div className="conn-name">{conn.name}</div>
-                        <div className={`conn-status ${conn.status}`}>{conn.status === 'connected' ? '● Connected' : '○ Disconnected'}</div>
-                      </div>
-                    </div>
-                    <div className="conn-meta">{conn.meta}</div>
-                    <div className="conn-footer">
-                      <span className="sync-badge">{conn.sync}</span>
-                      <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }}>Configure</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <ConnectionsTab saved={saved} saveChanges={saveChanges} />
           )}
           {settingsTab === 's-team' && (
-            <div>
-              <div className="settings-section">
-                <h3>Team & Roles</h3>
-                <p>Manage portal access and role assignments for your team</p>
-              </div>
-              <div className="team-table-wrap">
-                <table>
-                  <thead><tr><th>Name</th><th>Title</th><th>Email</th><th>Access Level</th><th>Sidebar</th></tr></thead>
-                  <tbody>
-                    {Object.entries(ROLES).map(([key, r]) => (
-                      <tr key={key}>
-                        <td><div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ width: 28, height: 28, borderRadius: '50%', background: r.bg, color: r.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{r.avatar}</div><span style={{ fontWeight: 600, color: '#111827' }}>{r.name}</span></div></td>
-                        <td style={{ color: '#6b7280' }}>{r.title}</td>
-                        <td style={{ color: '#6b7280' }}>{r.email}</td>
-                        <td><span className="badge badge-teal">{r.access}</span></td>
-                        <td style={{ color: '#6b7280', textTransform: 'capitalize' }}>{r.sidebar}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <TeamTab saved={saved} saveChanges={saveChanges} />
           )}
           {settingsTab === 's-notifications' && (
             <div>
@@ -1044,6 +1007,405 @@ function SettingsView({
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Team Tab ─────────────────────────────────────────────────────────────────
+
+const ACCESS_OPTIONS = ['Admin', 'Manager', 'Standard', 'Read Only']
+const SIDEBAR_OPTIONS = ['all', 'executive', 'property', 'finance', 'ops', 'leasing', 'accounting']
+
+interface TeamMember {
+  id: string
+  name: string
+  title: string
+  email: string
+  access: string
+  sidebar: string
+  avatar: string
+  bg: string
+  color: string
+}
+
+const AVATAR_COLORS = [
+  { bg: '#eff6ff', color: '#1d4ed8' },
+  { bg: '#f0fdf4', color: '#15803d' },
+  { bg: '#faf5ff', color: '#7c3aed' },
+  { bg: '#fff7ed', color: '#c2410c' },
+  { bg: '#f0f9fa', color: '#0e7490' },
+  { bg: '#fef2f2', color: '#b91c1c' },
+  { bg: '#fefce8', color: '#a16207' },
+]
+
+function initials(name: string) {
+  return name.split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'
+}
+
+function TeamTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
+  const [members, setMembers] = useState<TeamMember[]>(() =>
+    Object.entries(ROLES).map(([key, r], i) => ({
+      id: key,
+      name: r.name,
+      title: r.title,
+      email: r.email,
+      access: r.access,
+      sidebar: r.sidebar,
+      avatar: r.avatar,
+      bg: AVATAR_COLORS[i % AVATAR_COLORS.length].bg,
+      color: AVATAR_COLORS[i % AVATAR_COLORS.length].color,
+    }))
+  )
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDraft, setEditDraft] = useState<Partial<TeamMember>>({})
+  const [showAdd, setShowAdd] = useState(false)
+  const [newMember, setNewMember] = useState({ name: '', title: '', email: '', access: 'Standard', sidebar: 'all' })
+  const [removeConfirm, setRemoveConfirm] = useState<string | null>(null)
+
+  function startEdit(m: TeamMember) {
+    setEditingId(m.id)
+    setEditDraft({ name: m.name, title: m.title, email: m.email, access: m.access, sidebar: m.sidebar })
+    setShowAdd(false)
+  }
+
+  function commitEdit(id: string) {
+    setMembers((prev) => prev.map((m) => m.id === id ? { ...m, ...editDraft } : m))
+    setEditingId(null)
+    saveChanges()
+  }
+
+  function cancelEdit() { setEditingId(null); setEditDraft({}) }
+
+  function addMember() {
+    if (!newMember.name.trim() || !newMember.email.trim()) return
+    const colorIdx = members.length % AVATAR_COLORS.length
+    const id = `member-${Date.now()}`
+    setMembers((prev) => [...prev, {
+      id,
+      name: newMember.name.trim(),
+      title: newMember.title.trim(),
+      email: newMember.email.trim(),
+      access: newMember.access,
+      sidebar: newMember.sidebar,
+      avatar: initials(newMember.name),
+      bg: AVATAR_COLORS[colorIdx].bg,
+      color: AVATAR_COLORS[colorIdx].color,
+    }])
+    setNewMember({ name: '', title: '', email: '', access: 'Standard', sidebar: 'all' })
+    setShowAdd(false)
+    saveChanges()
+  }
+
+  function removeMember(id: string) {
+    setMembers((prev) => prev.filter((m) => m.id !== id))
+    setRemoveConfirm(null)
+  }
+
+  const accessBadge: Record<string, string> = {
+    Admin: 'badge-gold', Manager: 'badge-teal', Standard: 'badge-blue', 'Read Only': 'badge-gray',
+  }
+
+  return (
+    <div>
+      <div className="settings-section" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <h3>Team & Roles</h3>
+          <p>Manage portal access and role assignments for your team</p>
+        </div>
+        <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={() => { setShowAdd(true); setEditingId(null) }}>+ Add Member</button>
+      </div>
+
+      {/* Add member form */}
+      {showAdd && (
+        <div style={{ background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#0e7490', marginBottom: 12 }}>New Team Member</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+            <div className="field">
+              <label>Full Name</label>
+              <input placeholder="Jane Smith" value={newMember.name} onChange={(e) => setNewMember((p) => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label>Job Title</label>
+              <input placeholder="Controller" value={newMember.title} onChange={(e) => setNewMember((p) => ({ ...p, title: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label>Email</label>
+              <input placeholder="jane@erpindustrials.com" value={newMember.email} onChange={(e) => setNewMember((p) => ({ ...p, email: e.target.value }))} />
+            </div>
+            <div className="field">
+              <label>Access Level</label>
+              <select value={newMember.access} onChange={(e) => setNewMember((p) => ({ ...p, access: e.target.value }))}>
+                {ACCESS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </div>
+            <div className="field">
+              <label>Portal View</label>
+              <select value={newMember.sidebar} onChange={(e) => setNewMember((p) => ({ ...p, sidebar: e.target.value }))}>
+                {SIDEBAR_OPTIONS.map((o) => <option key={o} value={o}>{o === 'all' ? 'All (Admin)' : o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
+              </select>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" onClick={addMember}>Add Member</button>
+            <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Team table */}
+      <div className="team-table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Title</th>
+              <th>Email</th>
+              <th>Access Level</th>
+              <th>Portal View</th>
+              <th style={{ width: 80 }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {members.map((m) => (
+              editingId === m.id ? (
+                <tr key={m.id} style={{ background: '#f8fafc' }}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.bg, color: m.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(editDraft.name ?? m.name)}</div>
+                      <input value={editDraft.name ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 130 }} />
+                    </div>
+                  </td>
+                  <td><input value={editDraft.title ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, title: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 140 }} /></td>
+                  <td><input value={editDraft.email ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, email: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 180 }} /></td>
+                  <td>
+                    <select value={editDraft.access ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, access: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px' }}>
+                      {ACCESS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select value={editDraft.sidebar ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, sidebar: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px' }}>
+                      {SIDEBAR_OPTIONS.map((o) => <option key={o} value={o}>{o === 'all' ? 'All (Admin)' : o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => commitEdit(m.id)}>Save</button>
+                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={cancelEdit}>✕</button>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                <tr key={m.id}>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.bg, color: m.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{m.avatar || initials(m.name)}</div>
+                      <span style={{ fontWeight: 600, color: '#111827' }}>{m.name}</span>
+                    </div>
+                  </td>
+                  <td style={{ color: '#6b7280' }}>{m.title}</td>
+                  <td style={{ color: '#6b7280' }}>{m.email}</td>
+                  <td><span className={`badge ${accessBadge[m.access] ?? 'badge-gray'}`}>{m.access}</span></td>
+                  <td style={{ color: '#6b7280', textTransform: 'capitalize' }}>{m.sidebar === 'all' ? 'All (Admin)' : m.sidebar}</td>
+                  <td>
+                    {removeConfirm === m.id ? (
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: '#b91c1c' }}>Remove?</span>
+                        <button className="btn" style={{ fontSize: 10, padding: '2px 6px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: 4 }} onClick={() => removeMember(m.id)}>Yes</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => setRemoveConfirm(null)}>No</button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => startEdit(m)}>Edit</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px', color: '#9ca3af' }} onClick={() => setRemoveConfirm(m.id)}>✕</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              )
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <div style={{ marginTop: 14, fontSize: 11, color: '#9ca3af' }}>
+        {members.length} team member{members.length !== 1 ? 's' : ''} · Changes apply on next login
+      </div>
+    </div>
+  )
+}
+
+// ─── Connections Tab ──────────────────────────────────────────────────────────
+
+const CONNECTIONS_DATA = [
+  {
+    id: 'yardi',
+    icon: '🏢',
+    name: 'Yardi Voyager',
+    status: 'connected' as const,
+    meta: 'Rent roll, GL, work orders, AP/AR — primary property management system',
+    sync: 'Synced every 30 min',
+    fields: [
+      { label: 'Server URL',    key: 'url',      placeholder: 'https://yourfirm.yardipcmng.com' },
+      { label: 'Username',      key: 'user',     placeholder: 'api-user@erpindustrials' },
+      { label: 'Entity ID',     key: 'entity',   placeholder: 'ERP001' },
+      { label: 'Sync Interval', key: 'interval', placeholder: '30 min' },
+    ],
+  },
+  {
+    id: 'salesforce',
+    icon: '📊',
+    name: 'Salesforce',
+    status: 'connected' as const,
+    meta: 'LP profiles, fund pipeline, leasing prospects, and email logs',
+    sync: 'Synced every 15 min',
+    fields: [
+      { label: 'Instance URL', key: 'url',    placeholder: 'https://erpindustrials.my.salesforce.com' },
+      { label: 'Client ID',    key: 'client', placeholder: 'Connected App Client ID' },
+      { label: 'Sandbox Mode', key: 'sandbox',placeholder: 'false' },
+    ],
+  },
+  {
+    id: 'onedrive',
+    icon: '📁',
+    name: 'OneDrive',
+    status: 'connected' as const,
+    meta: 'Document vault source — fund docs, leases, vendor contracts, and reports',
+    sync: 'Real-time via webhook',
+    fields: [
+      { label: 'Tenant ID',    key: 'tenant', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+      { label: 'Drive ID',     key: 'drive',  placeholder: 'b!xxxxxxxxxxxxxxxx' },
+      { label: 'Root Folder',  key: 'folder', placeholder: '/ERP Industrials' },
+    ],
+  },
+  {
+    id: 'docusign',
+    icon: '✍️',
+    name: 'DocuSign',
+    status: 'connected' as const,
+    meta: 'Lease execution, capital call notices, and K-1 delivery workflows',
+    sync: 'Webhook connected',
+    fields: [
+      { label: 'Account ID',  key: 'account', placeholder: 'DocuSign Account ID' },
+      { label: 'Base URI',    key: 'uri',     placeholder: 'https://na4.docusign.net' },
+      { label: 'Webhook URL', key: 'webhook', placeholder: 'https://yourapp.com/webhooks/docusign' },
+    ],
+  },
+  {
+    id: 'fathom',
+    icon: '🎤',
+    name: 'Fathom',
+    status: 'connected' as const,
+    meta: 'Meeting transcripts for executive assistant and CIO follow-up workflows',
+    sync: 'Webhook connected',
+    fields: [
+      { label: 'API Key',     key: 'key',     placeholder: 'fathom_live_xxxxxxxxxxxx' },
+      { label: 'Webhook URL', key: 'webhook', placeholder: 'https://yourapp.com/webhooks/fathom' },
+    ],
+  },
+  {
+    id: 'm365',
+    icon: '📅',
+    name: 'Microsoft 365',
+    status: 'connected' as const,
+    meta: 'Calendar triggers for meeting prep and email send/receive for all agents',
+    sync: 'Real-time via Graph API',
+    fields: [
+      { label: 'Tenant ID',    key: 'tenant', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+      { label: 'Client ID',    key: 'client', placeholder: 'App Registration Client ID' },
+      { label: 'Mailbox',      key: 'mailbox',placeholder: 'agents@erpindustrials.com' },
+    ],
+  },
+]
+
+function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
+  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
+    Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }]))
+  )
+  const [expandedConn, setExpandedConn] = useState<string | null>(null)
+
+  function toggleConn(id: string) {
+    setExpandedConn((prev) => (prev === id ? null : id))
+  }
+
+  function toggleConnStatus(id: string) {
+    setConns((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' : 'connected' },
+    }))
+  }
+
+  function setField(connId: string, key: string, val: string) {
+    setConns((prev) => ({
+      ...prev,
+      [connId]: { ...prev[connId], values: { ...prev[connId].values, [key]: val } },
+    }))
+  }
+
+  return (
+    <div>
+      <div className="settings-section">
+        <h3>Connected Systems</h3>
+        <p>Integration status for all data sources used by agents</p>
+      </div>
+      <div className="conn-grid">
+        {CONNECTIONS_DATA.map((conn) => {
+          const state = conns[conn.id]
+          const isConnected = state.status === 'connected'
+          const isExpanded = expandedConn === conn.id
+          return (
+            <div key={conn.id} className="conn-card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="conn-header">
+                <div className="conn-icon">{conn.icon}</div>
+                <div style={{ flex: 1 }}>
+                  <div className="conn-name">{conn.name}</div>
+                  <div className={`conn-status ${isConnected ? 'connected' : 'disconnected'}`}>
+                    {isConnected ? '● Connected' : '○ Disconnected'}
+                  </div>
+                </div>
+                {/* Connected / Disconnected toggle */}
+                <div
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
+                  onClick={() => toggleConnStatus(conn.id)}
+                  title={isConnected ? 'Click to disconnect' : 'Click to connect'}
+                >
+                  <div className={`toggle ${isConnected ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
+                </div>
+              </div>
+              <div className="conn-meta">{conn.meta}</div>
+              <div className="conn-footer">
+                <span className="sync-badge">{conn.sync}</span>
+                <button
+                  className="btn btn-ghost"
+                  style={{ fontSize: 11, padding: '3px 10px' }}
+                  onClick={() => toggleConn(conn.id)}
+                >
+                  {isExpanded ? 'Close' : 'Configure'}
+                </button>
+              </div>
+
+              {/* Expanded config panel */}
+              {isExpanded && (
+                <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {conn.fields.map((f) => (
+                    <div key={f.key} className="field" style={{ margin: 0 }}>
+                      <label>{f.label}</label>
+                      <input
+                        placeholder={f.placeholder}
+                        value={state.values[f.key] ?? ''}
+                        onChange={(e) => setField(conn.id, f.key, e.target.value)}
+                      />
+                    </div>
+                  ))}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={saveChanges}>Save</button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpandedConn(null)}>Cancel</button>
+                    {saved && <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✓ Saved</span>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )
