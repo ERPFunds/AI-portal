@@ -10,6 +10,9 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [forgotMode, setForgotMode] = useState(false)
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [resetSent, setResetSent] = useState(false)
   const router = useRouter()
 
   const supabase = createBrowserClient(
@@ -34,6 +37,37 @@ export default function LoginPage() {
 
     router.push('/dashboard')
     router.refresh()
+  }
+
+  async function handleForgotPassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (!forgotEmail) return
+    setError('')
+    setLoading(true)
+
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail, {
+      redirectTo: `${window.location.origin}/auth/reset-password`,
+    })
+
+    setLoading(false)
+    if (resetError) {
+      setError(resetError.message)
+    } else {
+      setResetSent(true)
+    }
+  }
+
+  function openForgot() {
+    setForgotMode(true)
+    setForgotEmail(selectedRole ? ROLES[selectedRole].email : '')
+    setError('')
+  }
+
+  function closeForgot() {
+    setForgotMode(false)
+    setResetSent(false)
+    setForgotEmail('')
+    setError('')
   }
 
   return (
@@ -82,7 +116,7 @@ export default function LoginPage() {
         })}
       </div>
 
-      {selectedRole && (
+      {selectedRole && !forgotMode && (
         <form
           onSubmit={handleLogin}
           style={{
@@ -136,6 +170,73 @@ export default function LoginPage() {
               {loading ? 'Signing in…' : 'Sign In →'}
             </button>
           </div>
+          <button
+            type="button"
+            onClick={openForgot}
+            style={{ background: 'none', border: 'none', color: '#888', fontSize: 12, cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            Forgot password?
+          </button>
+        </form>
+      )}
+
+      {forgotMode && (
+        <form
+          onSubmit={handleForgotPassword}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 10,
+            width: '100%',
+            maxWidth: 340,
+            padding: '0 24px',
+          }}
+        >
+          {resetSent ? (
+            <>
+              <div style={{ fontSize: 13, color: '#3DAE7A', textAlign: 'center' }}>
+                Reset link sent — check your email.
+              </div>
+              <button type="button" className="btn btn-ghost" style={{ width: '100%' }} onClick={closeForgot}>
+                Back to sign in
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, color: '#888', textAlign: 'center' }}>
+                Enter the email address on your account
+              </div>
+              <input
+                type="email"
+                placeholder="Your email"
+                value={forgotEmail}
+                onChange={(e) => setForgotEmail(e.target.value)}
+                autoFocus
+                style={{
+                  width: '100%',
+                  background: '#161B26',
+                  border: '1px solid #252D3D',
+                  borderRadius: 8,
+                  padding: '10px 14px',
+                  fontSize: 14,
+                  color: '#E8E6E1',
+                  outline: 'none',
+                }}
+              />
+              {error && (
+                <div style={{ fontSize: 12, color: '#E55A4E', textAlign: 'center' }}>{error}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                <button type="button" className="btn btn-ghost" style={{ flex: 1 }} onClick={closeForgot}>
+                  Back
+                </button>
+                <button type="submit" className="btn btn-primary" style={{ flex: 2 }} disabled={loading || !forgotEmail}>
+                  {loading ? 'Sending…' : 'Send reset link'}
+                </button>
+              </div>
+            </>
+          )}
         </form>
       )}
     </div>
