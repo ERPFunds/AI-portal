@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
-export default function ResetPasswordPage() {
+function ResetPasswordForm() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [error, setError] = useState('')
@@ -50,80 +50,87 @@ export default function ResetPasswordPage() {
   }
 
   return (
+    <form
+      onSubmit={handleReset}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 10,
+        width: '100%',
+        maxWidth: 340,
+        padding: '0 24px',
+      }}
+    >
+      <div style={{ fontSize: 14, color: '#E8E6E1', fontWeight: 600 }}>Set new password</div>
+
+      {error && (
+        <div style={{ fontSize: 12, color: '#E55A4E', textAlign: 'center' }}>{error}</div>
+      )}
+
+      {verified && (
+        <>
+          <input
+            type="password"
+            placeholder="New password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoFocus
+            style={{
+              width: '100%',
+              background: '#161B26',
+              border: '1px solid #252D3D',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 14,
+              color: '#E8E6E1',
+              outline: 'none',
+            }}
+          />
+          <input
+            type="password"
+            placeholder="Confirm new password"
+            value={confirm}
+            onChange={(e) => setConfirm(e.target.value)}
+            style={{
+              width: '100%',
+              background: '#161B26',
+              border: '1px solid #252D3D',
+              borderRadius: 8,
+              padding: '10px 14px',
+              fontSize: 14,
+              color: '#E8E6E1',
+              outline: 'none',
+            }}
+          />
+          <button
+            type="submit"
+            className="btn btn-primary"
+            style={{ width: '100%' }}
+            disabled={loading || !password || !confirm}
+          >
+            {loading ? 'Updating…' : 'Update password'}
+          </button>
+        </>
+      )}
+
+      {!verified && !error && (
+        <div style={{ fontSize: 12, color: '#888' }}>Verifying link…</div>
+      )}
+    </form>
+  )
+}
+
+export default function ResetPasswordPage() {
+  return (
     <div id="loginScreen">
       <div className="login-logo">
         <h1>ERP <span style={{ color: '#C9A84C' }}>Industrials</span></h1>
         <p>AI Agent Portal</p>
       </div>
-
-      <form
-        onSubmit={handleReset}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 10,
-          width: '100%',
-          maxWidth: 340,
-          padding: '0 24px',
-        }}
-      >
-        <div style={{ fontSize: 14, color: '#E8E6E1', fontWeight: 600 }}>Set new password</div>
-
-        {error && (
-          <div style={{ fontSize: 12, color: '#E55A4E', textAlign: 'center' }}>{error}</div>
-        )}
-
-        {verified && (
-          <>
-            <input
-              type="password"
-              placeholder="New password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoFocus
-              style={{
-                width: '100%',
-                background: '#161B26',
-                border: '1px solid #252D3D',
-                borderRadius: 8,
-                padding: '10px 14px',
-                fontSize: 14,
-                color: '#E8E6E1',
-                outline: 'none',
-              }}
-            />
-            <input
-              type="password"
-              placeholder="Confirm new password"
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-              style={{
-                width: '100%',
-                background: '#161B26',
-                border: '1px solid #252D3D',
-                borderRadius: 8,
-                padding: '10px 14px',
-                fontSize: 14,
-                color: '#E8E6E1',
-                outline: 'none',
-              }}
-            />
-            <button
-              type="submit"
-              className="btn btn-primary"
-              style={{ width: '100%' }}
-              disabled={loading || !password || !confirm}
-            >
-              {loading ? 'Updating…' : 'Update password'}
-            </button>
-          </>
-        )}
-
-        {!verified && !error && (
-          <div style={{ fontSize: 12, color: '#888' }}>Verifying link…</div>
-        )}
-      </form>
+      <Suspense fallback={<div style={{ fontSize: 12, color: '#888' }}>Loading…</div>}>
+        <ResetPasswordForm />
+      </Suspense>
     </div>
   )
 }
