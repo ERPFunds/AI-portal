@@ -1348,14 +1348,16 @@ function TeamTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => vo
           <h3>Team & Roles</h3>
           <p>Manage portal access and role assignments for your team</p>
         </div>
-        <button className="btn btn-primary" style={{ marginTop: 4 }} onClick={() => { setShowAdd(true); setEditingId(null) }}>+ Add Member</button>
+        <button className="btn btn-primary" style={{ marginTop: 4, flexShrink: 0 }} onClick={() => { setShowAdd((p) => !p); setEditingId(null) }}>
+          {showAdd ? 'Cancel' : '+ Add Member'}
+        </button>
       </div>
 
       {/* Add member form */}
       {showAdd && (
         <div style={{ background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 10, padding: '16px 20px', marginBottom: 16 }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: '#0e7490', marginBottom: 12 }}>New Team Member</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 12 }}>
             <div className="field">
               <label>Full Name</label>
               <input placeholder="Jane Smith" value={newMember.name} onChange={(e) => setNewMember((p) => ({ ...p, name: e.target.value }))} />
@@ -1364,9 +1366,9 @@ function TeamTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => vo
               <label>Job Title</label>
               <input placeholder="Controller" value={newMember.title} onChange={(e) => setNewMember((p) => ({ ...p, title: e.target.value }))} />
             </div>
-            <div className="field">
+            <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Email</label>
-              <input placeholder="jane@erpindustrials.com" value={newMember.email} onChange={(e) => setNewMember((p) => ({ ...p, email: e.target.value }))} />
+              <input type="email" placeholder="jane@erpindustrials.com" value={newMember.email} onChange={(e) => setNewMember((p) => ({ ...p, email: e.target.value }))} />
             </div>
             <div className="field">
               <label>Access Level</label>
@@ -1388,82 +1390,94 @@ function TeamTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => vo
         </div>
       )}
 
-      {/* Team table */}
-      <div className="team-table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Title</th>
-              <th>Email</th>
-              <th>Access Level</th>
-              <th>Portal View</th>
-              <th style={{ width: 80 }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {members.map((m) => (
-              editingId === m.id ? (
-                <tr key={m.id} style={{ background: '#f8fafc' }}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.bg, color: m.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{initials(editDraft.name ?? m.name)}</div>
-                      <input value={editDraft.name ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 130 }} />
-                    </div>
-                  </td>
-                  <td><input value={editDraft.title ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, title: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 140 }} /></td>
-                  <td><input value={editDraft.email ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, email: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px', width: 180 }} /></td>
-                  <td>
-                    <select value={editDraft.access ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, access: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px' }}>
+      {/* Team member cards */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+        {members.map((m, idx) => (
+          <div key={m.id} style={{ borderBottom: idx < members.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+            {/* Member row */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: editingId === m.id ? '#f8fafc' : '#ffffff' }}>
+              {/* Avatar */}
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: m.bg, color: m.color, fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {m.avatar || initials(m.name)}
+              </div>
+              {/* Identity */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 2 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{m.name}</span>
+                  <span style={{ fontSize: 11, color: '#9ca3af' }}>{m.title}</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#6b7280', wordBreak: 'break-all' }}>{m.email}</div>
+              </div>
+              {/* Badges */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <span className={`badge ${accessBadge[m.access] ?? 'badge-gray'}`}>{m.access}</span>
+                <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', padding: '2px 8px', borderRadius: 10, textTransform: 'capitalize' }}>
+                  {m.sidebar === 'all' ? 'All views' : m.sidebar}
+                </span>
+              </div>
+              {/* Actions */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                {removeConfirm === m.id ? (
+                  <>
+                    <span style={{ fontSize: 11, color: '#b91c1c', alignSelf: 'center' }}>Remove?</span>
+                    <button className="btn" style={{ fontSize: 11, padding: '3px 8px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: 6 }} onClick={() => removeMember(m.id)}>Yes</button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 8px' }} onClick={() => setRemoveConfirm(null)}>No</button>
+                  </>
+                ) : editingId === m.id ? (
+                  <>
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 12px' }} onClick={() => commitEdit(m.id)}>Save</button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={cancelEdit}>Cancel</button>
+                  </>
+                ) : (
+                  <>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 12px' }} onClick={() => startEdit(m)}>Edit</button>
+                    <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px', color: '#d1d5db' }} onClick={() => setRemoveConfirm(m.id)}>✕</button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Edit form — expands below the row */}
+            {editingId === m.id && (
+              <div style={{ padding: '0 16px 16px 16px', background: '#f8fafc', borderTop: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 14 }}>
+                  <div className="field">
+                    <label>Full Name</label>
+                    <input value={editDraft.name ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, name: e.target.value }))} />
+                  </div>
+                  <div className="field">
+                    <label>Job Title</label>
+                    <input value={editDraft.title ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, title: e.target.value }))} />
+                  </div>
+                  <div className="field" style={{ gridColumn: '1 / -1' }}>
+                    <label>Email</label>
+                    <input type="email" value={editDraft.email ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, email: e.target.value }))} />
+                  </div>
+                  <div className="field">
+                    <label>Access Level</label>
+                    <select value={editDraft.access ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, access: e.target.value }))}>
                       {ACCESS_OPTIONS.map((o) => <option key={o}>{o}</option>)}
                     </select>
-                  </td>
-                  <td>
-                    <select value={editDraft.sidebar ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, sidebar: e.target.value }))} style={{ fontSize: 12, padding: '3px 8px' }}>
+                  </div>
+                  <div className="field">
+                    <label>Portal View</label>
+                    <select value={editDraft.sidebar ?? ''} onChange={(e) => setEditDraft((p) => ({ ...p, sidebar: e.target.value }))}>
                       {SIDEBAR_OPTIONS.map((o) => <option key={o} value={o}>{o === 'all' ? 'All (Admin)' : o.charAt(0).toUpperCase() + o.slice(1)}</option>)}
                     </select>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 4 }}>
-                      <button className="btn btn-primary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => commitEdit(m.id)}>Save</button>
-                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: '3px 8px' }} onClick={cancelEdit}>✕</button>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                <tr key={m.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <div style={{ width: 28, height: 28, borderRadius: '50%', background: m.bg, color: m.color, fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{m.avatar || initials(m.name)}</div>
-                      <span style={{ fontWeight: 600, color: '#111827' }}>{m.name}</span>
-                    </div>
-                  </td>
-                  <td style={{ color: '#6b7280' }}>{m.title}</td>
-                  <td style={{ color: '#6b7280' }}>{m.email}</td>
-                  <td><span className={`badge ${accessBadge[m.access] ?? 'badge-gray'}`}>{m.access}</span></td>
-                  <td style={{ color: '#6b7280', textTransform: 'capitalize' }}>{m.sidebar === 'all' ? 'All (Admin)' : m.sidebar}</td>
-                  <td>
-                    {removeConfirm === m.id ? (
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                        <span style={{ fontSize: 10, color: '#b91c1c' }}>Remove?</span>
-                        <button className="btn" style={{ fontSize: 10, padding: '2px 6px', background: '#fef2f2', color: '#b91c1c', border: '1px solid #fca5a5', borderRadius: 4 }} onClick={() => removeMember(m.id)}>Yes</button>
-                        <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => setRemoveConfirm(null)}>No</button>
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => startEdit(m)}>Edit</button>
-                        <button className="btn btn-ghost" style={{ fontSize: 11, padding: '2px 8px', color: '#9ca3af' }} onClick={() => setRemoveConfirm(m.id)}>✕</button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              )
-            ))}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '6px 18px' }} onClick={() => commitEdit(m.id)}>Save Changes</button>
+                  <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={cancelEdit}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
-      <div style={{ marginTop: 14, fontSize: 11, color: '#9ca3af' }}>
-        {members.length} team member{members.length !== 1 ? 's' : ''} · Changes apply on next login
+
+      <div style={{ marginTop: 10, fontSize: 11, color: '#9ca3af' }}>
+        {members.length} team member{members.length !== 1 ? 's' : ''}
       </div>
     </div>
   )
