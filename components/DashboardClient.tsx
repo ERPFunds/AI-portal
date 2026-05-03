@@ -1908,14 +1908,14 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
 
 const SOP_CATEGORIES = [
-  { icon: '💰', label: 'Finance & Accounting', desc: 'AP/AR workflows, month-end close, invoice approval thresholds, GL coding standards' },
-  { icon: '🏢', label: 'Property Operations', desc: 'Work order dispatch, vendor onboarding, COI requirements, emergency escalation protocols' },
-  { icon: '🔑', label: 'Leasing', desc: 'Prospect intake, showing process, proposal guidelines, renewal playbook, lease execution checklist' },
-  { icon: '👥', label: 'Investor Relations', desc: 'LP communication standards, quarterly report cadence, capital call procedures, fund update templates' },
-  { icon: '🏭', label: 'Acquisitions', desc: 'Deal screening criteria, underwriting process, due diligence checklist, IC memo format' },
-  { icon: '👤', label: 'People & HR', desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, PTO policy' },
-  { icon: '🤖', label: 'AI Agent Protocols', desc: 'Agent escalation rules, approval thresholds, autonomy guidelines, output review standards' },
-  { icon: '🔐', label: 'Compliance & Controls', desc: 'Financial controls policy, data access rules, audit trail requirements, document retention' },
+  { icon: '🤖', label: 'Agent Working Guides',          desc: 'How to interact with each agent — submitting tasks, reviewing outputs, handling escalations, and adjusting autonomy settings per agent' },
+  { icon: '📊', label: 'Dashboard & Portal How-Tos',    desc: 'Step-by-step instructions for updating portal views: rent roll, capital calls, leasing pipeline, work orders, connections, and agent config' },
+  { icon: '💰', label: 'Finance Agent SOPs',            desc: 'Invoice approval workflows and GL coding for the Financial Controls agent; month-end close procedures for the Accounting Operations agent' },
+  { icon: '🏢', label: 'Property Operations Agent SOPs',desc: 'Work order submission, vendor dispatch, COI requirements, and escalation handling for the Property Operations agent' },
+  { icon: '🔑', label: 'Leasing Agent SOPs',            desc: 'Prospect intake, proposal review, renewal tracking, and lease execution checklist for the Leasing agent' },
+  { icon: '👥', label: 'Investor Relations Agent SOPs', desc: 'LP communication standards, capital call procedures, quarterly report cadence, and fund update templates for the IR agent' },
+  { icon: '🏭', label: 'Acquisitions Agent SOPs',       desc: 'Deal screening criteria, underwriting process, due diligence checklist, and IC memo format for the Acquisitions agent' },
+  { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]
 
 function SOPsView() {
@@ -1935,12 +1935,12 @@ function SOPsView() {
   return (
     <div>
       <div className="page-header">
-        <h2>Standard Operating Procedures</h2>
-        <p>Company-wide SOPs — accessible by agents and team members</p>
+        <h2>SOPs & Agent Guides</h2>
+        <p>Instructions for working with agents and managing portal dashboards — the team's reference library for how everything runs</p>
       </div>
       <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>📌</span>
-        <span style={{ fontSize: 12, color: '#92400e' }}>SOPs stored here are indexed into agent knowledge bases. Keeping them current ensures agents follow the latest procedures.</span>
+        <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         {SOP_CATEGORIES.map((cat) => {
