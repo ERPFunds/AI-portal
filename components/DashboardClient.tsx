@@ -1553,19 +1553,21 @@ const CONNECTIONS_DATA = [
       { label: 'Transcript Path',key: 'path',     placeholder: '/drives/{driveId}/items/{folderId}' },
     ],
   },
-  {
-    id: 'm365',
-    icon: '📅',
-    name: 'Microsoft 365',
-    status: 'connected' as const,
-    meta: 'Calendar triggers for meeting prep and email send/receive for all agents',
-    sync: 'Real-time via Graph API',
-    fields: [
-      { label: 'Tenant ID',    key: 'tenant', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { label: 'Client ID',    key: 'client', placeholder: 'App Registration Client ID' },
-      { label: 'Mailbox',      key: 'mailbox',placeholder: 'agents@erpindustrials.com' },
-    ],
-  },
+]
+
+// M365 accounts live separately — supports multiple named accounts
+type M365Account = {
+  id: string
+  label: string       // e.g. "Meghan Berry"
+  email: string
+  tenantId: string
+  clientId: string
+  status: 'connected' | 'disconnected'
+}
+
+const DEFAULT_M365_ACCOUNTS: M365Account[] = [
+  { id: 'm365-meghan',  label: 'Meghan Berry',    email: 'meghan@erpindustrials.com',  tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-michele', label: 'Michele Parad',   email: 'michele.parad@gmail.com',   tenantId: '', clientId: '', status: 'disconnected' },
 ]
 
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
@@ -1574,23 +1576,47 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   )
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
 
+  // Microsoft 365 multi-account state
+  const [m365Accounts, setM365Accounts] = useState<M365Account[]>(DEFAULT_M365_ACCOUNTS)
+  const [expandedM365, setExpandedM365] = useState<string | null>(null)
+  const [showAddM365, setShowAddM365] = useState(false)
+  const [newM365, setNewM365] = useState({ label: '', email: '', tenantId: '', clientId: '' })
+
   function toggleConn(id: string) {
     setExpandedConn((prev) => (prev === id ? null : id))
   }
-
   function toggleConnStatus(id: string) {
-    setConns((prev) => ({
-      ...prev,
-      [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' : 'connected' },
-    }))
+    setConns((prev) => ({ ...prev, [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' : 'connected' } }))
+  }
+  function setField(connId: string, key: string, val: string) {
+    setConns((prev) => ({ ...prev, [connId]: { ...prev[connId], values: { ...prev[connId].values, [key]: val } } }))
   }
 
-  function setField(connId: string, key: string, val: string) {
-    setConns((prev) => ({
-      ...prev,
-      [connId]: { ...prev[connId], values: { ...prev[connId].values, [key]: val } },
-    }))
+  function updateM365Account(id: string, field: keyof M365Account, val: string) {
+    setM365Accounts((prev) => prev.map((a) => a.id === id ? { ...a, [field]: val } : a))
   }
+  function toggleM365Status(id: string) {
+    setM365Accounts((prev) => prev.map((a) => a.id === id ? { ...a, status: a.status === 'connected' ? 'disconnected' : 'connected' } : a))
+  }
+  function removeM365Account(id: string) {
+    setM365Accounts((prev) => prev.filter((a) => a.id !== id))
+    if (expandedM365 === id) setExpandedM365(null)
+  }
+  function addM365Account() {
+    if (!newM365.label.trim() || !newM365.email.trim()) return
+    setM365Accounts((prev) => [...prev, {
+      id: `m365-${Date.now()}`,
+      label: newM365.label.trim(),
+      email: newM365.email.trim(),
+      tenantId: newM365.tenantId.trim(),
+      clientId: newM365.clientId.trim(),
+      status: 'disconnected',
+    }])
+    setNewM365({ label: '', email: '', tenantId: '', clientId: '' })
+    setShowAddM365(false)
+  }
+
+  const connectedM365 = m365Accounts.filter((a) => a.status === 'connected').length
 
   return (
     <div>
@@ -1599,6 +1625,114 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
         <p>Integration status for all data sources used by agents</p>
       </div>
       <div className="conn-grid">
+
+        {/* ── Microsoft 365 multi-account card ── */}
+        <div className="conn-card" style={{ display: 'flex', flexDirection: 'column', gridColumn: '1 / -1' }}>
+          <div className="conn-header">
+            <div className="conn-icon">📅</div>
+            <div style={{ flex: 1 }}>
+              <div className="conn-name">Microsoft 365</div>
+              <div className={`conn-status ${connectedM365 > 0 ? 'connected' : 'disconnected'}`}>
+                {connectedM365 > 0 ? `● ${connectedM365} account${connectedM365 > 1 ? 's' : ''} connected` : '○ No accounts connected'}
+              </div>
+            </div>
+            <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px', flexShrink: 0 }} onClick={() => setShowAddM365((p) => !p)}>
+              {showAddM365 ? 'Cancel' : '+ Add Account'}
+            </button>
+          </div>
+          <div className="conn-meta">Calendar, email send/receive, and Teams transcript access via Microsoft Graph API — supports multiple mailboxes</div>
+
+          {/* Add account form */}
+          {showAddM365 && (
+            <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 10, paddingTop: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#0e7490', marginBottom: 2 }}>New M365 Account</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Display Name</label>
+                  <input placeholder="Meghan Berry" value={newM365.label} onChange={(e) => setNewM365((p) => ({ ...p, label: e.target.value }))} />
+                </div>
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Email / UPN</label>
+                  <input type="email" placeholder="meghan@erpindustrials.com" value={newM365.email} onChange={(e) => setNewM365((p) => ({ ...p, email: e.target.value }))} />
+                </div>
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Tenant ID</label>
+                  <input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={newM365.tenantId} onChange={(e) => setNewM365((p) => ({ ...p, tenantId: e.target.value }))} />
+                </div>
+                <div className="field" style={{ margin: 0 }}>
+                  <label>Client ID</label>
+                  <input placeholder="App Registration Client ID" value={newM365.clientId} onChange={(e) => setNewM365((p) => ({ ...p, clientId: e.target.value }))} />
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={addM365Account}>Add Account</button>
+                <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setShowAddM365(false)}>Cancel</button>
+              </div>
+            </div>
+          )}
+
+          {/* Account list */}
+          {m365Accounts.length > 0 && (
+            <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 0, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+              {m365Accounts.map((acct, idx) => (
+                <div key={acct.id} style={{ borderBottom: idx < m365Accounts.length - 1 ? '1px solid #f3f4f6' : 'none' }}>
+                  {/* Account row */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: expandedM365 === acct.id ? '#f8fafc' : '#ffffff' }}>
+                    <div style={{ width: 30, height: 30, borderRadius: 6, background: '#f0f4ff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0 }}>🪟</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{acct.label}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', wordBreak: 'break-all' }}>{acct.email}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: acct.status === 'connected' ? '#15803d' : '#9ca3af' }}>
+                        {acct.status === 'connected' ? '● Connected' : '○ Disconnected'}
+                      </span>
+                      <div className={`toggle ${acct.status === 'connected' ? 'on' : ''}`} style={{ width: 28, height: 16, cursor: 'pointer' }} onClick={() => toggleM365Status(acct.id)} />
+                      <button className="btn btn-ghost" style={{ fontSize: 10, padding: '2px 8px' }} onClick={() => setExpandedM365((p) => p === acct.id ? null : acct.id)}>
+                        {expandedM365 === acct.id ? 'Close' : 'Configure'}
+                      </button>
+                      <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db', fontSize: 13, padding: '2px 4px' }} onClick={() => removeM365Account(acct.id)} title="Remove">✕</button>
+                    </div>
+                  </div>
+
+                  {/* Expanded config for this account */}
+                  {expandedM365 === acct.id && (
+                    <div style={{ padding: '0 14px 14px 14px', background: '#f8fafc', borderTop: '1px solid #e5e7eb' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, paddingTop: 12 }}>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Display Name</label>
+                          <input value={acct.label} onChange={(e) => updateM365Account(acct.id, 'label', e.target.value)} />
+                        </div>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Email / UPN</label>
+                          <input type="email" value={acct.email} onChange={(e) => updateM365Account(acct.id, 'email', e.target.value)} />
+                        </div>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Tenant ID</label>
+                          <input placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" value={acct.tenantId} onChange={(e) => updateM365Account(acct.id, 'tenantId', e.target.value)} />
+                        </div>
+                        <div className="field" style={{ margin: 0 }}>
+                          <label>Client ID</label>
+                          <input placeholder="App Registration Client ID" value={acct.clientId} onChange={(e) => updateM365Account(acct.id, 'clientId', e.target.value)} />
+                        </div>
+                      </div>
+                      <div style={{ marginTop: 10, fontSize: 10, color: '#9ca3af', lineHeight: 1.5 }}>
+                        Requires an Azure App Registration with <strong>Mail.Send</strong>, <strong>Calendars.ReadWrite</strong>, and <strong>OnlineMeetings.Read</strong> permissions granted for this user.
+                      </div>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                        <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={saveChanges}>Save</button>
+                        <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setExpandedM365(null)}>Close</button>
+                        {saved && <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✓ Saved</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ── All other single-account connections ── */}
         {CONNECTIONS_DATA.map((conn) => {
           const state = conns[conn.id]
           const isConnected = state.status === 'connected'
@@ -1613,38 +1747,23 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                     {isConnected ? '● Connected' : '○ Disconnected'}
                   </div>
                 </div>
-                {/* Connected / Disconnected toggle */}
-                <div
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }}
-                  onClick={() => toggleConnStatus(conn.id)}
-                  title={isConnected ? 'Click to disconnect' : 'Click to connect'}
-                >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => toggleConnStatus(conn.id)}>
                   <div className={`toggle ${isConnected ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
                 </div>
               </div>
               <div className="conn-meta">{conn.meta}</div>
               <div className="conn-footer">
                 <span className="sync-badge">{conn.sync}</span>
-                <button
-                  className="btn btn-ghost"
-                  style={{ fontSize: 11, padding: '3px 10px' }}
-                  onClick={() => toggleConn(conn.id)}
-                >
+                <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => toggleConn(conn.id)}>
                   {isExpanded ? 'Close' : 'Configure'}
                 </button>
               </div>
-
-              {/* Expanded config panel */}
               {isExpanded && (
                 <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {conn.fields.map((f) => (
                     <div key={f.key} className="field" style={{ margin: 0 }}>
                       <label>{f.label}</label>
-                      <input
-                        placeholder={f.placeholder}
-                        value={state.values[f.key] ?? ''}
-                        onChange={(e) => setField(conn.id, f.key, e.target.value)}
-                      />
+                      <input placeholder={f.placeholder} value={state.values[f.key] ?? ''} onChange={(e) => setField(conn.id, f.key, e.target.value)} />
                     </div>
                   ))}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
