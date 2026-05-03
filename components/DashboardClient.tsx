@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { ROLES, type RoleKey, type Role } from '@/lib/data/roles'
@@ -123,7 +123,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
   // ─── Views ───────────────────────────────────────────────────────────────────
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView />,
+    dashboard: <DashboardView roleKey={roleKey} userName={role.name} />,
     inbox: (
       <InboxView
         inboxItems={inboxItems}
@@ -435,25 +435,127 @@ function AgentConfigTab({
 
 // ─── Dashboard / AI Command Center ────────────────────────────────────────────
 
-function DashboardView() {
+type ChatMessage = { role: 'user' | 'assistant'; content: string; streaming?: boolean }
+
+function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const feedRef = React.useRef<HTMLDivElement>(null)
+
+  React.useEffect(() => {
+    if (feedRef.current) {
+      feedRef.current.scrollTop = feedRef.current.scrollHeight
+    }
+  }, [messages])
+
+  async function sendMessage() {
+    const text = input.trim()
+    if (!text || loading) return
+    setInput('')
+
+    const userMsg: ChatMessage = { role: 'user', content: text }
+    const history = [...messages, userMsg]
+    setMessages([...history, { role: 'assistant', content: '', streaming: true }])
+    setLoading(true)
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: history.map(({ role, content }) => ({ role, content })),
+        }),
+      })
+
+      if (!res.ok || !res.body) throw new Error('Request failed')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+      let full = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        full += decoder.decode(value, { stream: true })
+        setMessages([...history, { role: 'assistant', content: full, streaming: true }])
+      }
+
+      setMessages([...history, { role: 'assistant', content: full, streaming: false }])
+    } catch {
+      setMessages([...history, { role: 'assistant', content: 'Something went wrong — please try again.', streaming: false }])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+  }
+
+  const firstName = userName.split(' ')[0]
+
   return (
     <div className="ai-center">
       {/* Center Feed */}
       <div className="ai-main">
         <div className="ai-feed-header">
-          <h3>Live Activity</h3>
+          <h3>AI Command Center</h3>
           <div className="ai-live-dot">Live</div>
         </div>
-        <div className="ai-feed">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: '#9ca3af' }}>
-            <div style={{ fontSize: 32 }}>⚡</div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#6b7280' }}>No agent activity yet</div>
-            <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', maxWidth: 280 }}>Activity will appear here once agents are deployed and connected to your data sources</div>
-          </div>
+        <div className="ai-feed" ref={feedRef}>
+          {messages.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, color: '#9ca3af' }}>
+              <div style={{ fontSize: 32 }}>⚡</div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: '#6b7280' }}>Good morning, {firstName}</div>
+              <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center', maxWidth: 300, lineHeight: 1.6 }}>
+                Ask me anything about your portfolio, agents, or team — or ask me to draft something for you.
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 0' }}>
+              {messages.map((msg, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  flexDirection: msg.role === 'user' ? 'row-reverse' : 'row',
+                  gap: 10,
+                  alignItems: 'flex-start',
+                }}>
+                  {msg.role === 'assistant' && (
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: '#f0f9fa', border: '1px solid #A6C3C9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>⚡</div>
+                  )}
+                  <div style={{
+                    maxWidth: '78%',
+                    background: msg.role === 'user' ? '#111827' : '#ffffff',
+                    color: msg.role === 'user' ? '#ffffff' : '#111827',
+                    border: msg.role === 'user' ? 'none' : '1px solid #e5e7eb',
+                    borderRadius: msg.role === 'user' ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                    padding: '10px 14px',
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    whiteSpace: 'pre-wrap',
+                  }}>
+                    {msg.content}
+                    {msg.streaming && <span style={{ opacity: 0.5, animation: 'pulse 1s infinite' }}>▋</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
         <div className="ai-cmd">
-          <input className="ai-cmd-input" type="text" placeholder="Ask your agents anything — e.g. 'What did IR do today?' or 'Draft a summary for Meghan'" />
-          <button className="ai-cmd-btn">↑</button>
+          <textarea
+            className="ai-cmd-input"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            placeholder={`Ask anything — e.g. "Draft a Q1 update for James Halverson" or "What should I prioritize today?"`}
+            rows={1}
+            style={{ resize: 'none', overflowY: 'hidden', lineHeight: '1.5' }}
+          />
+          <button className="ai-cmd-btn" onClick={sendMessage} disabled={loading || !input.trim()}>
+            {loading ? '…' : '↑'}
+          </button>
         </div>
       </div>
 
