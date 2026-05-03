@@ -1566,8 +1566,9 @@ type M365Account = {
 }
 
 const DEFAULT_M365_ACCOUNTS: M365Account[] = [
-  { id: 'm365-meghan',  label: 'Meghan Berry',  email: 'mberry@erpindustrials.com', tenantId: '', clientId: '', status: 'disconnected' },
-  { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpindustrials.com', tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-meghan',    label: 'Meghan Berry',    email: 'mberry@erpindustrials.com',    tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-michele',   label: 'Michele Parad',   email: 'mparad@erpindustrials.com',    tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-investors', label: 'Investor Inbox',  email: 'investors@erpindustrials.com', tenantId: '', clientId: '', status: 'disconnected' },
 ]
 
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
