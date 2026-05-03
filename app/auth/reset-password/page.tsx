@@ -19,16 +19,37 @@ function ResetPasswordForm() {
   )
 
   useEffect(() => {
+    // Supabase can send reset links in two formats:
+    // 1. PKCE flow: ?token_hash=xxx&type=recovery
+    // 2. Implicit flow: #access_token=xxx&type=recovery (in URL hash)
     const tokenHash = searchParams.get('token_hash')
     const type = searchParams.get('type')
+    const code = searchParams.get('code')
 
     if (tokenHash && type === 'recovery') {
+      // PKCE / token_hash flow
       supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ error }) => {
         if (error) setError('This reset link is invalid or has expired.')
         else setVerified(true)
       })
+    } else if (code) {
+      // PKCE code exchange flow
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) setError('This reset link is invalid or has expired.')
+        else setVerified(true)
+      })
     } else {
-      setError('Invalid reset link.')
+      // Check URL hash for implicit flow (access_token in hash)
+      const hash = window.location.hash
+      if (hash.includes('access_token') && hash.includes('type=recovery')) {
+        // The Supabase client picks up the session automatically from the hash
+        supabase.auth.getSession().then(({ data }) => {
+          if (data.session) setVerified(true)
+          else setError('Invalid reset link.')
+        })
+      } else {
+        setError('Invalid reset link.')
+      }
     }
   }, [])
 

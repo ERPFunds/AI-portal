@@ -104,7 +104,6 @@ export default function LoginPage() {
                 {role.avatar}
               </div>
               <h3>{role.name}</h3>
-              <p>{role.title}</p>
               <div
                 className="access-badge"
                 style={{ background: card.accessBg, color: card.accessColor }}
