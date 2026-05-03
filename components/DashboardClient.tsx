@@ -521,24 +521,13 @@ function InboxView({
   setSelectedInboxIdx: (v: number) => void
   roleKey: RoleKey
 }) {
-  if (inboxItems.length === 0) {
-    return (
-      <div>
-        <div className="page-header"><h2>Inbox</h2><p>All agent communications</p></div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 'calc(100vh - 200px)', color: '#9ca3af', fontSize: 14 }}>
-          No inbox items for this role.
-        </div>
-      </div>
-    )
-  }
-
   const selected = filteredInbox[selectedInboxIdx]
 
   return (
     <div>
       <div className="page-header">
-        <h2>Inbox</h2>
-        <p>{inboxItems.length} agent communications</p>
+        <h2>Agent Inbox</h2>
+        <p>{inboxItems.length > 0 ? `${inboxItems.length} agent communication${inboxItems.length !== 1 ? 's' : ''}` : 'Agent-drafted communications will appear here for your review'}</p>
       </div>
       <div className="inbox-wrap">
         <div className="inbox-left">
@@ -577,7 +566,14 @@ function InboxView({
                 <div className={`inbox-agent-tag badge ${item.agentBadge}`}>{item.agent}</div>
               </div>
             ))}
-            {filteredInbox.length === 0 && (
+            {filteredInbox.length === 0 && inboxItems.length === 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
+                <div style={{ fontSize: 28 }}>📭</div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>All clear</div>
+                <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.5, maxWidth: 200 }}>Agent drafts and communications will show up here once agents are active</div>
+              </div>
+            )}
+            {filteredInbox.length === 0 && inboxItems.length > 0 && (
               <div style={{ padding: 20, color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>No matching items</div>
             )}
           </div>
@@ -619,8 +615,14 @@ function InboxView({
               )}
             </>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, color: '#9ca3af', fontSize: 13 }}>
-              Select a message to view
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, padding: 40, color: '#9ca3af' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>✉️</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>{inboxItems.length > 0 ? 'Select a message to view' : 'No messages yet'}</div>
+              <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.6, maxWidth: 280 }}>
+                {inboxItems.length > 0
+                  ? 'Click a message on the left to read the thread and review any agent drafts.'
+                  : 'When an agent drafts a communication for your review — an LP update, lease proposal, or payment reminder — it will appear here for your approval before anything is sent.'}
+              </div>
             </div>
           )}
         </div>
