@@ -1553,6 +1553,32 @@ const CONNECTIONS_DATA = [
       { label: 'Transcript Path',key: 'path',     placeholder: '/drives/{driveId}/items/{folderId}' },
     ],
   },
+  {
+    id: 'dropbox',
+    icon: '📦',
+    name: 'Dropbox',
+    status: 'disconnected' as const,
+    meta: 'Document storage for investor decks, offering memoranda, and fund materials shared with LPs',
+    sync: 'Not connected',
+    fields: [
+      { label: 'App Key',        key: 'appKey',   placeholder: 'Dropbox App Key' },
+      { label: 'App Secret',     key: 'secret',   placeholder: 'Dropbox App Secret' },
+      { label: 'Folder Path',    key: 'folder',   placeholder: '/ERP Industrials/Investor Documents' },
+    ],
+  },
+  {
+    id: 'powerpoint',
+    icon: '📊',
+    name: 'Microsoft PowerPoint',
+    status: 'disconnected' as const,
+    meta: 'Reads and generates investor decks, offering memoranda, and LP presentation materials via Microsoft Graph API',
+    sync: 'Not connected',
+    fields: [
+      { label: 'Tenant ID',      key: 'tenant',   placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
+      { label: 'Client ID',      key: 'client',   placeholder: 'App Registration Client ID' },
+      { label: 'Template Folder',key: 'folder',   placeholder: '/sites/{site}/drives/{drive}/root:/Templates' },
+    ],
+  },
 ]
 
 // M365 accounts live separately — supports multiple named accounts
