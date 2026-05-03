@@ -695,7 +695,29 @@ const KB_CATEGORIES = [
 ]
 
 function KnowledgeBaseView() {
-  const [docs, setDocs] = useState<Record<string, string[]>>({})
+  const [docs, setDocs] = useState<Record<string, string[]>>({
+    'Investor Relations KB': [
+      'ERP_Funds_IV_-_Investor_Presentation_(9.24.25_DRAFT).ppt',
+      'ERP_Funds_II__III_Update_-_Investor_Presentation_(March_23_2023).pdf',
+      'ERP_Funds_III_-_Quarterly_Reporting_Package_(3.31.26)_(v4.14.26_DRAFT).xlsx',
+      'ERP_Space_Coast_Opportunity_Overview_(2.17.20).ppt',
+    ],
+    'IR & Capital KB': [
+      'ERP_1031_Industrial_Portfolio_IV_DST_-_PPM_(Compiled).pdf',
+      'ERP_1031_Industrial_Portfolio_IV_DST_-_Executive_Summary_(March_2026).pdf',
+      'ERP_Funds_III_LLC_(Private_Placement_Memorandum).pdf',
+      'ERP_Industrials_VII_-_Transaction_Overview_(3.02.26).pdf',
+      'ERP_Industrials_-_ERP_Controls__Responsibilities_(3.25.26).xlsx',
+      'ERP_Industrials_1788_-_ERP_Controls__Responsibilities_(3.25.26).xlsx',
+      'ERP_Industrials_-_Team_Member_Duties_(12.02.25).xlsx',
+      'ERP_Pipeline__Market_Analysis_(v.10.28.25).xlsx',
+      'ERP_Industrials_-_Job_Descriptions_(3.18.25).docx',
+      'Industrial_-_Improvements__Deferred_Maintenance_(3.25.26).xlsx',
+      'Industrial_-_Weekly_Agenda_(4.13.26).docx',
+      'ERP_MT_-_PCA_Tracker_(9.17.25).xlsx',
+      'ERP_Industrials_VII_-_DD_Tracking_(3.02.26).xls',
+    ],
+  })
   const [dragging, setDragging] = useState<string | null>(null)
 
   function handleFiles(kbLabel: string, files: FileList | null) {
