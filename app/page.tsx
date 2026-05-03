@@ -80,7 +80,7 @@ export default function LoginPage() {
       <div className="login-label">Select your profile to continue</div>
 
       <div className="role-grid">
-        {ROLE_CARDS.map((card) => {
+        {ROLE_CARDS.filter(card => card.key === 'meghan').map((card) => {
           const role = ROLES[card.key]
           const isSelected = selectedRole === card.key
           return (
