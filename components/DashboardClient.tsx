@@ -32,6 +32,15 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
   const [settingsTab, setSettingsTab] = useState('s-profile')
   const [openWorkflows, setOpenWorkflows] = useState<Record<string, boolean>>({})
 
+  // Shared agent config — used by both drawer and Settings > Agents tab
+  const [agentConfig, setAgentConfig] = useState<Record<string, {
+    auto: string; escal: string; active: boolean; kb: string; notes: string
+  }>>(() =>
+    Object.fromEntries(AGENTS.map((a) => [a.id, {
+      auto: a.auto, escal: a.escal, active: a.status === 'active', kb: a.kb, notes: '',
+    }]))
+  )
+
   const router = useRouter()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -152,6 +161,8 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
         userEmail={userEmail}
         settingsTab={settingsTab}
         setSettingsTab={setSettingsTab}
+        agentConfig={agentConfig}
+        setAgentConfig={setAgentConfig}
       />
     ),
     lp: <StubView title="LP Directory" icon="👥" desc="Limited partner profiles, commitment tracking, and Salesforce sync" />,
@@ -272,18 +283,112 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
               ))}
             </div>
           )}
-          {drawerTab === 'config' && (
-            <div>
-              <div className="config-grid">
-                <div className="config-item"><label>Escalation Contact</label><div className="config-val">{drawerAgent.escal}</div></div>
-                <div className="config-item"><label>Autonomy Level</label><div className="config-val">{drawerAgent.auto}</div></div>
-                <div className="config-item"><label>Knowledge Base</label><div className="config-val">{drawerAgent.kb}</div></div>
-                <div className="config-item"><label>Total Runs (7d)</label><div className="config-val">{drawerAgent.runs}</div></div>
-                <div className="config-item"><label>Last Active</label><div className="config-val">{drawerAgent.last}</div></div>
-                <div className="config-item"><label>Category</label><div className="config-val">{drawerAgent.cat}</div></div>
+          {drawerTab === 'config' && drawerAgentId && (() => {
+            const cfg = agentConfig[drawerAgentId]
+            const [localSaved, setLocalSaved] = useState(false)
+            function save() { setLocalSaved(true); setTimeout(() => setLocalSaved(false), 2000) }
+            function update(field: string, val: string | boolean) {
+              setAgentConfig((prev) => ({ ...prev, [drawerAgentId!]: { ...prev[drawerAgentId!], [field]: val } }))
+            }
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+                {/* Active toggle */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>Agent Status</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Enable or disable this agent</div>
+                  </div>
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}
+                    onClick={() => update('active', !cfg.active)}
+                  >
+                    <span style={{ fontSize: 11, fontWeight: 600, color: cfg.active ? '#15803d' : '#9ca3af' }}>
+                      {cfg.active ? 'Active' : 'Inactive'}
+                    </span>
+                    <div className={`toggle ${cfg.active ? 'on' : ''}`} style={{ width: 36, height: 20 }} />
+                  </div>
+                </div>
+
+                {/* Autonomy */}
+                <div style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Autonomy Level</label>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(['High', 'Medium', 'Low'] as const).map((level) => (
+                      <button
+                        key={level}
+                        onClick={() => update('auto', level)}
+                        style={{
+                          flex: 1, padding: '6px 0', fontSize: 11, fontWeight: 600, borderRadius: 6, cursor: 'pointer',
+                          border: cfg.auto === level ? '2px solid #A6C3C9' : '1px solid #e5e7eb',
+                          background: cfg.auto === level ? '#f0f9fa' : '#ffffff',
+                          color: cfg.auto === level ? '#0e7490' : '#6b7280',
+                        }}
+                      >{level}</button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 6, lineHeight: 1.4 }}>
+                    {cfg.auto === 'High' ? 'Agent acts and sends autonomously within defined rules' :
+                     cfg.auto === 'Medium' ? 'Agent drafts and queues; some actions require approval' :
+                     'Agent drafts everything; all outputs require human review before sending'}
+                  </div>
+                </div>
+
+                {/* Escalation contact */}
+                <div style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Escalation Contact</label>
+                  <select
+                    value={cfg.escal}
+                    onChange={(e) => update('escal', e.target.value)}
+                    style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }}
+                  >
+                    {['Meghan', 'William', 'Brennan', 'Michele', 'Liz', 'Hannah', 'Sylvia'].map((n) => <option key={n}>{n}</option>)}
+                  </select>
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>Receives escalations when agent hits an approval gate or encounters an error</div>
+                </div>
+
+                {/* Knowledge Base */}
+                <div style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Knowledge Base</label>
+                  <select
+                    value={cfg.kb}
+                    onChange={(e) => update('kb', e.target.value)}
+                    style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }}
+                  >
+                    {['Investor Relations KB', 'IR & Capital KB', 'Finance & Controls KB', 'Acquisition KB', 'Analytics KB', 'Strategy KB', 'Executive KB', 'Marketing KB', 'Fund Admin KB', 'Leasing KB', 'Operations KB', 'People Ops KB', 'Accounting KB'].map((kb) => <option key={kb}>{kb}</option>)}
+                  </select>
+                </div>
+
+                {/* Notes / custom instructions */}
+                <div style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 6 }}>Custom Instructions</label>
+                  <textarea
+                    value={cfg.notes}
+                    onChange={(e) => update('notes', e.target.value)}
+                    placeholder="Add any custom instructions, constraints, or context for this agent…"
+                    rows={4}
+                    style={{ width: '100%', fontSize: 12, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827', resize: 'vertical', lineHeight: 1.5, boxSizing: 'border-box' }}
+                  />
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>These instructions are included in this agent's system prompt</div>
+                </div>
+
+                {/* Read-only metadata */}
+                <div style={{ padding: '10px 0', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                    <div className="config-item"><label>Category</label><div className="config-val">{drawerAgent.cat}</div></div>
+                    <div className="config-item"><label>Total Runs (7d)</label><div className="config-val">{drawerAgent.runs}</div></div>
+                    <div className="config-item"><label>Last Active</label><div className="config-val">{drawerAgent.last}</div></div>
+                    <div className="config-item"><label>Agent ID</label><div className="config-val" style={{ fontSize: 10 }}>{drawerAgent.id}</div></div>
+                  </div>
+                </div>
+
+                {/* Save */}
+                <div style={{ paddingTop: 14, display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <button className="btn btn-primary" style={{ fontSize: 12, padding: '7px 20px' }} onClick={save}>Save Changes</button>
+                  {localSaved && <span style={{ fontSize: 11, color: '#15803d', fontWeight: 600 }}>✓ Saved</span>}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
         </div>
       </div>
     </>
@@ -308,26 +413,6 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
 function DashboardView() {
   return (
     <div className="ai-center">
-      {/* Left Rail */}
-      <div className="ai-agents-rail">
-        <div className="ai-rail-header">
-          <h4>Agents</h4>
-          <span style={{ fontSize: 10, color: '#9ca3af' }}>{AGENTS.length} agents</span>
-        </div>
-        <div className="ai-agents-list">
-          {AGENTS.map((agent) => (
-            <div key={agent.id} className={`ai-agent-row ${agent.status === 'active' ? 'running' : ''}`}>
-              <div className={`ai-pulse ${agent.status === 'active' ? 'on' : 'idle'}`} />
-              <div className="ai-agent-info">
-                <div className="ai-agent-name">{agent.icon} {agent.name}</div>
-                <div className="ai-agent-act">{'Not yet deployed'}</div>
-              </div>
-              <div className="ai-agent-runs">{agent.runs}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-
       {/* Center Feed */}
       <div className="ai-main">
         <div className="ai-feed-header">
@@ -806,12 +891,14 @@ function AcquisitionView() {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 function SettingsView({
-  role, userEmail, settingsTab, setSettingsTab,
+  role, userEmail, settingsTab, setSettingsTab, agentConfig, setAgentConfig,
 }: {
   role: Role
   userEmail: string
   settingsTab: string
   setSettingsTab: (tab: string) => void
+  agentConfig: Record<string, { auto: string; escal: string; active: boolean; kb: string; notes: string }>
+  setAgentConfig: React.Dispatch<React.SetStateAction<Record<string, { auto: string; escal: string; active: boolean; kb: string; notes: string }>>>
 }) {
   const [prefs, setPrefs] = useState({ digest: true, confidence: false, autoCollapse: true })
   const [notifs, setNotifs] = useState({
@@ -823,9 +910,6 @@ function SettingsView({
     weeklyDigest:{ email: true,  sms: false, push: false },
   })
   const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({})
-  const [agentConfig, setAgentConfig] = useState<Record<string, { auto: string; escal: string; active: boolean }>>(() =>
-    Object.fromEntries(AGENTS.map((a) => [a.id, { auto: a.auto, escal: a.escal, active: a.status === 'active' }]))
-  )
   const [saved, setSaved] = useState(false)
 
   function togglePref(key: keyof typeof prefs) {

@@ -209,7 +209,7 @@ tr:hover td{background:#f8fafc}
 .ov-divider{width:1px;background:#d1e8ea;align-self:stretch}
 
 /* ── AI COMMAND CENTER ── */
-.ai-center{display:grid;grid-template-columns:220px 1fr 280px;gap:0;height:calc(100vh - 52px);background:#f8fafc;overflow:hidden}
+.ai-center{display:grid;grid-template-columns:1fr 300px;gap:0;height:calc(100vh - 52px);background:#f8fafc;overflow:hidden}
 .ai-agents-rail{border-right:1px solid #e5e7eb;display:flex;flex-direction:column;overflow:hidden;background:#ffffff}
 .ai-rail-header{padding:14px 16px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;background:#f8fafc}
 .ai-rail-header h4{font-size:11px;font-weight:600;color:#9ca3af;text-transform:uppercase;letter-spacing:1px}
