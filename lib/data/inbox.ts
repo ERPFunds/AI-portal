@@ -10,21 +10,27 @@ export interface InboxItem {
 }
 
 export const INBOX_DATA: Record<RoleKey, InboxItem[]> = {
-  meghan:  [],
-  william: [],
-  brennan: [],
-  michele: [],
-  liz:     [],
-  hannah:  [],
-  sylvia:  [],
+  meghan:   [],
+  meghanb:  [],
+  william:  [],
+  brennan:  [],
+  michele:  [],
+  liz:      [],
+  hannah:   [],
+  sylvia:   [],
+  pippi:    [],
+  kasandra: [],
 }
 
 export const INBOX_AGENTS: Record<RoleKey, string[]> = {
-  meghan:  [],
-  william: [],
-  brennan: [],
-  michele: [],
-  liz:     [],
-  hannah:  [],
-  sylvia:  [],
+  meghan:   [],
+  meghanb:  [],
+  william:  [],
+  brennan:  [],
+  michele:  [],
+  liz:      [],
+  hannah:   [],
+  sylvia:   [],
+  pippi:    [],
+  kasandra: [],
 }

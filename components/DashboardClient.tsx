@@ -115,7 +115,12 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
         <span>{role.name}</span>
         <span style={{ color: '#9ca3af', fontSize: 10 }}>▼</span>
       </div>
-      <div className="topbar-notif">🔔<div className="notif-dot" /></div>
+      <div
+        className="topbar-notif"
+        title="Notifications"
+        onClick={() => { setCurrentView('settings'); setSettingsTab('s-notifications') }}
+        style={{ cursor: 'pointer' }}
+      >🔔<div className="notif-dot" /></div>
       <div className="topbar-logout" onClick={handleLogout}>Sign Out</div>
     </div>
   )
@@ -384,7 +389,7 @@ function AgentConfigTab({
           onChange={(e) => update('escal', e.target.value)}
           style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }}
         >
-          {['Meghan', 'William', 'Brennan', 'Michele', 'Liz', 'Hannah', 'Sylvia'].map((n) => <option key={n}>{n}</option>)}
+          {['Meghan', 'William', 'Brennan', 'Michele', 'Liz', 'Hannah', 'Sylvia', 'Pippi', 'Kasandra'].map((n) => <option key={n}>{n}</option>)}
         </select>
         <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4 }}>Receives escalations when agent hits an approval gate or encounters an error</div>
       </div>
@@ -1192,6 +1197,10 @@ function SettingsView({
                               <option>Brennan</option>
                               <option>Michele</option>
                               <option>Liz</option>
+                              <option>Hannah</option>
+                              <option>Sylvia</option>
+                              <option>Pippi</option>
+                              <option>Kasandra</option>
                             </select>
                           </div>
                           <div className="config-item">
