@@ -6,7 +6,7 @@ const COMPANY_CONTEXT = `
 ERP Industrials is an industrial real estate private equity firm. The team manages:
 - Fund IV: $65M target, $48M deployed, 6 industrial properties
 - Portfolio includes distribution centers, flex industrial, and warehouse assets
-- Key systems: Salesforce (investor/LP tracking), Yardi (property accounting & rent roll), OneDrive, DocuSign, Fathom (meeting transcripts)
+- Key systems: Salesforce (investor/LP tracking), Yardi (property accounting & rent roll), OneDrive, DocuSign, Microsoft Teams (meetings & transcripts via Graph API)
 - Key LP relationships, capital call management, and active acquisition pipeline
 
 The AI agent platform manages 16 specialized agents across Investor Relations, Finance, Property Operations, Leasing, Marketing, and Acquisitions.
