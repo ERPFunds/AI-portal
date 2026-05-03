@@ -179,6 +179,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
     peopleops: <StubView title="People Ops" icon="👥" desc="Team directory, onboarding checklists, and HR policy Q&A" />,
     vendors: <StubView title="Vendor Contracts" icon="🔑" desc="Vendor master list, contract status, and COI tracking" />,
     docvault: <StubView title="Document Vault" icon="📁" desc="Centralized file store feeding all agent knowledge bases" />,
+    requests: <RequestsView roleKey={roleKey} roleName={role.name} roleTitle={role.title} />,
   }
 
   const activeView = views[currentView]
@@ -1662,6 +1663,19 @@ const CONNECTIONS_DATA = [
       { label: 'Template Folder',key: 'folder',   placeholder: '/sites/{site}/drives/{drive}/root:/Templates' },
     ],
   },
+  {
+    id: 'notion',
+    name: 'Notion',
+    icon: '📓',
+    status: 'disconnected' as const,
+    meta: 'Routes team requests to the Agent Pipeline Requests database and syncs knowledge base documents. Requires an internal Notion integration token.',
+    sync: 'Not connected',
+    fields: [
+      { label: 'Integration Token', key: 'token',  placeholder: 'secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+      { label: 'Requests DB ID',    key: 'dbId',   placeholder: '32-character Notion database ID' },
+      { label: 'Workspace ID',      key: 'ws',     placeholder: 'Optional — leave blank to use token default' },
+    ],
+  },
 ]
 
 // M365 accounts live separately — supports multiple named accounts
@@ -2009,6 +2023,266 @@ function SourceBar({ source, agents, synced, link }: { source: string; agents: s
     </div>
   )
 }
+
+// ─── Requests View ───────────────────────────────────────────────────────────
+
+type RequestItem = {
+  id: string
+  url: string
+  title: string
+  category: string
+  priority: string
+  status: string
+  submittedBy: string
+  role: string
+  date: string
+  description: string
+}
+
+const REQUEST_CATEGORIES = ['Agent Feature', 'New View', 'Data Integration', 'Bug / Issue', 'Workflow', 'Other']
+const REQUEST_PRIORITIES  = ['Low', 'Medium', 'High', 'Urgent']
+
+const STATUS_COLOR: Record<string, string> = {
+  Submitted:   '#E8A020',
+  'In Review': '#3B82F6',
+  Planned:     '#8B5CF6',
+  'In Progress':'#0e7490',
+  Done:        '#3DAE7A',
+}
+const PRIORITY_COLOR: Record<string, string> = {
+  Low: '#9ca3af', Medium: '#E8A020', High: '#ef4444', Urgent: '#dc2626',
+}
+
+function RequestsView({ roleKey, roleName, roleTitle }: { roleKey: string; roleName: string; roleTitle: string }) {
+  const [title, setTitle]         = useState('')
+  const [category, setCategory]   = useState(REQUEST_CATEGORIES[0])
+  const [priority, setPriority]   = useState('Medium')
+  const [description, setDesc]    = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [submitted, setSubmitted] = useState<{ url: string } | null>(null)
+  const [error, setError]         = useState<string | null>(null)
+  const [notionReady, setNotionReady] = useState(true)
+
+  const [requests, setRequests]   = useState<RequestItem[]>([])
+  const [loadingList, setLoadingList] = useState(true)
+  const [selectedReq, setSelectedReq] = useState<RequestItem | null>(null)
+
+  const isAdmin = roleKey === 'meghan' || roleKey === 'meghanb'
+
+  React.useEffect(() => {
+    fetch('/api/requests')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.setup) setNotionReady(false)
+        setRequests(d.requests ?? [])
+      })
+      .catch(() => setRequests([]))
+      .finally(() => setLoadingList(false))
+  }, [])
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!title.trim() || !description.trim() || submitting) return
+    setSubmitting(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title, category, priority, description }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        if (data.setup) setNotionReady(false)
+        setError(data.error ?? 'Submission failed')
+        return
+      }
+      setSubmitted({ url: data.url })
+      setTitle(''); setDesc(''); setCategory(REQUEST_CATEGORIES[0]); setPriority('Medium')
+      // Refresh list
+      const list = await fetch('/api/requests').then((r) => r.json())
+      setRequests(list.requests ?? [])
+    } catch {
+      setError('Network error — please try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: 24, height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Left: submit form ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 0, overflow: 'auto' }}>
+        <div className="page-header">
+          <h2>📮 Requests</h2>
+          <p>Submit a feature request, improvement idea, or issue for the agent pipeline. Routed to Notion for triage.</p>
+        </div>
+
+        {!notionReady && (
+          <div style={{ background: '#fff8e1', border: '1px solid #f59e0b', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#92400e', marginBottom: 16 }}>
+            <strong>Notion not connected.</strong> Set <code>NOTION_TOKEN</code> and <code>NOTION_REQUESTS_DB_ID</code> in Vercel environment variables, then reconnect in{' '}
+            <span style={{ color: '#0e7490', cursor: 'pointer', textDecoration: 'underline' }}>Settings → Connections</span>.
+            Requests will submit once connected.
+          </div>
+        )}
+
+        {submitted && (
+          <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#166534', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span>✅ Request submitted to Notion.</span>
+            {submitted.url && (
+              <a href={submitted.url} target="_blank" rel="noopener noreferrer" style={{ color: '#0e7490', fontSize: 11 }}>
+                Open in Notion ↗
+              </a>
+            )}
+          </div>
+        )}
+
+        {error && (
+          <div style={{ background: '#fff1f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#991b1b', marginBottom: 16 }}>
+            {error}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 20 }}>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Request Title *</label>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. Add lease expiration alerts to Leasing Agent"
+              required
+              style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, boxSizing: 'border-box' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Category</label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                style={{ width: '100%', fontSize: 12, padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 6 }}
+              >
+                {REQUEST_CATEGORIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                style={{ width: '100%', fontSize: 12, padding: '7px 10px', border: '1px solid #e5e7eb', borderRadius: 6 }}
+              >
+                {REQUEST_PRIORITIES.map((p) => <option key={p}>{p}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#374151', display: 'block', marginBottom: 4 }}>Description *</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder="Describe what you need and why it would help your workflow…"
+              required
+              rows={5}
+              style={{ width: '100%', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.5 }}
+            />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#9ca3af' }}>Submitting as {roleName} · {roleTitle}</span>
+            <button
+              type="submit"
+              disabled={submitting || !title.trim() || !description.trim()}
+              style={{ background: '#111827', color: '#fff', border: 'none', borderRadius: 7, padding: '8px 20px', fontSize: 13, fontWeight: 600, cursor: 'pointer', opacity: (submitting || !title.trim() || !description.trim()) ? 0.5 : 1 }}
+            >
+              {submitting ? 'Submitting…' : 'Submit Request'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* ── Right: submitted requests ── */}
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '0 0 12px', borderBottom: '1px solid #f0f0f0', marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <div>
+            <h3 style={{ fontSize: 14, fontWeight: 700, color: '#111827', margin: 0 }}>
+              {isAdmin ? 'All Requests' : 'My Requests'}
+            </h3>
+            <p style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 0' }}>
+              {isAdmin ? 'Manage and triage requests from the full team' : 'Track status of your submitted requests'}
+            </p>
+          </div>
+          {requests.length > 0 && (
+            <span style={{ fontSize: 11, color: '#6b7280' }}>{requests.length} request{requests.length !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto' }}>
+          {loadingList ? (
+            <div style={{ color: '#9ca3af', fontSize: 13, padding: 20 }}>Loading…</div>
+          ) : requests.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '60%', gap: 8, color: '#9ca3af' }}>
+              <div style={{ fontSize: 28 }}>📮</div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>No requests yet</div>
+              <div style={{ fontSize: 12 }}>Submit your first request using the form</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {requests.map((req) => (
+                <div
+                  key={req.id}
+                  onClick={() => setSelectedReq(selectedReq?.id === req.id ? null : req)}
+                  style={{ background: '#fff', border: `1px solid ${selectedReq?.id === req.id ? '#A6C3C9' : '#e5e7eb'}`, borderRadius: 8, padding: '12px 16px', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {req.title}
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        {req.category && (
+                          <span style={{ fontSize: 10, background: '#f3f4f6', color: '#6b7280', borderRadius: 6, padding: '2px 7px' }}>{req.category}</span>
+                        )}
+                        {req.priority && (
+                          <span style={{ fontSize: 10, color: PRIORITY_COLOR[req.priority] ?? '#9ca3af', fontWeight: 600 }}>● {req.priority}</span>
+                        )}
+                        {isAdmin && req.submittedBy && (
+                          <span style={{ fontSize: 10, color: '#9ca3af' }}>{req.submittedBy}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: STATUS_COLOR[req.status] ?? '#9ca3af', background: STATUS_COLOR[req.status] ? `${STATUS_COLOR[req.status]}18` : '#f3f4f6', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap' }}>
+                        {req.status}
+                      </span>
+                      {req.date && <span style={{ fontSize: 10, color: '#9ca3af' }}>{req.date}</span>}
+                    </div>
+                  </div>
+                  {selectedReq?.id === req.id && req.description && (
+                    <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid #f0f0f0', fontSize: 12, color: '#4b5563', lineHeight: 1.6 }}>
+                      {req.description}
+                      {req.url && (
+                        <div style={{ marginTop: 8 }}>
+                          <a href={req.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, color: '#0e7490' }}>Open in Notion ↗</a>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Stub View ────────────────────────────────────────────────────────────────
 
 function StubView({ title, icon, desc }: { title: string; icon: string; desc: string }) {
   return (

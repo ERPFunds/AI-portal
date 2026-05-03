@@ -25,6 +25,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { section: 'Platform' },
     { icon: '📚', label: 'Knowledge Base',      view: 'kb' },
     { icon: '📋', label: 'SOPs',                view: 'sops' },
+    { icon: '📮', label: 'Requests',            view: 'requests' },
     { icon: '⚙️', label: 'Settings',            view: 'settings' },
   ],
   executive: [
@@ -36,6 +37,8 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📈', label: 'Fund Performance',     view: 'fundperf' },
     { icon: '🏭', label: 'Acquisition Pipeline', view: 'acquisition' },
     { icon: '📣', label: 'LP Marketing',         view: 'mktg-lp' },
+    { section: 'Platform' },
+    { icon: '📮', label: 'Requests',             view: 'requests' },
   ],
   property: [
     { section: 'Overview' },
@@ -50,6 +53,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '👥', label: 'People Ops',         view: 'peopleops' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   finance: [
     { section: 'Overview' },
@@ -60,6 +64,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   ops: [
     { section: 'Overview' },
@@ -70,6 +75,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🔑', label: 'Vendor Contracts',   view: 'vendors' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   leasing: [
     { section: 'Overview' },
@@ -80,6 +86,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📋', label: 'Rent Roll',          view: 'rentroll' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   accounting: [
     { section: 'Overview' },
@@ -89,6 +96,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   pippi: [
     { section: 'Overview' },
@@ -101,6 +109,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🔑', label: 'Leasing Pipeline',  view: 'leasing' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
   kasandra: [
     { section: 'Overview' },
@@ -110,5 +119,6 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
     { section: 'Docs' },
     { icon: '📚', label: 'Knowledge Base',     view: 'kb' },
+    { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
 }
