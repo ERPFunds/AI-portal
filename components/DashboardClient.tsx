@@ -530,7 +530,7 @@ function AgentConfigTab({
           onChange={(e) => update('kb', e.target.value)}
           style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }}
         >
-          {['Investor Relations KB', 'IR & Capital KB', 'Finance & Controls KB', 'Acquisition KB', 'Analytics KB', 'Strategy KB', 'Executive KB', 'Marketing KB', 'Fund Admin KB', 'Leasing KB', 'Operations KB', 'People Ops KB', 'Accounting KB'].map((kb) => <option key={kb}>{kb}</option>)}
+          {['Capital KB', 'Investor Relations KB', 'Finance & Controls KB', 'Acquisition KB', 'Analytics KB', 'Strategy KB', 'Executive KB', 'Marketing KB', 'Fund Admin KB', 'Leasing KB', 'Operations KB', 'People Ops KB', 'Accounting KB'].map((kb) => <option key={kb}>{kb}</option>)}
         </select>
       </div>
 
@@ -1100,8 +1100,8 @@ function AccountingView() {
 // ─── Knowledge Base ───────────────────────────────────────────────────────────
 
 const KB_CATEGORIES = [
-  { icon: '📊', label: 'Investor Relations KB',  desc: 'LP profiles, fund terms, investor communications, subscription docs',              agents: ['LP Market Intelligence', 'Investor Relations'] },
-  { icon: '💰', label: 'IR & Capital KB',         desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['Capital Raising', 'Investor Relations'] },
+  { icon: '💰', label: 'Capital KB',              desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['LP Market Intelligence', 'Capital Raising'] },
+  { icon: '📊', label: 'Investor Relations KB',   desc: 'LP profiles, fund terms, investor communications, subscription docs',              agents: ['Investor Relations', 'Capital Raising'] },
   { icon: '🔐', label: 'Finance & Controls KB',   desc: 'Approval thresholds, GL coding rules, invoice policies, audit documentation',       agents: ['Financial Controls', 'Accounting Operations'] },
   { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Brokerage'] },
   { icon: '📈', label: 'Analytics KB',            desc: 'Cap rate benchmarks, valuation models, fund performance data, market reports',      agents: ['Investment Analytics', 'CIO & Chief of Staff'] },
@@ -1117,13 +1117,13 @@ const KB_CATEGORIES = [
 
 function KnowledgeBaseView() {
   const [docs, setDocs] = useState<Record<string, string[]>>({
-    'Investor Relations KB': [
+    'Capital KB': [
       'ERP_Funds_IV_-_Investor_Presentation_(9.24.25_DRAFT).ppt',
       'ERP_Funds_II__III_Update_-_Investor_Presentation_(March_23_2023).pdf',
       'ERP_Funds_III_-_Quarterly_Reporting_Package_(3.31.26)_(v4.14.26_DRAFT).xlsx',
       'ERP_Space_Coast_Opportunity_Overview_(2.17.20).ppt',
     ],
-    'IR & Capital KB': [
+    'Investor Relations KB': [
       'ERP_1031_Industrial_Portfolio_IV_DST_-_PPM_(Compiled).pdf',
       'ERP_1031_Industrial_Portfolio_IV_DST_-_Executive_Summary_(March_2026).pdf',
       'ERP_Funds_III_LLC_(Private_Placement_Memorandum).pdf',
