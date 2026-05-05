@@ -16,6 +16,110 @@ interface Props {
   userEmail: string
 }
 
+// ─── Workflow Edit Form ───────────────────────────────────────────────────────
+
+function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => void; onCancel: () => void }) {
+  const [name, setName] = useState(wf.name)
+  const [trigger, setTrigger] = useState(wf.trigger)
+  const [triggerType, setTriggerType] = useState(wf.triggerType)
+  const [freq, setFreq] = useState(wf.freq)
+  const [status, setStatus] = useState(wf.status)
+  const [steps, setSteps] = useState<any[]>(wf.steps.map((s: any) => ({ ...s })))
+  const [metaTrigger, setMetaTrigger] = useState(wf.meta.trigger)
+  const [metaOutput, setMetaOutput] = useState(wf.meta.output)
+  const [metaEscalate, setMetaEscalate] = useState(wf.meta.escalate)
+
+  const inputStyle = { width: '100%', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#111827', outline: 'none', fontFamily: 'inherit' }
+  const labelStyle = { fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: '.5px', display: 'block', marginBottom: 3 }
+  const sectionStyle = { marginBottom: 14 }
+
+  return (
+    <div style={{ padding: '14px 16px', borderTop: '1px solid #e5e7eb', background: '#f8fafc' }}>
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Workflow name</label>
+        <input style={inputStyle} value={name} onChange={e => setName(e.target.value)} />
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+        <div>
+          <label style={labelStyle}>Trigger type</label>
+          <select style={inputStyle} value={triggerType} onChange={e => setTriggerType(e.target.value)}>
+            {['email', 'schedule', 'data', 'manual', 'webhook'].map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Status</label>
+          <select style={inputStyle} value={status} onChange={e => setStatus(e.target.value)}>
+            <option value="idle">idle</option>
+            <option value="active">active</option>
+          </select>
+        </div>
+      </div>
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Trigger description</label>
+        <input style={inputStyle} value={trigger} onChange={e => setTrigger(e.target.value)} />
+      </div>
+      <div style={sectionStyle}>
+        <label style={labelStyle}>Frequency</label>
+        <input style={inputStyle} value={freq} onChange={e => setFreq(e.target.value)} />
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+          <label style={{ ...labelStyle, marginBottom: 0 }}>Steps</label>
+          <button
+            onClick={() => setSteps([...steps, { type: 'action', label: 'New Step', desc: '' }])}
+            style={{ fontSize: 10, color: '#0e7490', background: 'none', border: '1px solid #A6C3C9', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
+          >+ Add step</button>
+        </div>
+        {steps.map((step, si) => (
+          <div key={si} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '10px 12px', marginBottom: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 8, marginBottom: 6 }}>
+              <div>
+                <label style={labelStyle}>Type</label>
+                <select style={inputStyle} value={step.type} onChange={e => { const s = [...steps]; s[si] = { ...s[si], type: e.target.value }; setSteps(s) }}>
+                  {['trigger', 'action', 'condition', 'output'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={labelStyle}>Label</label>
+                <input style={inputStyle} value={step.label} onChange={e => { const s = [...steps]; s[si] = { ...s[si], label: e.target.value }; setSteps(s) }} />
+              </div>
+              <button
+                onClick={() => setSteps(steps.filter((_, i) => i !== si))}
+                style={{ alignSelf: 'flex-end', background: 'none', border: 'none', color: '#E55A4E', cursor: 'pointer', fontSize: 14, padding: '4px 6px' }}
+              >✕</button>
+            </div>
+            <div>
+              <label style={labelStyle}>Description</label>
+              <textarea
+                style={{ ...inputStyle, resize: 'vertical', minHeight: 52, lineHeight: 1.5 }}
+                value={step.desc}
+                onChange={e => { const s = [...steps]; s[si] = { ...s[si], desc: e.target.value }; setSteps(s) }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ marginBottom: 14 }}>
+        <label style={labelStyle}>Meta — trigger</label>
+        <input style={{ ...inputStyle, marginBottom: 6 }} value={metaTrigger} onChange={e => setMetaTrigger(e.target.value)} />
+        <label style={labelStyle}>Meta — output</label>
+        <input style={{ ...inputStyle, marginBottom: 6 }} value={metaOutput} onChange={e => setMetaOutput(e.target.value)} />
+        <label style={labelStyle}>Escalates to</label>
+        <input style={inputStyle} value={metaEscalate} onChange={e => setMetaEscalate(e.target.value)} />
+      </div>
+
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCancel}>Cancel</button>
+        <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => onSave({ name, trigger, triggerType, freq, status, steps, meta: { trigger: metaTrigger, output: metaOutput, escalate: metaEscalate } })}>
+          Save workflow
+        </button>
+      </div>
+    </div>
+  )
+}
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DashboardClient({ roleKey, userEmail }: Props) {
@@ -31,6 +135,10 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
   const [selectedInboxIdx, setSelectedInboxIdx] = useState(0)
   const [settingsTab, setSettingsTab] = useState('s-profile')
   const [openWorkflows, setOpenWorkflows] = useState<Record<string, boolean>>({})
+  const [editingWf, setEditingWf] = useState<string | null>(null)
+  const [wfOverrides, setWfOverrides] = useState<Record<string, any>>(() => {
+    try { return JSON.parse(localStorage.getItem('wf-overrides') || '{}') } catch { return {} }
+  })
 
   // Shared agent config — used by both drawer and Settings > Agents tab
   const [agentConfig, setAgentConfig] = useState<Record<string, {
@@ -220,9 +328,11 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
         <div className="drawer-body">
           {drawerTab === 'workflows' && (
             <div>
-              {drawerWf ? drawerWf.wf.map((wf, wi) => {
+              {drawerWf ? drawerWf.wf.map((baseWf, wi) => {
                 const key = `${drawerAgentId}-${wi}`
+                const wf = { ...baseWf, ...(wfOverrides[key] || {}), steps: (wfOverrides[key]?.steps || baseWf.steps) }
                 const isOpen = openWorkflows[key]
+                const isEditing = editingWf === key
                 const triggerColors: Record<string, string> = {
                   email: '#eff6ff', schedule: '#faf5ff', data: '#f0f9fa', manual: '#fff7ed', webhook: '#f0fdf4',
                 }
@@ -232,9 +342,17 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
                 const triggerBorderColors: Record<string, string> = {
                   email: '#bfdbfe', schedule: '#ddd6fe', data: '#a5f3fc', manual: '#fed7aa', webhook: '#bbf7d0',
                 }
+
+                function saveWfEdit(updated: any) {
+                  const next = { ...wfOverrides, [key]: updated }
+                  setWfOverrides(next)
+                  try { localStorage.setItem('wf-overrides', JSON.stringify(next)) } catch {}
+                  setEditingWf(null)
+                }
+
                 return (
                   <div key={wi} className="wf-card">
-                    <div className="wf-header" onClick={() => toggleWorkflow(key)}>
+                    <div className="wf-header" onClick={() => { if (!isEditing) toggleWorkflow(key) }}>
                       <span
                         className="wf-trigger-chip"
                         style={{ background: triggerColors[wf.triggerType] ?? '#f3f4f6', color: triggerTextColors[wf.triggerType] ?? '#6b7280', border: `1px solid ${triggerBorderColors[wf.triggerType] ?? '#e5e7eb'}` }}
@@ -246,12 +364,18 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
                         <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{wf.trigger} · {wf.freq}</div>
                       </div>
                       <span className={`badge ${wf.status === 'active' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 9 }}>{wf.status}</span>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingWf(isEditing ? null : key); if (!isOpen) toggleWorkflow(key) }}
+                        style={{ background: isEditing ? '#f0f9fa' : 'transparent', border: `1px solid ${isEditing ? '#A6C3C9' : '#e5e7eb'}`, borderRadius: 5, padding: '2px 8px', fontSize: 10, color: isEditing ? '#0e7490' : '#9ca3af', cursor: 'pointer', marginLeft: 6 }}
+                      >
+                        {isEditing ? 'cancel' : 'edit'}
+                      </button>
                       <span className="wf-expand-icon" style={{ transform: isOpen ? 'rotate(180deg)' : undefined }}>▼</span>
                     </div>
-                    {isOpen && (
+                    {isOpen && !isEditing && (
                       <div className="wf-body open">
                         <div className="wf-steps">
-                          {wf.steps.map((step, si) => (
+                          {wf.steps.map((step: any, si: number) => (
                             <div key={si} className="wf-step">
                               <div className={`wf-step-dot ${step.type}`} />
                               <div className="wf-step-content">
@@ -268,6 +392,9 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
                           <span>Last run: {wf.lastRun}</span>
                         </div>
                       </div>
+                    )}
+                    {isOpen && isEditing && (
+                      <WfEditForm wf={wf} onSave={saveWfEdit} onCancel={() => setEditingWf(null)} />
                     )}
                   </div>
                 )
