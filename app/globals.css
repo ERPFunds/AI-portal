@@ -4,15 +4,15 @@
 body{font-family:'Montserrat','Gotham',system-ui,sans-serif;background:#ffffff;color:#111827;height:100vh;overflow:hidden}
 
 /* ── LOGIN ── */
-#loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:28px;background:linear-gradient(160deg,#0d1f2d 0%,#0e2a35 50%,#0d2030 100%);padding:32px 24px}
+#loginScreen{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;gap:28px;background:linear-gradient(160deg,#f0f4f6 0%,#e8f0f2 50%,#eef2f5 100%);padding:32px 24px}
 .login-logo{text-align:center}
-.login-logo h1{font-size:24px;font-weight:700;letter-spacing:.5px;color:#e8f4f6}
-.login-logo p{font-size:11px;color:#5a8a94;margin-top:5px;letter-spacing:2px;text-transform:uppercase}
-.login-label{font-size:12px;color:#5a8a94;text-align:center;letter-spacing:.8px;text-transform:uppercase}
+.login-logo h1{font-size:24px;font-weight:700;letter-spacing:.5px;color:#111827}
+.login-logo p{font-size:11px;color:#7a9ea6;margin-top:5px;letter-spacing:2px;text-transform:uppercase}
+.login-label{font-size:12px;color:#7a9ea6;text-align:center;letter-spacing:.8px;text-transform:uppercase}
 .role-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;max-width:900px;width:100%}
-.role-card{background:rgba(255,255,255,.04);border:1px solid rgba(166,195,201,.15);border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.role-card:hover{border-color:#A6C3C9;transform:translateY(-2px);background:rgba(166,195,201,.08);box-shadow:0 4px 14px rgba(166,195,201,.15)}
-.role-card h3{color:#e8f4f6}
+.role-card{background:#ffffff;border:1px solid #dde6e9;border-radius:10px;padding:18px 12px;text-align:center;cursor:pointer;transition:all .2s;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.role-card:hover{border-color:#A6C3C9;transform:translateY(-2px);background:#f7fbfc;box-shadow:0 4px 14px rgba(166,195,201,.25)}
+.role-card h3{color:#111827}
 .role-card .access-badge{opacity:.8}
 .role-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;margin:0 auto 10px}
 .role-card h3{font-size:13px;font-weight:600;color:#111827}
