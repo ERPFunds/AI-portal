@@ -208,7 +208,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
 
   const topbar = (
     <div className="topbar">
-      <div className="topbar-brand">ERP <span>Industrials</span> — AI Agent Portal</div>
+      <div className="topbar-brand">ERP <span>AI Agent Portal</span></div>
       <div
         className="topbar-role"
         onClick={handleLogout}
