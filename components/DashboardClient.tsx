@@ -1026,13 +1026,237 @@ function AgentsView({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
 // ─── Financial Dashboard ──────────────────────────────────────────────────────
 
 function FinancialView() {
+  const kpiStyle = {
+    background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 0,
+  }
+  const kpiLabel = { fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: '.6px', marginBottom: 4 }
+  const kpiVal = { fontSize: 24, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginBottom: 3 }
+  const kpiUp = { fontSize: 11, color: '#3DAE7A' }
+  const kpiNeutral = { fontSize: 11, color: '#0e7490' }
+  const cardStyle = { background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '16px 18px' }
+  const cardTitle = { fontSize: 12, fontWeight: 700, color: '#111827', textTransform: 'uppercase' as const, letterSpacing: '.5px', marginBottom: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }
+  const cardTitleSub = { fontSize: 10, color: '#9ca3af', fontWeight: 400, textTransform: 'none' as const, letterSpacing: 0 }
+  const placeholderBadge = {
+    fontSize: 9, background: '#f0f9fa', color: '#0e7490', border: '1px solid #a5f3fc', borderRadius: 5,
+    padding: '2px 8px', letterSpacing: '.3px', fontWeight: 600, textTransform: 'uppercase' as const, display: 'inline-block', marginBottom: 14,
+  }
+
   return (
     <div>
       <div className="page-header">
         <h2>Investment Dashboard</h2>
         <p>Portfolio performance · Fund metrics · Acquisition pipeline</p>
       </div>
-      <EmptyDataView source="Yardi · Salesforce" message="Investment dashboard data will appear here once connected to your data sources" />
+
+      {/* Source bar */}
+      <SourceBar
+        source="Yardi · Salesforce · CoStar"
+        agents="Investment Analytics · CIO & Chief of Staff · Capital Raising"
+        synced="Not yet connected"
+        link="Connect data sources ↗"
+      />
+
+      {/* Placeholder notice */}
+      <div style={{ marginBottom: 16 }}>
+        <span style={placeholderBadge}>⚠ Sample data — connect Yardi &amp; Salesforce to see live figures</span>
+      </div>
+
+      {/* KPI Row */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+        <div style={kpiStyle}>
+          <div style={kpiLabel}>AUM</div>
+          <div style={kpiVal}>$284M</div>
+          <div style={kpiUp}>↑ 12% YoY</div>
+        </div>
+        <div style={kpiStyle}>
+          <div style={kpiLabel}>LPs</div>
+          <div style={kpiVal}>147</div>
+          <div style={kpiUp}>+8 this quarter</div>
+        </div>
+        <div style={kpiStyle}>
+          <div style={kpiLabel}>T12 NOI</div>
+          <div style={kpiVal}>$21.6M</div>
+          <div style={kpiUp}>↑ 8.4%</div>
+        </div>
+        <div style={kpiStyle}>
+          <div style={kpiLabel}>Fund IV Raised</div>
+          <div style={kpiVal}>$48M</div>
+          <div style={kpiNeutral}>of $120M target</div>
+        </div>
+        <div style={kpiStyle}>
+          <div style={kpiLabel}>Occupancy</div>
+          <div style={kpiVal}>93.4%</div>
+          <div style={kpiUp}>↑ 1.2pp QoQ</div>
+        </div>
+      </div>
+
+      {/* Row 2: NOI Chart + Fund IV Progress */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+
+        {/* NOI Chart */}
+        <div style={cardStyle}>
+          <div style={cardTitle}>
+            Net Operating Income — Quarterly
+            <span style={cardTitleSub}>$M</span>
+          </div>
+          <div style={{ display: 'flex', gap: 20, alignItems: 'flex-end', marginBottom: 10 }}>
+            {/* Bar chart */}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 80 }}>
+              {/* 2024 */}
+              {[48, 52, 50, 55].map((h, i) => (
+                <div key={i} style={{ width: 12, height: h * 0.85 + 'px', background: '#cbd5e1', borderRadius: '2px 2px 0 0' }} title={`Q${i+1} 2024`} />
+              ))}
+              <div style={{ width: 6 }} />
+              {/* 2025 */}
+              {[54, 58, 56, 62].map((h, i) => (
+                <div key={i} style={{ width: 12, height: h * 0.85 + 'px', background: '#93c5fd', borderRadius: '2px 2px 0 0' }} title={`Q${i+1} 2025`} />
+              ))}
+              <div style={{ width: 6 }} />
+              {/* 2026 YTD */}
+              {[65, 70].map((h, i) => (
+                <div key={i} style={{ width: 12, height: h * 0.85 + 'px', background: i === 1 ? '#bfdbfe' : '#3B82F6', borderRadius: '2px 2px 0 0', opacity: i === 1 ? 0.5 : 1 }} title={`Q${i+1} 2026`} />
+              ))}
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 4 }}>Q1 2026 NOI</div>
+              <div style={{ fontSize: 22, fontWeight: 700, color: '#111827', marginBottom: 2 }}>$6.5M</div>
+              <div style={{ fontSize: 11, color: '#3DAE7A' }}>↑ 20.4% vs Q1 2025</div>
+              <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: '#9ca3af' }}>2024 Full Year</span><span style={{ color: '#374151' }}>$20.5M</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: '#9ca3af' }}>2025 Full Year</span><span style={{ color: '#374151' }}>$23.0M</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                  <span style={{ color: '#0e7490' }}>2026 YTD</span><span style={{ color: '#0e7490', fontWeight: 600 }}>$6.5M</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 14, fontSize: 10, color: '#9ca3af', marginTop: 4 }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ display: 'inline-block', width: 8, height: 8, background: '#cbd5e1', borderRadius: 2 }} />2024</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ display: 'inline-block', width: 8, height: 8, background: '#93c5fd', borderRadius: 2 }} />2025</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ display: 'inline-block', width: 8, height: 8, background: '#3B82F6', borderRadius: 2 }} />2026 YTD</span>
+          </div>
+        </div>
+
+        {/* Fund IV Capital Raise */}
+        <div style={cardStyle}>
+          <div style={cardTitle}>
+            Fund IV — Capital Raise Progress
+            <span style={cardTitleSub}>Target $120M</span>
+          </div>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+              <span style={{ color: '#6b7280' }}>Committed Capital</span>
+              <span style={{ color: '#0e7490', fontWeight: 600 }}>$48M / $120M</span>
+            </div>
+            <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+              <div style={{ width: '40%', height: '100%', background: 'linear-gradient(90deg,#0e7490,#3EB5C4)', borderRadius: 4 }} />
+            </div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 5 }}>40% of target · 7 months remaining</div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {[
+              { label: 'LP Commitments', sub: '23 investors · Avg $2.1M', val: '$48M', badgeClass: 'badge-blue' },
+              { label: 'Soft Circles', sub: '8 investors in diligence', val: '$22M', badgeClass: 'badge-purple' },
+              { label: 'Pipeline (Engaged)', sub: '14 prospects active', val: '$35M est.', badgeClass: 'badge-gray' },
+            ].map((row) => (
+              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#f8fafc', borderRadius: 7, border: '1px solid #e5e7eb' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{row.label}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af' }}>{row.sub}</div>
+                </div>
+                <span className={`badge ${row.badgeClass}`}>{row.val}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 10px 0' }}>
+              <span style={{ color: '#9ca3af' }}>Close target</span>
+              <span style={{ color: '#374151' }}>December 2026</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: Fund Performance + Acquisition Pipeline */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+
+        {/* Fund Performance Table */}
+        <div style={cardStyle}>
+          <div style={cardTitle}>Fund Performance Summary</div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr>
+                {['Fund', 'Vintage', 'Size', 'Net IRR', 'CoC', 'Status'].map((h) => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', paddingBottom: 8, borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {[
+                { fund: 'Fund I',   vintage: '2016', size: '$42M',  irr: '18.4%', coc: '2.1x', status: 'Realized',   statusClass: 'badge-gray',   irrColor: '#3DAE7A', cocColor: '#3DAE7A' },
+                { fund: 'Fund II',  vintage: '2018', size: '$68M',  irr: '16.2%', coc: '1.8x', status: 'Harvesting', statusClass: 'badge-blue',   irrColor: '#3DAE7A', cocColor: '#0e7490' },
+                { fund: 'Fund III', vintage: '2021', size: '$96M',  irr: '14.1%', coc: '1.4x', status: 'Active',     statusClass: 'badge-green',  irrColor: '#0e7490', cocColor: '#0e7490' },
+                { fund: 'Fund IV',  vintage: '2025', size: '$120M*',irr: '—',     coc: '—',    status: 'Raising',    statusClass: 'badge-blue',   irrColor: '#9ca3af', cocColor: '#9ca3af' },
+              ].map((row, ri) => (
+                <tr key={ri} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '10px 4px 10px 0', fontWeight: 600, color: '#111827' }}>{row.fund}</td>
+                  <td style={{ padding: '10px 4px', color: '#9ca3af' }}>{row.vintage}</td>
+                  <td style={{ padding: '10px 4px', color: '#374151' }}>{row.size}</td>
+                  <td style={{ padding: '10px 4px', color: row.irrColor, fontWeight: 600 }}>{row.irr}</td>
+                  <td style={{ padding: '10px 4px', color: row.cocColor, fontWeight: 600 }}>{row.coc}</td>
+                  <td style={{ padding: '10px 0' }}><span className={`badge ${row.statusClass}`} style={{ fontSize: 9 }}>{row.status}</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 10 }}>* Target size · IRR and CoC as of Q1 2026 · Unaudited</div>
+        </div>
+
+        {/* Acquisition Pipeline */}
+        <div style={cardStyle}>
+          <div style={cardTitle}>
+            Acquisition Pipeline
+            <span style={cardTitleSub}>5 active deals · $163M</span>
+          </div>
+          {/* Stage bars */}
+          <div style={{ marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
+              <span>Stage</span><span>Volume</span>
+            </div>
+            {[
+              { label: 'Screening',       pct: '100%', color: '#cbd5e1', val: '$74M' },
+              { label: 'LOI / Diligence', pct: '58%',  color: '#93c5fd', val: '$43M' },
+              { label: 'Under Contract',  pct: '31%',  color: '#3B82F6', val: '$31M' },
+              { label: 'Closing',         pct: '20%',  color: '#3DAE7A', val: '$15M' },
+            ].map((row) => (
+              <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                <div style={{ fontSize: 11, color: '#374151', width: 110, flexShrink: 0 }}>{row.label}</div>
+                <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden' }}>
+                  <div style={{ width: row.pct, height: '100%', background: row.color, borderRadius: 4 }} />
+                </div>
+                <div style={{ fontSize: 11, color: '#6b7280', width: 36, textAlign: 'right', flexShrink: 0 }}>{row.val}</div>
+              </div>
+            ))}
+          </div>
+          {/* Deal list */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {[
+              { name: 'Albuquerque Dist. Hub — 185k SF', stage: 'LOI',       badgeClass: 'badge-purple' },
+              { name: 'El Paso Logistics — 120k SF',     stage: 'Diligence', badgeClass: 'badge-blue' },
+              { name: 'San Antonio Cold Storage — 80k SF',stage:'Contract',  badgeClass: 'badge-blue' },
+              { name: 'Midland Industrial Park — 95k SF', stage: 'Screening', badgeClass: 'badge-gray' },
+              { name: 'Laredo Freeport B — 140k SF',     stage: 'Closing',   badgeClass: 'badge-green' },
+            ].map((deal) => (
+              <div key={deal.name} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, padding: '6px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                <span style={{ color: '#374151' }}>{deal.name}</span>
+                <span className={`badge ${deal.badgeClass}`} style={{ fontSize: 9, flexShrink: 0 }}>{deal.stage}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
