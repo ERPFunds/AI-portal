@@ -169,7 +169,72 @@ export const WORKFLOWS: Record<string, AgentWorkflows> = {
   
   ]},
   brokerage: { runs: '—', sent: '—', queue: '—', wf: [
-  
+
+  ]},
+  'ai-ops': { runs: '—', sent: '—', queue: '—', wf: [
+    { name: 'Agent Health Monitor', trigger: 'Daily scan + real-time error event', triggerType: 'schedule', freq: 'Daily', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule + Error Trigger', desc: 'Runs daily health scan across all active agents; also fires in real-time when any agent throws an error or stops responding' },
+      { type: 'action', label: 'Ping All Agents', desc: 'Tests each agent endpoint for responsiveness, checks last-run timestamps, validates tool connections and KB access' },
+      { type: 'action', label: 'Classify Status', desc: 'Classifies each agent as Healthy, Degraded, or Down based on response time, error rate, and last successful run' },
+      { type: 'condition', label: 'Escalation Gate', desc: 'Any agent marked Down or Degraded for >30 min escalates to Michele. Healthy status logged silently.' },
+      { type: 'output', label: 'Health Report', desc: 'Daily health summary posted to AI Operations KB. Degraded/Down agents trigger immediate alert to Michele with diagnostic detail.' },
+    ], meta: { trigger: 'Daily schedule + error event', output: 'Health status report + escalation', escalate: 'Michele' } },
+    { name: 'Self-Serve Fix Guide', trigger: 'Error detected in any agent', triggerType: 'data', freq: 'Real-time', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Error Event Trigger', desc: 'Fires when Agent Health Monitor or Error Triage workflow detects a known error pattern in any agent' },
+      { type: 'action', label: 'Match Error to Known Fix', desc: 'Searches AI Operations KB for matching error pattern; retrieves step-by-step remediation guide if available' },
+      { type: 'condition', label: 'Known vs. Unknown Error', desc: 'Known errors surface self-serve fix guide to Michele with one-click resolution steps. Unknown errors escalate for investigation.' },
+      { type: 'output', label: 'Fix Guide Delivered', desc: 'Step-by-step fix guide sent to Michele with error context. Resolution logged to AI Operations KB to improve future matching.' },
+    ], meta: { trigger: 'Error detected', output: 'Self-serve fix guide', escalate: 'Michele' } },
+    { name: 'OAuth & Connection Renewal Tracker', trigger: 'Weekly check + 14-day advance alert', triggerType: 'schedule', freq: 'Weekly', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule Trigger', desc: 'Runs weekly scan of all OAuth tokens, API keys, and third-party connections across the agent stack' },
+      { type: 'action', label: 'Check Expiry Dates', desc: 'Pulls expiry metadata for all connections: Microsoft Graph, Salesforce, DocuSign, Yardi, and custom integrations' },
+      { type: 'condition', label: 'Expiry Threshold Check', desc: 'Connections expiring within 14 days trigger advance renewal alert. Expired connections trigger immediate escalation.' },
+      { type: 'output', label: 'Renewal Alert', desc: 'Renewal reminder sent to Michele with connection name, expiry date, and renewal steps. Tracked in AI Operations KB.' },
+    ], meta: { trigger: 'Weekly + 14-day advance', output: 'OAuth renewal alert', escalate: 'Michele' } },
+    { name: 'Agent Change Log', trigger: 'Any agent modified or redeployed', triggerType: 'webhook', freq: 'Event-based', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Deploy / Edit Webhook', desc: 'Fires whenever an agent workflow, prompt, KB, or tool connection is modified or a new version is deployed' },
+      { type: 'action', label: 'Capture Change Diff', desc: 'Records what changed: agent name, modified component (prompt, KB, tool), changed by, timestamp, and version tag' },
+      { type: 'action', label: 'Update Change Log', desc: 'Appends change record to the running Agent Change Log in AI Operations KB with full diff and rollback reference' },
+      { type: 'output', label: 'Change Logged', desc: 'Change record stored in AI Operations KB. Summary notification sent to Michele. Enables rollback if regression detected.' },
+    ], meta: { trigger: 'Agent modified / redeployed', output: 'Versioned change log entry', escalate: 'Michele' } },
+    { name: 'Weekly Regression Test', trigger: 'Monday morning', triggerType: 'schedule', freq: 'Weekly', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule Trigger', desc: 'Fires every Monday morning to validate that all agents are producing expected outputs after any weekend changes' },
+      { type: 'action', label: 'Run Test Suite', desc: 'Executes a standard set of test prompts against each active agent; compares outputs against expected response benchmarks' },
+      { type: 'condition', label: 'Pass / Fail Gate', desc: 'Agents that fail regression tests are flagged Degraded and routed to Error Triage. Passing agents logged as verified.' },
+      { type: 'output', label: 'Regression Report', desc: 'Weekly regression test report delivered to Michele with pass/fail by agent. Failed agents trigger Self-Serve Fix Guide.' },
+    ], meta: { trigger: 'Monday morning schedule', output: 'Regression test report', escalate: 'Michele' } },
+    { name: 'Monthly Agent Performance Report', trigger: '1st of each month', triggerType: 'schedule', freq: 'Monthly', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule Trigger', desc: 'Fires on the 1st of each month to compile the prior month\'s agent performance data' },
+      { type: 'action', label: 'Aggregate Run Data', desc: 'Pulls run counts, error rates, escalation rates, auto-send rates, and KB usage across all agents for the prior month' },
+      { type: 'action', label: 'Build Performance Summary', desc: 'Formats data into a monthly agent performance report with trend analysis, top performers, and improvement candidates' },
+      { type: 'output', label: 'Report Delivered', desc: 'Monthly performance report delivered to Michele and stored in AI Operations KB. Feeds quarterly roadmap planning.' },
+    ], meta: { trigger: '1st of month schedule', output: 'Monthly performance report', escalate: 'Michele' } },
+    { name: 'Error Triage & Retry', trigger: 'Real-time error event', triggerType: 'data', freq: 'Real-time', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Error Event Trigger', desc: 'Fires immediately when any agent returns an error, times out, or produces an anomalous output' },
+      { type: 'action', label: 'Classify Error', desc: 'Categorizes error as: transient (retry eligible), config issue (fix required), or data/KB issue (investigation needed)' },
+      { type: 'condition', label: 'Retry Gate', desc: 'Transient errors trigger automatic retry up to 3x with exponential backoff. Persistent errors escalate to Michele with full error trace.' },
+      { type: 'action', label: 'Log & Escalate', desc: 'Error trace, classification, and retry outcome logged to AI Operations KB. Persistent failures push alert to Michele.' },
+      { type: 'output', label: 'Resolution or Escalation', desc: 'Transient errors self-resolved via retry. Persistent errors escalated to Michele with diagnostic context and suggested fix.' },
+    ], meta: { trigger: 'Real-time error', output: 'Auto-retry or escalation with diagnostic', escalate: 'Michele' } },
+    { name: 'Portal Request Router', trigger: 'Portal webhook — new request submitted', triggerType: 'webhook', freq: 'Real-time', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Portal Webhook', desc: 'Fires when a team member submits a new agent request, feedback, or issue report through the ERP Agent Portal' },
+      { type: 'action', label: 'Classify Request', desc: 'Categorizes incoming request as: new workflow, bug report, KB update, access request, or general feedback' },
+      { type: 'condition', label: 'Routing Gate', desc: 'Bug reports route to Error Triage. KB updates route to relevant agent KB owner. New workflow requests route to Michele for scoping.' },
+      { type: 'output', label: 'Request Routed', desc: 'Request routed to appropriate handler with confirmation sent to submitter. Tracked in AI Operations KB for resolution.' },
+    ], meta: { trigger: 'Portal webhook', output: 'Routed request + confirmation', escalate: 'Michele' } },
+    { name: 'Weekly Agent Performance Digest', trigger: 'Sunday 6 PM', triggerType: 'schedule', freq: 'Weekly', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule Trigger', desc: 'Fires every Sunday at 6 PM to compile the prior week\'s agent activity into a leadership digest' },
+      { type: 'action', label: 'Pull Weekly Stats', desc: 'Aggregates weekly run counts, auto-send rates, escalation rates, error counts, and top actions across all agents' },
+      { type: 'action', label: 'Build Digest', desc: 'Formats into a concise weekly digest: what ran, what escalated, what needs attention, and standout automations' },
+      { type: 'output', label: 'Digest Delivered', desc: 'Weekly agent performance digest delivered to Michele\'s inbox before Monday standup. Stored in AI Operations KB.' },
+    ], meta: { trigger: 'Sunday 6 PM schedule', output: 'Weekly performance digest', escalate: 'Michele' } },
+    { name: 'Portal Security Audit', trigger: 'Daily + real-time on anomaly', triggerType: 'schedule', freq: 'Daily', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Schedule + Anomaly Trigger', desc: 'Runs daily security scan of the portal; also fires in real-time when anomalous access patterns are detected' },
+      { type: 'action', label: 'Audit Access Logs', desc: 'Reviews portal access logs for unusual login times, failed auth attempts, role escalation attempts, and off-hours activity' },
+      { type: 'action', label: 'Scan Agent Permissions', desc: 'Validates that each agent\'s tool and KB permissions match its configured access scope — flags any drift' },
+      { type: 'condition', label: 'Anomaly Gate', desc: 'Anomalies above threshold (failed logins, permission drift, off-hours access) escalate to Michele immediately. Clean audits logged silently.' },
+      { type: 'output', label: 'Audit Report', desc: 'Daily security audit summary logged to AI Operations KB. Anomalies trigger immediate alert to Michele with access log excerpts.' },
+    ], meta: { trigger: 'Daily + real-time anomaly', output: 'Security audit report + anomaly alerts', escalate: 'Michele' } },
   ]},
 }
 

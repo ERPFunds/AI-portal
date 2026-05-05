@@ -30,6 +30,7 @@ export const AGENTS: Agent[] = [
   { id: 'people-ops',    name: 'People Ops',              icon: '👥', cat: 'HR',          badge: 'badge-orange',  desc: 'Onboarding coordination, benefits inquiries, HR policy Q&A for team members',                                                           status: 'idle', runs: '—', last: '—', auto: 'Medium', escal: 'Brennan', kb: 'People Ops KB' },
   { id: 'acct-ops',      name: 'Accounting Operations',   icon: '🧾', cat: 'Finance',     badge: 'badge-blue',    desc: 'Processes AP/AR, reconciles Yardi entries, drafts payment reminders to tenants',                                                        status: 'idle', runs: '—', last: '—', auto: 'High',   escal: 'Michele', kb: 'Accounting KB' },
   { id: 'coo',           name: 'COO Operations',          icon: '🏗️', cat: 'Property',    badge: 'badge-teal',    desc: 'Daily ops briefing — vendor dispatch, work order SLAs, leasing activity, and people ops flags',                                         status: 'idle', runs: '—', last: '—', auto: 'High',   escal: 'Brennan', kb: 'Operations KB' },
+  { id: 'ai-ops',        name: 'AI Operations',           icon: '🤖', cat: 'System',      badge: 'badge-teal',    desc: 'Agent health monitoring, error triage, OAuth renewal tracking, regression testing, and portal security audits across the full agent stack', status: 'idle', runs: '—', last: '—', auto: 'High',   escal: 'Michele', kb: 'AI Operations KB' },
 ]
 
 export const ACTIVITY_MAP: Record<string, string> = {}

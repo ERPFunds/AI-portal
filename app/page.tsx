@@ -73,14 +73,14 @@ export default function LoginPage() {
   return (
     <div id="loginScreen">
       <div className="login-logo">
-        <h1>ERP <span style={{ color: '#C9A84C' }}>Industrials</span></h1>
+        <h1>ERP <span style={{ color: '#A6C3C9' }}>Funds</span></h1>
         <p>AI Agent Portal</p>
       </div>
 
       <div className="login-label">Select your profile to continue</div>
 
       <div className="role-grid">
-        {ROLE_CARDS.filter(card => card.key === 'meghan').map((card) => {
+        {ROLE_CARDS.map((card) => {
           const role = ROLES[card.key]
           const isSelected = selectedRole === card.key
           return (
