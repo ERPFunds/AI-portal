@@ -93,7 +93,7 @@ export default function LoginPage() {
                 setPassword('')
               }}
               style={{
-                borderColor: isSelected ? '#C9A84C' : undefined,
+                borderColor: isSelected ? '#3EB5C4' : undefined,
                 transform: isSelected ? 'translateY(-2px)' : undefined,
               }}
             >
