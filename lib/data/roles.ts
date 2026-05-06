@@ -33,6 +33,6 @@ export const ROLE_CARDS: Array<{ key: RoleKey; description: string; accessLabel:
   { key: 'liz',      description: 'Project Manager',               accessLabel: 'Operations',         accessBg: '#0D2218', accessColor: '#3DAE7A' },
   { key: 'hannah',   description: 'Hannah Powell — Leasing Coordinator', accessLabel: 'Leasing',            accessBg: '#0A1F22', accessColor: '#3EB5C4' },
   { key: 'sylvia',   description: 'Senior Accountant',             accessLabel: 'Accounting',         accessBg: '#0D1F35', accessColor: '#5B9BD5' },
-  { key: 'pippi',    description: 'Investor & Tenant Relations',   accessLabel: 'Property',           accessBg: '#1F1535', accessColor: '#B07FE0' },
+  { key: 'pippi',    description: 'Investor & Tenant Relations',   accessLabel: 'Standard',           accessBg: '#1F1535', accessColor: '#B07FE0' },
   { key: 'kasandra', description: 'Industrial Accounting Analyst', accessLabel: 'Accounting',         accessBg: '#0D1F35', accessColor: '#5B9BD5' },
 ]
