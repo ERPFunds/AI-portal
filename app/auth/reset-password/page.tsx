@@ -146,7 +146,7 @@ export default function ResetPasswordPage() {
   return (
     <div id="loginScreen">
       <div className="login-logo">
-        <h1>ERP <span style={{ color: '#A6C3C9' }}>Funds</span></h1>
+        <h1>ERP <span style={{ color: '#0D2D52' }}>Funds</span></h1>
         <p>AI Agent Portal</p>
       </div>
       <Suspense fallback={<div style={{ fontSize: 12, color: '#888' }}>Loading…</div>}>
