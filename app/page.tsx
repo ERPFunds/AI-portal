@@ -20,6 +20,16 @@ export default function LoginPage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  async function signInWithMicrosoft() {
+    await supabase.auth.signInWithOAuth({
+      provider: 'azure',
+      options: {
+        scopes: 'email',
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    })
+  }
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     if (!selectedRole) return
@@ -75,6 +85,41 @@ export default function LoginPage() {
       <div className="login-logo">
         <h1>ERP <span style={{ color: '#0D2D52' }}>Funds</span></h1>
         <p>AI Agent Portal</p>
+      </div>
+
+      <button
+        onClick={signInWithMicrosoft}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+          width: '100%',
+          maxWidth: 340,
+          padding: '10px 20px',
+          background: '#fff',
+          color: '#1a1a1a',
+          border: '1px solid #ddd',
+          borderRadius: 8,
+          fontSize: 14,
+          fontWeight: 600,
+          cursor: 'pointer',
+          marginBottom: 20,
+        }}
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 21 21">
+          <rect x="1" y="1" width="9" height="9" fill="#f25022"/>
+          <rect x="11" y="1" width="9" height="9" fill="#7fba00"/>
+          <rect x="1" y="11" width="9" height="9" fill="#00a4ef"/>
+          <rect x="11" y="11" width="9" height="9" fill="#ffb900"/>
+        </svg>
+        Sign in with Microsoft
+      </button>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', maxWidth: 340, marginBottom: 20 }}>
+        <div style={{ flex: 1, height: 1, background: '#252D3D' }} />
+        <span style={{ fontSize: 12, color: '#555' }}>or sign in with a role</span>
+        <div style={{ flex: 1, height: 1, background: '#252D3D' }} />
       </div>
 
       <div className="login-label">Select your profile to continue</div>
