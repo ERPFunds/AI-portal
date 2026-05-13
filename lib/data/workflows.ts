@@ -132,7 +132,29 @@ export const WORKFLOWS: Record<string, AgentWorkflows> = {
       { type: 'action', label: 'Apply Design Iterations', desc: 'Takes market research draft through design iterations to produce a polished, LP-ready deck' },
       { type: 'condition', label: 'Review Gate', desc: 'Deck requires Meghan approval and final polish before distribution to LPs' },
       { type: 'output', label: 'Polished LP Deck', desc: 'Finalized investor deck ready for LP distribution, stored in Investor Relations KB' },
-    ], meta: { trigger: 'Manual', output: 'Polished LP investor deck', escalate: 'Meghan Berry' } },,
+    ], meta: { trigger: 'Manual', output: 'Polished LP investor deck', escalate: 'Meghan Berry' } },
+    { name: 'Offering Memorandum Editor', trigger: 'New deal or PPM update needed', triggerType: 'manual', freq: 'Event-based', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Manual Trigger', desc: 'Triggered when a new deal requires a PPM or an existing offering document needs updating' },
+      { type: 'action', label: 'Process Deal Inputs', desc: 'Takes deal data inputs and existing PPM template; structures sections for offering summary, financials, risk factors, and terms' },
+      { type: 'action', label: 'Draft OM Sections', desc: 'Edits PPM-style offering document sections with current deal data, market narrative, and fund terms' },
+      { type: 'condition', label: 'Legal Review Gate', desc: 'All PPM edits require Meghan review and legal sign-off before LP distribution' },
+      { type: 'output', label: 'OM Draft', desc: 'Offering memorandum draft delivered for review and legal finalization' },
+    ], meta: { trigger: 'Manual', output: 'Offering memorandum draft', escalate: 'Meghan Berry' } },
+    { name: 'LP Tear Sheet Builder', trigger: 'New raise, LP meeting scheduled, or quarterly refresh', triggerType: 'manual', freq: 'Event-based', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Manual Trigger', desc: 'Triggered when a new raise begins, an LP meeting is scheduled, or a quarterly refresh is needed' },
+      { type: 'action', label: 'Pull Asset and Fund Data', desc: 'Pulls from underwriting model, Portfolio Performance Snapshot, and Investor Materials Brand Template Library' },
+      { type: 'action', label: 'Generate Tear Sheet', desc: 'Generates LP-facing one-page tear sheet for individual properties or funds — investor-ready without designer involvement. Replaces the New York designer cycle.' },
+      { type: 'condition', label: 'Review Gate', desc: 'Tear sheet requires Meghan review before LP distribution' },
+      { type: 'output', label: 'Tear Sheet Ready', desc: 'Polished one-page LP tear sheet delivered for outreach emails, meeting prep, and LP follow-up. Stored in Investor Relations KB.' },
+    ], meta: { trigger: 'Manual', output: 'LP tear sheet', escalate: 'Meghan Berry' } },
+    { name: 'Portfolio vs. Macro Benchmarks Analyzer', trigger: 'New raise / LP meeting / quarterly refresh', triggerType: 'manual', freq: 'Event-based', lastRun: '—', status: 'idle', steps: [
+      { type: 'trigger', label: 'Manual Trigger', desc: 'Triggered ahead of new raises, LP meetings, or quarterly reporting cycles' },
+      { type: 'action', label: 'Overlay Portfolio Against Benchmarks', desc: 'Overlays ERPs historical occupancy, NOI, and rent trends against external benchmarks — oil prices, Permian rig count, S&P 500, interest rates, and major events' },
+      { type: 'action', label: 'Surface Key Narratives', desc: 'Surfaces the we held up during low oil periods story automatically. Answers lag-pattern questions using historical data.' },
+      { type: 'action', label: 'Build Charts', desc: 'Outputs benchmark comparison charts ready for LP decks plus structured narrative for investor materials' },
+      { type: 'output', label: 'Benchmark Analysis Delivered', desc: 'Benchmark analysis and LP-ready charts delivered to Meghan. Drives LP narrative and internal decisions on when to push rates.' },
+    ], meta: { trigger: 'Manual', output: 'Benchmark analysis + LP charts', escalate: 'Meghan Berry' } },
+  ]},
   'cap-raising': { runs: '—', sent: '—', queue: '—', wf: [
   
   ]},
