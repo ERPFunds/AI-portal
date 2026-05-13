@@ -101,7 +101,7 @@ export const WORKFLOWS: Record<string, AgentWorkflows> = {
       { type: 'action', label: 'Identify Differentiation', desc: 'Compares competitor profiles against ERP\'s strategy to surface differentiation angles for LP narrative' },
       { type: 'output', label: 'Competitive Brief', desc: 'Competitive landscape profile delivered to LP deck prep workflow and added to LP Market Intelligence KB' },
     ], meta: { trigger: 'Manual', output: 'Competitive landscape profile', escalate: 'Meghan Berry' } },
-    { name: 'Market News Monitor', trigger: 'Weekly (Monday morning)', triggerType: 'schedule', freq: 'Weekly', lastRun: '—', status: 'idle', steps: [
+    { name: 'Industrial CRE News & Publications Monitor', trigger: 'Weekly (Monday morning)', triggerType: 'schedule', freq: 'Weekly', lastRun: '—', status: 'idle', steps: [
       { type: 'trigger', label: 'Schedule Trigger', desc: 'Fires every Monday morning using ERP\'s target market list as scope' },
       { type: 'action', label: 'Scan News Sources', desc: 'Weekly digest of industrial CRE news, cap rate movements, and competitor activity in ERP\'s target markets' },
       { type: 'action', label: 'Curate & Summarize', desc: 'Filters noise, highlights material market developments, organizes by market and topic' },
@@ -132,15 +132,7 @@ export const WORKFLOWS: Record<string, AgentWorkflows> = {
       { type: 'action', label: 'Apply Design Iterations', desc: 'Takes market research draft through design iterations to produce a polished, LP-ready deck' },
       { type: 'condition', label: 'Review Gate', desc: 'Deck requires Meghan approval and final polish before distribution to LPs' },
       { type: 'output', label: 'Polished LP Deck', desc: 'Finalized investor deck ready for LP distribution, stored in Investor Relations KB' },
-    ], meta: { trigger: 'Manual', output: 'Polished LP investor deck', escalate: 'Meghan Berry' } },
-    { name: 'Offering Memorandum Editor', trigger: 'New deal or PPM update needed', triggerType: 'manual', freq: 'Event-based', lastRun: '—', status: 'idle', steps: [
-      { type: 'trigger', label: 'Manual Trigger', desc: 'Triggered when a new deal requires a PPM or an existing offering document needs updating' },
-      { type: 'action', label: 'Process Deal Inputs', desc: 'Takes deal data inputs and existing PPM template; structures sections for offering summary, financials, risk factors, and terms' },
-      { type: 'action', label: 'Draft OM Sections', desc: 'Edits PPM-style offering document sections with current deal data, market narrative, and fund terms' },
-      { type: 'condition', label: 'Legal Review Gate', desc: 'All PPM edits require Meghan review and legal sign-off before LP distribution' },
-      { type: 'output', label: 'OM Draft', desc: 'Offering memorandum draft delivered for review and legal finalization' },
-    ], meta: { trigger: 'Manual', output: 'Offering memorandum draft', escalate: 'Meghan Berry' } },
-  ]},
+    ], meta: { trigger: 'Manual', output: 'Polished LP investor deck', escalate: 'Meghan Berry' } },,
   'cap-raising': { runs: '—', sent: '—', queue: '—', wf: [
   
   ]},
