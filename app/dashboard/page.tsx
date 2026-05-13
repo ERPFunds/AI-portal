@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient as createSupabaseServer } from '@/lib/supabase/server'
 import DashboardClient from '@/components/DashboardClient'
 import type { RoleKey } from '@/lib/data/roles'
+import { ROLES } from '@/lib/data/roles'
 
 export default async function DashboardPage() {
   const supabase = await createSupabaseServer()
@@ -19,5 +20,11 @@ export default async function DashboardPage() {
 
   const roleKey = (profile?.role_key as RoleKey) ?? 'meghan'
 
-  return <DashboardClient roleKey={roleKey} userEmail={user.email ?? ''} />
+  // Prefer the name from the identity provider (Microsoft SSO), fall back to role name
+  const userName: string =
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    ROLES[roleKey].name
+
+  return <DashboardClient roleKey={roleKey} userEmail={user.email ?? ''} userName={userName} />
 }
