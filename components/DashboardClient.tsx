@@ -1968,6 +1968,52 @@ const CONNECTIONS_DATA = [
       { label: 'Workspace ID',      key: 'ws',     placeholder: 'Optional — leave blank to use token default' },
     ],
   },
+  {
+    id: 'anthropic',
+    icon: '🤖',
+    name: 'Anthropic API',
+    status: 'disconnected' as const,
+    meta: 'Powers Claude-based AI workflows across all agents — LP narrative drafting, document analysis, and synthesis tasks',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key', key: 'apiKey', placeholder: 'sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxx' },
+      { label: 'Model',   key: 'model',  placeholder: 'claude-opus-4-7' },
+    ],
+  },
+  {
+    id: 'fred',
+    icon: '📈',
+    name: 'FRED API (Federal Reserve)',
+    status: 'disconnected' as const,
+    meta: 'Macro economic data — interest rates, inflation, GDP, and industrial production indicators for the Macro Signals Digest',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key', key: 'apiKey', placeholder: 'abcdefghijklmnopqrstuvwxyz123456' },
+    ],
+  },
+  {
+    id: 'eia',
+    icon: '⚡',
+    name: 'EIA API (Energy Information Admin.)',
+    status: 'disconnected' as const,
+    meta: 'U.S. energy data — oil prices, Permian rig counts, and production volumes used in Portfolio vs. Macro Benchmarks Analyzer',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key', key: 'apiKey', placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+    ],
+  },
+  {
+    id: 'bls',
+    icon: '📊',
+    name: 'BLS API (Bureau of Labor Statistics)',
+    status: 'disconnected' as const,
+    meta: 'Manufacturing PMI, employment, and freight volume data — feeds Macro Signals Digest and industrial demand signals',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key',       key: 'apiKey',  placeholder: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+      { label: 'Series IDs',    key: 'series',  placeholder: 'CEU3000000001,PCU331--331-- (comma-separated)' },
+    ],
+  },
 ]
 
 // M365 accounts live separately — supports multiple named accounts
