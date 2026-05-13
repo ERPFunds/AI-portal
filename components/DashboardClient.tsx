@@ -1744,7 +1744,7 @@ function TeamTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => vo
             </div>
             <div className="field" style={{ gridColumn: '1 / -1' }}>
               <label>Email</label>
-              <input type="email" placeholder="jane@erpindustrials.com" value={newMember.email} onChange={(e) => setNewMember((p) => ({ ...p, email: e.target.value }))} />
+              <input type="email" placeholder="name@erpfunds.com" value={newMember.email} onChange={(e) => setNewMember((p) => ({ ...p, email: e.target.value }))} />
             </div>
             <div className="field">
               <label>Access Level</label>
@@ -1871,7 +1871,7 @@ const CONNECTIONS_DATA = [
     sync: 'Synced every 30 min',
     fields: [
       { label: 'Server URL',    key: 'url',      placeholder: 'https://yourfirm.yardipcmng.com' },
-      { label: 'Username',      key: 'user',     placeholder: 'api-user@erpindustrials' },
+      { label: 'Username',      key: 'user',     placeholder: 'api-user@erpfunds' },
       { label: 'Entity ID',     key: 'entity',   placeholder: 'ERP001' },
       { label: 'Sync Interval', key: 'interval', placeholder: '30 min' },
     ],
@@ -1884,7 +1884,7 @@ const CONNECTIONS_DATA = [
     meta: 'LP profiles, fund pipeline, leasing prospects, and email logs',
     sync: 'Synced every 15 min',
     fields: [
-      { label: 'Instance URL', key: 'url',    placeholder: 'https://erpindustrials.my.salesforce.com' },
+      { label: 'Instance URL', key: 'url',    placeholder: 'https://erpfunds.my.salesforce.com' },
       { label: 'Client ID',    key: 'client', placeholder: 'Connected App Client ID' },
       { label: 'Sandbox Mode', key: 'sandbox',placeholder: 'false' },
     ],
@@ -1981,9 +1981,9 @@ type M365Account = {
 }
 
 const DEFAULT_M365_ACCOUNTS: M365Account[] = [
-  { id: 'm365-meghan',    label: 'Meghan Berry',    email: 'mberry@erpindustrials.com',    tenantId: '', clientId: '', status: 'disconnected' },
-  { id: 'm365-michele',   label: 'Michele Parad',   email: 'mparad@erpindustrials.com',    tenantId: '', clientId: '', status: 'disconnected' },
-  { id: 'm365-investors', label: 'Investor Inbox',  email: 'investors@erpindustrials.com', tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-meghan',  label: 'Meghan Berry',  email: 'mberry@erpfunds.com',    tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-william', label: 'William Meyer', email: 'wmeyer@erpfunds.com',    tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpfunds.com', tenantId: '', clientId: '', status: 'disconnected' },
 ]
 
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
@@ -2069,7 +2069,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                 </div>
                 <div className="field" style={{ margin: 0 }}>
                   <label>Email / UPN</label>
-                  <input type="email" placeholder="meghan@erpindustrials.com" value={newM365.email} onChange={(e) => setNewM365((p) => ({ ...p, email: e.target.value }))} />
+                  <input type="email" placeholder="name@erpfunds.com" value={newM365.email} onChange={(e) => setNewM365((p) => ({ ...p, email: e.target.value }))} />
                 </div>
                 <div className="field" style={{ margin: 0 }}>
                   <label>Tenant ID</label>
