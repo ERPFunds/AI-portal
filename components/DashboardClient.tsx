@@ -14,6 +14,7 @@ import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
 interface Props {
   roleKey: RoleKey
   userEmail: string
+  userName: string
 }
 
 // ─── Workflow Edit Form ───────────────────────────────────────────────────────
@@ -122,7 +123,7 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function DashboardClient({ roleKey, userEmail }: Props) {
+export default function DashboardClient({ roleKey, userEmail, userName }: Props) {
   const role = ROLES[roleKey]
   const sidebarItems: SidebarItem[] = SIDEBARS[role.sidebar] ?? SIDEBARS.all
   const defaultView = (sidebarItems.find((i) => 'view' in i) as { view: string } | undefined)?.view ?? 'dashboard'
@@ -220,7 +221,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
         >
           {role.avatar}
         </div>
-        <span>{role.name}</span>
+        <span>{userName}</span>
         <span style={{ color: '#9ca3af', fontSize: 10 }}>▼</span>
       </div>
       <div
@@ -236,7 +237,7 @@ export default function DashboardClient({ roleKey, userEmail }: Props) {
   // ─── Views ───────────────────────────────────────────────────────────────────
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView roleKey={roleKey} userName={role.name} />,
+    dashboard: <DashboardView roleKey={roleKey} userName={userName} />,
     inbox: (
       <InboxView
         inboxItems={inboxItems}
