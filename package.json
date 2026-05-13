@@ -10,19 +10,23 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
-    "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
-    "next": "^15.5.15",
+    "@supabase/ssr": "^0.6.1",
+    "@vercel/postgres": "^0.10.0",
+    "apify-client": "^2.9.4",
+    "date-fns": "^3.6.0",
+    "rss-parser": "^3.13.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "next": "^15.5.15"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/node": "*",
+    "@types/react": "*",
+    "@types/react-dom": "*"
   },
   "engines": {
     "node": "20.x"
-  },
-  "devDependencies": {
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "typescript": "^5"
   }
 }
