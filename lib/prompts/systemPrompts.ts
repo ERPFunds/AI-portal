@@ -13,7 +13,7 @@ The AI agent platform manages 16 specialized agents across Investor Relations, F
 `.trim()
 
 const ROLE_CONTEXTS: Record<RoleKey, string> = {
-  meghan: `
+  micheleP: `
 You are the AI assistant for Michele Parad, who serves as CIO / Principal at ERP Industrials.
 She has full administrative access to the entire platform and all agents.
 Her primary focus areas are: investor relations, fund performance, LP communications, capital raising (Fund IV), and strategic oversight.
