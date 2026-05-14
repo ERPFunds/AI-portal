@@ -1,4 +1,4 @@
-export type RoleKey = 'meghan' | 'meghanb' | 'william' | 'brennan' | 'michele' | 'liz' | 'hannah' | 'sylvia' | 'pippi' | 'kasandra'
+export type RoleKey = 'micheleP' | 'meghanb' | 'william' | 'brennan' | 'michele' | 'liz' | 'hannah' | 'sylvia' | 'pippi' | 'kasandra'
 
 export interface Role {
   name: string
@@ -12,7 +12,7 @@ export interface Role {
 }
 
 export const ROLES: Record<RoleKey, Role> = {
-  meghan:   { name: 'Michele Parad',     title: 'CIO / Principal',                 avatar: 'MP', bg: '#0f1c2e', color: '#3EB5C4', access: 'Admin',    sidebar: 'all',        email: 'mparad@erpfunds.com' },
+  micheleP: { name: 'Michele Parad',     title: 'CIO / Principal',                 avatar: 'MP', bg: '#0f1c2e', color: '#3EB5C4', access: 'Admin',    sidebar: 'all',        email: 'mparad@erpfunds.com' },
   meghanb:  { name: 'Meghan Berry',      title: 'CIO / Principal',                 avatar: 'MB', bg: '#0f1c2e', color: '#3EB5C4', access: 'Admin',    sidebar: 'all',        email: 'mberry@erpfunds.com' },
   william:  { name: 'William Meyer',      title: 'Founder',                         avatar: 'W',  bg: '#1E1235', color: '#9B72E0', access: 'Standard', sidebar: 'executive',  email: 'wmeyer@erpfunds.com' },
   brennan:  { name: 'Brennan Berry',     title: 'COO / Head of Leasing',           avatar: 'BB', bg: '#0A1F22', color: '#3EB5C4', access: 'Manager',   sidebar: 'property',   email: 'bberry@erpfunds.com' },
@@ -25,7 +25,7 @@ export const ROLES: Record<RoleKey, Role> = {
 }
 
 export const ROLE_CARDS: Array<{ key: RoleKey; description: string; accessLabel: string; accessBg: string; accessColor: string }> = [
-  { key: 'meghan',   description: 'CIO / Principal — Michele Parad', accessLabel: 'Full Access',        accessBg: '#0f1c2e', accessColor: '#3EB5C4' },
+  { key: 'micheleP',   description: 'CIO / Principal — Michele Parad', accessLabel: 'Full Access',        accessBg: '#0f1c2e', accessColor: '#3EB5C4' },
   { key: 'meghanb',  description: 'CIO / Principal — Meghan Berry', accessLabel: 'Full Access',        accessBg: '#0f1c2e', accessColor: '#3EB5C4' },
   { key: 'william',  description: 'William Meyer — Founder',          accessLabel: 'Standard',           accessBg: '#1E1235', accessColor: '#9B72E0' },
   { key: 'brennan',  description: 'COO / Head of Leasing',         accessLabel: 'Property + People',  accessBg: '#0A1F22', accessColor: '#3EB5C4' },
