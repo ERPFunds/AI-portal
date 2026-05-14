@@ -2034,7 +2034,7 @@ const DEFAULT_M365_ACCOUNTS: M365Account[] = [
 
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
   const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
-    Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }]))
+  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() => { try { const stored = JSON.parse(localStorage.getItem('conn-state') || '{}'); return Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, stored[c.id] ?? { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }])) } catch { return Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }])) } })
   )
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
 
@@ -2052,17 +2052,6 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   }
   function setField(connId: string, key: string, val: string) {
     setConns((prev) => ({ ...prev, [connId]: { ...prev[connId], values: { ...prev[connId].values, [key]: val } } }))
-  }
-
-  function saveConn(id: string) {
-    const conn = CONNECTIONS_DATA.find((c) => c.id === id)
-    const values = conns[id]?.values ?? {}
-    const allFilled = !conn || conn.fields.every((f) => (values[f.key] ?? '').trim().length > 0)
-    const newStatus: 'connected' | 'disconnected' = allFilled ? 'connected' : 'disconnected'
-    const next = { ...conns, [id]: { ...conns[id], status: newStatus, values } }
-    setConns(next)
-    try { localStorage.setItem('conn-state', JSON.stringify(next)) } catch {}
-    saveChanges()
   }
 
   function updateM365Account(id: string, field: keyof M365Account, val: string) {
@@ -2193,7 +2182,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                         Requires an Azure App Registration with <strong>Mail.Send</strong>, <strong>Calendars.ReadWrite</strong>, and <strong>OnlineMeetings.Read</strong> permissions granted for this user.
                       </div>
                       <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                        <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={() => saveConn(conn.id)}>Save</button>
+                        <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={saveChanges}>Save</button>
                         <button className="btn btn-ghost" style={{ fontSize: 11 }} onClick={() => setExpandedM365(null)}>Close</button>
                         {saved && <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✓ Saved</span>}
                       </div>
@@ -2204,7 +2193,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
             </div>
           )}
         </div>
-
+                        <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={() => saveConn(expandedM365 ?? '')}>Save</button>
         {/* ── All other single-account connections ── */}
         {CONNECTIONS_DATA.map((conn) => {
           const state = conns[conn.id]
@@ -2240,7 +2229,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                     </div>
                   ))}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={() => saveConn(conn.id)}>Save</button>
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={saveChanges}>Save</button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpandedConn(null)}>Cancel</button>
                     {saved && <span style={{ fontSize: 11, color: '#15803d', fontWeight: 500 }}>✓ Saved</span>}
                   </div>
@@ -2251,7 +2240,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
         })}
       </div>
     </div>
-  )
+                    <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={() => saveConn(conn.id)}>Save</button>
 }
 
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
