@@ -2025,6 +2025,18 @@ const CONNECTIONS_DATA = [
       { label: 'API Token', key: 'apiToken', placeholder: 'apify_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
     ],
   },
+  {
+    id: 'regrid',
+    icon: '🗺️',
+    name: 'Regrid',
+    status: 'disconnected' as const,
+    meta: 'Parcel-level land data — ownership, zoning, and acreage for Permian Basin counties. Powers land assembly and site selection workflows.',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key',      key: 'apiKey', placeholder: 'your-regrid-api-key' },
+      { label: 'Default Path', key: 'path',   placeholder: 'us/tx/midland' },
+    ],
+  },
 ]
 
 // M365 accounts live separately — supports multiple named accounts
