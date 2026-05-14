@@ -2076,9 +2076,20 @@ const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string
   { icon: '💼', agent: 'Agent 5 · Fund Benchmarking', name: 'PERE / IPE Real Assets', url: 'https://pere.privateequityinternational.com/feed/',   desc: 'Institutional industrial fund fundraising news and strategy announcements' },
 ]
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
-  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
-    Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }]))
-  )
+  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() => {
+    const base = Object.fromEntries(
+      CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }])
+    )
+    try {
+      const saved = localStorage.getItem('conn-state')
+      if (saved) {
+        const parsed = JSON.parse(saved) as typeof base
+        // Merge: saved values win, but new connectors added since last save get defaults
+        return { ...base, ...parsed }
+      }
+    } catch {}
+    return base
+  })
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
 
   // Microsoft 365 multi-account state
