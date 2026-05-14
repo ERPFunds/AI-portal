@@ -2014,6 +2014,17 @@ const CONNECTIONS_DATA = [
       { label: 'Series IDs',    key: 'series',  placeholder: 'CEU3000000001,PCU331--331-- (comma-separated)' },
     ],
   },
+  {
+    id: 'apify',
+    icon: '🕷️',
+    name: 'Apify',
+    status: 'disconnected' as const,
+    meta: 'Web scraping and Google News extraction — powers the Permian Brief news pull and LP Market Intelligence research workflows',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Token', key: 'apiToken', placeholder: 'apify_api_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
+    ],
+  },
 ]
 
 // M365 accounts live separately — supports multiple named accounts
@@ -2032,6 +2043,16 @@ const DEFAULT_M365_ACCOUNTS: M365Account[] = [
   { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpfunds.com', tenantId: '', clientId: '', status: 'disconnected' },
 ]
 
+const RSS_FEEDS_DISPLAY = [
+  { icon: '⛽', name: 'Oil & Gas 360',       url: 'https://www.oilandgas360.com/feed/',                              desc: 'Upstream and midstream news — drilling activity, production, pipeline updates' },
+  { icon: '🔧', name: 'World Oil',            url: 'https://www.worldoil.com/rss/news',                              desc: 'Global oilfield technology, production, and exploration news' },
+  { icon: '📡', name: 'Rigzone',              url: 'https://www.rigzone.com/rss/news.aspx',                          desc: 'Rig counts, offshore/onshore drilling, and energy workforce news' },
+  { icon: '📊', name: 'Enverus',              url: 'https://www.drillinginfo.com/feed/',                             desc: 'Energy analytics, Permian Basin activity, M&A deal tracking' },
+  { icon: '🏙️', name: 'Biz Journals Dallas', url: 'https://www.bizjournals.com/dallas/rss/industry/real-estate',    desc: 'DFW and Texas commercial real estate transactions and market trends' },
+  { icon: '🏢', name: 'CoStar',              url: 'https://www.costar.com/rss',                                     desc: 'National CRE market data, cap rates, vacancy, and deal flow' },
+  { icon: '📰', name: 'Commercial Observer',  url: 'https://commercialobserver.com/feed/',                           desc: 'CRE finance, acquisitions, and industrial market news' },
+  { icon: '🌐', name: 'GlobeSt',             url: 'https://www.globest.com/feed/',                                  desc: 'Industrial, net lease, and multifamily market intelligence' },
+]
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
   const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
     Object.fromEntries(CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }]))
@@ -2249,6 +2270,29 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
             </div>
           )
         })}
+      </div>
+
+      {/* ── Data Feeds ── */}
+      <div className="settings-section" style={{ marginTop: 32 }}>
+        <h3>Data Feeds</h3>
+        <p>RSS and news feeds monitored by the Permian Brief and market intelligence agents</p>
+      </div>
+      <div className="conn-grid">
+        {RSS_FEEDS_DISPLAY.map((feed) => (
+          <div key={feed.name} className="conn-card">
+            <div className="conn-card-header">
+              <span className="conn-icon">{feed.icon}</span>
+              <div style={{ flex: 1 }}>
+                <div className="conn-name">{feed.name}</div>
+                <div className="conn-status connected">● Active</div>
+              </div>
+            </div>
+            <div className="conn-meta">{feed.desc}</div>
+            <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6 }}>
+              <a href={feed.url} target="_blank" rel="noopener noreferrer" style={{ color: '#94a3b8', textDecoration: 'none' }}>{feed.url}</a>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )
