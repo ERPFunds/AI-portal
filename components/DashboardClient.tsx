@@ -2416,7 +2416,7 @@ function RequestsView({ roleKey, roleName, roleTitle }: { roleKey: string; roleN
   const [loadingList, setLoadingList] = useState(true)
   const [selectedReq, setSelectedReq] = useState<RequestItem | null>(null)
 
-  const isAdmin = roleKey === 'meghan' || roleKey === 'meghanb'
+  const isAdmin = roleKey === 'micheleP' || roleKey === 'meghanb'
 
   React.useEffect(() => {
     fetch('/api/requests')
