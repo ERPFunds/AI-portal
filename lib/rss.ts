@@ -31,6 +31,7 @@ const COMPETITIVE_FEEDS: { url: string; source: string }[] = [
   { url: "https://therealdeal.com/feed/",                                  source: "The Real Deal" },
   { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
   { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
+  { url: "https://www.costar.com/rss",                                     source: "CoStar News" },
 ];
 
 // Agent 5 — Comparable Fund Benchmarking

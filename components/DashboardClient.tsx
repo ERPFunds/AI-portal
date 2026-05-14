@@ -2071,6 +2071,7 @@ const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string
   { icon: '📣', agent: 'Agent 3 · Competitive Landscape', name: 'PR Newswire',      url: 'https://www.prnewswire.com/rss/news-releases-list.rss', desc: 'Fund closes, acquisitions, JV announcements from industrial PE players' },
   { icon: '📢', agent: 'Agent 3 · Competitive Landscape', name: 'Business Wire',    url: 'https://www.businesswire.com/rss/home',                  desc: 'Institutional CRE deals and capital markets — alternative wire to PR Newswire' },
   { icon: '🏗️', agent: 'Agent 3 · Competitive Landscape', name: 'The Real Deal',   url: 'https://therealdeal.com/feed/',                          desc: 'Large industrial transactions and fund activity' },
+  { icon: '🏢', agent: 'Agent 3 · Competitive Landscape', name: 'CoStar News',      url: 'https://www.costar.com/rss',                             desc: 'CRE deal announcements and market news — headlines available without subscription' },
   // ── Agent 5 — Comparable Fund Benchmarking ────────────────────────────
   { icon: '📁', agent: 'Agent 5 · Fund Benchmarking', name: 'SEC EDGAR Form D',   url: 'https://efts.sec.gov/LATEST/search-index?forms=D',        desc: 'Every Reg D filing nationwide — tracks private fund raises by structure and amount' },
   { icon: '💼', agent: 'Agent 5 · Fund Benchmarking', name: 'PERE / IPE Real Assets', url: 'https://pere.privateequityinternational.com/feed/',   desc: 'Institutional industrial fund fundraising news and strategy announcements' },
