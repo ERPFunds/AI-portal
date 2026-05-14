@@ -2043,15 +2043,25 @@ const DEFAULT_M365_ACCOUNTS: M365Account[] = [
   { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpfunds.com', tenantId: '', clientId: '', status: 'disconnected' },
 ]
 
-const RSS_FEEDS_DISPLAY = [
-  { icon: '⛽', name: 'Oil & Gas 360',       url: 'https://www.oilandgas360.com/feed/',                              desc: 'Upstream and midstream news — drilling activity, production, pipeline updates' },
-  { icon: '🔧', name: 'World Oil',            url: 'https://www.worldoil.com/rss/news',                              desc: 'Global oilfield technology, production, and exploration news' },
-  { icon: '📡', name: 'Rigzone',              url: 'https://www.rigzone.com/rss/news.aspx',                          desc: 'Rig counts, offshore/onshore drilling, and energy workforce news' },
-  { icon: '📊', name: 'Enverus',              url: 'https://www.drillinginfo.com/feed/',                             desc: 'Energy analytics, Permian Basin activity, M&A deal tracking' },
-  { icon: '🏙️', name: 'Biz Journals Dallas', url: 'https://www.bizjournals.com/dallas/rss/industry/real-estate',    desc: 'DFW and Texas commercial real estate transactions and market trends' },
-  { icon: '🏢', name: 'CoStar',              url: 'https://www.costar.com/rss',                                     desc: 'National CRE market data, cap rates, vacancy, and deal flow' },
-  { icon: '📰', name: 'Commercial Observer',  url: 'https://commercialobserver.com/feed/',                           desc: 'CRE finance, acquisitions, and industrial market news' },
-  { icon: '🌐', name: 'GlobeSt',             url: 'https://www.globest.com/feed/',                                  desc: 'Industrial, net lease, and multifamily market intelligence' },
+const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string; agent: string }[] = [
+  // ── Agent 1 — Permian Industrial Brief ────────────────────────────────
+  { icon: '⛽', agent: 'Agent 1 · Permian Brief', name: 'Oil & Gas 360',       url: 'https://www.oilandgas360.com/feed/',                         desc: 'Upstream and midstream news — drilling activity, production, pipeline updates' },
+  { icon: '🔧', agent: 'Agent 1 · Permian Brief', name: 'World Oil',            url: 'https://www.worldoil.com/rss/news',                         desc: 'Operator activity, frac sand, midstream, in-basin facilities' },
+  { icon: '📡', agent: 'Agent 1 · Permian Brief', name: 'Rigzone',              url: 'https://www.rigzone.com/rss/news.aspx',                     desc: 'Rig counts, offshore/onshore drilling, and energy workforce news' },
+  { icon: '⚡', agent: 'Agent 1 · Permian Brief', name: 'EIA Today in Energy',  url: 'https://www.eia.gov/rss/todayinenergy.xml',                 desc: 'Permian production updates, regulatory changes, basin economics — from EIA' },
+  { icon: '🛢️', agent: 'Agent 1 · Permian Brief', name: 'OilPrice.com',         url: 'https://oilprice.com/rss/main',                             desc: 'Energy press, WTI commentary, occasional Permian operator coverage' },
+  { icon: '🏙️', agent: 'Agent 1 · Permian Brief', name: 'Bisnow Texas',         url: 'https://bisnow.com/rss/houston',                            desc: 'Texas CRE coverage — filter to Permian/Midland/Odessa activity' },
+  { icon: '🔗', agent: 'Agent 1 · Permian Brief', name: 'Connect CRE',          url: 'https://connectcre.com/feed/',                              desc: 'Texas and national CRE — Permian-adjacent industrial transactions' },
+  { icon: '📋', agent: 'Agent 1 · Permian Brief', name: 'CRE Daily',            url: 'https://credaily.com/feed/',                                desc: 'National CRE — picks up institutional Permian industrial deals' },
+  { icon: '📰', agent: 'Agent 1 · Permian Brief', name: 'Commercial Observer',  url: 'https://commercialobserver.com/feed/',                      desc: 'CRE finance, acquisitions, and industrial market news' },
+  { icon: '🌐', agent: 'Agent 1 · Permian Brief', name: 'GlobeSt',              url: 'https://www.globest.com/feed/',                             desc: 'Industrial, net lease, and multifamily market intelligence' },
+  // ── Agent 3 — Competitive Landscape Profile ───────────────────────────
+  { icon: '📣', agent: 'Agent 3 · Competitive Landscape', name: 'PR Newswire',      url: 'https://www.prnewswire.com/rss/news-releases-list.rss', desc: 'Fund closes, acquisitions, JV announcements from industrial PE players' },
+  { icon: '📢', agent: 'Agent 3 · Competitive Landscape', name: 'Business Wire',    url: 'https://www.businesswire.com/rss/home',                  desc: 'Institutional CRE deals and capital markets — alternative wire to PR Newswire' },
+  { icon: '🏗️', agent: 'Agent 3 · Competitive Landscape', name: 'The Real Deal',   url: 'https://therealdeal.com/feed/',                          desc: 'Large industrial transactions and fund activity' },
+  // ── Agent 5 — Comparable Fund Benchmarking ────────────────────────────
+  { icon: '📁', agent: 'Agent 5 · Fund Benchmarking', name: 'SEC EDGAR Form D',   url: 'https://efts.sec.gov/LATEST/search-index?forms=D',        desc: 'Every Reg D filing nationwide — tracks private fund raises by structure and amount' },
+  { icon: '💼', agent: 'Agent 5 · Fund Benchmarking', name: 'PERE / IPE Real Assets', url: 'https://pere.privateequityinternational.com/feed/',   desc: 'Institutional industrial fund fundraising news and strategy announcements' },
 ]
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
   const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
