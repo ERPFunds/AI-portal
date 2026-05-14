@@ -371,54 +371,14 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
 };
 
 export const AGENT_ACTIVITY = [
-  {
-    color: "green",
-    description: "Automated LP KYC verification completed",
-    timestamp: new Date("2024-01-15T10:30:00Z")
-  },
-  {
-    color: "blue",
-    description: "Monthly reporting package queued for distribution",
-    timestamp: new Date("2024-01-15T09:15:00Z")
-  },
-  {
-    color: "yellow",
-    description: "Email escalation requiring manual review",
-    timestamp: new Date("2024-01-15T08:45:00Z")
-  },
-  {
-    color: "green",
-    description: "Market trend analysis completed and published",
-    timestamp: new Date("2024-01-15T08:00:00Z")
-  },
-  {
-    color: "blue",
-    description: "Investor deck draft generated for review",
-    timestamp: new Date("2024-01-15T07:30:00Z")
-  },
-  {
-    color: "yellow",
-    description: "Competitive landscape changes flagged for analysis",
-    timestamp: new Date("2024-01-15T07:00:00Z")
-  },
-  {
-    color: "green",
-    description: "Agent health check passed all systems",
-    timestamp: new Date("2024-01-15T06:30:00Z")
-  },
-  {
-    color: "blue",
-    description: "Security audit completed with no critical issues",
-    timestamp: new Date("2024-01-15T06:00:00Z")
-  },
-  {
-    color: "yellow",
-    description: "Database optimization in progress",
-    timestamp: new Date("2024-01-15T05:30:00Z")
-  },
-  {
-    color: "green",
-    description: "Backup verification successful",
-    timestamp: new Date("2024-01-15T05:00:00Z")
-  }
+  { color: "green",  action: "Automated LP KYC verification completed",          time: "10:30 AM" },
+  { color: "blue",   action: "Monthly reporting package queued for distribution", time: "9:15 AM"  },
+  { color: "yellow", action: "Email escalation requiring manual review",           time: "8:45 AM"  },
+  { color: "green",  action: "Market trend analysis completed and published",      time: "8:00 AM"  },
+  { color: "blue",   action: "Investor deck draft generated for review",           time: "7:30 AM"  },
+  { color: "yellow", action: "Competitive landscape changes flagged for analysis", time: "7:00 AM"  },
+  { color: "green",  action: "Agent health check passed all systems",             time: "6:30 AM"  },
+  { color: "blue",   action: "Security audit completed with no critical issues",   time: "6:00 AM"  },
+  { color: "yellow", action: "Database optimization in progress",                  time: "5:30 AM"  },
+  { color: "green",  action: "Backup verification successful",                     time: "5:00 AM"  },
 ];
