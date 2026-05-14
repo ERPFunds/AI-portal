@@ -1,5 +1,5 @@
 import { ApifyClient } from "apify-client";
-import { subDays } from "date-fns";
+import { subDays, format } from "date-fns";
 import { fetchAllFeeds, FeedItem } from "@/lib/rss";
 import { isPermianRelevant } from "@/lib/filter-permian";
 import { getPreviouslyPublishedUrls } from "@/lib/db";
@@ -7,9 +7,12 @@ import { getPreviouslyPublishedUrls } from "@/lib/db";
 const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 const AGENT_NAME = "permian-brief";
 const ARTICLE_WINDOW_DAYS = 60;
+const APIFY_PRIORITY_DAYS = 7;
 
 async function fetchApifyItems(): Promise<FeedItem[]> {
   try {
+    const priorityAfter = format(subDays(new Date(), APIFY_PRIORITY_DAYS), "yyyy-MM-dd");
+
     const run = await apify.actor("apify/google-news-scraper").call({
       queries: [
         "Permian Basin industrial real estate",
@@ -17,6 +20,8 @@ async function fetchApifyItems(): Promise<FeedItem[]> {
         "West Texas industrial market",
       ],
       maxResultsPerQuery: 20,
+      dateFilter: "week",          // Google News built-in: last 7 days
+      startUrls: [],
     });
     const { items } = await apify.dataset(run.defaultDatasetId).listItems();
     return (items as any[])
