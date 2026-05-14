@@ -2109,7 +2109,11 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
     setExpandedConn((prev) => (prev === id ? null : id))
   }
   function toggleConnStatus(id: string) {
-    setConns((prev) => ({ ...prev, [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' : 'connected' } }))
+    setConns((prev) => {
+      const next = { ...prev, [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' as const : 'connected' as const } }
+      try { localStorage.setItem('conn-state', JSON.stringify(next)) } catch {}
+      return next
+    })
   }
   function setField(connId: string, key: string, val: string) {
     setConns((prev) => ({ ...prev, [connId]: { ...prev[connId], values: { ...prev[connId].values, [key]: val } } }))
@@ -2291,7 +2295,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
               </div>
               <div className="conn-meta">{conn.meta}</div>
               <div className="conn-footer">
-                <span className="sync-badge">{conn.sync}</span>
+                <span className="sync-badge">{isConnected ? '✓ Connected' : conn.sync}</span>
                 <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => toggleConn(conn.id)}>
                   {isExpanded ? 'Close' : 'Configure'}
                 </button>
