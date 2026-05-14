@@ -2094,7 +2094,13 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
 
   // Microsoft 365 multi-account state
-  const [m365Accounts, setM365Accounts] = useState<M365Account[]>(DEFAULT_M365_ACCOUNTS)
+  const [m365Accounts, setM365Accounts] = useState<M365Account[]>(() => {
+    try {
+      const saved = localStorage.getItem('m365-state')
+      if (saved) return JSON.parse(saved) as M365Account[]
+    } catch {}
+    return DEFAULT_M365_ACCOUNTS
+  })
   const [expandedM365, setExpandedM365] = useState<string | null>(null)
   const [showAddM365, setShowAddM365] = useState(false)
   const [newM365, setNewM365] = useState({ label: '', email: '', tenantId: '', clientId: '' })
@@ -2120,19 +2126,23 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
     saveChanges()
   }
 
+  function saveM365(next: M365Account[]) {
+    setM365Accounts(next)
+    try { localStorage.setItem('m365-state', JSON.stringify(next)) } catch {}
+  }
   function updateM365Account(id: string, field: keyof M365Account, val: string) {
-    setM365Accounts((prev) => prev.map((a) => a.id === id ? { ...a, [field]: val } : a))
+    saveM365(m365Accounts.map((a) => a.id === id ? { ...a, [field]: val } : a))
   }
   function toggleM365Status(id: string) {
-    setM365Accounts((prev) => prev.map((a) => a.id === id ? { ...a, status: a.status === 'connected' ? 'disconnected' : 'connected' } : a))
+    saveM365(m365Accounts.map((a) => a.id === id ? { ...a, status: a.status === 'connected' ? 'disconnected' : 'connected' } : a))
   }
   function removeM365Account(id: string) {
-    setM365Accounts((prev) => prev.filter((a) => a.id !== id))
+    saveM365(m365Accounts.filter((a) => a.id !== id))
     if (expandedM365 === id) setExpandedM365(null)
   }
   function addM365Account() {
     if (!newM365.label.trim() || !newM365.email.trim()) return
-    setM365Accounts((prev) => [...prev, {
+    saveM365([...m365Accounts, {
       id: `m365-${Date.now()}`,
       label: newM365.label.trim(),
       email: newM365.email.trim(),
