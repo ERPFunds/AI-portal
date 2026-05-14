@@ -101,7 +101,7 @@ Focus on transaction accuracy, reconciliation items, and expense tracking. Use p
 }
 
 export function buildSystemPrompt(roleKey: RoleKey): string {
-  const roleContext = ROLE_CONTEXTS[roleKey] ?? ROLE_CONTEXTS.meghan
+  const roleContext = ROLE_CONTEXTS[roleKey] ?? ROLE_CONTEXTS.micheleP
 
   return `
 You are the AI command assistant embedded in the ERP Industrials portal. Today is ${today()}.
