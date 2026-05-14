@@ -10,7 +10,7 @@ export interface InboxItem {
 }
 
 export const INBOX_DATA: Record<RoleKey, InboxItem[]> = {
-  meghan:   [],
+  micheleP: [],
   meghanb:  [],
   william:  [],
   brennan:  [],
@@ -23,7 +23,7 @@ export const INBOX_DATA: Record<RoleKey, InboxItem[]> = {
 }
 
 export const INBOX_AGENTS: Record<RoleKey, string[]> = {
-  meghan:   [],
+  micheleP: [],
   meghanb:  [],
   william:  [],
   brennan:  [],
