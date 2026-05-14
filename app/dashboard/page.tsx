@@ -18,7 +18,7 @@ export default async function DashboardPage() {
     .eq('id', user.id)
     .single()
 
-  const roleKey = (profile?.role_key as RoleKey) ?? 'meghan'
+  const roleKey = (profile?.role_key as RoleKey) ?? 'micheleP'
 
   // Prefer the name from the identity provider (Microsoft SSO), fall back to role name
   const userName: string =
