@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { ROLES, type RoleKey, type Role } from '@/lib/data/roles'
@@ -2077,33 +2077,38 @@ const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string
   { icon: '💼', agent: 'Agent 5 · Fund Benchmarking', name: 'PERE / IPE Real Assets', url: 'https://pere.privateequityinternational.com/feed/',   desc: 'Institutional industrial fund fundraising news and strategy announcements' },
 ]
 function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: () => void }) {
-  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() => {
-    const base = Object.fromEntries(
+  const [conns, setConns] = useState<Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>>(() =>
+    Object.fromEntries(
       CONNECTIONS_DATA.map((c) => [c.id, { status: c.status as 'connected' | 'disconnected', values: Object.fromEntries(c.fields.map((f) => [f.key, ''])) }])
     )
-    try {
-      const saved = localStorage.getItem('conn-state')
-      if (saved) {
-        const parsed = JSON.parse(saved) as typeof base
-        // Merge: saved values win, but new connectors added since last save get defaults
-        return { ...base, ...parsed }
-      }
-    } catch {}
-    return base
-  })
+  )
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
 
   // Microsoft 365 multi-account state
-  const [m365Accounts, setM365Accounts] = useState<M365Account[]>(() => {
-    try {
-      const saved = localStorage.getItem('m365-state')
-      if (saved) return JSON.parse(saved) as M365Account[]
-    } catch {}
-    return DEFAULT_M365_ACCOUNTS
-  })
+  const [m365Accounts, setM365Accounts] = useState<M365Account[]>(DEFAULT_M365_ACCOUNTS)
   const [expandedM365, setExpandedM365] = useState<string | null>(null)
   const [showAddM365, setShowAddM365] = useState(false)
   const [newM365, setNewM365] = useState({ label: '', email: '', tenantId: '', clientId: '' })
+
+  // Load persisted connector + M365 state after hydration (avoids SSR mismatch)
+  useEffect(() => {
+    try {
+      const savedConns = localStorage.getItem('conn-state')
+      if (savedConns) {
+        const parsed = JSON.parse(savedConns)
+        setConns((prev) => ({ ...prev, ...parsed }))
+      }
+    } catch {}
+    try {
+      const savedM365 = localStorage.getItem('m365-state')
+      if (savedM365) setM365Accounts(JSON.parse(savedM365))
+    } catch {}
+  }, [])
+
+  // Auto-save connector values to localStorage on every change
+  useEffect(() => {
+    try { localStorage.setItem('conn-state', JSON.stringify(conns)) } catch {}
+  }, [conns])
 
   function toggleConn(id: string) {
     setExpandedConn((prev) => (prev === id ? null : id))
