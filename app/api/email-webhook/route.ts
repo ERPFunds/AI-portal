@@ -87,7 +87,15 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Step 3: Workflow Agent ────────────────────────────────────────────────
-  type AnyOutput = { summary: string; outputType: string; [key: string]: unknown };
+  type AnyOutput = {
+    summary: string;
+    outputType: string;
+    brief?: string;
+    slideContent?: string;
+    prose?: string;
+    omContent?: string;
+    section?: string;
+  };
   let output: AnyOutput;
 
   try {
@@ -170,11 +178,7 @@ export async function POST(req: NextRequest) {
 
   // ── Step 4: File Handler ──────────────────────────────────────────────────
   const outputContent =
-    (output.brief as string | undefined) ??
-    (output.slideContent as string | undefined) ??
-    (output.prose as string | undefined) ??
-    (output.omContent as string | undefined) ??
-    output.summary;
+    output.brief ?? output.slideContent ?? output.prose ?? output.omContent ?? output.summary;
 
   const folder = buildOneDriveFolder({ prefix, projectContext, workflowId });
   const filename = buildFilename({ projectContext, workflowId });
