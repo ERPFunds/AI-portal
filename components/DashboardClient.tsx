@@ -22,13 +22,12 @@ interface Props {
 function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => void; onCancel: () => void }) {
   const [name, setName] = useState(wf.name)
   const [trigger, setTrigger] = useState(wf.trigger)
-  const [triggerType, setTriggerType] = useState(wf.triggerType)
-  const [freq, setFreq] = useState(wf.freq)
+  const [freq, setFreq] = useState(wf.frequency ?? wf.freq ?? '')
   const [status, setStatus] = useState(wf.status)
   const [steps, setSteps] = useState<any[]>(wf.steps.map((s: any) => ({ ...s })))
-  const [metaTrigger, setMetaTrigger] = useState(wf.meta.trigger)
-  const [metaOutput, setMetaOutput] = useState(wf.meta.output)
-  const [metaEscalate, setMetaEscalate] = useState(wf.meta.escalate)
+  const [metaTrigger, setMetaTrigger] = useState(wf.meta?.trigger ?? '')
+  const [metaOutput, setMetaOutput] = useState(wf.meta?.output ?? '')
+  const [metaEscalate, setMetaEscalate] = useState(wf.meta?.escalate ?? '')
 
   const inputStyle = { width: '100%', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 10px', fontSize: 12, color: '#111827', outline: 'none', fontFamily: 'inherit' }
   const labelStyle = { fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' as const, letterSpacing: '.5px', display: 'block', marginBottom: 3 }
@@ -43,7 +42,7 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
         <div>
           <label style={labelStyle}>Trigger type</label>
-          <select style={inputStyle} value={triggerType} onChange={e => setTriggerType(e.target.value)}>
+          <select style={inputStyle} value={trigger} onChange={e => setTrigger(e.target.value)}>
             {['email', 'schedule', 'data', 'manual', 'webhook'].map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
@@ -56,10 +55,6 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
         </div>
       </div>
       <div style={sectionStyle}>
-        <label style={labelStyle}>Trigger description</label>
-        <input style={inputStyle} value={trigger} onChange={e => setTrigger(e.target.value)} />
-      </div>
-      <div style={sectionStyle}>
         <label style={labelStyle}>Frequency</label>
         <input style={inputStyle} value={freq} onChange={e => setFreq(e.target.value)} />
       </div>
@@ -68,7 +63,7 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
           <label style={{ ...labelStyle, marginBottom: 0 }}>Steps</label>
           <button
-            onClick={() => setSteps([...steps, { type: 'action', label: 'New Step', desc: '' }])}
+            onClick={() => setSteps([...steps, { type: 'automated', label: 'New Step', description: '' }])}
             style={{ fontSize: 10, color: '#0e7490', background: 'none', border: '1px solid #A6C3C9', borderRadius: 4, padding: '2px 8px', cursor: 'pointer' }}
           >+ Add step</button>
         </div>
@@ -94,8 +89,8 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
               <label style={labelStyle}>Description</label>
               <textarea
                 style={{ ...inputStyle, resize: 'vertical', minHeight: 52, lineHeight: 1.5 }}
-                value={step.desc}
-                onChange={e => { const s = [...steps]; s[si] = { ...s[si], desc: e.target.value }; setSteps(s) }}
+                value={step.description ?? step.desc ?? ''}
+                onChange={e => { const s = [...steps]; s[si] = { ...s[si], description: e.target.value }; setSteps(s) }}
               />
             </div>
           </div>
@@ -113,7 +108,7 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
 
       <div style={{ display: 'flex', gap: 8 }}>
         <button className="btn btn-ghost" style={{ flex: 1 }} onClick={onCancel}>Cancel</button>
-        <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => onSave({ name, trigger, triggerType, freq, status, steps, meta: { trigger: metaTrigger, output: metaOutput, escalate: metaEscalate } })}>
+        <button className="btn btn-primary" style={{ flex: 2 }} onClick={() => onSave({ name, trigger, frequency: freq, status, steps, meta: { trigger: metaTrigger, output: metaOutput, escalate: metaEscalate } })}>
           Save workflow
         </button>
       </div>
@@ -356,13 +351,13 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
                     <div className="wf-header" onClick={() => { if (!isEditing) toggleWorkflow(key) }}>
                       <span
                         className="wf-trigger-chip"
-                        style={{ background: triggerColors[wf.triggerType] ?? '#f3f4f6', color: triggerTextColors[wf.triggerType] ?? '#6b7280', border: `1px solid ${triggerBorderColors[wf.triggerType] ?? '#e5e7eb'}` }}
+                        style={{ background: triggerColors[wf.trigger] ?? '#f3f4f6', color: triggerTextColors[wf.trigger] ?? '#6b7280', border: `1px solid ${triggerBorderColors[wf.trigger] ?? '#e5e7eb'}` }}
                       >
-                        {wf.triggerType}
+                        {wf.trigger}
                       </span>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{wf.name}</div>
-                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{wf.trigger} · {wf.freq}</div>
+                        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{wf.trigger}{wf.frequency ? ` · ${wf.frequency}` : ''}</div>
                       </div>
                       <span className={`badge ${wf.status === 'active' ? 'badge-green' : 'badge-gray'}`} style={{ fontSize: 9 }}>{wf.status}</span>
                       <button
@@ -381,17 +376,20 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
                               <div className={`wf-step-dot ${step.type}`} />
                               <div className="wf-step-content">
                                 <div className={`wf-step-label ${step.type}`}>{step.label}</div>
-                                <div className="wf-step-desc">{step.desc}</div>
+                                <div className="wf-step-desc">{step.description ?? step.desc}</div>
                               </div>
                             </div>
                           ))}
                         </div>
-                        <div className="wf-meta">
-                          <span>Trigger: {wf.meta.trigger}</span>
-                          <span>Output: {wf.meta.output}</span>
-                          <span>Escalates to: {wf.meta.escalate}</span>
-                          <span>Last run: {wf.lastRun}</span>
-                        </div>
+                        {(wf.meta || wf.triggerSenders || wf.lastRun) && (
+                          <div className="wf-meta">
+                            {wf.triggerSenders && <span>Senders: {wf.triggerSenders.join(', ')}</span>}
+                            {wf.meta?.trigger && <span>Trigger: {wf.meta.trigger}</span>}
+                            {wf.meta?.output && <span>Output: {wf.meta.output}</span>}
+                            {wf.meta?.escalate && <span>Escalates to: {wf.meta.escalate}</span>}
+                            {wf.lastRun && <span>Last run: {wf.lastRun}</span>}
+                          </div>
+                        )}
                       </div>
                     )}
                     {isOpen && isEditing && (
