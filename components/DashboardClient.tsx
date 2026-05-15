@@ -2465,11 +2465,14 @@ function NewsletterPromptLibrary() {
   const filtered = NEWSLETTER_PROMPTS.filter((p) => filterMarket === 'all' || p.market === filterMarket)
 
   return (
-    <div style={{ marginTop: 32 }}>
+    <div className="card" style={{ margin: 0 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Agent 1 — Newsletter Prompt Library</div>
-          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs for all 6 scheduled newsletters</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📰</div>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Agent 1 — Newsletter Prompt Library</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs for all 6 scheduled newsletters</div>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {(['all', 'permian', 'brevard'] as const).map((m) => (
@@ -2525,7 +2528,10 @@ function SOPsView() {
         <span style={{ fontSize: 13 }}>📌</span>
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 0 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ gridColumn: '1 / -1' }}>
+          <NewsletterPromptLibrary />
+        </div>
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
           return (
@@ -2572,7 +2578,6 @@ function SOPsView() {
           )
         })}
       </div>
-      <NewsletterPromptLibrary />
     </div>
   )
 }
