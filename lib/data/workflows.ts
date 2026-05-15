@@ -126,9 +126,9 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         frequency: "weekly",
         status: "active",
         steps: [
-          { type: "automated", label: "Fetch News", description: "RSS + Google News · Permian macro & CRE" },
-          { type: "automated", label: "Write Narrative", description: "Claude drafts 3-4 paragraph market brief" },
-          { type: "automated", label: "Send & Archive", description: "Email to Michele, Meghan, William · archived in portal" }
+          { type: "automated", label: "Fetch News", description: "RSS + Google News · Permian Basin & Florida industrial CRE" },
+          { type: "automated", label: "Write Narrative", description: "Claude drafts 3-4 paragraph market brief covering Permian Basin & Florida" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William" }
         ]
       },
       {
@@ -137,9 +137,9 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         frequency: "monthly",
         status: "active",
         steps: [
-          { type: "automated", label: "Pull Activity", description: "Sale comps & tenant activity · Permian Basin & Tampa" },
-          { type: "automated", label: "Write Brief", description: "Claude writes submarket conditions brief" },
-          { type: "automated", label: "Send & Archive", description: "Email + portal archive · feeds OM research" }
+          { type: "automated", label: "Pull Activity", description: "Sale comps & tenant activity · Permian Basin & Florida submarkets" },
+          { type: "automated", label: "Write Brief", description: "Claude writes submarket conditions brief for Permian Basin & Florida" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William · feeds OM research" }
         ]
       },
       {
@@ -148,9 +148,9 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         frequency: "quarterly",
         status: "active",
         steps: [
-          { type: "automated", label: "Scan Competitors", description: "Competitor fund activity · benchmarks · LP appetite signals" },
-          { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning brief" },
-          { type: "automated", label: "Send & Archive", description: "Email + portal archive · feeds LP meeting prep" }
+          { type: "automated", label: "Scan Competitors", description: "Competitor fund activity · Permian Basin & Florida market benchmarks · LP appetite signals" },
+          { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning brief for Permian Basin & Florida industrial CRE" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William · feeds LP meeting prep" }
         ]
       },
       // ── Email-triggered RESEARCH: workflows (Step 2) ─────────────────────
