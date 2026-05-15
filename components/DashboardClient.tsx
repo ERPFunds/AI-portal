@@ -1894,12 +1894,12 @@ const CONNECTIONS_DATA = [
     icon: '📁',
     name: 'OneDrive',
     status: 'connected' as const,
-    meta: 'Document vault source — fund docs, leases, vendor contracts, and reports',
-    sync: 'Real-time via webhook',
+    meta: 'Agent outputs saved to OneDrive via Microsoft Graph API · uses Azure app credentials set in Vercel env',
+    sync: 'On-demand via Graph API',
     fields: [
-      { label: 'Tenant ID',    key: 'tenant', placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { label: 'Drive ID',     key: 'drive',  placeholder: 'b!xxxxxxxxxxxxxxxx' },
-      { label: 'Root Folder',  key: 'folder', placeholder: '/ERP Industrials' },
+      { label: 'Tenant ID',     key: 'tenant', placeholder: 'AZURE_TENANT_ID (set in Vercel env)' },
+      { label: 'Client ID',     key: 'client', placeholder: 'AZURE_CLIENT_ID (set in Vercel env)' },
+      { label: 'Client Secret', key: 'secret', placeholder: 'AZURE_CLIENT_SECRET (set in Vercel env)' },
     ],
   },
   {
