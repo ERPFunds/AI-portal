@@ -29,87 +29,87 @@ export interface AgentWorkflows {
 export const WORKFLOWS: Record<string, AgentWorkflowData> = {
   ir: {
     wf: [
+      // ── DocuSign-triggered ───────────────────────────────────────────────
       {
-        name: "LP Onboarding & KYC",
+        name: "LP Onboarding",
+        trigger: "webhook",
+        status: "active",
+        steps: [
+          { type: "automated", label: "DocuSign Trigger", description: "Power Automate detects executed subscription agreement · POSTs to /api/ir-onboarding" },
+          { type: "automated", label: "Generate Sequence", description: "Claude drafts Day 1, Day 7, Day 30 welcome emails · portal access · key contacts" },
+          { type: "automated", label: "Save to Drafts", description: "3 email drafts saved to Meghan's Outlook · archived to OneDrive /IR/Onboarding/" },
+          { type: "manual", label: "Review & Send", description: "Meghan personalizes and sends each email at the right interval" }
+        ]
+      },
+      // ── Inbound investor email workflows ────────────────────────────────
+      {
+        name: "Email Escalation Filter",
         trigger: "email",
+        triggerSenders: ["investors@erpfunds.com", "mberry@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Extract LP info from email" },
-          { type: "manual", label: "KYC Review", description: "Review and verify LP documents" },
-          { type: "automated", label: "Create Portal Account", description: "Provision LP portal access" }
+          { type: "automated", label: "Receive Email", description: "Power Automate watches investors@erpfunds.com DST inbox · POSTs to /api/ir-webhook" },
+          { type: "automated", label: "Classify", description: "Claude identifies: portal access · K-1 · distribution · escalation · new inquiry" },
+          { type: "automated", label: "Draft Response", description: "For repeat questions: AI drafts reply saved to Meghan's Outlook Drafts — never auto-sent" },
+          { type: "manual", label: "Review & Send", description: "Meghan reviews draft · sends or edits · escalations flagged for immediate attention" }
         ]
       },
       {
-        name: "Monthly LP Reporting",
-        trigger: "schedule",
-        frequency: "monthly",
-        status: "active",
-        steps: [
-          { type: "automated", label: "Compile Data", description: "Gather performance metrics" },
-          { type: "automated", label: "Generate Reports", description: "Create LP-specific reports" },
-          { type: "manual", label: "Review & Send", description: "QA and send to LPs" }
-        ]
-      },
-      {
-        name: "Email Escalation Handler",
+        name: "Attachment Auto-Filer",
         trigger: "email",
+        triggerSenders: ["investors@erpfunds.com", "mberry@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Classify Email", description: "Determine urgency and type" },
-          { type: "automated", label: "Route to Queue", description: "Send to appropriate handler" },
-          { type: "manual", label: "Manual Review", description: "Human oversight if needed" }
+          { type: "automated", label: "Receive Email", description: "Power Automate detects investor email with attachment · POSTs to /api/ir-webhook" },
+          { type: "automated", label: "Classify Doc", description: "Claude classifies: subscription · K-1 · wire · signed agreement · KYC · correspondence" },
+          { type: "automated", label: "File to OneDrive", description: "Saves to /IR/[DocType]/[LP-Name]/ · versioned" },
+          { type: "automated", label: "Log Entry", description: "Logged to ir_email_log · portal activity feed updated" }
         ]
       },
       {
-        name: "Portfolio Update Digest",
-        trigger: "schedule",
-        frequency: "weekly",
-        status: "active",
-        steps: [
-          { type: "automated", label: "Fetch Updates", description: "Collect portfolio changes" },
-          { type: "automated", label: "Format Digest", description: "Create formatted summary" },
-          { type: "manual", label: "Send Digest", description: "Distribute to stakeholders" }
-        ]
-      },
-      {
-        name: "LP Query Response",
+        name: "Investor Dialogue Log",
         trigger: "email",
+        triggerSenders: ["mberry@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Query", description: "Understand LP question" },
-          { type: "automated", label: "Draft Response", description: "Generate response text" },
-          { type: "manual", label: "Review & Send", description: "Human review and sending" }
+          { type: "automated", label: "Receive Note", description: "Meghan or William emails typed meeting notes or voice memo to agent inbox · POSTs to /api/ir-webhook" },
+          { type: "automated", label: "Parse & Extract", description: "Claude extracts: LP name · interest level · sticking points · follow-up commitments · relationship context" },
+          { type: "automated", label: "Save Log Entry", description: "Structured entry saved to ir_dialogue_log DB · archived to OneDrive /IR/Dialogue-Log/" },
+          { type: "automated", label: "Surface Next Touch", description: "Next touch suggestion returned in response · stale relationships flagged weekly" }
+        ]
+      },
+      // ── Accounting-triggered report workflows ────────────────────────────
+      {
+        name: "Monthly DST Formatter",
+        trigger: "webhook",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Receive Raw Data", description: "Accounting POSTs raw outputs to /api/ir-report after monthly close" },
+          { type: "automated", label: "Format Report", description: "Claude formats into DST reporting package: operating summary · distributions · capital accounts" },
+          { type: "automated", label: "Save to OneDrive", description: "Formatted report filed to /IR/DST-Reports/[period]/" },
+          { type: "manual", label: "Review & Distribute", description: "Meghan reviews · sends to DST investors" }
         ]
       },
       {
-        name: "Fund Performance Analysis",
-        trigger: "schedule",
-        frequency: "quarterly",
+        name: "Quarterly LP Report Formatter",
+        trigger: "webhook",
         status: "active",
         steps: [
-          { type: "automated", label: "Analyze Returns", description: "Calculate fund metrics" },
-          { type: "automated", label: "Generate Analysis", description: "Create detailed analysis" },
-          { type: "manual", label: "Executive Review", description: "C-suite review and approval" }
+          { type: "automated", label: "Receive Raw Data", description: "Accounting POSTs raw outputs to /api/ir-report after quarterly close" },
+          { type: "automated", label: "Format Report", description: "Claude formats into LP package: exec summary · portfolio performance · financials · market update" },
+          { type: "automated", label: "Draft Update Email", description: "Optional: AI drafts LP update email saved to Meghan's Outlook Drafts" },
+          { type: "manual", label: "Review & Send", description: "Meghan adds commentary · sends to LP distribution list" }
         ]
       },
+      // ── Salesforce sync ──────────────────────────────────────────────────
       {
-        name: "Investment Committee Prep",
+        name: "Salesforce Contact Auto-Update",
         trigger: "webhook",
         status: "draft",
         steps: [
-          { type: "automated", label: "Gather Data", description: "Collect deal info" },
-          { type: "manual", label: "Create Memo", description: "Prepare investment memo" },
-          { type: "manual", label: "Schedule Meeting", description: "Coordinate IC meeting" }
-        ]
-      },
-      {
-        name: "Investor Deck Generation",
-        trigger: "webhook",
-        status: "draft",
-        steps: [
-          { type: "automated", label: "Pull Data", description: "Extract performance data" },
-          { type: "automated", label: "Generate Deck", description: "Create presentation slides" },
-          { type: "manual", label: "Review & Distribute", description: "QA and send to investors" }
+          { type: "automated", label: "Email Interaction Ends", description: "After email-escalation or dialogue-logger workflow completes" },
+          { type: "automated", label: "Push to Salesforce", description: "Power Automate pushes notes and open items to LP Salesforce contact record" },
+          { type: "automated", label: "Log Update", description: "Sync timestamp and field updates logged to portal" }
         ]
       }
     ]

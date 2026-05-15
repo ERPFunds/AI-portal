@@ -85,3 +85,93 @@ export async function getRecentResearchLog(limit = 20) {
   `;
   return rows;
 }
+
+// ── ir_email_log — Agent 2 IR email workflow log ─────────────────────────────
+
+export async function logIrEmailEntry(params: {
+  fromEmail: string;
+  subject: string;
+  workflowId: string;
+  category: string;
+  isEscalation: boolean;
+  escalationReason: string | null;
+  lpName: string | null;
+  summary: string;
+  draftSaved: boolean;
+  draftId: string | null;
+}) {
+  await sql`
+    INSERT INTO ir_email_log (
+      from_email, subject, workflow_id, category,
+      is_escalation, escalation_reason, lp_name,
+      summary, draft_saved, draft_id
+    ) VALUES (
+      ${params.fromEmail},
+      ${params.subject},
+      ${params.workflowId},
+      ${params.category},
+      ${params.isEscalation},
+      ${params.escalationReason},
+      ${params.lpName},
+      ${params.summary},
+      ${params.draftSaved},
+      ${params.draftId}
+    )
+  `;
+}
+
+export async function getRecentIrEmailLog(limit = 20) {
+  const { rows } = await sql`
+    SELECT id, created_at, from_email, subject, workflow_id, category,
+           is_escalation, lp_name, summary, draft_saved
+    FROM ir_email_log
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
+
+// ── ir_dialogue_log — Agent 2 relationship intelligence log ──────────────────
+
+export async function logDialogueEntry(params: {
+  fromEmail: string;
+  lpName: string;
+  meetingDate: string | null;
+  medium: string;
+  interestLevel: string;
+  stickingPoints: string[];
+  followUpCommitments: string[];
+  relationshipContext: string;
+  nextTouchSuggestion: string;
+  oneDriveUrl: string | null;
+}) {
+  await sql`
+    INSERT INTO ir_dialogue_log (
+      from_email, lp_name, meeting_date, medium,
+      interest_level, sticking_points, follow_up_commitments,
+      relationship_context, next_touch_suggestion, onedrive_url
+    ) VALUES (
+      ${params.fromEmail},
+      ${params.lpName},
+      ${params.meetingDate},
+      ${params.medium},
+      ${params.interestLevel},
+      ${JSON.stringify(params.stickingPoints)},
+      ${JSON.stringify(params.followUpCommitments)},
+      ${params.relationshipContext},
+      ${params.nextTouchSuggestion},
+      ${params.oneDriveUrl}
+    )
+  `;
+}
+
+export async function getDialogueLog(limit = 50) {
+  const { rows } = await sql`
+    SELECT id, created_at, lp_name, meeting_date, medium,
+           interest_level, next_touch_suggestion, onedrive_url
+    FROM ir_dialogue_log
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}
