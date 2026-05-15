@@ -44,3 +44,44 @@ export async function getLatestBrief(agentName: string) {
   `;
   return rows[0];
 }
+
+// ── research_log — Agent 1 email-triggered workflow log ───────────────────
+
+export async function logResearchEntry(params: {
+  fromEmail: string;
+  subject: string;
+  prefix: string;
+  workflowId: string;
+  emailBody?: string;
+  outputSummary?: string;
+  oneDriveUrl?: string | null;
+  oneDriveVersion?: string | null;
+  rawPayload?: Record<string, unknown>;
+}) {
+  await sql`
+    INSERT INTO research_log (
+      from_email, subject, prefix, workflow_id,
+      email_body, output_summary, onedrive_url, onedrive_version, raw_payload
+    ) VALUES (
+      ${params.fromEmail},
+      ${params.subject},
+      ${params.prefix},
+      ${params.workflowId},
+      ${params.emailBody ?? null},
+      ${params.outputSummary ?? null},
+      ${params.oneDriveUrl ?? null},
+      ${params.oneDriveVersion ?? null},
+      ${JSON.stringify(params.rawPayload ?? {})}
+    )
+  `;
+}
+
+export async function getRecentResearchLog(limit = 20) {
+  const { rows } = await sql`
+    SELECT id, created_at, from_email, subject, prefix, workflow_id, output_summary, onedrive_url
+    FROM research_log
+    ORDER BY created_at DESC
+    LIMIT ${limit}
+  `;
+  return rows;
+}

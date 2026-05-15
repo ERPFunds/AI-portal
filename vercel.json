@@ -3,5 +3,19 @@
     "env": {
       "NODE_VERSION": "20.x"
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/permian-brief",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/submarket-watch",
+      "schedule": "0 8 1 * *"
+    },
+    {
+      "path": "/api/cron/fund-landscape-brief",
+      "schedule": "0 8 1 1,4,7,10 *"
+    }
+  ]
 }

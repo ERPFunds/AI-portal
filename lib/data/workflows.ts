@@ -115,125 +115,140 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
     ]
   },
   "lp-intel": {
+    runs: 3,
+    sent: 3,
+    queue: 0,
     wf: [
+      // ── Always-running background (Step 1) ──────────────────────────────
       {
-        name: "Market Trend Analysis",
+        name: "Monday Brief",
+        trigger: "schedule",
+        frequency: "weekly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Fetch News", description: "RSS + Google News · Permian macro & CRE" },
+          { type: "automated", label: "Write Narrative", description: "Claude drafts 3-4 paragraph market brief" },
+          { type: "automated", label: "Send & Archive", description: "Email to Michele, Meghan, William · archived in portal" }
+        ]
+      },
+      {
+        name: "Submarket Watch",
+        trigger: "schedule",
+        frequency: "monthly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Pull Activity", description: "Sale comps & tenant activity · Permian Basin & Tampa" },
+          { type: "automated", label: "Write Brief", description: "Claude writes submarket conditions brief" },
+          { type: "automated", label: "Send & Archive", description: "Email + portal archive · feeds OM research" }
+        ]
+      },
+      {
+        name: "Fund Landscape Brief",
+        trigger: "schedule",
+        frequency: "quarterly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Scan Competitors", description: "Competitor fund activity · benchmarks · LP appetite signals" },
+          { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning brief" },
+          { type: "automated", label: "Send & Archive", description: "Email + portal archive · feeds LP meeting prep" }
+        ]
+      },
+      // ── Email-triggered RESEARCH: workflows (Step 2) ─────────────────────
+      {
+        name: "Market Update Digest",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Fetch Data", description: "Collect market data" },
-          { type: "automated", label: "Analyze Trends", description: "Process trend analysis" },
-          { type: "manual", label: "Review Insights", description: "Human review of findings" }
+          { type: "automated", label: "Route", description: "RESEARCH: prefix detected · market-update-digest workflow" },
+          { type: "automated", label: "Pull Market Intel", description: "Web search + broker sources for submarket data" },
+          { type: "automated", label: "Write Brief", description: "Market section formatted for OM or deck" },
+          { type: "automated", label: "Save & Reply", description: "File to OneDrive · reply with output" }
         ]
       },
       {
-        name: "Competitive Landscape Monitor",
+        name: "LP-Ready Summary",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Scan Competitors", description: "Monitor competitor activity" },
-          { type: "automated", label: "Flag Changes", description: "Highlight significant changes" },
-          { type: "manual", label: "Analyze Impact", description: "Assess competitive implications" }
+          { type: "automated", label: "Route", description: "RESEARCH: prefix detected · lp-ready-summary workflow" },
+          { type: "automated", label: "Research Angle", description: "Pull data supporting team's stated strategic angle" },
+          { type: "automated", label: "Write Context", description: "LP-ready framing with slide copy suggestions" },
+          { type: "automated", label: "Save & Reply", description: "File to OneDrive · reply with output" }
         ]
       },
       {
-        name: "Investor Deck Prep",
+        name: "Sub-Sector Deep Dive",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Gather Assets", description: "Collect presentation materials" },
-          { type: "automated", label: "Organize Slides", description: "Structure deck framework" },
-          { type: "manual", label: "Final Review", description: "Review and refine presentation" }
+          { type: "automated", label: "Route", description: "RESEARCH: deep dive detected · sub-sector-deep-dive workflow" },
+          { type: "automated", label: "Deep Research", description: "Multi-source sub-sector analysis" },
+          { type: "automated", label: "Write Deep Dive", description: "Full structured sub-sector brief for deck or OM" },
+          { type: "automated", label: "Save & Reply", description: "File to OneDrive · reply with output" }
         ]
       },
       {
-        name: "Deal Source Tracking",
+        name: "Sale Comps Pull",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Log Deal", description: "Record new deal lead" },
-          { type: "automated", label: "Extract Terms", description: "Parse deal terms" },
-          { type: "manual", label: "Evaluate", description: "Human assessment of opportunity" }
+          { type: "automated", label: "Route", description: "RESEARCH: sale comps detected · sale-comps-pull workflow" },
+          { type: "automated", label: "Pull Comps", description: "Search public records · broker reports · trade press" },
+          { type: "automated", label: "Format Table", description: "Comps table + implied pricing analysis" },
+          { type: "automated", label: "Save & Reply", description: "File to /OMs/ OneDrive · reply with output" }
         ]
       },
       {
-        name: "Quarterly Industry Report",
+        name: "Save to KB",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Compile Data", description: "Gather industry statistics" },
-          { type: "automated", label: "Create Report", description: "Generate quarterly report" },
-          { type: "manual", label: "Review & Publish", description: "Final review and distribution" }
+          { type: "automated", label: "Route", description: "RESEARCH: file-only detected · save-file-only workflow" },
+          { type: "automated", label: "File to KB", description: "Save attachment or content to project OneDrive folder" },
+          { type: "automated", label: "Confirm", description: "Reply confirming what was filed and where" }
         ]
       },
+      // ── Email-triggered BUILD: workflows (Step 3) ─────────────────────────
       {
-        name: "LP Communication Draft",
-        trigger: "email",
-        triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
-        status: "draft",
-        steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Analyze Request", description: "Understand communication need" },
-          { type: "automated", label: "Draft Message", description: "Generate message content" },
-          { type: "manual", label: "Approve & Send", description: "Human approval before sending" }
-        ]
-      },
-      {
-        name: "Market News Digest",
+        name: "Deck Builder",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Fetch News", description: "Collect relevant news" },
-          { type: "automated", label: "Filter & Sort", description: "Prioritize relevant articles" },
-          { type: "manual", label: "Review & Distribute", description: "QA and send digest" }
+          { type: "automated", label: "Route", description: "BUILD: deck detected · deck-builder workflow" },
+          { type: "automated", label: "Assemble Deck", description: "Build slide outline from research context + internal data" },
+          { type: "automated", label: "Save to OneDrive", description: "File to /Decks/[project]/ · versioned" },
+          { type: "manual", label: "Refine in PowerPoint", description: "Meghan or William refines in PowerPoint · compliance review" }
         ]
       },
       {
-        name: "SEC Filing Monitor",
+        name: "OM Editor",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Check Filings", description: "Monitor SEC filings" },
-          { type: "automated", label: "Extract Key Data", description: "Parse filing contents" },
-          { type: "manual", label: "Flag Issues", description: "Identify relevant changes" }
+          { type: "automated", label: "Route", description: "BUILD: OM detected · om-editor workflow" },
+          { type: "automated", label: "Build OM", description: "Assemble OM sections from research + deal data" },
+          { type: "automated", label: "Save to OneDrive", description: "File to /OMs/[project]/ · versioned" },
+          { type: "manual", label: "Review & Refine", description: "Meghan or William reviews · compliance signs off" }
         ]
       },
+      // ── Email-triggered WRITE: workflows (Step 4) ─────────────────────────
       {
-        name: "Investment Thesis Review",
+        name: "OM Writer",
         trigger: "email",
         triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
-        status: "draft",
+        status: "active",
         steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Analyze Documents", description: "Review investment docs" },
-          { type: "automated", label: "Extract Data", description: "Pull key thesis points" },
-          { type: "manual", label: "Validate Thesis", description: "Human validation of approach" }
-        ]
-      },
-      {
-        name: "Partner Network Updates",
-        trigger: "email",
-        triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
-        status: "draft",
-        steps: [
-          { type: "automated", label: "Parse Email", description: "Read request from Meghan, Michele, or William" },
-          { type: "automated", label: "Gather Updates", description: "Collect partner updates" },
-          { type: "automated", label: "Compile Summary", description: "Create update summary" },
-          { type: "manual", label: "Review & Share", description: "QA and distribute to team" }
+          { type: "automated", label: "Route", description: "WRITE: prefix detected · om-writer workflow" },
+          { type: "automated", label: "Research", description: "Pull supporting research for the section" },
+          { type: "automated", label: "Write Prose", description: "Draft Investment Thesis / Executive Summary / Demand Drivers" },
+          { type: "automated", label: "Save & Reply", description: "File section draft to /OMs/ OneDrive · reply" }
         ]
       }
     ]
