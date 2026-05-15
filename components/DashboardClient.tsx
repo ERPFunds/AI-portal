@@ -2128,6 +2128,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
     setConns(next)
     try { localStorage.setItem('conn-state', JSON.stringify(next)) } catch {}
     saveChanges()
+    setExpandedConn(null)
   }
 
   function saveM365(next: M365Account[]) {
@@ -2302,12 +2303,21 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
               </div>
               {isExpanded && (
                 <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {conn.fields.map((f) => (
-                    <div key={f.key} className="field" style={{ margin: 0 }}>
-                      <label>{f.label}</label>
-                      <input placeholder={f.placeholder} value={state.values[f.key] ?? ''} onChange={(e) => setField(conn.id, f.key, e.target.value)} />
-                    </div>
-                  ))}
+                  {conn.fields.map((f) => {
+                    const isSensitive = /secret|pass|token|key/i.test(f.key)
+                    const hasValue = (state.values[f.key] ?? '').trim().length > 0
+                    return (
+                      <div key={f.key} className="field" style={{ margin: 0 }}>
+                        <label>{f.label}</label>
+                        <input
+                          type={isSensitive ? 'password' : 'text'}
+                          placeholder={isSensitive && hasValue ? '••••••••••••••••' : f.placeholder}
+                          value={state.values[f.key] ?? ''}
+                          onChange={(e) => setField(conn.id, f.key, e.target.value)}
+                        />
+                      </div>
+                    )
+                  })}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
                     <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 14px' }} onClick={() => saveConn(conn.id)}>Save</button>
                     <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 10px' }} onClick={() => setExpandedConn(null)}>Cancel</button>
