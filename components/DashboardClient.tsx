@@ -2529,9 +2529,7 @@ function SOPsView() {
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={{ gridColumn: '1 / -1' }}>
-          <NewsletterPromptLibrary />
-        </div>
+        <NewsletterPromptLibrary />
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
           return (
