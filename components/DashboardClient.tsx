@@ -8,6 +8,7 @@ import { SIDEBARS, type SidebarItem } from '@/lib/data/sidebars'
 import { AGENTS, ACTIVITY_MAP } from '@/lib/data/agents'
 import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
+import { NEWSLETTER_PROMPTS, type NewsletterPrompt } from '@/lib/data/prompts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2359,6 +2360,134 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   )
 }
 
+// ─── Newsletter Prompt Library ────────────────────────────────────────────────
+
+function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
+  const [open, setOpen] = useState(false)
+  const [tab, setTab] = useState<'overview' | 'prompt' | 'output' | 'sources'>('overview')
+
+  const freqColor: Record<string, string> = { Weekly: '#0e7490', Monthly: '#7c3aed' }
+  const marketColor: Record<string, string> = { permian: '#d97706', brevard: '#0891b2' }
+
+  const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: '#9ca3af', display: 'block', marginBottom: 4 }
+  const preStyle: React.CSSProperties = { margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 11, lineHeight: 1.65, color: '#374151', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 12px' }
+
+  return (
+    <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
+      {/* Header row */}
+      <div
+        onClick={() => setOpen(!open)}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', cursor: 'pointer', userSelect: 'none', background: open ? '#f8fafc' : '#fff' }}
+      >
+        <span style={{ fontSize: 16 }}>📧</span>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{p.name}</div>
+          <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{p.schedule} · {p.marketFull}</div>
+        </div>
+        <span className={`badge ${p.frequency === 'Weekly' ? 'badge-teal' : 'badge-purple'}`} style={{ fontSize: 9 }}>{p.frequency}</span>
+        <span className={`badge ${p.market === 'permian' ? 'badge-gold' : 'badge-blue'}`} style={{ fontSize: 9 }}>{p.market === 'permian' ? 'Permian' : 'Brevard'}</span>
+        <span style={{ fontSize: 12, color: '#9ca3af', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>▼</span>
+      </div>
+
+      {open && (
+        <div style={{ borderTop: '1px solid #e5e7eb' }}>
+          {/* Tab bar */}
+          <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb', background: '#f8fafc' }}>
+            {(['overview', 'prompt', 'output', 'sources'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                style={{ padding: '7px 14px', fontSize: 11, fontWeight: tab === t ? 700 : 400, color: tab === t ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #0e7490' : '2px solid transparent', cursor: 'pointer', textTransform: 'capitalize' }}
+              >{t}</button>
+            ))}
+          </div>
+
+          <div style={{ padding: '14px 16px' }}>
+            {tab === 'overview' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div>
+                  <span style={labelStyle}>Trigger</span>
+                  <div style={{ fontSize: 11, color: '#374151', background: '#f1f5f9', borderRadius: 5, padding: '6px 10px', fontFamily: 'monospace' }}>{p.endpoint}</div>
+                </div>
+                <div>
+                  <span style={labelStyle}>Recipients</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {p.recipients.map((r) => (
+                      <span key={r} style={{ fontSize: 10, background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 4, padding: '2px 8px', color: '#166534' }}>{r}</span>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <span style={labelStyle}>Research Query Sent to Research Agent</span>
+                  <pre style={preStyle}>{p.researchQuery}</pre>
+                </div>
+              </div>
+            )}
+
+            {tab === 'prompt' && (
+              <div>
+                <span style={labelStyle}>Claude System Prompt</span>
+                <pre style={preStyle}>{p.systemPrompt}</pre>
+              </div>
+            )}
+
+            {tab === 'output' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <span style={labelStyle}>Email Output Sections</span>
+                {p.outputSections.map((s) => (
+                  <div key={s.title} style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, padding: '8px 12px' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: '#111827', marginBottom: 2 }}>{s.title}</div>
+                    <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{s.description}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {tab === 'sources' && (
+              <div>
+                <span style={labelStyle}>Data Sources Targeted by Research Agent</span>
+                <ul style={{ margin: 0, padding: '0 0 0 16px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {p.sources.map((s) => (
+                    <li key={s} style={{ fontSize: 11, color: '#374151', lineHeight: 1.55 }}>{s}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function NewsletterPromptLibrary() {
+  const [filterMarket, setFilterMarket] = useState<'all' | 'permian' | 'brevard'>('all')
+  const filtered = NEWSLETTER_PROMPTS.filter((p) => filterMarket === 'all' || p.market === filterMarket)
+
+  return (
+    <div style={{ marginTop: 32 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Agent 1 — Newsletter Prompt Library</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs for all 6 scheduled newsletters</div>
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {(['all', 'permian', 'brevard'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setFilterMarket(m)}
+              style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid', cursor: 'pointer', fontWeight: filterMarket === m ? 700 : 400, background: filterMarket === m ? '#0e7490' : '#fff', color: filterMarket === m ? '#fff' : '#6b7280', borderColor: filterMarket === m ? '#0e7490' : '#d1d5db' }}
+            >{m === 'all' ? 'All' : m === 'permian' ? 'Permian' : 'Brevard'}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {filtered.map((p) => <NewsletterPromptCard key={p.id} p={p} />)}
+      </div>
+    </div>
+  )
+}
+
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
 
 const SOP_CATEGORIES = [
@@ -2396,7 +2525,7 @@ function SOPsView() {
         <span style={{ fontSize: 13 }}>📌</span>
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 0 }}>
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
           return (
@@ -2443,6 +2572,7 @@ function SOPsView() {
           )
         })}
       </div>
+      <NewsletterPromptLibrary />
     </div>
   )
 }
