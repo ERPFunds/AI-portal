@@ -216,3 +216,65 @@ export const NEWSLETTER_PROMPTS: NewsletterPrompt[] = [
     ],
   },
 ]
+
+// ── Market Data Sources ───────────────────────────────────────────────────────
+
+export interface DataSeries {
+  id: string
+  label: string
+  description: string
+  url: string
+  source: 'BLS' | 'FRED'
+  note?: string
+}
+
+export interface MarketDataSource {
+  market: string
+  marketFull: string
+  icon: string
+  blsPage: string
+  fredPage: string
+  series: DataSeries[]
+}
+
+export const MARKET_DATA_SOURCES: MarketDataSource[] = [
+  {
+    market: 'permian',
+    marketFull: 'Permian Basin — Midland-Odessa, TX',
+    icon: '🛢️',
+    blsPage: 'https://www.bls.gov/eag/eag.tx_midland_msa.htm',
+    fredPage: 'https://fred.stlouisfed.org/series/MIDL248NA',
+    series: [
+      // ── Midland MSA ──
+      { id: 'MIDL248NA',  label: 'Midland — Total Nonfarm Employment',         description: 'All employees, thousands, not seasonally adjusted',     url: 'https://fred.stlouisfed.org/series/MIDL248NA',              source: 'FRED' },
+      { id: 'MIDL248UR',  label: 'Midland — Unemployment Rate (SA)',            description: 'Seasonally adjusted monthly unemployment rate',         url: 'https://fred.stlouisfed.org/series/MIDL248UR',              source: 'FRED' },
+      { id: 'MIDL248URN', label: 'Midland — Unemployment Rate (NSA)',           description: 'Not seasonally adjusted monthly unemployment rate',     url: 'https://fred.stlouisfed.org/series/MIDL248URN',             source: 'FRED' },
+      // ── Odessa MSA ──
+      { id: 'ODES248UR',  label: 'Odessa — Unemployment Rate (SA)',             description: 'Seasonally adjusted monthly unemployment rate',         url: 'https://fred.stlouisfed.org/series/ODES248UR',              source: 'FRED' },
+      { id: 'ODES248URN', label: 'Odessa — Unemployment Rate (NSA)',            description: 'Not seasonally adjusted monthly unemployment rate',     url: 'https://fred.stlouisfed.org/series/ODES248URN',             source: 'FRED' },
+      // ── BLS ──
+      { id: 'SMU4832900001',        label: 'Midland — Nonfarm Employment (BLS SAE)', description: 'BLS State and Metro Area Employment series',       url: 'https://www.bls.gov/eag/eag.tx_midland_msa.htm',            source: 'BLS' },
+      { id: 'LAUMT483326000000003A',label: 'Midland — Unemployment Rate (BLS LAUS)', description: 'BLS Local Area Unemployment Statistics annual',    url: 'https://fred.stlouisfed.org/series/LAUMT483326000000003A',  source: 'BLS' },
+      { id: 'SMU4836220001',        label: 'Odessa — Nonfarm Employment (BLS SAE)',  description: 'BLS State and Metro Area Employment series',       url: 'https://www.bls.gov/eag/eag.tx_odessa_msa.htm',             source: 'BLS' },
+      { id: 'LAUMT483622000000003A',label: 'Odessa — Unemployment Rate (BLS LAUS)',  description: 'BLS Local Area Unemployment Statistics annual',    url: 'https://fred.stlouisfed.org/series/LAUMT483622000000003A',  source: 'BLS' },
+    ],
+  },
+  {
+    market: 'brevard',
+    marketFull: 'Brevard County — Palm Bay-Melbourne-Titusville, FL',
+    icon: '🚀',
+    blsPage: 'https://www.bls.gov/eag/eag.fl_palmbay_msa.htm',
+    fredPage: 'https://fred.stlouisfed.org/series/PALM312NA',
+    series: [
+      // ── Palm Bay-Melbourne-Titusville MSA ──
+      { id: 'PALM312NA',  label: 'Palm Bay MSA — Total Nonfarm Employment',     description: 'All employees, thousands, not seasonally adjusted',     url: 'https://fred.stlouisfed.org/series/PALM312NA',              source: 'FRED' },
+      { id: 'PALM312UR',  label: 'Palm Bay MSA — Unemployment Rate (SA)',       description: 'Seasonally adjusted monthly unemployment rate',         url: 'https://fred.stlouisfed.org/series/PALM312UR',              source: 'FRED' },
+      { id: 'PALM312URN', label: 'Palm Bay MSA — Unemployment Rate (NSA)',      description: 'Not seasonally adjusted monthly unemployment rate',     url: 'https://fred.stlouisfed.org/series/PALM312URN',             source: 'FRED' },
+      { id: 'FLBREV3URN', label: 'Brevard County — Unemployment Rate (NSA)',    description: 'County-level, not seasonally adjusted',                 url: 'https://fred.stlouisfed.org/series/FLBREV3URN',             source: 'FRED' },
+      { id: 'PALM312PBSV',label: 'Palm Bay MSA — Prof & Business Services',     description: 'Employment in professional & business services sector', url: 'https://fred.stlouisfed.org/series/PALM312PBSV',            source: 'FRED' },
+      // ── BLS ──
+      { id: 'SMU1237340001',        label: 'Palm Bay MSA — Nonfarm Employment (BLS SAE)', description: 'BLS State and Metro Area Employment series', url: 'https://www.bls.gov/eag/eag.fl_palmbay_msa.htm',            source: 'BLS' },
+      { id: 'LAUMT123734000000003A',label: 'Palm Bay MSA — Unemployment Rate (BLS LAUS)', description: 'BLS Local Area Unemployment Statistics annual', url: 'https://fred.stlouisfed.org/series/LAUMT123734000000003A', source: 'BLS' },
+    ],
+  },
+]

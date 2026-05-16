@@ -8,7 +8,7 @@ import { SIDEBARS, type SidebarItem } from '@/lib/data/sidebars'
 import { AGENTS, ACTIVITY_MAP } from '@/lib/data/agents'
 import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
-import { NEWSLETTER_PROMPTS, type NewsletterPrompt } from '@/lib/data/prompts'
+import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type MarketDataSource } from '@/lib/data/prompts'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -2491,6 +2491,66 @@ function NewsletterPromptLibrary() {
   )
 }
 
+// ─── Market Data Source Card ──────────────────────────────────────────────────
+
+function MarketDataCard({ mds }: { mds: MarketDataSource }) {
+  const [filterSource, setFilterSource] = useState<'all' | 'FRED' | 'BLS'>('all')
+  const filtered = mds.series.filter((s) => filterSource === 'all' || s.source === filterSource)
+  const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: '#9ca3af', display: 'block', marginBottom: 4 }
+
+  return (
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+          {mds.icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{mds.marketFull}</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>BLS & FRED series IDs and reference links</div>
+        </div>
+      </div>
+
+      {/* Quick links */}
+      <div style={{ display: 'flex', gap: 6 }}>
+        <a href={mds.blsPage} target="_blank" rel="noreferrer"
+          style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: '1px solid #bfdbfe', background: '#eff6ff', color: '#1d4ed8', textDecoration: 'none', fontWeight: 600 }}>
+          BLS Economy at a Glance ↗
+        </a>
+        <a href={mds.fredPage} target="_blank" rel="noreferrer"
+          style={{ fontSize: 10, padding: '3px 9px', borderRadius: 5, border: '1px solid #d1fae5', background: '#ecfdf5', color: '#065f46', textDecoration: 'none', fontWeight: 600 }}>
+          FRED Series ↗
+        </a>
+      </div>
+
+      {/* Filter */}
+      <div style={{ display: 'flex', gap: 5 }}>
+        {(['all', 'FRED', 'BLS'] as const).map((f) => (
+          <button key={f} onClick={() => setFilterSource(f)}
+            style={{ fontSize: 9, padding: '2px 8px', borderRadius: 4, border: '1px solid', cursor: 'pointer', fontWeight: filterSource === f ? 700 : 400, background: filterSource === f ? '#0e7490' : '#fff', color: filterSource === f ? '#fff' : '#6b7280', borderColor: filterSource === f ? '#0e7490' : '#d1d5db' }}>
+            {f === 'all' ? 'All' : f}
+          </button>
+        ))}
+      </div>
+
+      {/* Series list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        {filtered.map((s) => (
+          <a key={s.id} href={s.url} target="_blank" rel="noreferrer"
+            style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 10px', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, textDecoration: 'none' }}>
+            <span style={{ fontSize: 9, fontWeight: 700, background: s.source === 'FRED' ? '#ecfdf5' : '#eff6ff', color: s.source === 'FRED' ? '#065f46' : '#1d4ed8', border: `1px solid ${s.source === 'FRED' ? '#a7f3d0' : '#bfdbfe'}`, borderRadius: 3, padding: '1px 5px', flexShrink: 0, marginTop: 1 }}>{s.source}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', lineHeight: 1.3 }}>{s.label}</div>
+              <div style={{ fontSize: 10, color: '#6b7280', marginTop: 2 }}>{s.id} · {s.description}</div>
+            </div>
+            <span style={{ fontSize: 10, color: '#9ca3af', flexShrink: 0 }}>↗</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
 
 const SOP_CATEGORIES = [
@@ -2530,6 +2590,7 @@ function SOPsView() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <NewsletterPromptLibrary />
+        {MARKET_DATA_SOURCES.map((mds) => <MarketDataCard key={mds.market} mds={mds} />)}
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
           return (
