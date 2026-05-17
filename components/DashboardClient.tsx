@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import { AGENTS, ACTIVITY_MAP } from '@/lib/data/agents'
 import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
 import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type MarketDataSource } from '@/lib/data/prompts'
+import MarketResearchView from './MarketResearchView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -265,6 +266,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     accounting: <AccountingView />,
     kb: <KnowledgeBaseView />,
     sops: <SOPsView />,
+    'market-research': <MarketResearchView />,
     settings: (
       <SettingsView
         role={role}
@@ -2947,3 +2949,4 @@ function StubView({ title, icon, desc }: { title: string; icon: string; desc: st
     </div>
   )
 }
+
