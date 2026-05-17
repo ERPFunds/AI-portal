@@ -147,6 +147,25 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     }]))
   )
 
+  // ── Live agent run stats ─────────────────────────────────────────────────────
+  const [agentStats, setAgentStats] = useState<Record<string, { runs: number; last: string | null }>>({})
+  const [recentRuns, setRecentRuns] = useState<any[]>([])
+
+  useEffect(() => {
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/dashboard/stats')
+        if (!res.ok) return
+        const data = await res.json()
+        setAgentStats(data.agentStats ?? {})
+        setRecentRuns(data.recentRuns ?? [])
+      } catch { /* ignore */ }
+    }
+    fetchStats()
+    const interval = setInterval(fetchStats, 60_000)
+    return () => clearInterval(interval)
+  }, [])
+
   const router = useRouter()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -234,7 +253,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   // ─── Views ───────────────────────────────────────────────────────────────────
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView roleKey={roleKey} userName={userName} />,
+    dashboard: <DashboardView roleKey={roleKey} userName={userName} recentRuns={recentRuns} />,
     inbox: (
       <InboxView
         inboxItems={inboxItems}
@@ -256,6 +275,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
           setDrawerTab('workflows')
           setOpenWorkflows({})
         }}
+        statsMap={agentStats}
       />
     ),
     financial: <FinancialView />,
@@ -307,7 +327,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
           <div className="drawer-close" onClick={() => setDrawerAgentId(null)}>✕</div>
         </div>
         <div className="drawer-stats">
-          <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.runs ?? drawerAgent.runs}</div><div className="drawer-stat-label">Runs (7d)</div></div>
+          <div className="drawer-stat"><div className="drawer-stat-val">{agentStats[drawerAgent.id]?.runs ?? drawerWf?.runs ?? '—'}</div><div className="drawer-stat-label">Runs (7d)</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.sent ?? '—'}</div><div className="drawer-stat-label">Auto-Sent (7d)</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val">{drawerWf?.queue ?? '—'}</div><div className="drawer-stat-label">In Queue</div></div>
           <div className="drawer-stat"><div className="drawer-stat-val" style={{ color: drawerAgent.status === 'active' ? '#3DAE7A' : '#9ca3af' }}>{drawerAgent.status === 'active' ? 'Active' : 'Idle'}</div><div className="drawer-stat-label">Status</div></div>
@@ -596,7 +616,95 @@ const TOOL_SHORT: Record<string, string> = {
   get_flagged_items:    'Flagged items',
 }
 
-function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: string }) {
+const AGENT_LABEL: Record<string, { icon: string; name: string }> = Object.fromEntries(
+  AGENTS.map((a) => [a.id, { icon: a.icon, name: a.name }])
+)
+
+const WF_LABEL: Record<string, string> = {
+  'weekly-market-update': 'Monday Brief',
+  'submarket-intelligence': 'Submarket Watch',
+  'competitor-intelligence': 'Fund Landscape',
+  'market-update-digest': 'Market Update Digest',
+  'lp-ready-summary': 'LP-Ready Summary',
+  'sub-sector-deep-dive': 'Sub-Sector Deep Dive',
+  'sale-comps-pull': 'Sale Comps Pull',
+  'email-escalation': 'Email Escalation',
+  'attachment-filer': 'Attachment Filer',
+  'dialogue-logger': 'Dialogue Log',
+  'lp-onboarding': 'LP Onboarding',
+}
+
+function timeAgo(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime()
+  const mins = Math.floor(diff / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins}m ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  return `${Math.floor(hrs / 24)}d ago`
+}
+
+function RightRail({ recentRuns }: { recentRuns: any[] }) {
+  const [tab, setTab] = useState<'activity' | 'queue'>('activity')
+
+  const tabBtn = (t: 'activity' | 'queue', label: string) => (
+    <button
+      onClick={() => setTab(t)}
+      style={{ flex: 1, padding: '7px 0', fontSize: 11, fontWeight: tab === t ? 700 : 400, color: tab === t ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #0e7490' : '2px solid transparent', cursor: 'pointer' }}
+    >{label}</button>
+  )
+
+  return (
+    <div className="ai-queue">
+      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+        {tabBtn('activity', 'Activity')}
+        {tabBtn('queue', 'Queue')}
+      </div>
+
+      <div className="ai-queue-list">
+        {tab === 'activity' ? (
+          recentRuns.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 8, padding: 20, color: '#9ca3af' }}>
+              <div style={{ fontSize: 22 }}>📭</div>
+              <div style={{ fontSize: 11, textAlign: 'center' }}>No runs yet — activity will appear here once agents start executing</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+              {recentRuns.map((run, i) => {
+                const agent = AGENT_LABEL[run.agent_id] ?? { icon: '🤖', name: run.agent_id }
+                const wfLabel = WF_LABEL[run.workflow_id] ?? run.workflow_id
+                const isErr = run.status === 'error'
+                return (
+                  <div key={i} style={{ display: 'flex', gap: 9, padding: '9px 12px', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start' }}>
+                    <div style={{ width: 26, height: 26, borderRadius: 6, background: isErr ? '#fef2f2' : '#f0f9fa', border: `1px solid ${isErr ? '#fecaca' : '#a5f3fc'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0, marginTop: 1 }}>
+                      {agent.icon}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 5 }}>
+                        {wfLabel}
+                        {isErr && <span style={{ fontSize: 9, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 3, padding: '1px 4px' }}>error</span>}
+                      </div>
+                      <div style={{ fontSize: 10, color: '#6b7280', marginTop: 1 }}>{agent.name}</div>
+                      {run.summary && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{run.summary}</div>}
+                    </div>
+                    <div style={{ fontSize: 9, color: '#9ca3af', flexShrink: 0, marginTop: 2 }}>{timeAgo(run.created_at)}</div>
+                  </div>
+                )
+              })}
+            </div>
+          )
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: 20, color: '#9ca3af' }}>
+            <div style={{ fontSize: 24 }}>✓</div>
+            <div style={{ fontSize: 12, textAlign: 'center' }}>Review queue is empty</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function DashboardView({ roleKey, userName, recentRuns }: { roleKey: RoleKey; userName: string; recentRuns: any[] }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -768,19 +876,8 @@ function DashboardView({ roleKey, userName }: { roleKey: RoleKey; userName: stri
         </div>
       </div>
 
-      {/* Right Rail — Review Queue */}
-      <div className="ai-queue">
-        <div className="ai-queue-header">
-          <h4>Review Queue</h4>
-          <span className="ai-queue-count">0</span>
-        </div>
-        <div className="ai-queue-list">
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: 20, color: '#9ca3af' }}>
-            <div style={{ fontSize: 24 }}>✓</div>
-            <div style={{ fontSize: 12, textAlign: 'center' }}>Review queue is empty</div>
-          </div>
-        </div>
-      </div>
+      {/* Right Rail — Activity / Queue */}
+      <RightRail recentRuns={recentRuns} />
     </div>
   )
 }
@@ -995,7 +1092,17 @@ function getInboxDraftContent(subject: string, from: string): string {
 
 // ─── Agent Hub ────────────────────────────────────────────────────────────────
 
-function AgentsView({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
+function AgentsView({ onOpenAgent, statsMap }: { onOpenAgent: (id: string) => void; statsMap: Record<string, { runs: number; last: string | null }> }) {
+  function fmtLast(iso: string | null | undefined): string {
+    if (!iso) return '—'
+    const diff = Date.now() - new Date(iso).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.floor(hrs / 24)}d ago`
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -1003,23 +1110,28 @@ function AgentsView({ onOpenAgent }: { onOpenAgent: (id: string) => void }) {
         <p>{AGENTS.length} agents — monitoring, drafting, and acting autonomously</p>
       </div>
       <div className="agent-grid">
-        {AGENTS.map((agent) => (
-          <div key={agent.id} className="agent-card" onClick={() => onOpenAgent(agent.id)}>
-            <div className="agent-card-top">
-              <div className={`agent-icon badge ${agent.badge}`}>{agent.icon}</div>
-              <div className={`agent-status-dot ${agent.status}`} />
-            </div>
-            <div className="agent-name">{agent.name}</div>
-            <div className="agent-desc">{agent.desc}</div>
-            <div className="agent-meta">
-              <span className={`badge ${agent.badge}`} style={{ fontSize: 9 }}>{agent.cat}</span>
-              <div>
-                <div className="agent-last">{agent.last}</div>
-                <div className="agent-runs">{agent.runs !== '—' ? `${agent.runs} runs` : '—'}</div>
+        {AGENTS.map((agent) => {
+          const stat = statsMap[agent.id]
+          const runs = stat?.runs ?? null
+          const last = fmtLast(stat?.last)
+          return (
+            <div key={agent.id} className="agent-card" onClick={() => onOpenAgent(agent.id)}>
+              <div className="agent-card-top">
+                <div className={`agent-icon badge ${agent.badge}`}>{agent.icon}</div>
+                <div className={`agent-status-dot ${runs ? 'active' : agent.status}`} />
+              </div>
+              <div className="agent-name">{agent.name}</div>
+              <div className="agent-desc">{agent.desc}</div>
+              <div className="agent-meta">
+                <span className={`badge ${agent.badge}`} style={{ fontSize: 9 }}>{agent.cat}</span>
+                <div>
+                  <div className="agent-last">{last}</div>
+                  <div className="agent-runs">{runs !== null ? `${runs} runs` : '—'}</div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

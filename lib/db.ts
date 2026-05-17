@@ -175,3 +175,77 @@ export async function getDialogueLog(limit = 50) {
   `;
   return rows;
 }
+
+// ── agent_runs — unified run log for all agents ───────────────────────────────
+
+export async function logAgentRun(params: {
+  agentId: string;
+  workflowId: string;
+  status: "success" | "error";
+  summary?: string;
+  market?: string;
+  durationMs?: number;
+  errorMessage?: string;
+}) {
+  await sql`
+    INSERT INTO agent_runs (agent_id, workflow_id, status, summary, market, duration_ms, error_message)
+    VALUES (
+      ${params.agentId},
+      ${params.workflowId},
+      ${params.status},
+      ${params.summary ?? null},
+      ${params.market ?? null},
+      ${params.durationMs ?? null},
+      ${params.errorMessage ?? null}
+    )
+  `;
+}
+
+export async function getRecentAgentRuns(limit = 40) {
+  // Unified feed: agent_runs + research_log (lp-intel) + ir_email_log (ir)
+  try {
+    const { rows } = await sql`
+      SELECT agent_id, workflow_id, status, summary, market, created_at
+      FROM agent_runs
+      UNION ALL
+      SELECT 'lp-intel' AS agent_id, workflow_id, 'success' AS status,
+             output_summary AS summary, NULL AS market, created_at
+      FROM research_log
+      UNION ALL
+      SELECT 'ir' AS agent_id, workflow_id, 'success' AS status,
+             summary, NULL AS market, created_at
+      FROM ir_email_log
+      ORDER BY created_at DESC
+      LIMIT ${limit}
+    `;
+    return rows;
+  } catch {
+    return [];
+  }
+}
+
+export async function getAgentRunStats(days = 7): Promise<
+  Record<string, { runs: number; last: string | null }>
+> {
+  try {
+    const { rows } = await sql`
+      SELECT agent_id, COUNT(*)::int AS runs, MAX(created_at) AS last
+      FROM (
+        SELECT agent_id, created_at FROM agent_runs
+          WHERE created_at > NOW() - (${days} || ' days')::interval
+        UNION ALL
+        SELECT 'lp-intel' AS agent_id, created_at FROM research_log
+          WHERE created_at > NOW() - (${days} || ' days')::interval
+        UNION ALL
+        SELECT 'ir' AS agent_id, created_at FROM ir_email_log
+          WHERE created_at > NOW() - (${days} || ' days')::interval
+      ) combined
+      GROUP BY agent_id
+    `;
+    return Object.fromEntries(
+      rows.map((r: any) => [r.agent_id, { runs: r.runs, last: r.last }])
+    );
+  } catch {
+    return {};
+  }
+}

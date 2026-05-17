@@ -3,6 +3,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { runCompetitorIntelligence } from "@/lib/agents/workflows/competitor-intelligence";
 import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-update";
 import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intelligence";
+import { logAgentRun } from "@/lib/db";
 
 type Market = "permian" | "brevard";
 type ReportType = "weekly-update" | "submarket-intelligence" | "competitor-intelligence";
@@ -109,6 +110,8 @@ export async function POST(req: NextRequest) {
   }
 
   const period = getCurrentPeriod();
+  const workflowId = reportType === "weekly-update" ? "weekly-market-update" : reportType;
+  const startMs = Date.now();
 
   let subject: string;
   let htmlBody: string;
@@ -126,13 +129,13 @@ export async function POST(req: NextRequest) {
       htmlBody = result.htmlBody;
       summary = result.summary;
     } else {
-      // submarket-intelligence
       const result = await runSubmarketIntelligence({ market, period });
       subject = result.subject;
       htmlBody = result.htmlBody;
       summary = result.summary;
     }
   } catch (err) {
+    logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: String(err) }).catch(() => {});
     return NextResponse.json(
       { error: "workflow-failed", message: String(err) },
       { status: 500 }
@@ -147,11 +150,14 @@ export async function POST(req: NextRequest) {
   });
 
   if (!emailResult.success) {
+    logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: emailResult.message }).catch(() => {});
     return NextResponse.json(
       { error: "email-send-failed", message: emailResult.message },
       { status: 500 }
     );
   }
+
+  logAgentRun({ agentId: "lp-intel", workflowId, status: "success", summary, market, durationMs: Date.now() - startMs }).catch(() => {});
 
   return NextResponse.json({
     success: true,
