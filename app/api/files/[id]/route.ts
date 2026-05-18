@@ -8,9 +8,9 @@ export const dynamic = "force-dynamic";
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const fileId = params.id;
+  const { id: fileId } = await params;
   try {
     await (anthropic.beta as any).files.delete(fileId);
   } catch {
