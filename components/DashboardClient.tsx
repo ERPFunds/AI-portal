@@ -1776,17 +1776,161 @@ function BrokerageNewsletterView() {
 }
 
 function RentRollView() {
+  const TEAL = '#A6C3C9'
+  const NAVY = '#0D2D52'
+
+  const properties = [
+    {
+      name: 'Midland Service Yard',
+      address: '4820 W Industrial Blvd, Midland, TX 79703',
+      market: 'Permian Basin', type: 'Service Yard / IOS',
+      totalSf: 18500, officeSf: 1200, siteSf: 87120,
+      yearBuilt: 2008, clearHeight: 24, dockDoors: 4, driveIn: 2, power: '800A / 480V',
+      acquired: 'Mar 2022', acquisitionPrice: 4.1, currentNoi: 0.24, capRate: 5.8, estValue: 4.8,
+      occupancy: 100, tenants: 1, market_color: TEAL,
+    },
+    {
+      name: 'Odessa IOS Yard',
+      address: '1102 E 52nd St, Odessa, TX 79762',
+      market: 'Permian Basin', type: 'Industrial Outdoor Storage',
+      totalSf: 24000, officeSf: 800, siteSf: 130680,
+      yearBuilt: 2003, clearHeight: 20, dockDoors: 2, driveIn: 4, power: '400A / 240V',
+      acquired: 'Aug 2022', acquisitionPrice: 4.8, currentNoi: 0.31, capRate: 5.6, estValue: 5.7,
+      occupancy: 100, tenants: 1, market_color: TEAL,
+    },
+    {
+      name: 'Midland Flex I',
+      address: '3300 Garden City Hwy, Midland, TX 79701',
+      market: 'Permian Basin', type: 'Flex Industrial',
+      totalSf: 16200, officeSf: 3400, siteSf: 52272,
+      yearBuilt: 1998, clearHeight: 18, dockDoors: 6, driveIn: 2, power: '1200A / 480V',
+      acquired: 'Jan 2023', acquisitionPrice: 3.6, currentNoi: 0.22, capRate: 5.9, estValue: 3.9,
+      occupancy: 90, tenants: 2, market_color: TEAL,
+    },
+    {
+      name: 'Palm Bay Industrial',
+      address: '1875 Malabar Rd NE, Palm Bay, FL 32907',
+      market: 'Brevard County', type: 'Flex Industrial',
+      totalSf: 30800, officeSf: 4200, siteSf: 108900,
+      yearBuilt: 2001, clearHeight: 22, dockDoors: 8, driveIn: 4, power: '1600A / 480V',
+      acquired: 'Jun 2022', acquisitionPrice: 7.8, currentNoi: 0.48, capRate: 5.5, estValue: 9.1,
+      occupancy: 100, tenants: 2, market_color: '#6366f1',
+    },
+    {
+      name: 'Melbourne Cold Storage',
+      address: '655 S Apollo Blvd, Melbourne, FL 32901',
+      market: 'Brevard County', type: 'Cold Storage',
+      totalSf: 14500, officeSf: 900, siteSf: 43560,
+      yearBuilt: 2011, clearHeight: 30, dockDoors: 10, driveIn: 1, power: '2000A / 480V',
+      acquired: 'Nov 2022', acquisitionPrice: 6.2, currentNoi: 0.38, capRate: 5.4, estValue: 7.3,
+      occupancy: 100, tenants: 1, market_color: '#6366f1',
+    },
+    {
+      name: 'Titusville Service Bay',
+      address: '3801 S Hopkins Ave, Titusville, FL 32780',
+      market: 'Brevard County', type: 'Service Bay / Flex',
+      totalSf: 11200, officeSf: 1600, siteSf: 36300,
+      yearBuilt: 2015, clearHeight: 16, dockDoors: 2, driveIn: 6, power: '600A / 240V',
+      acquired: 'Apr 2023', acquisitionPrice: 3.1, currentNoi: 0.18, capRate: 5.7, estValue: 3.4,
+      occupancy: 100, tenants: 2, market_color: '#6366f1',
+    },
+  ]
+
+  const totalSf  = properties.reduce((s, p) => s + p.totalSf, 0)
+  const totalNoi = properties.reduce((s, p) => s + p.currentNoi, 0)
+  const totalVal = properties.reduce((s, p) => s + p.estValue, 0)
+  const wtdOcc   = Math.round(properties.reduce((s, p) => s + p.occupancy * p.totalSf, 0) / totalSf)
+
   return (
     <div>
-      <div className="page-header"><h2>Rent Roll</h2><p>Agent-flagged exceptions from Yardi — past-due balances, expiring leases, and occupancy gaps</p></div>
-      <SourceBar source="Yardi Voyager" agents="Leasing · Accounting Operations · Financial Controls" synced="Today 9:00 AM (every 30 min)" link="Open in Yardi ↗" />
-      <EmptyDataView source="Yardi Voyager" message="Rent roll data will sync from Yardi once connected" />
+      <div className="page-header">
+        <h2>Properties</h2>
+        <p>Asset fact sheets · Specs · Financial snapshot</p>
+      </div>
+
+      <SourceBar source="Yardi · VTS" agents="Property Operations · Investment Analytics" synced="Not yet connected" link="Connect data sources ↗" />
+
+      {/* KPI strip */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Total Assets',      value: `${properties.length}`,                sub: 'Across 2 markets' },
+          { label: 'Total GLA',         value: `${(totalSf/1000).toFixed(0)}k SF`,    sub: 'Gross leasable area' },
+          { label: 'Portfolio Occ.',    value: `${wtdOcc}%`,                          sub: 'Weighted by SF' },
+          { label: 'T12 NOI',           value: `$${totalNoi.toFixed(1)}M`,            sub: 'Trailing 12 months' },
+          { label: 'Est. Portfolio Val',value: `$${totalVal.toFixed(1)}M`,            sub: 'At current cap rates' },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Property cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {properties.map((p, i) => (
+          <div key={i} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+            {/* card header */}
+            <div style={{ borderLeft: `4px solid ${p.market_color}`, padding: '14px 16px 12px', borderBottom: '1px solid #f3f4f6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>{p.address}</div>
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: p.market_color, background: `${p.market_color}18`, border: `1px solid ${p.market_color}44`, borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap', marginLeft: 8 }}>{p.type}</span>
+              </div>
+            </div>
+
+            {/* specs + financials */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
+              {/* left: building specs */}
+              <div style={{ padding: '12px 16px', borderRight: '1px solid #f3f4f6' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 8 }}>Building</div>
+                {[
+                  { label: 'Total SF',      value: `${p.totalSf.toLocaleString()} SF` },
+                  { label: 'Office SF',     value: `${p.officeSf.toLocaleString()} SF` },
+                  { label: 'Site',          value: `${(p.siteSf / 43560).toFixed(1)} ac` },
+                  { label: 'Year Built',    value: `${p.yearBuilt}` },
+                  { label: 'Clear Height',  value: `${p.clearHeight}'` },
+                  { label: 'Dock Doors',    value: `${p.dockDoors}` },
+                  { label: 'Drive-In',      value: `${p.driveIn}` },
+                  { label: 'Power',         value: p.power },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* right: financial snapshot */}
+              <div style={{ padding: '12px 16px' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 8 }}>Financials</div>
+                {[
+                  { label: 'Acquired',      value: p.acquired },
+                  { label: 'Acq. Price',    value: `$${p.acquisitionPrice.toFixed(1)}M` },
+                  { label: 'Est. Value',    value: `$${p.estValue.toFixed(1)}M` },
+                  { label: 'T12 NOI',       value: `$${(p.currentNoi * 1000).toFixed(0)}k` },
+                  { label: 'Cap Rate',      value: `${p.capRate}%` },
+                  { label: 'Occupancy',     value: `${p.occupancy}%` },
+                  { label: 'Tenants',       value: `${p.tenants}` },
+                  { label: 'Market',        value: p.market },
+                ].map(row => (
+                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.label}</span>
+                    <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 12, textAlign: 'center' }}>Placeholder data — connect Yardi to populate live asset records</div>
     </div>
   )
 }
-
-// ─── Work Orders ──────────────────────────────────────────────────────────────
-
 function WorkOrdersView() {
   return (
     <div>
