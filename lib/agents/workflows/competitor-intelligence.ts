@@ -71,9 +71,9 @@ export async function runCompetitorIntelligence(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 6000,
-    system: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets (Midland-Odessa, Tampa/Brevard County FL, secondary Texas).
+    system: [{ type: "text" as const, text: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets (Midland-Odessa, Tampa/Brevard County FL, secondary Texas).
 
-Your job: produce a richly detailed, LP-grade competitor intelligence brief for internal use. Be specific, data-dense, and direct. Every section must contain real named entities, figures, and actionable observations. No filler.`,
+Your job: produce a richly detailed, LP-grade competitor intelligence brief for internal use. Be specific, data-dense, and direct. Every section must contain real named entities, figures, and actionable observations. No filler.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

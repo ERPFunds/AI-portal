@@ -81,9 +81,9 @@ export async function runWeeklyMarketUpdate(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 5000,
-    system: `You are a CRE market analyst for ERP Funds, producing concise weekly market update briefs for the investment team. ERP Funds is an industrial CRE firm focused on service yards, IOS, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets including Brevard County FL.
+    system: [{ type: "text" as const, text: `You are a CRE market analyst for ERP Funds, producing concise weekly market update briefs for the investment team. ERP Funds is an industrial CRE firm focused on service yards, IOS, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets including Brevard County FL.
 
-Tone: professional, punchy, data-first. Weekly cadence means shorter and more focused than a monthly report — prioritize the most actionable signals. No filler.`,
+Tone: professional, punchy, data-first. Weekly cadence means shorter and more focused than a monthly report — prioritize the most actionable signals. No filler.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

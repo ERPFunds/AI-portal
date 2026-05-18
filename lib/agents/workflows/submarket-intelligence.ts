@@ -87,9 +87,9 @@ export async function runSubmarketIntelligence(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 5500,
-    system: `You are a senior CRE submarket analyst for ERP Funds, producing monthly deep-dive intelligence reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
+    system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds, producing monthly deep-dive intelligence reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
-Produce LP-grade submarket intelligence: specific data points, named assets and transactions, trend analysis, and clear investment implications. Be precise, data-dense, and direct.`,
+Produce LP-grade submarket intelligence: specific data points, named assets and transactions, trend analysis, and clear investment implications. Be precise, data-dense, and direct.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
