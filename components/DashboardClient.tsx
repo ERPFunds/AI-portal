@@ -1139,6 +1139,146 @@ function AgentsView({ onOpenAgent, statsMap }: { onOpenAgent: (id: string) => vo
 
 // ─── Financial Dashboard ──────────────────────────────────────────────────────
 
+// ── Fund snapshot (Investment Dashboard) ─────────────────────────────────────
+const FUND = {
+  netIrr: 18.2, grossIrr: 22.4, moic: 1.8, tvpi: 1.8, rvpi: 1.4,
+  targetNetIrr: 16, targetGrossIrr: 20,
+  committed: 85, deployed: 61.2, dryPowder: 23.8, deployedPct: 72,
+  assets: 8, totalSf: 847, wtdCapRate: 5.6, avgHold: 2.4,
+  permianPortfolioOcc: 94, permianSubmarketOcc: 96.3,
+  brevardPortfolioOcc: 91,  brevardSubmarketOcc: 94.4,
+}
+function FsDonut({ pct, color }: { pct: number; color: string }) {
+  const r = 48, cx = 60, cy = 60, circ = 2 * Math.PI * r
+  const filled = circ * (pct / 100), offset = circ * 0.25
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+      <svg width={120} height={120} viewBox="0 0 120 120">
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f3f4f6" strokeWidth={14} />
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth={14}
+          strokeDasharray={`${filled} ${circ - filled}`} strokeDashoffset={offset} strokeLinecap="round"
+          style={{ transform: 'rotate(-90deg)', transformOrigin: '60px 60px' }} />
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={16} fontWeight={700} fill="#111827">{pct}%</text>
+        <text x={cx} y={cy + 12} textAnchor="middle" fontSize={9} fill="#9ca3af">deployed</text>
+      </svg>
+      <div>
+        <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 8 }}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: color, marginRight: 6 }} />
+          Deployed <strong style={{ color: '#111827' }}>${FUND.deployed}M</strong>
+        </div>
+        <div style={{ fontSize: 11, color: '#6b7280' }}>
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#f3f4f6', border: '1px solid #e5e7eb', marginRight: 6 }} />
+          Dry Powder <strong style={{ color: '#111827' }}>${FUND.dryPowder}M</strong>
+        </div>
+      </div>
+    </div>
+  )
+}
+function FsIrr() {
+  const rows = [
+    { label: 'Gross IRR', actual: FUND.grossIrr, target: FUND.targetGrossIrr, color: '#A6C3C9' },
+    { label: 'Net IRR',   actual: FUND.netIrr,   target: FUND.targetNetIrr,   color: '#6366f1' },
+  ]
+  const max = 30
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '4px 0' }}>
+      {rows.map(row => (
+        <div key={row.label}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>{row.label}</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>{row.actual}% <span style={{ fontWeight: 400, color: '#9ca3af' }}>vs {row.target}% target</span></span>
+          </div>
+          <div style={{ position: 'relative', height: 10, background: '#f3f4f6', borderRadius: 5 }}>
+            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${(row.target / max) * 100}%`, background: '#e5e7eb', borderRadius: 5 }} />
+            <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${(row.actual / max) * 100}%`, background: row.color, borderRadius: 5 }} />
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+function FsOccupancy() {
+  const markets = [
+    { label: 'Permian Basin',  portfolio: FUND.permianPortfolioOcc, submarket: FUND.permianSubmarketOcc, color: '#A6C3C9' },
+    { label: 'Brevard County', portfolio: FUND.brevardPortfolioOcc,  submarket: FUND.brevardSubmarketOcc,  color: '#6366f1' },
+  ]
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 0' }}>
+      {markets.map(m => (
+        <div key={m.label}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', marginBottom: 8 }}>{m.label}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ fontSize: 10, color: '#6b7280' }}>Our Portfolio</span>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#111827' }}>{m.portfolio}%</span>
+              </div>
+              <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4 }}>
+                <div style={{ height: '100%', width: `${m.portfolio}%`, background: m.color, borderRadius: 4 }} />
+              </div>
+            </div>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 3 }}>
+                <span style={{ fontSize: 10, color: '#9ca3af' }}>Submarket Avg</span>
+                <span style={{ fontSize: 10, color: '#9ca3af' }}>{m.submarket}%</span>
+              </div>
+              <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4 }}>
+                <div style={{ height: '100%', width: `${m.submarket}%`, background: '#e5e7eb', borderRadius: 4 }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+}
+function FundSnapshot() {
+  const returns = [
+    { label: 'Net IRR',   value: `${FUND.netIrr}%`,   sub: `vs ${FUND.targetNetIrr}% target` },
+    { label: 'Gross IRR', value: `${FUND.grossIrr}%`,  sub: `vs ${FUND.targetGrossIrr}% target` },
+    { label: 'MOIC',      value: `${FUND.moic}x`,      sub: 'Multiple on invested capital' },
+    { label: 'TVPI',      value: `${FUND.tvpi}x`,      sub: 'Total value to paid-in' },
+    { label: 'RVPI',      value: `${FUND.rvpi}x`,      sub: 'Residual value to paid-in' },
+  ]
+  const stats = [
+    { label: 'Committed Capital', value: `$${FUND.committed}M`,  sub: 'Total fund size' },
+    { label: 'Deployed',          value: `$${FUND.deployed}M`,   sub: `${FUND.deployedPct}% of committed` },
+    { label: 'Portfolio Assets',  value: `${FUND.assets}`,       sub: 'Properties' },
+    { label: 'Total SF',          value: `${FUND.totalSf}k sf`,  sub: 'Gross leasable area' },
+    { label: 'Wtd. Cap Rate',     value: `${FUND.wtdCapRate}%`,  sub: 'Portfolio weighted avg' },
+    { label: 'Avg Hold Period',   value: `${FUND.avgHold} yrs`,  sub: 'Since acquisition' },
+  ]
+  const kpiCard = (k: { label: string; value: string; sub: string }) => (
+    <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 120 }}>
+      <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
+      <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+      <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
+    </div>
+  )
+  return (
+    <div style={{ marginBottom: 32 }}>
+      <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Returns</div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>{returns.map(kpiCard)}</div>
+      <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 8 }}>Fund Stats</div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>{stats.map(kpiCard)}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>Deployed Capital</div>
+          <FsDonut pct={FUND.deployedPct} color="#A6C3C9" />
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>IRR vs Target</div>
+          <FsIrr />
+        </div>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 14 }}>Portfolio vs Submarket Occ.</div>
+          <FsOccupancy />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function FinancialView() {
   const kpiStyle = {
     background: '#ffffff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 0,
@@ -1164,6 +1304,8 @@ function FinancialView() {
         synced="Not yet connected"
         link="Connect data sources ↗"
       />
+
+      <FundSnapshot />
 
       {/* KPI Row */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
