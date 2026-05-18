@@ -297,8 +297,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
         setAgentConfig={setAgentConfig}
       />
     ),
-    lp: <StubView title="LP Directory" icon="👥" desc="Limited partner profiles, commitment tracking, and Salesforce sync" />,
-    capitalcalls: <StubView title="Capital Calls" icon="💰" desc="Fund IV capital call management and LP funding status" />,
+    lp: <LpDirectoryView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <StubView title="Brokerage Marketing" icon="📣" desc="Property marketing materials, broker packages, and availability flyers" />,
