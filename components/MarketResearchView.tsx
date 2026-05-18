@@ -231,7 +231,7 @@ export default function MarketResearchView() {
   return (
     <div style={{ padding: '24px 28px', overflowY: 'auto', height: '100%' }}>
       <div style={{ marginBottom: 20 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0, marginBottom: 4 }}>Market Research</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0, marginBottom: 4 }}>Market Intelligence</h1>
         <p style={{ fontSize: 13, color: '#6b7280', margin: 0 }}>Industrial CRE market metrics — Permian Basin &amp; Brevard County</p>
       </div>
 
@@ -257,3 +257,4 @@ export default function MarketResearchView() {
     </div>
   )
 }
+
