@@ -300,7 +300,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     lp: <LpDirectoryView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
-    'mktg-brokerage': <StubView title="Brokerage Marketing" icon="📣" desc="Property marketing materials, broker packages, and availability flyers" />,
+    'mktg-brokerage': <BrokerageNewsletterView />,
     fundperf: <StubView title="Fund Performance" icon="📈" desc="Detailed fund-level IRR, cash-on-cash, and waterfall analysis" />,
     peopleops: <StubView title="People Ops" icon="👥" desc="Team directory, onboarding checklists, and HR policy Q&A" />,
     vendors: <StubView title="Vendor Contracts" icon="🔑" desc="Vendor master list, contract status, and COI tracking" />,
@@ -1573,6 +1573,209 @@ function LpDirectoryView() {
           <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Placeholder data — connect Yardi to populate live capital call records</div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Newsletter Creator ───────────────────────────────────────────────────────
+function BrokerageNewsletterView() {
+  const [selectedId, setSelectedId] = React.useState<string>(NEWSLETTER_PROMPTS[0].id)
+  const [tab, setTab] = React.useState<'edit' | 'preview'>('edit')
+  const [subject, setSubject] = React.useState('')
+  const [sections, setSections] = React.useState<Record<string, string>>({})
+  const [generating, setGenerating] = React.useState(false)
+  const [copied, setCopied] = React.useState(false)
+
+  const tpl = NEWSLETTER_PROMPTS.find(p => p.id === selectedId) ?? NEWSLETTER_PROMPTS[0]
+
+  React.useEffect(() => {
+    setSubject(`${tpl.name} — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`)
+    const init: Record<string, string> = {}
+    tpl.outputSections.forEach(s => { init[s.title] = '' })
+    setSections(init)
+  }, [selectedId])
+
+  const grouped: Record<string, typeof NEWSLETTER_PROMPTS> = {}
+  NEWSLETTER_PROMPTS.forEach(p => {
+    const g = p.market === 'permian' ? 'Permian Basin' : 'Brevard County'
+    if (!grouped[g]) grouped[g] = []
+    grouped[g].push(p)
+  })
+
+  const NAVY = '#0D2D52'
+  const TEAL = '#A6C3C9'
+
+  async function handleGenerate() {
+    setGenerating(true)
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: [{ role: 'user', content: tpl.researchQuery }],
+          systemPrompt: tpl.systemPrompt,
+        }),
+      })
+      if (!res.ok) throw new Error('API error')
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No stream')
+      let raw = ''
+      const decoder = new TextDecoder()
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        raw += decoder.decode(value, { stream: true })
+      }
+      // Parse section headings from response (§1, §2, etc.)
+      const newSections: Record<string, string> = {}
+      tpl.outputSections.forEach((sec, i) => {
+        const marker = `§${i + 1}`
+        const next = `§${i + 2}`
+        const start = raw.indexOf(marker)
+        if (start === -1) { newSections[sec.title] = ''; return }
+        const end = raw.indexOf(next, start)
+        newSections[sec.title] = (end === -1 ? raw.slice(start) : raw.slice(start, end)).replace(marker, '').trim()
+      })
+      if (Object.values(newSections).some(v => v)) {
+        setSections(newSections)
+      } else {
+        // fallback: dump full response into first section
+        const updated = { ...sections }
+        const first = tpl.outputSections[0]?.title
+        if (first) updated[first] = raw
+        setSections(updated)
+      }
+    } catch {
+      // silently fail — user can still edit manually
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  function buildHtml() {
+    const rows = tpl.outputSections.map(s => {
+      const body = sections[s.title] || ''
+      return `
+        <div style="margin-bottom:24px">
+          <div style="font-size:11px;font-weight:700;color:${TEAL};text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb">${s.title}</div>
+          <div style="font-size:13px;color:#374151;line-height:1.7;white-space:pre-wrap">${body || '<span style="color:#d1d5db;font-style:italic">No content yet</span>'}</div>
+        </div>`
+    }).join('')
+    return `
+<div style="max-width:640px;margin:0 auto;font-family:'Montserrat','Gotham',system-ui,sans-serif;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
+  <div style="background:${NAVY};padding:28px 32px 24px">
+    <div style="font-size:10px;font-weight:700;color:${TEAL};letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">ERP FUNDS</div>
+    <div style="font-size:20px;font-weight:700;color:#ffffff;line-height:1.3">${tpl.name}</div>
+    <div style="font-size:11px;color:#93b8be;margin-top:4px">${subject}</div>
+    <div style="height:3px;background:linear-gradient(90deg,${TEAL},transparent);margin-top:16px;border-radius:2px"></div>
+  </div>
+  <div style="padding:28px 32px">${rows}</div>
+  <div style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:10px;color:#9ca3af">ERP Funds · Industrial CRE · ${tpl.marketFull}</div>
+    <div style="font-size:10px;color:#9ca3af">${tpl.schedule} · ${tpl.recipients.length} recipients</div>
+  </div>
+</div>`
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(buildHtml())
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const btnBase: React.CSSProperties = { fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer' }
+
+  return (
+    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+
+      {/* ── Left: template picker ── */}
+      <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: '20px 12px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12, paddingLeft: 8 }}>Templates</div>
+        {Object.entries(grouped).map(([group, items]) => (
+          <div key={group} style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px', padding: '4px 8px', marginBottom: 4 }}>{group}</div>
+            {items.map(p => (
+              <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
+                width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: 8, border: 'none',
+                background: selectedId === p.id ? '#f0f7f8' : 'transparent',
+                borderLeft: selectedId === p.id ? `3px solid ${TEAL}` : '3px solid transparent',
+                cursor: 'pointer', marginBottom: 2,
+              }}>
+                <div style={{ fontSize: 12, fontWeight: selectedId === p.id ? 700 : 500, color: selectedId === p.id ? NAVY : '#374151' }}>{p.reportType === 'weekly-market-update' ? 'Monday Brief' : p.reportType === 'submarket-watch' ? 'Submarket Watch' : 'Fund Landscape'}</div>
+                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{p.frequency}</div>
+              </button>
+            ))}
+          </div>
+        ))}
+        <div style={{ margin: '16px 8px 8px', height: 1, background: '#e5e7eb' }} />
+        <div style={{ padding: '4px 8px' }}>
+          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px' }}>Recipients</div>
+          {tpl.recipients.map((r, i) => (
+            <div key={i} style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, lineHeight: 1.4 }}>{r.split(' (')[0]}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Main: editor + preview ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+
+        {/* toolbar */}
+        <div style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, background: '#fff' }}>
+          <div style={{ flex: 1 }}>
+            <input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="Subject line…"
+              style={{ width: '100%', fontSize: 13, fontWeight: 600, color: NAVY, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit' }}
+            />
+          </div>
+          <div style={{ display: 'flex', gap: 4, borderRadius: 7, background: '#f3f4f6', padding: 3 }}>
+            {(['edit', 'preview'] as const).map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ ...btnBase, padding: '5px 14px', background: tab === t ? '#fff' : 'transparent', color: tab === t ? NAVY : '#9ca3af', boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,.08)' : 'none', fontWeight: tab === t ? 700 : 500, fontSize: 11 }}>
+                {t === 'edit' ? 'Edit' : 'Preview'}
+              </button>
+            ))}
+          </div>
+          <button onClick={handleGenerate} disabled={generating} style={{ ...btnBase, background: NAVY, color: '#fff', opacity: generating ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+            {generating ? '⏳ Generating…' : '✦ Generate Draft'}
+          </button>
+          <button onClick={handleCopy} style={{ ...btnBase, background: copied ? '#f0fdf4' : '#f3f4f6', color: copied ? '#3DAE7A' : '#374151' }}>
+            {copied ? '✓ Copied' : '⎘ Copy HTML'}
+          </button>
+        </div>
+
+        {/* content area */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+          {tab === 'edit' ? (
+            <div>
+              <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 16 }}>
+                {tpl.name} · {tpl.frequency} · {tpl.outputSections.length} sections
+              </div>
+              {tpl.outputSections.map((sec, i) => (
+                <div key={sec.title} style={{ marginBottom: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: TEAL, textTransform: 'uppercase', letterSpacing: '1px' }}>§{i + 1}</span>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{sec.title}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{sec.description}</span>
+                  </div>
+                  <textarea
+                    value={sections[sec.title] ?? ''}
+                    onChange={e => setSections(prev => ({ ...prev, [sec.title]: e.target.value }))}
+                    placeholder={sec.description}
+                    rows={4}
+                    style={{ width: '100%', fontSize: 12, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', lineHeight: 1.6, background: '#fafafa' }}
+                  />
+                </div>
+              ))}
+              <div style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', fontSize: 11, color: '#6b7280' }}>
+                <span style={{ fontWeight: 600, color: '#374151' }}>Sources: </span>{tpl.sources.join(' · ')}
+              </div>
+            </div>
+          ) : (
+            <div dangerouslySetInnerHTML={{ __html: buildHtml() }} />
+          )}
+        </div>
+      </div>
     </div>
   )
 }
