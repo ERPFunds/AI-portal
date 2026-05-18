@@ -1,4 +1,4 @@
-﻿export type SidebarItem =
+export type SidebarItem =
   | { section: string }
   | { icon: string; label: string; view: string }
 
@@ -9,11 +9,11 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
     { icon: '🤖', label: 'Agent Hub',         view: 'agents' },
     { section: 'Investor' },
+    { icon: '🔬', label: 'Market Intelligence',   view: 'market-research' },
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { icon: '👥', label: 'LP Directory',        view: 'lp' },
     { icon: '💰', label: 'Capital Calls',       view: 'capitalcalls' },
     { icon: '🏭', label: 'Acquisition Research', view: 'acquisition' },
-    { icon: '🔬', label: 'Market Research',      view: 'market-research' },
     { icon: '📣', label: 'LP Marketing',        view: 'mktg-lp' },
     { section: 'Property' },
     { icon: '📋', label: 'Rent Roll',           view: 'rentroll' },
@@ -34,10 +34,10 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
     { icon: '📥', label: 'Agent Inbox',       view: 'inbox' },
     { section: 'Investor' },
+    { icon: '🔬', label: 'Market Intelligence',  view: 'market-research' },
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { icon: '📈', label: 'Fund Performance',     view: 'fundperf' },
     { icon: '🏭', label: 'Acquisition Research',  view: 'acquisition' },
-    { icon: '🔬', label: 'Market Research',       view: 'market-research' },
     { icon: '📣', label: 'LP Marketing',         view: 'mktg-lp' },
     { section: 'Platform' },
     { icon: '📮', label: 'Requests',             view: 'requests' },
@@ -124,4 +124,5 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📮', label: 'Requests',           view: 'requests' },
   ],
 }
+
 
