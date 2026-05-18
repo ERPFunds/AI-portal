@@ -1577,48 +1577,99 @@ function LpDirectoryView() {
   )
 }
 
-// ─── Newsletter Creator ───────────────────────────────────────────────────────
+// ─── Brokerage Newsletter Creator ────────────────────────────────────────────
+const BROKERAGE_TEMPLATES = [
+  {
+    id: 'availability-blast',
+    name: 'Availability Blast',
+    audience: 'Broker Network',
+    frequency: 'As needed',
+    description: 'Available space blast to active brokers — new listings, lease terms, contact',
+    sections: [
+      { title: 'Subject Line Hook',       hint: 'Punchy 1-liner brokers will open (e.g. "New ±24,000 SF IOS Available — Midland, TX")' },
+      { title: 'Property Highlights',     hint: 'Address, size, clear height, dock doors, yard depth, power, zoning, asking rent NNN' },
+      { title: 'Why This Space',          hint: '2–3 bullet points — location advantage, access, tenant fit' },
+      { title: 'Availability & Terms',    hint: 'Available date, lease term flexibility, TI allowance if applicable' },
+      { title: 'Call to Action',          hint: 'Broker contact, tour scheduling link or phone, commission structure' },
+    ],
+  },
+  {
+    id: 'property-spotlight',
+    name: 'Property Spotlight',
+    audience: 'Broker Network + Tenants',
+    frequency: 'Per listing',
+    description: 'Featured property deep-dive for a single asset — ideal for larger or strategic availabilities',
+    sections: [
+      { title: 'Property Overview',       hint: 'Asset name, address, submarket, total SF, year built / renovated' },
+      { title: 'Space Details',           hint: 'Office SF, warehouse SF, clear height, dock-high doors, drive-in doors, sprinkler, power' },
+      { title: 'Site & Location',         hint: 'Acreage, yard depth, access roads, proximity to highway / rail / port' },
+      { title: 'Market Context',          hint: 'Submarket vacancy, competing availabilities, why this market is active' },
+      { title: 'Lease Terms',             hint: 'Asking NNN rate, available date, lease term, TI, co-broker commission' },
+      { title: 'Contact & Tour',          hint: 'Leasing contact name, phone, email, preferred showing windows' },
+    ],
+  },
+  {
+    id: 'quarterly-broker-update',
+    name: 'Quarterly Broker Update',
+    audience: 'Broker Network',
+    frequency: 'Quarterly',
+    description: 'Portfolio-level update for the broker network — leasing activity, new availabilities, market color',
+    sections: [
+      { title: 'Quarter in Review',       hint: '2–3 sentences: leases signed, SF absorbed, notable deals this quarter' },
+      { title: 'Current Availabilities',  hint: 'Table or bullets: property, SF, asking rent, available date — Permian and Brevard' },
+      { title: 'Recent Transactions',     hint: 'Deals closed this quarter — tenant, property, SF, term (no confidential economics)' },
+      { title: 'Market Snapshot',         hint: 'Quick external-facing stats: vacancy rate, asking rents, absorption — Permian + Brevard' },
+      { title: 'What We\'re Looking For', hint: 'Acquisition targets, ideal tenant profiles, markets of interest — broker call to action' },
+    ],
+  },
+  {
+    id: 'new-listing-announcement',
+    name: 'New Listing Announcement',
+    audience: 'Prospects + Tenants',
+    frequency: 'Per listing',
+    description: 'Clean single-property announcement for direct prospect outreach and CoStar/LoopNet syndication copy',
+    sections: [
+      { title: 'Headline',                hint: 'e.g. "±18,500 SF Industrial / IOS Available — Palm Bay, FL"' },
+      { title: 'Property Summary',        hint: '3–4 sentences: what it is, where it is, what makes it special' },
+      { title: 'Key Specs',               hint: 'Bulleted: SF, clear height, dock doors, yard, power, zoning, asking rent' },
+      { title: 'Location Advantage',      hint: 'Highway access, distance to key nodes, labor market, logistics' },
+      { title: 'Next Steps',              hint: 'Tour contact, OM availability, deadline or urgency if applicable' },
+    ],
+  },
+]
+
 function BrokerageNewsletterView() {
-  const [selectedId, setSelectedId] = React.useState<string>(NEWSLETTER_PROMPTS[0].id)
+  const [selectedId, setSelectedId] = React.useState(BROKERAGE_TEMPLATES[0].id)
   const [tab, setTab] = React.useState<'edit' | 'preview'>('edit')
   const [subject, setSubject] = React.useState('')
   const [sections, setSections] = React.useState<Record<string, string>>({})
   const [generating, setGenerating] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
 
-  const tpl = NEWSLETTER_PROMPTS.find(p => p.id === selectedId) ?? NEWSLETTER_PROMPTS[0]
+  const tpl = BROKERAGE_TEMPLATES.find(p => p.id === selectedId) ?? BROKERAGE_TEMPLATES[0]
 
   React.useEffect(() => {
     setSubject(`${tpl.name} — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`)
     const init: Record<string, string> = {}
-    tpl.outputSections.forEach(s => { init[s.title] = '' })
+    tpl.sections.forEach(s => { init[s.title] = '' })
     setSections(init)
   }, [selectedId])
-
-  const grouped: Record<string, typeof NEWSLETTER_PROMPTS> = {}
-  NEWSLETTER_PROMPTS.forEach(p => {
-    const g = p.market === 'permian' ? 'Permian Basin' : 'Brevard County'
-    if (!grouped[g]) grouped[g] = []
-    grouped[g].push(p)
-  })
 
   const NAVY = '#0D2D52'
   const TEAL = '#A6C3C9'
 
   async function handleGenerate() {
     setGenerating(true)
+    const prompt = `Write a ${tpl.name} for ERP Funds, an industrial CRE firm with properties in the Permian Basin (Midland-Odessa TX) and Brevard County FL. Audience: ${tpl.audience}. Format with clear section headings matching exactly: ${tpl.sections.map(s => s.title).join(', ')}. Tone: direct, professional, broker-friendly. Use placeholder values like [ADDRESS], [SF], [RATE] where specifics are needed.`
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [{ role: 'user', content: tpl.researchQuery }],
-          systemPrompt: tpl.systemPrompt,
-        }),
+        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
       })
-      if (!res.ok) throw new Error('API error')
+      if (!res.ok) throw new Error()
       const reader = res.body?.getReader()
-      if (!reader) throw new Error('No stream')
+      if (!reader) throw new Error()
       let raw = ''
       const decoder = new TextDecoder()
       while (true) {
@@ -1626,55 +1677,25 @@ function BrokerageNewsletterView() {
         if (done) break
         raw += decoder.decode(value, { stream: true })
       }
-      // Parse section headings from response (§1, §2, etc.)
-      const newSections: Record<string, string> = {}
-      tpl.outputSections.forEach((sec, i) => {
-        const marker = `§${i + 1}`
-        const next = `§${i + 2}`
-        const start = raw.indexOf(marker)
-        if (start === -1) { newSections[sec.title] = ''; return }
-        const end = raw.indexOf(next, start)
-        newSections[sec.title] = (end === -1 ? raw.slice(start) : raw.slice(start, end)).replace(marker, '').trim()
+      const newSecs: Record<string, string> = {}
+      tpl.sections.forEach((sec, i) => {
+        const next = tpl.sections[i + 1]
+        const re = new RegExp(`${sec.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[:\\n]+([\\s\\S]*?)${next ? `(?=${next.title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})` : '$'}`, 'i')
+        const m = raw.match(re)
+        newSecs[sec.title] = m ? m[1].trim() : ''
       })
-      if (Object.values(newSections).some(v => v)) {
-        setSections(newSections)
-      } else {
-        // fallback: dump full response into first section
-        const updated = { ...sections }
-        const first = tpl.outputSections[0]?.title
-        if (first) updated[first] = raw
-        setSections(updated)
-      }
-    } catch {
-      // silently fail — user can still edit manually
-    } finally {
-      setGenerating(false)
-    }
+      if (Object.values(newSecs).some(v => v)) setSections(newSecs)
+      else setSections({ [tpl.sections[0].title]: raw, ...Object.fromEntries(tpl.sections.slice(1).map(s => [s.title, ''])) })
+    } catch { /* silent */ }
+    finally { setGenerating(false) }
   }
 
   function buildHtml() {
-    const rows = tpl.outputSections.map(s => {
+    const rows = tpl.sections.map(s => {
       const body = sections[s.title] || ''
-      return `
-        <div style="margin-bottom:24px">
-          <div style="font-size:11px;font-weight:700;color:${TEAL};text-transform:uppercase;letter-spacing:1.2px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid #e5e7eb">${s.title}</div>
-          <div style="font-size:13px;color:#374151;line-height:1.7;white-space:pre-wrap">${body || '<span style="color:#d1d5db;font-style:italic">No content yet</span>'}</div>
-        </div>`
+      return `<div style="margin-bottom:22px"><div style="font-size:10px;font-weight:700;color:${TEAL};text-transform:uppercase;letter-spacing:1.2px;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #e5e7eb">${s.title}</div><div style="font-size:13px;color:#374151;line-height:1.75;white-space:pre-wrap">${body || '<span style=\\"color:#d1d5db;font-style:italic\\">—</span>'}</div></div>`
     }).join('')
-    return `
-<div style="max-width:640px;margin:0 auto;font-family:'Montserrat','Gotham',system-ui,sans-serif;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden">
-  <div style="background:${NAVY};padding:28px 32px 24px">
-    <div style="font-size:10px;font-weight:700;color:${TEAL};letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">ERP FUNDS</div>
-    <div style="font-size:20px;font-weight:700;color:#ffffff;line-height:1.3">${tpl.name}</div>
-    <div style="font-size:11px;color:#93b8be;margin-top:4px">${subject}</div>
-    <div style="height:3px;background:linear-gradient(90deg,${TEAL},transparent);margin-top:16px;border-radius:2px"></div>
-  </div>
-  <div style="padding:28px 32px">${rows}</div>
-  <div style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:16px 32px;display:flex;justify-content:space-between;align-items:center">
-    <div style="font-size:10px;color:#9ca3af">ERP Funds · Industrial CRE · ${tpl.marketFull}</div>
-    <div style="font-size:10px;color:#9ca3af">${tpl.schedule} · ${tpl.recipients.length} recipients</div>
-  </div>
-</div>`
+    return `<div style="max-width:620px;margin:0 auto;font-family:'Montserrat','Gotham',system-ui,sans-serif;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden"><div style="background:${NAVY};padding:26px 30px 22px"><div style="font-size:9px;font-weight:700;color:${TEAL};letter-spacing:2.5px;text-transform:uppercase;margin-bottom:6px">ERP FUNDS · INDUSTRIAL CRE</div><div style="font-size:19px;font-weight:700;color:#fff;line-height:1.3">${subject}</div><div style="font-size:11px;color:#93b8be;margin-top:3px">${tpl.audience} · ${tpl.frequency}</div><div style="height:2px;background:linear-gradient(90deg,${TEAL},transparent);margin-top:14px;border-radius:2px"></div></div><div style="padding:26px 30px">${rows}</div><div style="background:#f8fafc;border-top:1px solid #e5e7eb;padding:14px 30px;display:flex;justify-content:space-between"><div style="font-size:10px;color:#9ca3af">ERP Funds · Permian Basin &amp; Brevard County · Industrial CRE</div><div style="font-size:10px;color:#9ca3af">Unsubscribe</div></div></div>`
   }
 
   async function handleCopy() {
@@ -1683,60 +1704,42 @@ function BrokerageNewsletterView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  const btnBase: React.CSSProperties = { fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer' }
+  const btnBase: React.CSSProperties = { fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontFamily: 'inherit' }
 
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-
-      {/* ── Left: template picker ── */}
-      <div style={{ width: 220, flexShrink: 0, borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: '20px 12px' }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12, paddingLeft: 8 }}>Templates</div>
-        {Object.entries(grouped).map(([group, items]) => (
-          <div key={group} style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px', padding: '4px 8px', marginBottom: 4 }}>{group}</div>
-            {items.map(p => (
-              <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
-                width: '100%', textAlign: 'left', padding: '9px 12px', borderRadius: 8, border: 'none',
-                background: selectedId === p.id ? '#f0f7f8' : 'transparent',
-                borderLeft: selectedId === p.id ? `3px solid ${TEAL}` : '3px solid transparent',
-                cursor: 'pointer', marginBottom: 2,
-              }}>
-                <div style={{ fontSize: 12, fontWeight: selectedId === p.id ? 700 : 500, color: selectedId === p.id ? NAVY : '#374151' }}>{p.reportType === 'weekly-market-update' ? 'Monday Brief' : p.reportType === 'submarket-watch' ? 'Submarket Watch' : 'Fund Landscape'}</div>
-                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{p.frequency}</div>
-              </button>
-            ))}
-          </div>
+      <div style={{ width: 210, flexShrink: 0, borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: '20px 10px' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10, paddingLeft: 8 }}>Brokerage Templates</div>
+        {BROKERAGE_TEMPLATES.map(p => (
+          <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
+            width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', marginBottom: 3,
+            background: selectedId === p.id ? '#f0f7f8' : 'transparent',
+            borderLeft: selectedId === p.id ? `3px solid ${TEAL}` : '3px solid transparent',
+            cursor: 'pointer',
+          }}>
+            <div style={{ fontSize: 12, fontWeight: selectedId === p.id ? 700 : 500, color: selectedId === p.id ? NAVY : '#374151' }}>{p.name}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{p.audience}</div>
+          </button>
         ))}
-        <div style={{ margin: '16px 8px 8px', height: 1, background: '#e5e7eb' }} />
-        <div style={{ padding: '4px 8px' }}>
-          <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 6, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px' }}>Recipients</div>
-          {tpl.recipients.map((r, i) => (
-            <div key={i} style={{ fontSize: 10, color: '#6b7280', marginBottom: 3, lineHeight: 1.4 }}>{r.split(' (')[0]}</div>
-          ))}
+        <div style={{ margin: '16px 8px 10px', height: 1, background: '#e5e7eb' }} />
+        <div style={{ padding: '2px 8px' }}>
+          <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 6 }}>About</div>
+          <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{tpl.description}</div>
         </div>
       </div>
 
-      {/* ── Main: editor + preview ── */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-
-        {/* toolbar */}
-        <div style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0, background: '#fff' }}>
-          <div style={{ flex: 1 }}>
-            <input
-              value={subject}
-              onChange={e => setSubject(e.target.value)}
-              placeholder="Subject line…"
-              style={{ width: '100%', fontSize: 13, fontWeight: 600, color: NAVY, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit' }}
-            />
-          </div>
-          <div style={{ display: 'flex', gap: 4, borderRadius: 7, background: '#f3f4f6', padding: 3 }}>
+        <div style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, background: '#fff' }}>
+          <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject line…"
+            style={{ flex: 1, fontSize: 13, fontWeight: 600, color: NAVY, border: 'none', outline: 'none', background: 'transparent', fontFamily: 'inherit' }} />
+          <div style={{ display: 'flex', gap: 3, borderRadius: 7, background: '#f3f4f6', padding: 3 }}>
             {(['edit', 'preview'] as const).map(t => (
               <button key={t} onClick={() => setTab(t)} style={{ ...btnBase, padding: '5px 14px', background: tab === t ? '#fff' : 'transparent', color: tab === t ? NAVY : '#9ca3af', boxShadow: tab === t ? '0 1px 3px rgba(0,0,0,.08)' : 'none', fontWeight: tab === t ? 700 : 500, fontSize: 11 }}>
                 {t === 'edit' ? 'Edit' : 'Preview'}
               </button>
             ))}
           </div>
-          <button onClick={handleGenerate} disabled={generating} style={{ ...btnBase, background: NAVY, color: '#fff', opacity: generating ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button onClick={handleGenerate} disabled={generating} style={{ ...btnBase, background: NAVY, color: '#fff', opacity: generating ? 0.6 : 1 }}>
             {generating ? '⏳ Generating…' : '✦ Generate Draft'}
           </button>
           <button onClick={handleCopy} style={{ ...btnBase, background: copied ? '#f0fdf4' : '#f3f4f6', color: copied ? '#3DAE7A' : '#374151' }}>
@@ -1744,32 +1747,24 @@ function BrokerageNewsletterView() {
           </button>
         </div>
 
-        {/* content area */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {tab === 'edit' ? (
             <div>
               <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 16 }}>
-                {tpl.name} · {tpl.frequency} · {tpl.outputSections.length} sections
+                {tpl.name} · {tpl.audience} · {tpl.sections.length} sections
               </div>
-              {tpl.outputSections.map((sec, i) => (
-                <div key={sec.title} style={{ marginBottom: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+              {tpl.sections.map((sec, i) => (
+                <div key={sec.title} style={{ marginBottom: 18 }}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: TEAL, textTransform: 'uppercase', letterSpacing: '1px' }}>§{i + 1}</span>
                     <span style={{ fontSize: 12, fontWeight: 700, color: NAVY }}>{sec.title}</span>
-                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{sec.description}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{sec.hint}</span>
                   </div>
-                  <textarea
-                    value={sections[sec.title] ?? ''}
-                    onChange={e => setSections(prev => ({ ...prev, [sec.title]: e.target.value }))}
-                    placeholder={sec.description}
-                    rows={4}
-                    style={{ width: '100%', fontSize: 12, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', lineHeight: 1.6, background: '#fafafa' }}
-                  />
+                  <textarea value={sections[sec.title] ?? ''} onChange={e => setSections(prev => ({ ...prev, [sec.title]: e.target.value }))}
+                    placeholder={sec.hint} rows={3}
+                    style={{ width: '100%', fontSize: 12, color: '#374151', border: '1px solid #e5e7eb', borderRadius: 8, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', lineHeight: 1.6, background: '#fafafa' }} />
                 </div>
               ))}
-              <div style={{ background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px', fontSize: 11, color: '#6b7280' }}>
-                <span style={{ fontWeight: 600, color: '#374151' }}>Sources: </span>{tpl.sources.join(' · ')}
-              </div>
             </div>
           ) : (
             <div dangerouslySetInnerHTML={{ __html: buildHtml() }} />
@@ -1779,6 +1774,7 @@ function BrokerageNewsletterView() {
     </div>
   )
 }
+
 function RentRollView() {
   return (
     <div>
