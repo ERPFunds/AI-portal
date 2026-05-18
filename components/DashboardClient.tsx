@@ -1455,6 +1455,127 @@ function FinancialView() {
   )
 }
 
+
+// ─── LP Directory ─────────────────────────────────────────────────────────────
+const LP_DATA = [
+  { name: 'Apex Capital Partners',    type: 'Institutional',   fund: 'Fund III', commitment: 5.0,  called: 3.6,  distributions: 0.8, status: 'Active'     },
+  { name: 'Meridian Family Office',   type: 'Family Office',   fund: 'Fund III', commitment: 2.5,  called: 1.8,  distributions: 0.4, status: 'Active'     },
+  { name: 'Coastal Endowment Trust',  type: 'Endowment',       fund: 'Fund II',  commitment: 10.0, called: 10.0, distributions: 6.2, status: 'Harvesting' },
+  { name: 'Vantage Pension Fund',     type: 'Pension Fund',    fund: 'Fund III', commitment: 7.5,  called: 5.4,  distributions: 1.1, status: 'Active'     },
+  { name: 'Sterling Private Wealth',  type: 'HNWI',            fund: 'Fund III', commitment: 1.0,  called: 0.7,  distributions: 0.1, status: 'Active'     },
+  { name: 'Harbor View Investments',  type: 'Family Office',   fund: 'Fund IV',  commitment: 3.0,  called: 0.0,  distributions: 0.0, status: 'Committed'  },
+  { name: 'Blue Ridge Advisors',      type: 'RIA',             fund: 'Fund IV',  commitment: 2.0,  called: 0.0,  distributions: 0.0, status: 'Committed'  },
+  { name: 'Pinnacle Asset Mgmt',      type: 'Institutional',   fund: 'Fund II',  commitment: 8.0,  called: 8.0,  distributions: 5.8, status: 'Realized'   },
+]
+const CALL_DATA = [
+  { date: 'Apr 15, 2025', fund: 'Fund III', callNo: 4, pct: 10, amount: 1.62, dueDate: 'Apr 29, 2025', status: 'Funded'  },
+  { date: 'Jan 10, 2025', fund: 'Fund III', callNo: 3, pct: 12, amount: 1.94, dueDate: 'Jan 24, 2025', status: 'Funded'  },
+  { date: 'Oct 01, 2024', fund: 'Fund III', callNo: 2, pct: 15, amount: 2.43, dueDate: 'Oct 15, 2024', status: 'Funded'  },
+  { date: 'Jun 18, 2024', fund: 'Fund III', callNo: 1, pct: 35, amount: 5.67, dueDate: 'Jul 02, 2024', status: 'Funded'  },
+  { date: 'Mar 05, 2025', fund: 'Fund IV',  callNo: 1, pct: 0,  amount: 0,    dueDate: 'Pending',      status: 'Pending' },
+]
+function LpDirectoryView() {
+  const [tab, setTab] = React.useState<'lps' | 'calls'>('lps')
+  const totalCommitted = LP_DATA.reduce((s, lp) => s + lp.commitment, 0)
+  const totalCalled    = LP_DATA.reduce((s, lp) => s + lp.called, 0)
+  const totalDistrib   = LP_DATA.reduce((s, lp) => s + lp.distributions, 0)
+  const uncalled       = totalCommitted - totalCalled
+  const statusColor: Record<string, string> = {
+    Active: '#3DAE7A', Committed: '#3B82F6', Harvesting: '#f59e0b', Realized: '#9ca3af', Pending: '#f59e0b', Funded: '#3DAE7A',
+  }
+  const statusBg: Record<string, string> = {
+    Active: '#f0fdf4', Committed: '#eff6ff', Harvesting: '#fffbeb', Realized: '#f9fafb', Pending: '#fffbeb', Funded: '#f0fdf4',
+  }
+  const badge = (s: string) => (
+    <span style={{ fontSize: 10, fontWeight: 600, color: statusColor[s] ?? '#6b7280', background: statusBg[s] ?? '#f3f4f6', border: `1px solid ${statusColor[s] ?? '#e5e7eb'}22`, borderRadius: 5, padding: '2px 7px' }}>{s}</span>
+  )
+  return (
+    <div>
+      <div className="page-header">
+        <h2>LP Directory</h2>
+        <p>Limited partner profiles · Commitments · Capital calls</p>
+      </div>
+      <SourceBar source="Salesforce · Yardi" agents="Capital Raising · CIO & Chief of Staff" synced="Not yet connected" link="Connect data sources ↗" />
+      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Total LPs',       value: `${LP_DATA.length}`,              sub: 'Across all funds' },
+          { label: 'Total Committed', value: `$${totalCommitted.toFixed(1)}M`, sub: 'All funds combined' },
+          { label: 'Called to Date',  value: `$${totalCalled.toFixed(1)}M`,    sub: `${Math.round(totalCalled/totalCommitted*100)}% of committed` },
+          { label: 'Uncalled',        value: `$${uncalled.toFixed(1)}M`,       sub: 'Remaining dry powder' },
+          { label: 'Distributions',   value: `$${totalDistrib.toFixed(1)}M`,   sub: 'Returned to LPs' },
+        ].map(k => (
+          <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
+            <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
+        {(['lps', 'calls'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: tab === t ? 700 : 500, color: tab === t ? '#111827' : '#9ca3af', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #111827' : '2px solid transparent', padding: '8px 16px', cursor: 'pointer', marginBottom: -1 }}>
+            {t === 'lps' ? 'LP Profiles' : 'Capital Calls'}
+          </button>
+        ))}
+      </div>
+      {tab === 'lps' && (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['LP Name', 'Type', 'Fund', 'Commitment', 'Called', 'Uncalled', 'Distributions', 'Status'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {LP_DATA.map((lp, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827' }}>{lp.name}</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>{lp.type}</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>{lp.fund}</td>
+                  <td style={{ padding: '11px 14px', fontWeight: 500, color: '#111827' }}>${lp.commitment.toFixed(1)}M</td>
+                  <td style={{ padding: '11px 14px', color: '#111827' }}>${lp.called.toFixed(1)}M</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>${(lp.commitment - lp.called).toFixed(1)}M</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>${lp.distributions.toFixed(1)}M</td>
+                  <td style={{ padding: '11px 14px' }}>{badge(lp.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Placeholder data — connect Salesforce to populate live LP records</div>
+        </div>
+      )}
+      {tab === 'calls' && (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                {['Call Date', 'Fund', 'Call #', '% Called', 'Amount', 'Due Date', 'Status'].map(h => (
+                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {CALL_DATA.map((c, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '11px 14px', color: '#111827' }}>{c.date}</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>{c.fund}</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>#{c.callNo}</td>
+                  <td style={{ padding: '11px 14px', fontWeight: 500, color: '#111827' }}>{c.pct > 0 ? `${c.pct}%` : '—'}</td>
+                  <td style={{ padding: '11px 14px', fontWeight: 500, color: '#111827' }}>{c.amount > 0 ? `$${c.amount.toFixed(2)}M` : '—'}</td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280' }}>{c.dueDate}</td>
+                  <td style={{ padding: '11px 14px' }}>{badge(c.status)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Placeholder data — connect Yardi to populate live capital call records</div>
+        </div>
+      )}
+    </div>
+  )
+}
 function RentRollView() {
   return (
     <div>
