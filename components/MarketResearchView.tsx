@@ -1,9 +1,5 @@
 'use client'
 import React from 'react'
-import {
-  LineChart, Line, BarChart, Bar,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts'
 
 // ── Placeholder CoStar data ───────────────────────────────────────────────────
 // Replace with live CoStar API response once COSTAR_API_KEY is configured
@@ -32,13 +28,14 @@ const BREVARD_DATA = [
 
 type DataPoint = typeof PERMIAN_DATA[0]
 
+// ── PNG download ──────────────────────────────────────────────────────────────
 function downloadChartAsPng(containerId: string, filename: string) {
   const el = document.getElementById(containerId)
   if (!el) return
   const svg = el.querySelector('svg')
   if (!svg) return
-  const w = svg.clientWidth || 600
-  const h = svg.clientHeight || 200
+  const w = svg.clientWidth || 560
+  const h = svg.clientHeight || 220
   const xml = new XMLSerializer().serializeToString(svg)
   const canvas = document.createElement('canvas')
   canvas.width = w * 2
@@ -62,10 +59,103 @@ function downloadChartAsPng(containerId: string, filename: string) {
   img.src = url
 }
 
+// ── Inline SVG charts ─────────────────────────────────────────────────────────
+const W = 560, H = 220, PAD = { top: 14, right: 16, bottom: 28, left: 44 }
+const chartW = W - PAD.left - PAD.right
+const chartH = H - PAD.top  - PAD.bottom
+
+function SvgLineChart({ data, yKey, color, yFmt }: {
+  data: DataPoint[]
+  yKey: keyof DataPoint
+  color: string
+  yFmt: (v: number) => string
+}) {
+  const vals = data.map(d => d[yKey] as number)
+  const minV = Math.min(...vals), maxV = Math.max(...vals)
+  const pad  = (maxV - minV) * 0.15 || 0.5
+  const lo   = minV - pad, hi = maxV + pad
+
+  const xOf = (i: number) => PAD.left + (i / (data.length - 1)) * chartW
+  const yOf = (v: number) => PAD.top  + (1 - (v - lo) / (hi - lo)) * chartH
+
+  const points = data.map((d, i) => `${xOf(i)},${yOf(d[yKey] as number)}`).join(' ')
+  const ticks  = [lo + (hi - lo) * 0, lo + (hi - lo) * 0.5, hi]
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      {/* grid */}
+      {ticks.map((t, i) => (
+        <line key={i} x1={PAD.left} x2={PAD.left + chartW}
+          y1={yOf(t)} y2={yOf(t)} stroke="#f3f4f6" strokeWidth={1} />
+      ))}
+      {/* y-axis labels */}
+      {ticks.map((t, i) => (
+        <text key={i} x={PAD.left - 6} y={yOf(t) + 4} textAnchor="end"
+          fontSize={10} fill="#9ca3af">{yFmt(t)}</text>
+      ))}
+      {/* x-axis labels */}
+      {data.map((d, i) => (
+        <text key={i} x={xOf(i)} y={H - 6} textAnchor="middle"
+          fontSize={9} fill="#9ca3af">{d.period}</text>
+      ))}
+      {/* line */}
+      <polyline points={points} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" />
+      {/* dots */}
+      {data.map((d, i) => (
+        <circle key={i} cx={xOf(i)} cy={yOf(d[yKey] as number)} r={3.5}
+          fill={color} stroke="#fff" strokeWidth={1.5} />
+      ))}
+    </svg>
+  )
+}
+
+function SvgBarChart({ data, yKey, color, yFmt }: {
+  data: DataPoint[]
+  yKey: keyof DataPoint
+  color: string
+  yFmt: (v: number) => string
+}) {
+  const vals = data.map(d => d[yKey] as number)
+  const maxV = Math.max(...vals)
+  const hi   = maxV * 1.15
+
+  const barW  = (chartW / data.length) * 0.6
+  const xOf   = (i: number) => PAD.left + (i + 0.5) * (chartW / data.length)
+  const yOf   = (v: number) => PAD.top  + (1 - v / hi) * chartH
+  const ticks = [0, hi * 0.5, hi]
+
+  return (
+    <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: 'block' }}>
+      {ticks.map((t, i) => (
+        <line key={i} x1={PAD.left} x2={PAD.left + chartW}
+          y1={yOf(t)} y2={yOf(t)} stroke="#f3f4f6" strokeWidth={1} />
+      ))}
+      {ticks.map((t, i) => (
+        <text key={i} x={PAD.left - 6} y={yOf(t) + 4} textAnchor="end"
+          fontSize={10} fill="#9ca3af">{yFmt(t)}</text>
+      ))}
+      {data.map((d, i) => (
+        <text key={i} x={xOf(i)} y={H - 6} textAnchor="middle"
+          fontSize={9} fill="#9ca3af">{d.period}</text>
+      ))}
+      {data.map((d, i) => {
+        const v = d[yKey] as number
+        const y = yOf(v)
+        const bh = PAD.top + chartH - y
+        return (
+          <rect key={i} x={xOf(i) - barW / 2} y={y} width={barW} height={bh}
+            fill={color} rx={2} />
+        )
+      })}
+    </svg>
+  )
+}
+
+// ── Shared card wrappers ──────────────────────────────────────────────────────
 function ChartCard({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
   return (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 16px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <span style={{ fontSize: 11, fontWeight: 600, color: '#374151', textTransform: 'uppercase', letterSpacing: '.5px' }}>
           {title}
         </span>
@@ -76,9 +166,7 @@ function ChartCard({ id, title, children }: { id: string; title: string; childre
           ↓ PNG
         </button>
       </div>
-      <div id={id} style={{ height: 200 }}>
-        {children}
-      </div>
+      <div id={id}>{children}</div>
     </div>
   )
 }
@@ -93,19 +181,16 @@ function KpiCard({ label, value, sub }: { label: string; value: string; sub: str
   )
 }
 
+// ── Market section ────────────────────────────────────────────────────────────
 function MarketSection({ title, subtitle, data, color, idPrefix }: {
-  title: string
-  subtitle: string
-  data: DataPoint[]
-  color: string
-  idPrefix: string
+  title: string; subtitle: string; data: DataPoint[]; color: string; idPrefix: string
 }) {
   const latest = data[data.length - 1]
   const prev   = data[data.length - 2]
-  const rentDelta  = ((latest.askingRent - prev.askingRent) / prev.askingRent * 100).toFixed(1)
-  const vacDelta   = (latest.vacancyRate - prev.vacancyRate).toFixed(1)
-  const rentSign   = parseFloat(rentDelta) >= 0 ? '+' : ''
-  const vacSign    = parseFloat(vacDelta)  >= 0 ? '+' : ''
+  const rentDelta = ((latest.askingRent - prev.askingRent) / prev.askingRent * 100).toFixed(1)
+  const vacDelta  = (latest.vacancyRate - prev.vacancyRate).toFixed(1)
+  const rentSign  = parseFloat(rentDelta) >= 0 ? '+' : ''
+  const vacSign   = parseFloat(vacDelta)  >= 0 ? '+' : ''
 
   return (
     <div style={{ marginBottom: 40 }}>
@@ -115,67 +200,33 @@ function MarketSection({ title, subtitle, data, color, idPrefix }: {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <KpiCard label="Vacancy Rate"        value={`${latest.vacancyRate}%`}            sub={`${vacSign}${vacDelta}pp vs prior qtr`} />
-        <KpiCard label="Asking Rent NNN"     value={`$${latest.askingRent.toFixed(2)}/sf`} sub={`${rentSign}${rentDelta}% vs prior qtr`} />
-        <KpiCard label="Net Absorption"      value={`${latest.netAbsorption}k sf`}        sub="Latest quarter" />
-        <KpiCard label="Under Construction"  value={`${latest.underConstruction}k sf`}    sub="Current pipeline" />
-        <KpiCard label="Cap Rate"            value={`${latest.capRate}%`}                 sub="Industrial avg" />
-        <KpiCard label="Sale Price / SF"     value={`$${latest.salePricePsf}`}            sub="Avg transaction" />
+        <KpiCard label="Vacancy Rate"       value={`${latest.vacancyRate}%`}              sub={`${vacSign}${vacDelta}pp vs prior qtr`} />
+        <KpiCard label="Asking Rent NNN"    value={`$${latest.askingRent.toFixed(2)}/sf`} sub={`${rentSign}${rentDelta}% vs prior qtr`} />
+        <KpiCard label="Net Absorption"     value={`${latest.netAbsorption}k sf`}         sub="Latest quarter" />
+        <KpiCard label="Under Construction" value={`${latest.underConstruction}k sf`}     sub="Current pipeline" />
+        <KpiCard label="Cap Rate"           value={`${latest.capRate}%`}                  sub="Industrial avg" />
+        <KpiCard label="Sale Price / SF"    value={`$${latest.salePricePsf}`}             sub="Avg transaction" />
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <ChartCard id={`${idPrefix}-vacancy`} title="Vacancy Rate (%)">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} domain={['auto', 'auto']} tickFormatter={(v: number) => `${v}%`} />
-              <Tooltip formatter={(v: number) => [`${v}%`, 'Vacancy']} contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-              <Line type="monotone" dataKey="vacancyRate" stroke={color} strokeWidth={2} dot={{ r: 3, fill: color }} activeDot={{ r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <SvgLineChart data={data} yKey="vacancyRate" color={color} yFmt={v => `${v.toFixed(1)}%`} />
         </ChartCard>
-
         <ChartCard id={`${idPrefix}-rent`} title="Asking Rent NNN ($/SF)">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 4, right: 8, left: -10, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} domain={['auto', 'auto']} tickFormatter={(v: number) => `$${v}`} />
-              <Tooltip formatter={(v: number) => [`$${v.toFixed(2)}/sf`, 'Asking Rent']} contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-              <Line type="monotone" dataKey="askingRent" stroke={color} strokeWidth={2} dot={{ r: 3, fill: color }} activeDot={{ r: 5 }} />
-            </LineChart>
-          </ResponsiveContainer>
+          <SvgLineChart data={data} yKey="askingRent" color={color} yFmt={v => `$${v.toFixed(0)}`} />
         </ChartCard>
-
         <ChartCard id={`${idPrefix}-absorption`} title="Net Absorption (k SF)">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <Tooltip formatter={(v: number) => [`${v}k sf`, 'Net Absorption']} contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="netAbsorption" fill={color} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <SvgBarChart data={data} yKey="netAbsorption" color={color} yFmt={v => `${Math.round(v)}`} />
         </ChartCard>
-
         <ChartCard id={`${idPrefix}-pipeline`} title="Under Construction (k SF)">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-              <XAxis dataKey="period" tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} />
-              <Tooltip formatter={(v: number) => [`${v}k sf`, 'Under Construction']} contentStyle={{ fontSize: 11, borderRadius: 6, border: '1px solid #e5e7eb' }} />
-              <Bar dataKey="underConstruction" fill={color} radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <SvgBarChart data={data} yKey="underConstruction" color={color} yFmt={v => `${Math.round(v)}`} />
         </ChartCard>
       </div>
     </div>
   )
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
 export default function MarketResearchView() {
   return (
     <div style={{ padding: '24px 28px', overflowY: 'auto', height: '100%' }}>
@@ -196,7 +247,6 @@ export default function MarketResearchView() {
         color="#A6C3C9"
         idPrefix="permian"
       />
-
       <MarketSection
         title="Brevard County"
         subtitle="Palm Bay–Melbourne–Titusville industrial submarket · Space Coast, FL"
