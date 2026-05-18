@@ -17,11 +17,11 @@ export async function runSaleCompsPull(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 3000,
-    system: `You are a CRE transaction analyst for ERP Industrials. Extract and present comparable sale transactions for OM comparable transaction sections.
+    system: [{ type: "text" as const, text: `You are a CRE transaction analyst for ERP Industrials. Extract and present comparable sale transactions for OM comparable transaction sections.
 
 Present comps in a structured format. For each comp include: property description, market/submarket, sale date, size (SF or acres), sale price, price per SF or price per acre, cap rate (if available), buyer type, and source.
 
-Be factual. Only include transactions you can cite. Note when data is estimated or extrapolated from partial information.`,
+Be factual. Only include transactions you can cite. Note when data is estimated or extrapolated from partial information.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

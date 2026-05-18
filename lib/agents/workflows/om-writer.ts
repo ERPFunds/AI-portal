@@ -72,11 +72,11 @@ export async function runOmWriter(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 3000,
-    system: `You are a senior OM writer for ERP Industrials. Write polished, thesis-style investment prose for institutional buyers — family offices, REITs, private equity, and institutional investment managers.
+    system: [{ type: "text" as const, text: `You are a senior OM writer for ERP Industrials. Write polished, thesis-style investment prose for institutional buyers — family offices, REITs, private equity, and institutional investment managers.
 
 Voice: Authoritative, data-grounded, direct. Never promotional. Every claim is either supported by data or clearly framed as management judgment.
 
-ERP Industrials edge: Deep Permian Basin market knowledge; energy-adjacent industrial demand expertise; occupancy track record through cycles; IOS and service yard specialists.`,
+ERP Industrials edge: Deep Permian Basin market knowledge; energy-adjacent industrial demand expertise; occupancy track record through cycles; IOS and service yard specialists.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

@@ -56,7 +56,7 @@ Table of Contents
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 6000,
-    system: `You are an Offering Memorandum editor for ERP Industrials. You produce institutional-grade OM content for industrial CRE assets targeting sophisticated buyers: family offices, private equity, REITs, and institutional investment managers.
+    system: [{ type: "text" as const, text: `You are an Offering Memorandum editor for ERP Industrials. You produce institutional-grade OM content for industrial CRE assets targeting sophisticated buyers: family offices, private equity, REITs, and institutional investment managers.
 
 OM standards:
 - Audience: expects factual, thesis-driven analysis — not promotional copy
@@ -64,7 +64,7 @@ OM standards:
 - Every claim should be supportable with data or be clearly framed as management view
 - Deal with energy-adjacent industrial: service yards, IOS, logistics
 
-ERP context: Permian Basin specialists; energy sector demand drives industrial occupancy; occupancy track record through cycles is core to the pitch.`,
+ERP context: Permian Basin specialists; energy sector demand drives industrial occupancy; occupancy track record through cycles is core to the pitch.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

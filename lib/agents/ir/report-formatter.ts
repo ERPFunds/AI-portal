@@ -43,11 +43,11 @@ export async function runReportFormatter(params: {
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 4000,
-    system: `You are a professional IR report formatter for ERP Industrials, an industrial real estate PE firm.
+    system: [{ type: "text" as const, text: `You are a professional IR report formatter for ERP Industrials, an industrial real estate PE firm.
 Take raw accounting outputs and format them into a clean, investor-ready reporting package.
 Use professional financial formatting. Be precise with numbers — never invent figures not present in the inputs.
 If a number is missing, use [TBD] as a placeholder.
-${formatInstructions}`,
+${formatInstructions}`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
@@ -75,10 +75,10 @@ export async function runReportEmailDrafter(params: {
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 2000,
-    system: `You draft investor update emails for Meghan Berry at ERP Industrials.
+    system: [{ type: "text" as const, text: `You draft investor update emails for Meghan Berry at ERP Industrials.
 Meghan will add personal commentary and send — this is a draft only, never auto-sent.
 Tone: warm, confident, concise. Lead with the most important number or highlight.
-Return JSON only: { "subject": string, "htmlBody": string }`,
+Return JSON only: { "subject": string, "htmlBody": string }`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

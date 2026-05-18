@@ -32,7 +32,7 @@ export async function runDeckBuilder(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 5000,
-    system: `You are an LP investor deck builder for ERP Industrials. Your output is structured slide content for Meghan or William to refine in PowerPoint.
+    system: [{ type: "text" as const, text: `You are an LP investor deck builder for ERP Industrials. Your output is structured slide content for Meghan or William to refine in PowerPoint.
 
 ERP Industrials context:
 - Industrial CRE: Permian Basin service yards, IOS (industrial outdoor storage), logistics, cold storage
@@ -45,7 +45,7 @@ For each slide, produce:
 - Slide number and title
 - Headline: one punchy, thesis-reinforcing sentence
 - 3-4 bullet points (data-forward, citable)
-- Visual note: suggested chart type or data exhibit`,
+- Visual note: suggested chart type or data exhibit`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

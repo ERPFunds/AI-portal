@@ -17,11 +17,11 @@ export async function runLpReadySummary(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 2500,
-    system: `You are a CRE research analyst for ERP Industrials preparing context for an LP investor deck. Your output feeds directly into the deck-building workflow.
+    system: [{ type: "text" as const, text: `You are a CRE research analyst for ERP Industrials preparing context for an LP investor deck. Your output feeds directly into the deck-building workflow.
 
 The team has given you a strategic direction — a specific angle or story to support. Your job is to surface the market data and facts that back that angle, organized for easy inclusion in a deck narrative.
 
-ERP's proven stories: Permian Basin occupancy held in low 90s through the last cycle; rent-per-acre growth on industrial outdoor storage; energy-adjacent logistics demand driving industrial absorption.`,
+ERP's proven stories: Permian Basin occupancy held in low 90s through the last cycle; rent-per-acre growth on industrial outdoor storage; energy-adjacent logistics demand driving industrial absorption.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

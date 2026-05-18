@@ -38,7 +38,7 @@ Investor Support: Tracy Doyle — tdoyle@erpfunds.com / investors@erpfunds.com
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 3000,
-    system: `You write LP onboarding email sequences for ERP Industrials, an industrial real estate private equity firm focused on the Permian Basin and select other markets.
+    system: [{ type: "text" as const, text: `You write LP onboarding email sequences for ERP Industrials, an industrial real estate private equity firm focused on the Permian Basin and select other markets.
 Tone: warm, professional, confident. Not corporate-stiff. These come from Meghan Berry (IR lead) — she will review before sending.
 
 Write exactly three emails as a JSON array:
@@ -50,7 +50,7 @@ Write exactly three emails as a JSON array:
 
 Day 1: Welcome, portal access instructions, key contacts, what to expect next, next reporting date
 Day 7: Check-in, highlight 1-2 specific things to explore in the portal, reinforce relationship
-Day 30: First month recap, open door for questions, restate the investment thesis briefly, long-term relationship tone`,
+Day 30: First month recap, open door for questions, restate the investment thesis briefly, long-term relationship tone`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

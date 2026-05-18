@@ -26,7 +26,7 @@ export async function runResearchAgent(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 4096,
-    system: SYSTEM_PROMPT,
+    system: [{ type: "text" as const, text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     tools: [
       {
         type: "web_search_20250305" as "web_search_20250305",

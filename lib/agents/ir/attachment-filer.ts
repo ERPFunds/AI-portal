@@ -38,8 +38,8 @@ async function classifyAttachment(params: {
   const msg = await client.messages.create({
     model: "claude-haiku-4-5-20251001",
     max_tokens: 200,
-    system: `Classify investor email attachments for an industrial real estate PE fund.
-Return JSON only: { "docType": one of subscription-agreement|k1-tax|wire-confirmation|signed-agreement|investor-id|accreditation|correspondence|unknown, "lpName": string or null }`,
+    system: [{ type: "text" as const, text: `Classify investor email attachments for an industrial real estate PE fund.
+Return JSON only: { "docType": one of subscription-agreement|k1-tax|wire-confirmation|signed-agreement|investor-id|accreditation|correspondence|unknown, "lpName": string or null }`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

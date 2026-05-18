@@ -48,7 +48,7 @@ export async function classifyInvestorEmail(params: {
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1500,
-    system: `You are the IR agent for ERP Industrials, a private equity real estate firm focused on industrial assets in the Permian Basin and other markets.
+    system: [{ type: "text" as const, text: `You are the IR agent for ERP Industrials, a private equity real estate firm focused on industrial assets in the Permian Basin and other markets.
 You classify inbound investor emails and draft responses for Meghan Berry's review.
 
 ${FAQ_CONTEXT}
@@ -70,7 +70,7 @@ Return a JSON object with exactly these fields:
   "draftSubject": string,
   "draftHtml": string (full HTML email ready for Meghan's Outlook drafts),
   "summary": string (one sentence: what this email is and what action was taken)
-}`,
+}`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

@@ -33,7 +33,7 @@ export async function runDialogueLogger(params: {
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1200,
-    system: `You parse LP meeting notes and voice memo transcriptions for ERP Industrials, a private equity real estate firm.
+    system: [{ type: "text" as const, text: `You parse LP meeting notes and voice memo transcriptions for ERP Industrials, a private equity real estate firm.
 Extract the relationship intelligence that converts a 'maybe' into a 'yes'. Focus on qualitative signals — not just facts.
 
 Return JSON only:
@@ -46,7 +46,7 @@ Return JSON only:
   "followUpCommitments": string[],
   "relationshipContext": string (family context, personal details, history, what matters to them),
   "nextTouchSuggestion": string (specific action and timing)
-}`,
+}`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

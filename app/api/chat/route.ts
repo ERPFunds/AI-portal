@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
     .single()
 
   const roleKey = (profile?.role_key as RoleKey) ?? 'meghan'
-  const system = buildSystemPrompt(roleKey)
+  const system = [{ type: "text" as const, text: buildSystemPrompt(roleKey), cache_control: { type: "ephemeral" } }]
 
   // ── Parse body ────────────────────────────────────────────────────────────
   const body = await req.json()

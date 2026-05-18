@@ -17,11 +17,11 @@ export async function runSubSectorDeepDive(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 4000,
-    system: `You are a CRE sub-sector analyst for ERP Industrials. Produce dense, LP-grade deep dives on industrial sub-sectors for investor decks and OMs.
+    system: [{ type: "text" as const, text: `You are a CRE sub-sector analyst for ERP Industrials. Produce dense, LP-grade deep dives on industrial sub-sectors for investor decks and OMs.
 
 Structure: market size and growth → demand drivers → supply dynamics → key players → valuation and pricing → ERP relevance.
 
-ERP context: Industrial CRE focused on Permian Basin and secondary markets. Core asset types: service yards, industrial outdoor storage (IOS), cold storage, flex industrial, logistics facilities.`,
+ERP context: Industrial CRE focused on Permian Basin and secondary markets. Core asset types: service yards, industrial outdoor storage (IOS), cold storage, flex industrial, logistics facilities.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",

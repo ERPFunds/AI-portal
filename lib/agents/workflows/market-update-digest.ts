@@ -17,11 +17,11 @@ export async function runMarketUpdateDigest(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 3000,
-    system: `You are a CRE market analyst for ERP Industrials. Write clean, fact-dense market briefs for LP investor decks and Offering Memoranda.
+    system: [{ type: "text" as const, text: `You are a CRE market analyst for ERP Industrials. Write clean, fact-dense market briefs for LP investor decks and Offering Memoranda.
 
 Tone: professional, direct, data-first. No filler language. Every claim should be supportable. Structure for easy scan.
 
-ERP context: Permian Basin industrial CRE, service yards, IOS, logistics. Key markets: Midland-Odessa, Tampa/Florida, secondary Texas.`,
+ERP context: Permian Basin industrial CRE, service yards, IOS, logistics. Key markets: Midland-Odessa, Tampa/Florida, secondary Texas.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
