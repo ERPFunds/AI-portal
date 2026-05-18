@@ -59,6 +59,7 @@ export async function runOmWriter(params: {
   section?: OmSection;
   researchFindings?: string;
   attachmentContent?: string;
+  fileId?: string;
 }): Promise<OmWriterOutput> {
   const section = params.section ?? detectSection(params.ask);
 
@@ -69,6 +70,20 @@ export async function runOmWriter(params: {
     .filter(Boolean)
     .join("\n\n---\n\n");
 
+  const promptText = `${SECTION_PROMPTS[section]}
+
+Project: ${params.projectContext}
+Additional direction from team: ${params.ask}
+
+${contextData || "Draw on general ERP Industrials market knowledge. Flag specific data gaps with [DATA NEEDED: description of what's missing]."}`;
+
+  const userContent: Anthropic.MessageParam["content"] = params.fileId
+    ? [
+        { type: "document", source: { type: "file", file_id: params.fileId } } as any,
+        { type: "text", text: promptText },
+      ]
+    : promptText;
+
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 3000,
@@ -77,17 +92,7 @@ export async function runOmWriter(params: {
 Voice: Authoritative, data-grounded, direct. Never promotional. Every claim is either supported by data or clearly framed as management judgment.
 
 ERP Industrials edge: Deep Permian Basin market knowledge; energy-adjacent industrial demand expertise; occupancy track record through cycles; IOS and service yard specialists.`, cache_control: { type: "ephemeral" } }],
-    messages: [
-      {
-        role: "user",
-        content: `${SECTION_PROMPTS[section]}
-
-Project: ${params.projectContext}
-Additional direction from team: ${params.ask}
-
-${contextData || "Draw on general ERP Industrials market knowledge. Flag specific data gaps with [DATA NEEDED: description of what's missing]."}`,
-      },
-    ],
+    messages: [{ role: "user", content: userContent }],
   });
 
   const prose = response.content[0].type === "text" ? response.content[0].text : "";

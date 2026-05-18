@@ -16,6 +16,7 @@ export async function runOmEditor(params: {
   researchFindings?: string;
   dealData?: string;
   attachmentContent?: string;
+  fileId?: string;
   mode: OmMode;
 }): Promise<OmEditorOutput> {
   const contextData = [
@@ -53,6 +54,21 @@ Table of Contents
 10. Appendix (aerials, site plans, financials)`
       : "";
 
+  const promptText = `${modeInstructions[params.mode]}
+
+Request: ${params.ask}
+Project: ${params.projectContext}
+${fullOmStructure}
+
+${contextData || "No internal data attached. Use placeholder markers [INSERT: data needed] throughout for property-specific figures."}`;
+
+  const userContent: Anthropic.MessageParam["content"] = params.fileId
+    ? [
+        { type: "document", source: { type: "file", file_id: params.fileId } } as any,
+        { type: "text", text: promptText },
+      ]
+    : promptText;
+
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 6000,
@@ -65,18 +81,7 @@ OM standards:
 - Deal with energy-adjacent industrial: service yards, IOS, logistics
 
 ERP context: Permian Basin specialists; energy sector demand drives industrial occupancy; occupancy track record through cycles is core to the pitch.`, cache_control: { type: "ephemeral" } }],
-    messages: [
-      {
-        role: "user",
-        content: `${modeInstructions[params.mode]}
-
-Request: ${params.ask}
-Project: ${params.projectContext}
-${fullOmStructure}
-
-${contextData || "No internal data attached. Use placeholder markers [INSERT: data needed] throughout for property-specific figures."}`,
-      },
-    ],
+    messages: [{ role: "user", content: userContent }],
   });
 
   const omContent = response.content[0].type === "text" ? response.content[0].text : "";

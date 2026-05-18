@@ -2665,6 +2665,133 @@ function MarketDataCard({ mds }: { mds: MarketDataSource }) {
   )
 }
 
+// ─── Uploaded Files (Anthropic Files API) ────────────────────────────────────
+
+interface UploadedFileRecord {
+  file_id: string
+  filename: string
+  size_bytes: number | null
+  mime_type: string | null
+  project_tag: string | null
+  uploaded_by: string | null
+  expires_at: string | null
+  created_at: string
+}
+
+function fmtBytes(n: number | null) {
+  if (!n) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function UploadedFilesCard() {
+  const [files, setFiles] = useState<UploadedFileRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [tag, setTag] = useState('')
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const fetchFiles = async () => {
+    try {
+      const res = await fetch('/api/files/list')
+      const data = await res.json()
+      setFiles(data.files ?? [])
+    } catch { setFiles([]) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchFiles() }, [])
+
+  const handleUpload = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    setUploading(true)
+    for (const file of Array.from(fileList)) {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (tag) fd.append('projectTag', tag)
+      await fetch('/api/files/upload', { method: 'POST', body: fd })
+    }
+    await fetchFiles()
+    setUploading(false)
+  }
+
+  const handleDelete = async (fileId: string) => {
+    await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
+    setFiles(f => f.filter(x => x.file_id !== fileId))
+  }
+
+  const copyId = (fileId: string) => {
+    navigator.clipboard.writeText(fileId)
+    setCopied(fileId)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  return (
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+          📂
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Deal Documents</div>
+        </div>
+        <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
+          {files.length} file{files.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+        Upload rent rolls, T12s, OMs, or deal PDFs once — reference across OM Writer, Sale Comps, and Deck Builder without re-attaching each time.
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input
+          placeholder="Project tag (e.g. Tampa OM)"
+          value={tag}
+          onChange={e => setTag(e.target.value)}
+          style={{ flex: 1, fontSize: 11, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', background: '#fff', color: '#111827' }}
+        />
+        <label style={{ cursor: 'pointer', fontSize: 11, padding: '5px 10px', background: '#0e7490', color: '#fff', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: uploading ? 0.6 : 1 }}>
+          {uploading ? 'Uploading…' : '+ Upload'}
+          <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={e => handleUpload(e.target.files)} disabled={uploading} />
+        </label>
+      </div>
+
+      {loading ? (
+        <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>Loading…</div>
+      ) : files.length === 0 ? (
+        <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>No files uploaded yet</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {files.map(f => (
+            <div key={f.file_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+              <span style={{ fontSize: 13, flexShrink: 0 }}>📄</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</div>
+                <div style={{ fontSize: 10, color: '#9ca3af' }}>
+                  {fmtBytes(f.size_bytes)}{f.project_tag ? ` · ${f.project_tag}` : ''}
+                </div>
+              </div>
+              <button
+                onClick={() => copyId(f.file_id)}
+                title="Copy file_id for agent use"
+                style={{ fontSize: 10, color: copied === f.file_id ? '#16a34a' : '#0e7490', background: 'none', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}
+              >
+                {copied === f.file_id ? 'Copied!' : 'Copy ID'}
+              </button>
+              <button
+                onClick={() => handleDelete(f.file_id)}
+                title="Delete file"
+                style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', flexShrink: 0 }}
+              >✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
 
 const SOP_CATEGORIES = [
@@ -2704,6 +2831,7 @@ function SOPsView() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <NewsletterPromptLibrary />
+        <UploadedFilesCard />
         {MARKET_DATA_SOURCES.map((mds) => <MarketDataCard key={mds.market} mds={mds} />)}
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []

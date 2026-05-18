@@ -176,6 +176,57 @@ export async function getDialogueLog(limit = 50) {
   return rows;
 }
 
+// ── uploaded_files — Anthropic Files API tracking ────────────────────────────
+
+export interface UploadedFile {
+  id: string;
+  file_id: string;
+  filename: string;
+  size_bytes: number | null;
+  mime_type: string | null;
+  project_tag: string | null;
+  uploaded_by: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export async function saveUploadedFile(params: {
+  fileId: string;
+  filename: string;
+  sizeBytes?: number;
+  mimeType?: string;
+  projectTag?: string;
+  uploadedBy?: string;
+  expiresAt?: string;
+}) {
+  await sql`
+    INSERT INTO uploaded_files (file_id, filename, size_bytes, mime_type, project_tag, uploaded_by, expires_at)
+    VALUES (
+      ${params.fileId},
+      ${params.filename},
+      ${params.sizeBytes ?? null},
+      ${params.mimeType ?? null},
+      ${params.projectTag ?? null},
+      ${params.uploadedBy ?? null},
+      ${params.expiresAt ?? null}
+    )
+    ON CONFLICT (file_id) DO NOTHING
+  `;
+}
+
+export async function listUploadedFiles(): Promise<UploadedFile[]> {
+  const { rows } = await sql`
+    SELECT id, file_id, filename, size_bytes, mime_type, project_tag, uploaded_by, expires_at, created_at
+    FROM uploaded_files
+    ORDER BY created_at DESC
+  `;
+  return rows as UploadedFile[];
+}
+
+export async function deleteUploadedFileRecord(fileId: string) {
+  await sql`DELETE FROM uploaded_files WHERE file_id = ${fileId}`;
+}
+
 // ── agent_runs — unified run log for all agents ───────────────────────────────
 
 export async function logAgentRun(params: {
