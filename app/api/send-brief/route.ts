@@ -13,7 +13,9 @@ interface SendBriefPayload {
   reportType: ReportType;
 }
 
-const RECIPIENTS = ["mberry@erpfunds.com", "wmeyer@erpfunds.com"];
+const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT
+  ? [process.env.OVERRIDE_EMAIL_RECIPIENT]
+  : ["mberry@erpfunds.com", "wmeyer@erpfunds.com"];
 const SENDER_MAILBOX = "mberry@erpfunds.com";
 
 function isAuthorized(req: NextRequest): boolean {
@@ -166,5 +168,6 @@ export async function POST(req: NextRequest) {
     subject,
     summary,
     recipients: RECIPIENTS,
+    testMode: !!process.env.OVERRIDE_EMAIL_RECIPIENT,
   });
 }
