@@ -3258,6 +3258,11 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
 function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<'overview' | 'prompt' | 'output' | 'sources'>('overview')
+  const [previewState, setPreviewState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [previewHtml, setPreviewHtml] = useState('')
+  const [previewSubject, setPreviewSubject] = useState('')
+  const [previewError, setPreviewError] = useState('')
+  const [showPreview, setShowPreview] = useState(false)
 
   const freqColor: Record<string, string> = { Weekly: '#0e7490', Monthly: '#7c3aed' }
   const marketColor: Record<string, string> = { permian: '#d97706', brevard: '#0891b2' }
@@ -3265,7 +3270,73 @@ function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
   const labelStyle: React.CSSProperties = { fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.8px', color: '#9ca3af', display: 'block', marginBottom: 4 }
   const preStyle: React.CSSProperties = { margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 11, lineHeight: 1.65, color: '#374151', background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: 6, padding: '10px 12px' }
 
+  async function handlePreview(e: React.MouseEvent) {
+    e.stopPropagation()
+    // normalize reportType: prompts.ts uses 'weekly-market-update', API expects 'weekly-update'
+    const apiReportType = p.reportType === 'weekly-market-update' ? 'weekly-update' : p.reportType
+    setPreviewState('loading')
+    setShowPreview(true)
+    try {
+      const res = await fetch('/api/preview-brief', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ market: p.market, reportType: apiReportType }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setPreviewError(data.message || data.error || 'Unknown error')
+        setPreviewState('error')
+      } else {
+        setPreviewSubject(data.subject)
+        setPreviewHtml(data.htmlBody)
+        setPreviewState('done')
+      }
+    } catch (err: any) {
+      setPreviewError(String(err))
+      setPreviewState('error')
+    }
+  }
+
   return (
+    <>
+      {/* Preview modal */}
+      {showPreview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '40px 20px', overflowY: 'auto' }}>
+          <div style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 780, boxShadow: '0 20px 60px rgba(0,0,0,.25)', display: 'flex', flexDirection: 'column' }}>
+            {/* Modal header */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid #e5e7eb' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Email Preview — {p.name}</div>
+                {previewSubject && <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>Subject: {previewSubject}</div>}
+              </div>
+              <button onClick={() => setShowPreview(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, color: '#9ca3af', padding: 4 }}>✕</button>
+            </div>
+            {/* Modal body */}
+            <div style={{ padding: '20px', minHeight: 200 }}>
+              {previewState === 'loading' && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '40px 0', color: '#6b7280' }}>
+                  <div style={{ width: 32, height: 32, border: '3px solid #e5e7eb', borderTopColor: '#0e7490', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                  <div style={{ fontSize: 12 }}>Generating {p.name}… this takes 1–2 minutes</div>
+                </div>
+              )}
+              {previewState === 'error' && (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '14px 16px', fontSize: 12, color: '#991b1b' }}>
+                  <strong>Error:</strong> {previewError}
+                </div>
+              )}
+              {previewState === 'done' && (
+                <iframe
+                  srcDoc={previewHtml}
+                  style={{ width: '100%', height: 560, border: '1px solid #e5e7eb', borderRadius: 8 }}
+                  title="Email preview"
+                  sandbox="allow-same-origin"
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', background: '#fff' }}>
       {/* Header row */}
       <div
@@ -3279,6 +3350,12 @@ function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
         </div>
         <span className={`badge ${p.frequency === 'Weekly' ? 'badge-teal' : 'badge-purple'}`} style={{ fontSize: 9 }}>{p.frequency}</span>
         <span className={`badge ${p.market === 'permian' ? 'badge-gold' : 'badge-blue'}`} style={{ fontSize: 9 }}>{p.market === 'permian' ? 'Permian' : 'Brevard'}</span>
+        <button
+          onClick={handlePreview}
+          style={{ fontSize: 10, fontWeight: 600, color: '#0e7490', background: '#f0fdfa', border: '1px solid #99f6e4', borderRadius: 5, padding: '3px 10px', cursor: 'pointer', flexShrink: 0 }}
+        >
+          Preview
+        </button>
         <span style={{ fontSize: 12, color: '#9ca3af', transform: open ? 'rotate(180deg)' : undefined, transition: 'transform .15s' }}>▼</span>
       </div>
 
@@ -3350,6 +3427,7 @@ function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
         </div>
       )}
     </div>
+    </>
   )
 }
 

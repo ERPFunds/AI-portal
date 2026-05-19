@@ -13,6 +13,7 @@ type ReportType = "weekly-update" | "submarket-intelligence" | "competitor-intel
 interface SendBriefPayload {
   market: Market;
   reportType: ReportType;
+  dryRun?: boolean; // if true, generate the report but skip email send — returns htmlBody for preview
 }
 
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT
@@ -91,7 +92,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const { market, reportType } = payload;
+  const { market, reportType, dryRun = false } = payload;
 
   if (!market || !["permian", "brevard"].includes(market)) {
     return NextResponse.json(
@@ -147,6 +148,20 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // dryRun: skip email, return full HTML for preview
+  if (dryRun) {
+    logAgentRun({ agentId: "lp-intel", workflowId, status: "success", summary, market, durationMs: Date.now() - startMs }).catch(() => {});
+    return NextResponse.json({
+      success: true,
+      dryRun: true,
+      market,
+      reportType,
+      subject,
+      summary,
+      htmlBody,
+    });
+  }
+
   const emailResult = await sendEmailViaGraph({
     subject,
     htmlBody,
@@ -157,7 +172,7 @@ export async function POST(req: NextRequest) {
   if (!emailResult.success) {
     logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: emailResult.message }).catch(() => {});
     return NextResponse.json(
-      { error: "email-send-failed", message: emailResult.message },
+      { error: "email-send-failed", message: emailResult.message, subject, summary, htmlBody },
       { status: 500 }
     );
   }
