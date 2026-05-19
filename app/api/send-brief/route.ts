@@ -5,6 +5,8 @@ import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-upda
 import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intelligence";
 import { logAgentRun } from "@/lib/db";
 
+export const maxDuration = 300;
+
 type Market = "permian" | "brevard";
 type ReportType = "weekly-update" | "submarket-intelligence" | "competitor-intelligence";
 
