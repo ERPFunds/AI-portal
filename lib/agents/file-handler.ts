@@ -6,11 +6,13 @@ export interface FileHandlerResult {
 }
 
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { buildDocx } from "@/lib/agents/docx-builder";
 
 export async function saveToOneDrive(params: {
   content: string;
   filename: string;
   folder: string; // e.g. "/Decks/Q2 LP Deck" or "/OMs/Tampa Property"
+  title?: string;  // used as the Word doc title heading
   contentType?: string;
 }): Promise<FileHandlerResult> {
   let token: string | null;
@@ -35,9 +37,6 @@ export async function saveToOneDrive(params: {
   }
 
   try {
-    const userEmail = process.env.SMTP_USER;
-    if (!userEmail) throw new Error("SMTP_USER not set — needed for OneDrive user path");
-
     // Ensure folder path starts with /
     const folderPath = params.folder.startsWith("/") ? params.folder : `/${params.folder}`;
     const fullPath = `${folderPath}/${params.filename}`;
@@ -49,10 +48,27 @@ export async function saveToOneDrive(params: {
       .map((seg) => encodeURIComponent(seg))
       .join("/");
 
-    const uploadUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/drive/root:/${encodedPath}:/content`;
+    // Build upload URL: SharePoint site drive if configured, else personal OneDrive
+    const siteId = process.env.SHAREPOINT_SITE_ID;
+    let uploadUrl: string;
+    if (siteId) {
+      uploadUrl = `https://graph.microsoft.com/v1.0/sites/${encodeURIComponent(siteId)}/drive/root:/${encodedPath}:/content`;
+    } else {
+      const userEmail = process.env.SMTP_USER;
+      if (!userEmail) throw new Error("Either SHAREPOINT_SITE_ID or SMTP_USER must be set");
+      uploadUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/drive/root:/${encodedPath}:/content`;
+    }
 
-    const bodyBuffer = Buffer.from(params.content, "utf-8");
-    const contentType = params.contentType ?? "text/plain; charset=utf-8";
+    // Build body: Word doc for .docx files, plain text otherwise
+    let bodyBuffer: Buffer;
+    let contentType: string;
+    if (params.filename.endsWith(".docx")) {
+      bodyBuffer = await buildDocx({ title: params.title ?? params.filename, content: params.content });
+      contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    } else {
+      bodyBuffer = Buffer.from(params.content, "utf-8");
+      contentType = params.contentType ?? "text/plain; charset=utf-8";
+    }
 
     const res = await fetch(uploadUrl, {
       method: "PUT",
@@ -112,5 +128,5 @@ export function buildFilename(params: {
     .replace(/\s+/g, "-")
     .slice(0, 40);
   const date = new Date().toISOString().split("T")[0];
-  return `${slug}-${params.workflowId}-${date}.txt`;
+  return `${slug}-${params.workflowId}-${date}.docx`;
 }
