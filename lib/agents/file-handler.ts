@@ -77,7 +77,7 @@ export async function saveToOneDrive(params: {
         "Content-Type": contentType,
         "Content-Length": String(bodyBuffer.length),
       },
-      body: bodyBuffer,
+      body: new Uint8Array(bodyBuffer),
     });
 
     if (!res.ok) {

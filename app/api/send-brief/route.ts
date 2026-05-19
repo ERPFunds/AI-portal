@@ -139,6 +139,7 @@ export async function POST(req: NextRequest) {
       summary = result.summary;
     }
   } catch (err) {
+    console.error(`[send-brief] workflow error — market=${market} reportType=${reportType}:`, err);
     logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: String(err) }).catch(() => {});
     return NextResponse.json(
       { error: "workflow-failed", message: String(err) },
