@@ -2975,6 +2975,9 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
     )
   )
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
+  const [revealedFields, setRevealedFields] = useState<Set<string>>(new Set())
+  const toggleReveal = (key: string) =>
+    setRevealedFields(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
 
   // Microsoft 365 multi-account state
   const [m365Accounts, setM365Accounts] = useState<M365Account[]>(DEFAULT_M365_ACCOUNTS)
@@ -3202,16 +3205,31 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                 <div style={{ borderTop: '1px solid #e5e7eb', marginTop: 10, paddingTop: 12, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {conn.fields.map((f) => {
                     const isSensitive = /secret|pass|token|key/i.test(f.key)
+                    const fieldId = `${conn.id}-${f.key}`
+                    const isRevealed = revealedFields.has(fieldId)
                     const hasValue = (state.values[f.key] ?? '').trim().length > 0
                     return (
                       <div key={f.key} className="field" style={{ margin: 0 }}>
                         <label>{f.label}</label>
-                        <input
-                          type={isSensitive ? 'password' : 'text'}
-                          placeholder={isSensitive && hasValue ? '••••••••••••••••' : f.placeholder}
-                          value={state.values[f.key] ?? ''}
-                          onChange={(e) => setField(conn.id, f.key, e.target.value)}
-                        />
+                        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                          <input
+                            type={isSensitive && !isRevealed ? 'password' : 'text'}
+                            placeholder={isSensitive && hasValue && !isRevealed ? '••••••••••••••••' : f.placeholder}
+                            value={state.values[f.key] ?? ''}
+                            onChange={(e) => setField(conn.id, f.key, e.target.value)}
+                            style={{ flex: 1, paddingRight: isSensitive ? 32 : undefined }}
+                          />
+                          {isSensitive && (
+                            <button
+                              type="button"
+                              onClick={() => toggleReveal(fieldId)}
+                              style={{ position: 'absolute', right: 8, background: 'none', border: 'none', cursor: 'pointer', padding: 2, color: '#9ca3af', fontSize: 14, lineHeight: 1 }}
+                              title={isRevealed ? 'Hide' : 'Show'}
+                            >
+                              {isRevealed ? '🙈' : '👁'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
