@@ -3,6 +3,7 @@ import { runResearchAgent } from "@/lib/agents/research";
 import { fetchFredMacro } from "@/lib/macro/fred";
 import { fetchEiaMacro } from "@/lib/macro/eia";
 import { fetchBlsMacro } from "@/lib/macro/bls";
+import { fetchCensusMacro } from "@/lib/macro/census";
 
 const anthropic = new Anthropic();
 
@@ -76,8 +77,8 @@ export async function runWeeklyMarketUpdate(params: {
 
   const ask = `Weekly market update for ${marketFullName}: recent industrial transactions, macro indicators (${macroIndicatorList}), supply/demand signals (vacancy rate, absorption, new deliveries), notable news or lease signings, period: ${params.period}`;
 
-  // Fetch FRED + EIA + BLS macro data and research all in parallel
-  const [research, fredRows, eiaRows, blsRows] = await Promise.all([
+  // Fetch all macro sources + research in parallel
+  const [research, fredRows, eiaRows, blsRows, censusRows] = await Promise.all([
     runResearchAgent({
       ask,
       projectContext: `${marketLabel} Weekly Market Update ${params.period}`,
@@ -87,15 +88,16 @@ export async function runWeeklyMarketUpdate(params: {
     fetchFredMacro(params.market),
     fetchEiaMacro(params.market),
     fetchBlsMacro(params.market),
+    fetchCensusMacro(params.market),
   ]);
 
-  // Merge: FRED → EIA → BLS, deduplicating by indicator label
-  // BLS is authoritative for employment; EIA for rig count/production; FRED for WTI
+  // Merge: FRED → EIA → BLS → Census, deduplicating by indicator label
   const seen = new Set<string>();
   const preFetchedRows = [
-    ...(fredRows ?? []),
-    ...(eiaRows ?? []),
-    ...(blsRows ?? []),
+    ...(fredRows   ?? []),
+    ...(eiaRows    ?? []),
+    ...(blsRows    ?? []),
+    ...(censusRows ?? []),
   ].filter(r => {
     if (seen.has(r.indicator)) return false;
     seen.add(r.indicator);
