@@ -119,7 +119,14 @@ Focus areas:
     max_tokens: 6000,
     system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds producing monthly submarket watch reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
-Be specific and data-dense. Use real named entities, dollar figures, SF counts, and percentages. Only include verified facts from the research. If data is unavailable for a field, use "DATA PENDING" — never fabricate figures.`, cache_control: { type: "ephemeral" } }],
+Be specific and data-dense. Use real named entities, dollar figures, SF counts, and percentages. Use the web_search tool aggressively to fill gaps — especially for §3 development activity and §4 tenant commitments. Search for recent CapEx announcements, new industrial projects, and operator activity BEFORE marking any field as DATA PENDING. Only use "DATA PENDING" if web search also returns nothing concrete. Do NOT recommend external reports — find the data yourself.`, cache_control: { type: "ephemeral" } }],
+    tools: [
+      {
+        type: "web_search_20250305" as "web_search_20250305",
+        name: "web_search",
+        max_uses: 5,
+      } as unknown as Anthropic.Tool,
+    ],
     messages: [
       {
         role: "user",
@@ -129,6 +136,11 @@ Research findings:
 ${research.findings}
 
 ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
+
+IMPORTANT: For any section where the research above lacks specific data (especially §3 dev activity and §4 tenant commitments), USE web_search NOW to find:
+- §3: "${isPermian ? "Permian Basin" : "Brevard County"} industrial development 2025" or "${isPermian ? "Midland TX" : "Melbourne FL"} warehouse construction 2025"
+- §4: "${isPermian ? "Diamondback Energy OR ConocoPhillips OR ExxonMobil Permian capex 2025" : "SpaceX OR L3Harris OR Northrop Grumman Brevard expansion 2025"}"
+- §5: "${isPermian ? "Permian pipeline infrastructure 2025" : "Port Canaveral expansion OR Brevard infrastructure 2025"}"
 
 ---
 Return ONLY valid JSON with this exact structure:
@@ -177,7 +189,9 @@ Rules:
     ],
   });
 
-  const rawText = response.content[0].type === "text" ? response.content[0].text : "{}";
+  // Find the last text block — tool_use blocks may appear before it
+  const textBlocks = response.content.filter((b) => b.type === "text");
+  const rawText = textBlocks.length > 0 ? (textBlocks[textBlocks.length - 1] as { type: "text"; text: string }).text : "{}";
   const cleanText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   let data: Record<string, unknown>;
   try {
