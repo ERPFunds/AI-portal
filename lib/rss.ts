@@ -12,16 +12,37 @@ const parser = new Parser();
 
 // Agent 1 — Permian Brief (weekly newsletter)
 const PERMIAN_BRIEF_FEEDS: { url: string; source: string }[] = [
-  { url: "https://www.oilandgas360.com/feed/",                              source: "Oil & Gas 360" },
+  // ── CRE broker wire services (carries CBRE, JLL, C&W, Newmark press releases) ─
+  { url: "https://www.prnewswire.com/rss/news-releases-list.rss",          source: "PR Newswire" },
+  { url: "https://www.businesswire.com/rss/home",                          source: "Business Wire" },
+  { url: "https://www.globenewswire.com/RssFeed/country/United+States",    source: "GlobeNewswire" },
+
+  // ── CRE nationals ──────────────────────────────────────────────────────────────
+  { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
+  { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
+  { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
+  { url: "https://connectcre.com/feed/",                                   source: "Connect CRE" },
+  { url: "https://therealdeal.com/feed/",                                  source: "The Real Deal" },
+  { url: "https://www.naiop.org/rss",                                      source: "NAIOP" },
+
+  // ── Texas CRE & business ───────────────────────────────────────────────────────
+  { url: "https://bisnow.com/rss/dallas",                                  source: "Bisnow Dallas" },
+  { url: "https://bisnow.com/rss/houston",                                 source: "Bisnow Houston" },
+  { url: "https://www.bizjournals.com/dallas/feed/latest-news",            source: "Dallas Business Journal" },
+  { url: "https://www.bizjournals.com/sanantonio/feed/latest-news",        source: "San Antonio Business Journal" },
+
+  // ── Permian / West Texas local ─────────────────────────────────────────────────
+  { url: "https://www.mrt.com/search/?f=rss&t=article&c=news",            source: "Midland Reporter-Telegram" },
+  { url: "https://www.texastribune.org/feeds/latest/",                     source: "Texas Tribune" },
+
+  // ── Oil & gas upstream (E&P activity = demand signal for industrial) ───────────
+  { url: "https://www.oilandgas360.com/feed/",                             source: "Oil & Gas 360" },
   { url: "https://www.worldoil.com/rss/news",                              source: "World Oil" },
   { url: "https://www.rigzone.com/rss/news.aspx",                          source: "Rigzone" },
   { url: "https://www.eia.gov/rss/todayinenergy.xml",                      source: "EIA Today in Energy" },
   { url: "https://oilprice.com/rss/main",                                  source: "OilPrice.com" },
-  { url: "https://bisnow.com/rss/houston",                                 source: "Bisnow Texas" },
-  { url: "https://connectcre.com/feed/",                                   source: "Connect CRE" },
-  { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
-  { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
-  { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
+  { url: "https://www.hartenergy.com/rss",                                 source: "Hart Energy" },
+  { url: "https://www.ogj.com/rss/all-ogj-news.rss",                      source: "Oil & Gas Journal" },
 ];
 
 // Agent 3 — Competitive Landscape Profile

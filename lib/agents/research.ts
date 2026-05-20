@@ -28,18 +28,18 @@ export async function runResearchAgent(params: {
 }): Promise<ResearchBundle> {
   // 1. Fetch RSS feeds + Google News in parallel
   const [rssArticles, googleArticles] = await Promise.all([
-    fetchFeedsForWorkflow(params.workflowId, params.market, 40),
-    fetchGoogleNews(params.workflowId, params.market ?? "", 20),
+    fetchFeedsForWorkflow(params.workflowId, params.market, 50),
+    fetchGoogleNews(params.workflowId, params.market ?? "", 30),
   ]);
 
-  // Merge: RSS first (curated), then Google News deduped by URL, newest-first, cap at 55
+  // Merge: RSS first (curated), then Google News deduped by URL, newest-first, cap at 65
   const seenLinks = new Set(rssArticles.map((a) => a.link));
   const articles: FeedItem[] = [
     ...rssArticles,
     ...googleArticles.filter((a) => !seenLinks.has(a.link)),
   ]
     .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
-    .slice(0, 55);
+    .slice(0, 65);
 
   // Build article context string
   const articleContext = articles.length > 0

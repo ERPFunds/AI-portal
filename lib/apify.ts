@@ -12,24 +12,40 @@ import type { FeedItem } from "@/lib/rss";
 const APIFY_BASE = "https://api.apify.com/v2";
 
 // Market + workflow-aware search queries
+// Permian queries explicitly target the broker sources shown in the mockup:
+//   CBRE, JLL, Cushman & Wakefield, Newmark, NAIOP Texas
 const QUERIES: Record<string, Record<string, string>> = {
   "weekly-market-update": {
-    permian: "Permian Basin industrial real estate OR Midland Odessa CRE OR West Texas industrial warehouse logistics",
-    brevard: "Space Coast industrial real estate OR Brevard County Florida CRE OR Melbourne Titusville industrial",
+    permian:
+      "(CBRE OR JLL OR \"Cushman Wakefield\" OR Newmark OR \"Marcus Millichap\" OR NAIOP OR Colliers) " +
+      "(Permian Basin OR Midland OR Odessa OR \"West Texas\") industrial market report 2026",
+    brevard:
+      "(CBRE OR JLL OR \"Cushman Wakefield\" OR Newmark OR NAIOP OR Colliers) " +
+      "(\"Space Coast\" OR Brevard OR Melbourne OR Titusville) industrial 2026",
   },
   "submarket-intelligence": {
-    permian: "Permian Basin industrial vacancy rents absorption West Texas CRE supply pipeline",
-    brevard: "Brevard County Florida industrial submarket rents vacancy absorption Space Coast",
+    permian:
+      "(CBRE OR JLL OR \"Cushman Wakefield\" OR CoStar OR Newmark) " +
+      "(Permian Basin OR Midland OR \"West Texas\") industrial vacancy rents absorption supply",
+    brevard:
+      "(CBRE OR JLL OR \"Cushman Wakefield\" OR CoStar) " +
+      "(\"Brevard County\" OR \"Space Coast\" OR Melbourne) industrial vacancy rents absorption",
   },
   "competitor-intelligence": {
-    permian: "industrial CRE fund acquisition Permian Basin IOS service yard outdoor storage REIT",
-    brevard: "industrial CRE fund Florida Space Coast logistics cold storage REIT acquisition",
+    permian:
+      "industrial CRE fund acquisition \"Permian Basin\" OR \"outdoor storage\" OR \"service yard\" OR IOS " +
+      "REIT OR \"private equity\" OR \"joint venture\" 2026",
+    brevard:
+      "industrial CRE fund acquisition \"Space Coast\" OR Brevard Florida " +
+      "logistics OR \"cold storage\" OR aerospace REIT 2026",
   },
 };
 
 const DEFAULT_QUERY: Record<string, string> = {
-  permian: "Permian Basin industrial real estate Midland Odessa",
-  brevard: "Space Coast Brevard County industrial real estate Florida",
+  permian:
+    "(CBRE OR JLL OR \"Cushman Wakefield\" OR Newmark OR NAIOP) Permian Basin industrial real estate Midland Odessa",
+  brevard:
+    "(CBRE OR JLL OR \"Cushman Wakefield\" OR Newmark) Space Coast Brevard County industrial real estate Florida",
 };
 
 function getQuery(workflowId: string, market: string): string {
