@@ -16,9 +16,10 @@ interface SendBriefPayload {
   dryRun?: boolean; // if true, generate the report but skip email send — returns htmlBody for preview
 }
 
+const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT
-  ? [process.env.OVERRIDE_EMAIL_RECIPIENT]
-  : ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
+  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT])]
+  : BASE_RECIPIENTS;
 const SENDER_MAILBOX = "mparad@erpfunds.com";
 
 function isAuthorized(req: NextRequest): boolean {
