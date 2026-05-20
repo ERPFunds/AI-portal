@@ -228,12 +228,23 @@ Rules:
     : "";
 
   // ── Article cards ─────────────────────────────────────────────────────────────
+  const hasUrl = (a: { url?: string }) => a.url && a.url !== "https://example.com/article" && a.url.startsWith("http");
+
   const articlesHtml = articles.map(a => {
-    const sourceLink = a.url && a.url !== "https://example.com/article"
-      ? `<a href="${a.url}" style="font-weight:700;color:#0f172a;text-decoration:none;">${a.source}</a>`
+    const url = hasUrl(a) ? a.url! : null;
+
+    // Source: always bold; linked + underlined when URL exists
+    const sourceEl = url
+      ? `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${a.source}</a>`
       : `<strong style="font-weight:700;color:#0f172a;">${a.source}</strong>`;
+
+    // Title: linked + underlined when URL exists, otherwise plain bold
+    const titleEl = url
+      ? `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${a.title}</a>`
+      : `<strong style="color:#0f172a;">${a.title}</strong>`;
+
     return `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
-  <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${sourceLink}<span style="color:#94a3b8;margin:0 5px;">&middot;</span><strong style="color:#0f172a;">${a.title}</strong><span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${a.date || ""}</span></p>
+  <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${sourceEl}<span style="color:#94a3b8;margin:0 5px;">&middot;</span>${titleEl}<span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${a.date || ""}</span></p>
   <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${a.body}</p>
 </div>`;
   }).join("\n");
