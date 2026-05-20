@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { runResearchAgent } from "@/lib/agents/research";
+import { fetchFredMacro } from "@/lib/macro/fred";
 
 const anthropic = new Anthropic();
 
@@ -73,12 +74,25 @@ export async function runWeeklyMarketUpdate(params: {
 
   const ask = `Weekly market update for ${marketFullName}: recent industrial transactions, macro indicators (${macroIndicatorList}), supply/demand signals (vacancy rate, absorption, new deliveries), notable news or lease signings, period: ${params.period}`;
 
-  const research = await runResearchAgent({
-    ask,
-    projectContext: `${marketLabel} Weekly Market Update ${params.period}`,
-    workflowId: "weekly-market-update",
-    market: params.market,
-  });
+  // Fetch FRED macro data and research in parallel
+  const [research, fredRows] = await Promise.all([
+    runResearchAgent({
+      ask,
+      projectContext: `${marketLabel} Weekly Market Update ${params.period}`,
+      workflowId: "weekly-market-update",
+      market: params.market,
+    }),
+    fetchFredMacro(params.market),
+  ]);
+
+  // Build FRED context string for the prompt
+  const fredContext = fredRows && fredRows.length > 0
+    ? `\n--- PRE-FETCHED MACRO DATA (use these exact values in macro_table) ---\n` +
+      fredRows.map(r =>
+        `${r.indicator}: latest=${r.latest}, WoW=${r.wow} (${r.wow_dir}), YoY=${r.yoy} (${r.yoy_dir})`
+      ).join("\n") +
+      `\n--- END MACRO DATA ---\n`
+    : "";
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
@@ -90,7 +104,7 @@ Tone: professional, data-first, punchy. Use real numbers from the research. LP n
       {
         role: "user",
         content: `Generate a weekly market brief for ${marketFullName}, period: ${params.period}.
-
+${fredContext}
 Research findings:
 ${research.findings}
 
@@ -129,7 +143,7 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text. Use this 
 }
 
 Rules:
-- macro_table: populate ${macroIndicatorList}. Direction fields: "up", "down", or "neutral". Use "—" if data unavailable.
+- macro_table: Start with any PRE-FETCHED MACRO DATA rows above (copy exact values). Then add remaining indicators from ${macroIndicatorList} using research findings or web search. Direction fields: "up", "down", or "neutral". Use "—" if truly unavailable — do NOT guess numbers.
 - articles: include ALL newsworthy items from the research (aim for 4-8). Use the source URL where you can match it from the source URLs list above.
 - narrative: synthesize the week for LP communication — what it means for ERP's thesis, what to watch.
 - source_names: list every publication used.`,
