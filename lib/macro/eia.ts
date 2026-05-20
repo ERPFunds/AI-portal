@@ -21,6 +21,7 @@ interface DprRecord {
   "rig-count"?: string;
   "drilled-wells"?: string;
   "completed-wells"?: string;
+  "DUC"?: string;
   "oil-production"?: string;
   "gas-production"?: string;
 }
@@ -73,7 +74,8 @@ async function fetchPermianDpr(apiKey: string): Promise<FredRow[]> {
       `&data[0]=rig-count` +
       `&data[1]=drilled-wells` +
       `&data[2]=completed-wells` +
-      `&data[3]=oil-production` +
+      `&data[3]=DUC` +
+      `&data[4]=oil-production` +
       `&sort[0][column]=period` +
       `&sort[0][direction]=desc` +
       `&length=14`;
@@ -123,6 +125,19 @@ async function fetchPermianDpr(apiKey: string): Promise<FredRow[]> {
         parseNum(prev?.["oil-production"] ?? undefined),
         parseNum(yago?.["oil-production"] ?? undefined),
         `${Math.round(oilCur).toLocaleString()} Mbbl/d`,
+        "integer"
+      ));
+    }
+
+    // DUC inventory count (actual drilled-but-uncompleted wells)
+    const ducCur = parseNum(cur["DUC"]);
+    if (ducCur !== null) {
+      rows.push(toRow(
+        "DUC inventory (Permian)",
+        ducCur,
+        parseNum(prev?.["DUC"] ?? undefined),
+        parseNum(yago?.["DUC"] ?? undefined),
+        Math.round(ducCur).toLocaleString(),
         "integer"
       ));
     }
