@@ -36,14 +36,30 @@ const COMPETITIVE_FEEDS: { url: string; source: string }[] = [
 
 // Brevard / Space Coast — industrial CRE + local economy
 const BREVARD_FEEDS: { url: string; source: string }[] = [
+  // ── CRE nationals ──────────────────────────────────────────────────────────
   { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
   { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
   { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
-  { url: "https://bisnow.com/rss/south-florida",                          source: "Bisnow South Florida" },
-  { url: "https://floridarealtors.org/news-media/news-articles/rss",      source: "Florida Realtors" },
-  { url: "https://www.bizjournals.com/orlando/feed/latest-news",          source: "Orlando Business Journal" },
-  { url: "https://www.spacecoastdaily.com/feed/",                         source: "Space Coast Daily" },
-  { url: "https://connectcre.com/feed/",                                  source: "Connect CRE" },
+  { url: "https://connectcre.com/feed/",                                   source: "Connect CRE" },
+
+  // ── Florida CRE & business ─────────────────────────────────────────────────
+  { url: "https://bisnow.com/rss/south-florida",                           source: "Bisnow South Florida" },
+  { url: "https://bisnow.com/rss/orlando",                                 source: "Bisnow Orlando" },
+  { url: "https://bisnow.com/rss/tampa",                                   source: "Bisnow Tampa" },
+  { url: "https://floridarealtors.org/news-media/news-articles/rss",       source: "Florida Realtors" },
+  { url: "https://www.bizjournals.com/orlando/feed/latest-news",           source: "Orlando Business Journal" },
+  { url: "https://www.bizjournals.com/southflorida/feed/latest-news",      source: "South Florida Business Journal" },
+  { url: "https://www.bizjournals.com/tampabay/feed/latest-news",          source: "Tampa Bay Business Journal" },
+
+  // ── Brevard / Space Coast local ────────────────────────────────────────────
+  { url: "https://www.spacecoastdaily.com/feed/",                          source: "Space Coast Daily" },
+  { url: "https://www.floridatoday.com/arcio/rss/",                        source: "Florida Today (Brevard)" },
+  { url: "https://brevardbusinessnews.com/feed/",                          source: "Brevard Business News" },
+
+  // ── Space industry — launch cadence & aerospace employment signal ──────────
+  { url: "https://spaceflightnow.com/feed/",                               source: "SpaceflightNow" },
+  { url: "https://spacenews.com/feed/",                                    source: "SpaceNews" },
+  { url: "https://www.nasaspaceflight.com/feed/",                          source: "NASASpaceflight.com" },
 ];
 
 // Submarket intelligence — CRE + macro combined
