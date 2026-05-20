@@ -70,7 +70,7 @@ async function fetchBPS(
 
   const url =
     `${CENSUS_BASE}/timeseries/bps` +
-    `?get=NAME,PERMIT,VALUNIT1` +
+    `?get=NAME,PERMIT` +
     `&for=county:${county}` +
     `&in=state:${state}` +
     `&time=from+${start}+to+${end}` +
@@ -81,7 +81,6 @@ async function fetchBPS(
 
   const headers = table[0];
   const iPermit = colIndex(headers, "PERMIT");
-  const iVal    = colIndex(headers, "VALUNIT1");
   const iTime   = colIndex(headers, "time");
 
   if (iPermit === -1 || iTime === -1) return [];
@@ -109,34 +108,6 @@ async function fetchBPS(
       yoy_dir: yoy?.dir  ?? "neutral",
       trend:   mom?.dir  ?? "neutral",
     });
-  }
-
-  // Permit value ($000s → $M)
-  if (iVal !== -1) {
-    const curVal  = parseNum(rows[0]?.[iVal]);
-    const prevVal = parseNum(rows[1]?.[iVal]);
-    const yagoVal = parseNum(rows[12]?.[iVal] ?? rows[rows.length - 1]?.[iVal]);
-
-    if (curVal !== null) {
-      const valM = curVal / 1000; // convert $000s to $M
-      const momV = prevVal !== null ? (() => {
-        const d = valM - prevVal / 1000;
-        return { text: `${d >= 0 ? "+" : ""}$${d.toFixed(1)}M`, dir: (d > 0 ? "up" : d < 0 ? "down" : "neutral") as "up" | "down" | "neutral" };
-      })() : null;
-      const yoyV = yagoVal !== null ? (() => {
-        const d = valM - yagoVal / 1000;
-        return { text: `${d >= 0 ? "+" : ""}$${d.toFixed(1)}M`, dir: (d > 0 ? "up" : d < 0 ? "down" : "neutral") as "up" | "down" | "neutral" };
-      })() : null;
-      results.push({
-        indicator: "Brevard permit value",
-        latest: `$${valM.toFixed(1)}M`,
-        wow:     momV?.text ?? "—",
-        wow_dir: momV?.dir  ?? "neutral",
-        yoy:     yoyV?.text ?? "—",
-        yoy_dir: yoyV?.dir  ?? "neutral",
-        trend:   momV?.dir  ?? "neutral",
-      });
-    }
   }
 
   return results;

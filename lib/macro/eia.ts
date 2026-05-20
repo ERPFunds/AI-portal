@@ -69,7 +69,7 @@ async function fetchPermianDpr(apiKey: string): Promise<FredRow[]> {
       `${EIA_BASE}/drilling-productivity-report/data/` +
       `?api_key=${encodeURIComponent(apiKey)}` +
       `&frequency=monthly` +
-      `&facets[region][]=permian` +
+      `&facets[region][]=Permian` +
       `&data[0]=rig-count` +
       `&data[1]=drilled-wells` +
       `&data[2]=completed-wells` +

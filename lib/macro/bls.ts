@@ -53,14 +53,15 @@ function fmtDelta(delta: number, suffix = "k"): { text: string; dir: "up" | "dow
   return { text: `${sign}${delta.toFixed(1)}${suffix}`, dir };
 }
 
+// NSA (not seasonally adjusted, data-type 06) — SA (01) is not published for small MSAs
 const PERMIAN_SERIES: { id: string; label: string }[] = [
-  { id: "SMU48332600500000001", label: "Midland MSA mining jobs" },
-  { id: "SMU48362200500000001", label: "Odessa MSA mining jobs"  },
+  { id: "SMU48332600500000006", label: "Midland MSA mining jobs" },
+  { id: "SMU48362200500000006", label: "Odessa MSA mining jobs"  },
 ];
 
 const BREVARD_SERIES: { id: string; label: string }[] = [
-  // Melbourne-Titusville-Palm Bay FL MSA (FIPS 27260), Aerospace & manufacturing adjacent
-  { id: "SMU12272600500000001", label: "Space Coast mining/mfg jobs" },
+  // Melbourne-Titusville-Palm Bay FL MSA (FIPS 27260)
+  { id: "SMU12272600500000006", label: "Space Coast mining/mfg jobs" },
 ];
 
 async function fetchBlsSeries(
