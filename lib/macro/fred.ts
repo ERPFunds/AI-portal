@@ -62,24 +62,8 @@ const PERMIAN_SERIES: SeriesDef[] = [
     wowOffset: 1,
     yoyOffset: 52,
   },
-  {
-    id: "SMU48332600500000001SA",
-    label: "Midland MSA mining jobs",
-    format: "number",
-    suffix: "k",
-    limit: 26,
-    wowOffset: 1,
-    yoyOffset: 12,
-  },
-  {
-    id: "SMU48362200500000001SA",
-    label: "Odessa MSA mining jobs",
-    format: "number",
-    suffix: "k",
-    limit: 26,
-    wowOffset: 1,
-    yoyOffset: 12,
-  },
+  // Employment data now sourced directly from BLS API (lib/macro/bls.ts)
+  // keeping this array lean — FRED handles price/financial series only
 ];
 
 const BREVARD_SERIES: SeriesDef[] = [
@@ -92,15 +76,7 @@ const BREVARD_SERIES: SeriesDef[] = [
     wowOffset: 1,
     yoyOffset: 12,
   },
-  {
-    id: "SMU12278700500000001SA",
-    label: "Space Coast mining/mfg jobs",
-    format: "number",
-    suffix: "k",
-    limit: 26,
-    wowOffset: 1,
-    yoyOffset: 12,
-  },
+  // Space Coast employment now sourced directly from BLS API (lib/macro/bls.ts)
 ];
 
 /** Parse FRED value string; returns null for missing (".") */
