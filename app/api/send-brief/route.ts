@@ -18,8 +18,8 @@ interface SendBriefPayload {
 
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT
   ? [process.env.OVERRIDE_EMAIL_RECIPIENT]
-  : ["mberry@erpfunds.com", "wmeyer@erpfunds.com"];
-const SENDER_MAILBOX = "mberry@erpfunds.com";
+  : ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
+const SENDER_MAILBOX = "mparad@erpfunds.com";
 
 function isAuthorized(req: NextRequest): boolean {
   const secret = req.headers.get("x-agent-secret");
