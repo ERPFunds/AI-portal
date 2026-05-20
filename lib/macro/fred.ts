@@ -67,16 +67,8 @@ const PERMIAN_SERIES: SeriesDef[] = [
 ];
 
 const BREVARD_SERIES: SeriesDef[] = [
-  {
-    id: "FLUR",
-    label: "Florida unemployment rate",
-    format: "percent",
-    suffix: "%",
-    limit: 26,
-    wowOffset: 1,
-    yoyOffset: 12,
-  },
-  // Space Coast employment now sourced directly from BLS API (lib/macro/bls.ts)
+  // Space Coast employment sourced directly from BLS API (lib/macro/bls.ts)
+  // Unemployment rate and Port Canaveral TEUs removed — no reliable free API
 ];
 
 /** Parse FRED value string; returns null for missing (".") */

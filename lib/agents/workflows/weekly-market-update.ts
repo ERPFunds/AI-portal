@@ -74,7 +74,7 @@ export async function runWeeklyMarketUpdate(params: {
   const macroIndicatorList =
     params.market.toLowerCase() === "permian"
       ? "WTI spot (Cushing), WTI 12M strip, Permian rig count, DUC inventory (Permian), Midland MSA mining jobs, Odessa MSA mining jobs, Dallas Fed Energy Survey sentiment"
-      : "FL industrial vacancy rate, Space Coast unemployment, Port Canaveral TEU volume, Orlando MSA logistics jobs, FL asking NNN rent/SF, SpaceX/Blue Origin launch cadence, Brevard County employment, FL industrial net absorption";
+      : "FL industrial vacancy rate, Orlando MSA logistics jobs, FL asking NNN rent/SF, SpaceX/Blue Origin launch cadence, Brevard County employment, FL industrial net absorption";
 
   const ask = `Weekly market update for ${marketFullName}: recent industrial transactions, macro indicators (${macroIndicatorList}), supply/demand signals (vacancy rate, absorption, new deliveries), notable news or lease signings, period: ${params.period}`;
 
