@@ -2783,15 +2783,16 @@ const CONNECTIONS_DATA = [
   },
   {
     id: 'onedrive',
-    icon: '📁',
-    name: 'OneDrive',
+    icon: '🗂️',
+    name: 'SharePoint',
     status: 'connected' as const,
-    meta: 'Agent outputs saved to OneDrive via Microsoft Graph API · uses Azure app credentials set in Vercel env',
+    meta: 'Agent outputs saved to SharePoint via Microsoft Graph API · uses Azure app credentials set in Vercel env',
     sync: 'On-demand via Graph API',
     fields: [
       { label: 'Tenant ID',     key: 'tenant', placeholder: 'AZURE_TENANT_ID (set in Vercel env)' },
       { label: 'Client ID',     key: 'client', placeholder: 'AZURE_CLIENT_ID (set in Vercel env)' },
       { label: 'Client Secret', key: 'secret', placeholder: 'AZURE_CLIENT_SECRET (set in Vercel env)' },
+      { label: 'Site ID',       key: 'siteId', placeholder: 'SHAREPOINT_SITE_ID (set in Vercel env)' },
     ],
   },
   {
