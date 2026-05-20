@@ -135,7 +135,7 @@ ${fredContext}
 Research findings:
 ${research.findings}
 
-${research.sources.length > 0 ? `Source URLs (match to articles where possible):\n${research.sources.slice(0, 15).join("\n")}` : ""}
+${research.sources.length > 0 ? `Source URLs (match to articles where possible):\n${research.sources.join("\n")}` : ""}
 
 ---
 Return ONLY valid JSON — no markdown, no code fences, no extra text. Use this exact structure:

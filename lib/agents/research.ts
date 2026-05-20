@@ -104,6 +104,6 @@ Using the RSS articles above as your primary source material, plus targeted web 
   return {
     query: params.ask,
     findings: textBlocks.join("\n\n") || "No findings returned.",
-    sources: [...new Set([...sources, ...extraSources])].slice(0, 15),
+    sources: [...new Set([...sources, ...extraSources])].slice(0, 60),
   };
 }
