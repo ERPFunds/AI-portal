@@ -235,7 +235,25 @@ ${
 }
 `;
 
-  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, "");
+  // ── Sources footer — hyperlinked with domain label ───────────────────────────
+  const linkedSources = research.sources
+    .filter((u) => u.startsWith("http"))
+    .slice(0, 40)
+    .map((u) => {
+      let label: string;
+      try {
+        label = new URL(u).hostname.replace(/^www\./, "");
+      } catch {
+        label = u;
+      }
+      return `<a href="${u}" style="color:#1d4ed8;text-decoration:underline;" target="_blank">${label}</a>`;
+    });
+
+  const sourcesLine = linkedSources.length > 0
+    ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong><br/>${linkedSources.join(" &nbsp;&middot;&nbsp; ")}`
+    : "";
+
+  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, sourcesLine);
   const summary = `Competitor intelligence brief generated for ${marketLabel} — ${params.period}. Covers ${section1Items.length} capital flow events, ${section2Table.length} REIT benchmarks, ${section3Table.length} PE peers, ${section4Items.length} private competitors.`;
 
   return { subject, htmlBody, summary };
