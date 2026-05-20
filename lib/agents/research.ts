@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { fetchFeedsForWorkflow, type FeedItem } from "@/lib/rss";
 
 export interface ResearchBundle {
   query: string;
@@ -22,7 +23,27 @@ export async function runResearchAgent(params: {
   ask: string;
   projectContext: string;
   workflowId: string;
+  market?: string;
 }): Promise<ResearchBundle> {
+  // 1. Fetch RSS articles in parallel with Claude call setup
+  const articles = await fetchFeedsForWorkflow(params.workflowId, params.market, 40);
+
+  // Build article context string
+  const articleContext = articles.length > 0
+    ? articles
+        .map(
+          (a, i) =>
+            `[${i + 1}] ${a.source} | ${a.pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}\n` +
+            `Title: ${a.title}\n` +
+            (a.summary ? `Summary: ${a.summary}\n` : "") +
+            `URL: ${a.link}`
+        )
+        .join("\n\n")
+    : "No RSS articles available.";
+
+  const sources = articles.map((a) => a.link);
+
+  // 2. Claude + web_search to supplement with targeted queries
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 4096,
@@ -31,7 +52,7 @@ export async function runResearchAgent(params: {
       {
         type: "web_search_20250305" as "web_search_20250305",
         name: "web_search",
-        max_uses: 5,
+        max_uses: 3,
       } as unknown as Anthropic.Tool,
     ],
     messages: [
@@ -41,24 +62,28 @@ export async function runResearchAgent(params: {
 Project context: ${params.projectContext}
 Workflow type: ${params.workflowId}
 
-Search for current, specific market data. Return a structured research brief with key findings, data points, and source URLs.`,
+--- FRESH RSS ARTICLES (use these as primary sources) ---
+${articleContext}
+--- END RSS ARTICLES ---
+
+Using the RSS articles above as your primary source material, plus targeted web searches for any specific data gaps (vacancy rates, recent transactions, macro figures), produce a structured research brief with key findings, data points, and source URLs. Prioritize articles from the last 7-14 days. Be specific — include actual numbers, company names, addresses, and dollar figures wherever available.`,
       },
     ],
   });
 
   const textBlocks: string[] = [];
-  const sources: string[] = [];
+  const extraSources: string[] = [];
 
   for (const block of response.content) {
     if (block.type === "text") {
       textBlocks.push(block.text);
     }
-    // Extract URLs from any tool result content
+    // Extract any additional URLs from web search results
     const raw = JSON.stringify(block);
     const urls = raw.match(/https?:\/\/[^\s"\\]+/g) ?? [];
     for (const u of urls) {
       if (!u.includes("anthropic") && !u.includes("api.")) {
-        sources.push(u);
+        extraSources.push(u);
       }
     }
   }
@@ -66,6 +91,6 @@ Search for current, specific market data. Return a structured research brief wit
   return {
     query: params.ask,
     findings: textBlocks.join("\n\n") || "No findings returned.",
-    sources: [...new Set(sources)].slice(0, 10),
+    sources: [...new Set([...sources, ...extraSources])].slice(0, 15),
   };
 }

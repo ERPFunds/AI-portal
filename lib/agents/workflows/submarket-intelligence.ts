@@ -82,6 +82,7 @@ export async function runSubmarketIntelligence(params: {
     ask,
     projectContext: `${marketLabel} Submarket Intelligence ${params.period}`,
     workflowId: "submarket-intelligence",
+    market: params.market,
   });
 
   const response = await anthropic.messages.create({

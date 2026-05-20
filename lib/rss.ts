@@ -34,6 +34,29 @@ const COMPETITIVE_FEEDS: { url: string; source: string }[] = [
   { url: "https://www.costar.com/rss",                                     source: "CoStar News" },
 ];
 
+// Brevard / Space Coast — industrial CRE + local economy
+const BREVARD_FEEDS: { url: string; source: string }[] = [
+  { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
+  { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
+  { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
+  { url: "https://bisnow.com/rss/south-florida",                          source: "Bisnow South Florida" },
+  { url: "https://floridarealtors.org/news-media/news-articles/rss",      source: "Florida Realtors" },
+  { url: "https://www.bizjournals.com/orlando/feed/latest-news",          source: "Orlando Business Journal" },
+  { url: "https://www.spacecoastdaily.com/feed/",                         source: "Space Coast Daily" },
+  { url: "https://connectcre.com/feed/",                                  source: "Connect CRE" },
+];
+
+// Submarket intelligence — CRE + macro combined
+const SUBMARKET_FEEDS: { url: string; source: string }[] = [
+  { url: "https://credaily.com/feed/",                                    source: "CRE Daily" },
+  { url: "https://www.globest.com/feed/",                                 source: "GlobeSt" },
+  { url: "https://commercialobserver.com/feed/",                          source: "Commercial Observer" },
+  { url: "https://connectcre.com/feed/",                                  source: "Connect CRE" },
+  { url: "https://www.eia.gov/rss/todayinenergy.xml",                     source: "EIA Today in Energy" },
+  { url: "https://bisnow.com/rss/texas",                                  source: "Bisnow Texas" },
+  { url: "https://bisnow.com/rss/south-florida",                         source: "Bisnow South Florida" },
+];
+
 // Agent 5 — Comparable Fund Benchmarking
 const FUND_BENCHMARK_FEEDS: { url: string; source: string }[] = [
   { url: "https://efts.sec.gov/LATEST/search-index?q=%22Form+D%22&dateRange=custom&startdt=2024-01-01&forms=D", source: "SEC EDGAR Form D" },
@@ -42,26 +65,51 @@ const FUND_BENCHMARK_FEEDS: { url: string; source: string }[] = [
 ];
 
 export const RSS_FEEDS_BY_AGENT = {
-  "permian-brief":   PERMIAN_BRIEF_FEEDS,
-  "competitive":     COMPETITIVE_FEEDS,
-  "fund-benchmark":  FUND_BENCHMARK_FEEDS,
+  "permian-brief":          PERMIAN_BRIEF_FEEDS,
+  "weekly-market-update":   PERMIAN_BRIEF_FEEDS,  // Permian default; override per market below
+  "brevard-weekly":         BREVARD_FEEDS,
+  "submarket-intelligence": SUBMARKET_FEEDS,
+  "competitor-intelligence":COMPETITIVE_FEEDS,
+  "competitive":            COMPETITIVE_FEEDS,
+  "fund-benchmark":         FUND_BENCHMARK_FEEDS,
 };
 
 export async function fetchAllFeeds(): Promise<FeedItem[]> {
+  return fetchFeedsForWorkflow("permian-brief");
+}
+
+/** Fetch RSS articles for a specific workflow + market, deduplicated and sorted newest-first */
+export async function fetchFeedsForWorkflow(
+  workflowId: string,
+  market?: string,
+  maxItems = 40
+): Promise<FeedItem[]> {
+  // Pick feed list — use market-specific override for weekly updates
+  let feedKey = workflowId as keyof typeof RSS_FEEDS_BY_AGENT;
+  if (workflowId === "weekly-market-update" && market?.toLowerCase() === "brevard") {
+    feedKey = "brevard-weekly";
+  }
+
+  const feedList =
+    RSS_FEEDS_BY_AGENT[feedKey] ??
+    RSS_FEEDS_BY_AGENT["weekly-market-update"];
+
   const results: FeedItem[] = [];
+  const seenLinks = new Set<string>();
 
   await Promise.allSettled(
-    PERMIAN_BRIEF_FEEDS.map(async ({ url, source }) => {
+    feedList.map(async ({ url, source }) => {
       try {
         const feed = await parser.parseURL(url);
         for (const item of feed.items) {
-          if (item.link && item.title && item.pubDate) {
+          if (item.link && item.title && item.pubDate && !seenLinks.has(item.link)) {
+            seenLinks.add(item.link);
             results.push({
               title: item.title,
               link: item.link,
               pubDate: new Date(item.pubDate),
               source,
-              summary: item.contentSnippet,
+              summary: item.contentSnippet?.slice(0, 300),
             });
           }
         }
@@ -71,5 +119,8 @@ export async function fetchAllFeeds(): Promise<FeedItem[]> {
     })
   );
 
-  return results;
+  // Sort newest first, cap at maxItems
+  return results
+    .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
+    .slice(0, maxItems);
 }

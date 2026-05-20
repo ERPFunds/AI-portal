@@ -76,6 +76,7 @@ export async function runWeeklyMarketUpdate(params: {
     ask,
     projectContext: `${marketLabel} Weekly Market Update ${params.period}`,
     workflowId: "weekly-market-update",
+    market: params.market,
   });
 
   const response = await anthropic.messages.create({

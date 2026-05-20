@@ -66,6 +66,7 @@ export async function runCompetitorIntelligence(params: {
     ask,
     projectContext: `${marketLabel} Competitor Intelligence ${params.period}`,
     workflowId: "competitor-intelligence",
+    market: params.market,
   });
 
   const response = await anthropic.messages.create({
