@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+export const maxDuration = 300;
+
 import { routeEmail } from "@/lib/agents/router";
 import { runResearchAgent } from "@/lib/agents/research";
 import { saveToOneDrive, buildOneDriveFolder, buildFilename } from "@/lib/agents/file-handler";
@@ -216,7 +219,7 @@ export async function POST(req: NextRequest) {
     summary: output.summary,
     oneDriveUrl: fileResult.url,
     outputContent: emailOutputContent,
-  });
+  }).catch((err) => console.error("[email-webhook] reply send failed:", err));
 
   return NextResponse.json({
     success: true,
