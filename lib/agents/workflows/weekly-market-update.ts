@@ -128,10 +128,13 @@ Return ONLY valid JSON, no markdown, no extra text.`,
   });
 
   const rawText = response.content[0].type === "text" ? response.content[0].text : "{}";
+  // Strip markdown code fences if Claude wraps the JSON (e.g. ```json ... ```)
+  const cleanText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   let data: Record<string, unknown>;
   try {
-    data = JSON.parse(rawText);
-  } catch {
+    data = JSON.parse(cleanText);
+  } catch (e) {
+    console.error("[weekly-market-update] JSON parse failed. Raw Claude output:", rawText.slice(0, 500));
     data = { subject: `Weekly Market Update: ${marketLabel} — ${params.period}` };
   }
 
