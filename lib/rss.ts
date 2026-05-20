@@ -10,20 +10,36 @@ export interface FeedItem {
 
 const parser = new Parser();
 
-// Agent 1 — Permian Brief (weekly newsletter)
-const PERMIAN_BRIEF_FEEDS: { url: string; source: string }[] = [
-  // ── CRE broker wire services (carries CBRE, JLL, C&W, Newmark press releases) ─
+// ── Shared industrial CRE feeds (used in both Permian and Brevard) ────────────────
+const INDUSTRIAL_CRE_FEEDS: { url: string; source: string }[] = [
+  // Broker wire services — CBRE, JLL, C&W, Newmark press releases
   { url: "https://www.prnewswire.com/rss/news-releases-list.rss",          source: "PR Newswire" },
   { url: "https://www.businesswire.com/rss/home",                          source: "Business Wire" },
   { url: "https://www.globenewswire.com/RssFeed/country/United+States",    source: "GlobeNewswire" },
 
-  // ── CRE nationals ──────────────────────────────────────────────────────────────
+  // CRE nationals + industrial-specific
+  { url: "https://www.globest.com/industrial/feed/",                       source: "GlobeSt Industrial" },
   { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
   { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
   { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
   { url: "https://connectcre.com/feed/",                                   source: "Connect CRE" },
   { url: "https://therealdeal.com/feed/",                                  source: "The Real Deal" },
   { url: "https://www.naiop.org/rss",                                      source: "NAIOP" },
+  { url: "https://www.sior.com/news/press-releases?format=rss",            source: "SIOR" },
+  { url: "https://www.costar.com/rss",                                     source: "CoStar News" },
+
+  // Logistics & supply chain — direct industrial demand signal
+  { url: "https://www.freightwaves.com/news/feed",                         source: "FreightWaves" },
+  { url: "https://www.supplychaindive.com/feeds/news/",                    source: "Supply Chain Dive" },
+  { url: "https://www.dcvelocity.com/rss/",                                source: "DC Velocity" },
+  { url: "https://www.logisticsmgmt.com/rss/articles",                     source: "Logistics Management" },
+  { url: "https://www.mmh.com/rss/articles",                               source: "Modern Materials Handling" },
+  { url: "https://bisnow.com/rss/national",                                source: "Bisnow National" },
+];
+
+// Agent 1 — Permian Brief (weekly newsletter)
+const PERMIAN_BRIEF_FEEDS: { url: string; source: string }[] = [
+  ...INDUSTRIAL_CRE_FEEDS,
 
   // ── Texas CRE & business ───────────────────────────────────────────────────────
   { url: "https://bisnow.com/rss/dallas",                                  source: "Bisnow Dallas" },
@@ -47,21 +63,13 @@ const PERMIAN_BRIEF_FEEDS: { url: string; source: string }[] = [
 
 // Agent 3 — Competitive Landscape Profile
 const COMPETITIVE_FEEDS: { url: string; source: string }[] = [
-  { url: "https://www.prnewswire.com/rss/news-releases-list.rss",         source: "PR Newswire" },
-  { url: "https://www.businesswire.com/rss/home",                         source: "Business Wire" },
-  { url: "https://therealdeal.com/feed/",                                  source: "The Real Deal" },
-  { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
-  { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
-  { url: "https://www.costar.com/rss",                                     source: "CoStar News" },
+  ...INDUSTRIAL_CRE_FEEDS,
 ];
 
 // Brevard / Space Coast — industrial CRE + local economy
 const BREVARD_FEEDS: { url: string; source: string }[] = [
-  // ── CRE nationals ──────────────────────────────────────────────────────────
-  { url: "https://credaily.com/feed/",                                     source: "CRE Daily" },
-  { url: "https://www.globest.com/feed/",                                  source: "GlobeSt" },
-  { url: "https://commercialobserver.com/feed/",                           source: "Commercial Observer" },
-  { url: "https://connectcre.com/feed/",                                   source: "Connect CRE" },
+  // ── Shared industrial CRE ──────────────────────────────────────────────────
+  ...INDUSTRIAL_CRE_FEEDS,
 
   // ── Florida CRE & business ─────────────────────────────────────────────────
   { url: "https://bisnow.com/rss/south-florida",                           source: "Bisnow South Florida" },
@@ -93,10 +101,7 @@ const BREVARD_FEEDS: { url: string; source: string }[] = [
 
 // Submarket intelligence — CRE + macro combined
 const SUBMARKET_FEEDS: { url: string; source: string }[] = [
-  { url: "https://credaily.com/feed/",                                    source: "CRE Daily" },
-  { url: "https://www.globest.com/feed/",                                 source: "GlobeSt" },
-  { url: "https://commercialobserver.com/feed/",                          source: "Commercial Observer" },
-  { url: "https://connectcre.com/feed/",                                  source: "Connect CRE" },
+  ...INDUSTRIAL_CRE_FEEDS,
   { url: "https://www.eia.gov/rss/todayinenergy.xml",                     source: "EIA Today in Energy" },
   { url: "https://bisnow.com/rss/texas",                                  source: "Bisnow Texas" },
   { url: "https://bisnow.com/rss/south-florida",                         source: "Bisnow South Florida" },
