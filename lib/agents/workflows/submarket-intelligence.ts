@@ -254,8 +254,23 @@ Rules:
     `<tr>${tdCell(r.submarket ?? "", true)}${tdCell(r.assessment ?? "")}</tr>`
   ).join("\n");
 
-  // ── Sources footer line ──────────────────────────────────────────────────────
-  const sourcesLine = sourceNames.length > 0
+  // ── Sources footer line — hyperlinked article URLs ───────────────────────────
+  const linkedSources = research.sources
+    .filter((u) => u.startsWith("http"))
+    .slice(0, 40)
+    .map((u) => {
+      let label: string;
+      try {
+        label = new URL(u).hostname.replace(/^www\./, "");
+      } catch {
+        label = u;
+      }
+      return `<a href="${u}" style="color:#1d4ed8;text-decoration:underline;" target="_blank">${label}</a>`;
+    });
+
+  const sourcesLine = linkedSources.length > 0
+    ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong><br/>${linkedSources.join(" &nbsp;&middot;&nbsp; ")}`
+    : sourceNames.length > 0
     ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong> ${sourceNames.join(" &middot; ")}`
     : "";
 
