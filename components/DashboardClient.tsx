@@ -3176,8 +3176,12 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
           )}
         </div>
 
-        {/* ── All other single-account connections ── */}
-        {CONNECTIONS_DATA.map((conn) => {
+        {/* ── All other single-account connections — connected first ── */}
+        {[...CONNECTIONS_DATA].sort((a, b) => {
+          const aConn = conns[a.id]?.status === 'connected' ? 0 : 1
+          const bConn = conns[b.id]?.status === 'connected' ? 0 : 1
+          return aConn - bConn
+        }).map((conn) => {
           const state = conns[conn.id]
           const isConnected = state.status === 'connected'
           const isExpanded = expandedConn === conn.id
