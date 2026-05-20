@@ -170,10 +170,11 @@ export async function fetchFredMacro(market: string): Promise<FredRow[] | null> 
     console.warn("[fred] No FRED API key found — tried FRED_API_KEY, FRED_KEY, API_KEY, FRED_API — skipping");
     return null;
   }
-  console.log(`[fred] Key found (${apiKey.slice(0, 4)}***), fetching ${seriesDefs.length} series for ${market}`);
 
   const seriesDefs =
     market.toLowerCase() === "brevard" ? BREVARD_SERIES : PERMIAN_SERIES;
+
+  console.log(`[fred] Key found (${apiKey.slice(0, 4)}***), fetching ${seriesDefs.length} series for ${market}`);
 
   const results = await Promise.allSettled(
     seriesDefs.map((def) => fetchSeries(def, apiKey))
