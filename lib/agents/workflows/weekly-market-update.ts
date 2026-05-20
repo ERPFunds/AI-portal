@@ -94,6 +94,8 @@ export async function runWeeklyMarketUpdate(params: {
     isBrevard ? fetchLaunchData() : Promise.resolve(null),
   ]);
 
+  console.log(`[weekly] macro raw — fred:${fredRows?.length ?? "null"} eia:${eiaRows?.length ?? "null"} bls:${blsRows?.length ?? "null"} census:${censusRows?.length ?? "null"}`);
+
   // Merge: FRED → EIA → BLS → Census → Launches, deduplicating by indicator label
   const seen = new Set<string>();
   const preFetchedRows = [
@@ -107,6 +109,8 @@ export async function runWeeklyMarketUpdate(params: {
     seen.add(r.indicator);
     return true;
   });
+
+  console.log(`[weekly] preFetchedRows total: ${preFetchedRows.length} — ${preFetchedRows.map(r => r.indicator).join(", ") || "none"}`);
 
   // Build macro context string for the prompt
   const fredContext = preFetchedRows.length > 0
@@ -179,6 +183,8 @@ Rules:
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(cleanText);
+    const mt = data.macro_table as unknown[];
+    console.log(`[weekly] Claude macro_table rows: ${Array.isArray(mt) ? mt.length : "not-array"}`);
   } catch (e) {
     console.error("[weekly-market-update] JSON parse failed. Raw output:", rawText.slice(0, 800));
     data = {
