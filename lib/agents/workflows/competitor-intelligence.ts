@@ -9,48 +9,39 @@ export interface CompetitorIntelligenceOutput {
   summary: string;
 }
 
-const HTML_WRAPPER = (subject: string, bodyContent: string) => `<!DOCTYPE html>
+const HTML_WRAPPER = (
+  displayTitle: string,
+  displayDate: string,
+  bodyContent: string,
+  sourcesLine: string
+) => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${subject}</title>
-<style>
-  body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
-  .wrapper { max-width: 720px; margin: 32px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
-  .header { background: #0f172a; padding: 36px 40px 28px; }
-  .header h1 { margin: 0 0 6px; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
-  .header .subtitle { color: #94a3b8; font-size: 13px; margin: 0; }
-  .verified-banner { background: #166534; color: #bbf7d0; font-size: 12px; font-weight: 600; padding: 8px 40px; letter-spacing: 0.5px; text-transform: uppercase; }
-  .body { padding: 32px 40px; }
-  .section-header { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-variant: small-caps; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 28px 0 14px; }
-  .card { border-left: 4px solid #0f172a; padding: 12px 16px; margin: 10px 0; background: #f8fafc; border-radius: 0 4px 4px 0; }
-  .card .card-title { font-weight: 700; font-size: 14px; color: #0f172a; margin-bottom: 4px; }
-  .card .card-body { font-size: 13px; color: #475569; line-height: 1.55; }
-  .highlight-box { background: #fefce8; border: 1px solid #fde68a; border-left: 4px solid #d97706; padding: 12px 16px; margin: 10px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #78350f; }
-  .correction-box { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #dc2626; padding: 12px 16px; margin: 10px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #991b1b; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-  thead tr { background: #0f172a; color: #ffffff; }
-  thead th { padding: 9px 12px; text-align: left; font-weight: 600; font-size: 12px; letter-spacing: 0.3px; }
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody td { padding: 8px 12px; color: #334155; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  .angle { margin: 8px 0; padding: 10px 14px; border-left: 4px solid #16a34a; background: #f0fdf4; border-radius: 0 4px 4px 0; font-size: 13px; color: #15803d; }
-  .watch-box { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #1d4ed8; }
-  .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 40px; font-size: 11px; color: #94a3b8; text-align: center; }
-  p { font-size: 13px; line-height: 1.6; color: #475569; margin: 8px 0; }
-</style>
+<title>${displayTitle}</title>
 </head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <h1>${subject}</h1>
-    <p class="subtitle">ERP Funds — Competitor Intelligence Brief</p>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;">
+<div style="max-width:680px;margin:32px auto;background:#ffffff;">
+
+  <!-- Header -->
+  <div style="padding:28px 40px 20px;border-bottom:2px solid #e2e8f0;">
+    <p style="font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;margin:0 0 10px;">ERP Funds &middot; Internal Research</p>
+    <h1 style="font-size:24px;font-weight:700;color:#0f172a;margin:0 0 6px;line-height:1.2;">&#128269; ${displayTitle}</h1>
+    <p style="font-size:13px;color:#64748b;margin:0;">${displayDate}</p>
   </div>
-  <div class="verified-banner">Verified Research — Internal Use Only</div>
-  <div class="body">
+
+  <!-- Body -->
+  <div style="padding:28px 40px 8px;">
     ${bodyContent}
   </div>
-  <div class="footer">ERP Funds Internal Research System &bull; Confidential &bull; Not for distribution</div>
+
+  <!-- Footer -->
+  <div style="padding:16px 40px 28px;border-top:1px solid #e2e8f0;margin-top:16px;">
+    <p style="font-size:11px;color:#94a3b8;line-height:1.8;margin:0;">${sourcesLine}</p>
+    <p style="font-size:11px;color:#94a3b8;font-style:italic;margin:6px 0 0;">Questions or corrections &#x2192; reply to this email.</p>
+  </div>
+
 </div>
 </body>
 </html>`;
@@ -147,82 +138,104 @@ Return ONLY valid JSON, no markdown, no extra text.`,
   const section5Table = (data.section5_table as Array<Record<string, string>> | undefined) ?? [];
   const section6Angles = (data.section6_angles as Array<{ angle: string; narrative: string }> | undefined) ?? [];
 
+  const secLabel = (text: string) =>
+    `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
+
   const s1Cards = section1Items
-    .map((i) => `<div class="card"><div class="card-title">${i.title}</div><div class="card-body">${i.body}</div></div>`)
+    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
     .join("\n");
 
   const s2TableRows = section2Table
     .map(
       (r) =>
-        `<tr><td><strong>${r.name ?? ""}</strong></td><td>${r.ticker ?? ""}</td><td>${r.price ?? "—"}</td><td>${r.ytd ?? "—"}</td><td>${r.ffo_yield ?? "—"}</td><td>${r.div_yield ?? "—"}</td><td>${r.note ?? ""}</td></tr>`
+        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.name ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ticker ?? ""}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.price ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ytd ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ffo_yield ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.div_yield ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.note ?? ""}</td></tr>`
     )
     .join("\n");
 
   const s3TableRows = section3Table
-    .map((r) => `<tr><td><strong>${r.firm ?? ""}</strong></td><td>${r.focus ?? ""}</td><td>${r.aum_est ?? "—"}</td><td>${r.activity ?? ""}</td></tr>`)
+    .map((r) => `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.firm ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.focus ?? ""}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.aum_est ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.activity ?? ""}</td></tr>`)
     .join("\n");
 
   const s4Cards = section4Items
-    .map((i) => `<div class="card"><div class="card-title">${i.title}</div><div class="card-body">${i.body}</div></div>`)
+    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
     .join("\n");
 
   const s5TableRows = section5Table
-    .map((r) => `<tr><td><strong>${r.fund ?? ""}</strong></td><td>${r.mgmt_fee ?? "—"}</td><td>${r.carry ?? "—"}</td><td>${r.term ?? "—"}</td><td>${r.target_irr ?? "—"}</td></tr>`)
+    .map((r) => `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.fund ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.mgmt_fee ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.carry ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.term ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.target_irr ?? "—"}</td></tr>`)
     .join("\n");
 
   const s6Angles = section6Angles
-    .map((a) => `<div class="angle"><strong>${a.angle}</strong> — ${a.narrative}</div>`)
+    .map((a) => `<div style="margin:8px 0;padding:10px 14px;border-left:4px solid #16a34a;background:#f0fdf4;border-radius:0 4px 4px 0;font-size:13px;color:#15803d;"><strong>${a.angle}</strong> — ${a.narrative}</div>`)
     .join("\n");
 
   const bodyContent = `
-<div class="section-header">${(data.section1_title as string) || "§1 — Capital Flowing"}</div>
-${s1Cards || '<div class="card"><div class="card-body">No data available for this period.</div></div>'}
+${secLabel((data.section1_title as string) || "§1 — Capital Flowing")}
+${s1Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No data available for this period.</p></div>'}
 
-<div class="section-header">${(data.section2_title as string) || "§2 — Public Industrial REIT Benchmark"}</div>
-<div class="highlight-box">EastGroup Properties (EGP) is the closest public comp to ERP's Sunbelt/secondary industrial strategy.</div>
+${secLabel((data.section2_title as string) || "§2 — Public Industrial REIT Benchmark")}
+<div style="border-left:4px solid #d97706;background:#fffbeb;padding:12px 16px;margin:20px 0 0;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.65;">EastGroup Properties (EGP) is the closest public comp to ERP's Sunbelt/secondary industrial strategy.</div>
 ${
   s2TableRows
-    ? `<table>
-  <thead><tr><th>REIT</th><th>Ticker</th><th>Price</th><th>YTD</th><th>FFO Yield</th><th>Div Yield</th><th>Note</th></tr></thead>
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">REIT</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Ticker</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Price</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">YTD</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">FFO Yield</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Div Yield</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Note</th>
+  </tr></thead>
   <tbody>${s2TableRows}</tbody>
 </table>`
-    : "<p>Benchmark data not available.</p>"
+    : `<p style="font-size:13px;color:#94a3b8;">Benchmark data not available.</p>`
 }
-<p>${(data.section2_narrative as string) || ""}</p>
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:8px 0;">${(data.section2_narrative as string) || ""}</p>
 
-<div class="section-header">${(data.section3_title as string) || "§3 — Regional PE Peers"}</div>
+${secLabel((data.section3_title as string) || "§3 — Regional PE Peers")}
 ${
   s3TableRows
-    ? `<table>
-  <thead><tr><th>Firm</th><th>Focus</th><th>AUM Est.</th><th>Activity in Market</th></tr></thead>
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Firm</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Focus</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">AUM Est.</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Activity in Market</th>
+  </tr></thead>
   <tbody>${s3TableRows}</tbody>
 </table>`
-    : "<p>No regional PE peer data available.</p>"
+    : `<p style="font-size:13px;color:#94a3b8;">No regional PE peer data available.</p>`
 }
 
-<div class="section-header">${(data.section4_title as string) || "§4 — Private Competitors"}</div>
-${s4Cards || '<div class="card"><div class="card-body">No private competitor data available.</div></div>'}
+${secLabel((data.section4_title as string) || "§4 — Private Competitors")}
+${s4Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No private competitor data available.</p></div>'}
 
-<div class="section-header">${(data.section5_title as string) || "§5 — Comparable Fund Structures"}</div>
+${secLabel((data.section5_title as string) || "§5 — Comparable Fund Structures")}
 ${
   s5TableRows
-    ? `<table>
-  <thead><tr><th>Fund</th><th>Mgmt Fee</th><th>Carry</th><th>Term</th><th>Target IRR</th></tr></thead>
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Fund</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Mgmt Fee</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Carry</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Term</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Target IRR</th>
+  </tr></thead>
   <tbody>${s5TableRows}</tbody>
 </table>`
-    : "<p>No comparable fund structure data available.</p>"
+    : `<p style="font-size:13px;color:#94a3b8;">No comparable fund structure data available.</p>`
 }
 
-<div class="section-header">${(data.section6_title as string) || "§6 — Differentiation Narrative for LP Decks"}</div>
-${s6Angles || "<p>No differentiation angles available.</p>"}
+${secLabel((data.section6_title as string) || "§6 — Differentiation Narrative for LP Decks")}
+${s6Angles || `<p style="font-size:13px;color:#94a3b8;">No differentiation angles available.</p>`}
 ${
   data.section6_watch
-    ? `<div class="watch-box"><strong>Watch for next month:</strong> ${data.section6_watch as string}</div>`
+    ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>Watch for next month:</strong> ${data.section6_watch as string}</div>`
     : ""
 }
 `;
 
-  const htmlBody = HTML_WRAPPER(subject, bodyContent);
+  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, "");
   const summary = `Competitor intelligence brief generated for ${marketLabel} — ${params.period}. Covers ${section1Items.length} capital flow events, ${section2Table.length} REIT benchmarks, ${section3Table.length} PE peers, ${section4Items.length} private competitors.`;
 
   return { subject, htmlBody, summary };

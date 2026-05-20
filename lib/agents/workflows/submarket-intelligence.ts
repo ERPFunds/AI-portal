@@ -9,56 +9,39 @@ export interface SubmarketIntelligenceOutput {
   summary: string;
 }
 
-const HTML_WRAPPER = (subject: string, bodyContent: string) => `<!DOCTYPE html>
+const HTML_WRAPPER = (
+  displayTitle: string,
+  displayDate: string,
+  bodyContent: string,
+  sourcesLine: string
+) => `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${subject}</title>
-<style>
-  body { margin: 0; padding: 0; background: #f1f5f9; font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
-  .wrapper { max-width: 720px; margin: 32px auto; background: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(0,0,0,0.10); }
-  .header { background: #0f172a; padding: 36px 40px 28px; }
-  .header h1 { margin: 0 0 6px; color: #ffffff; font-size: 22px; font-weight: 700; letter-spacing: 0.3px; }
-  .header .subtitle { color: #94a3b8; font-size: 13px; margin: 0; }
-  .verified-banner { background: #166534; color: #bbf7d0; font-size: 12px; font-weight: 600; padding: 8px 40px; letter-spacing: 0.5px; text-transform: uppercase; }
-  .body { padding: 32px 40px; }
-  .section-header { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; font-variant: small-caps; color: #0f172a; border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 28px 0 14px; }
-  .card { border-left: 4px solid #0f172a; padding: 12px 16px; margin: 10px 0; background: #f8fafc; border-radius: 0 4px 4px 0; }
-  .card .card-title { font-weight: 700; font-size: 14px; color: #0f172a; margin-bottom: 4px; }
-  .card .card-body { font-size: 13px; color: #475569; line-height: 1.55; }
-  .highlight-box { background: #fefce8; border: 1px solid #fde68a; border-left: 4px solid #d97706; padding: 12px 16px; margin: 10px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #78350f; }
-  .metrics-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 16px 0; }
-  .metric-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 6px; padding: 14px 16px; }
-  .metric-card .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #64748b; margin-bottom: 4px; }
-  .metric-card .metric-value { font-size: 20px; font-weight: 700; color: #0f172a; }
-  .metric-card .metric-sub { font-size: 12px; color: #94a3b8; margin-top: 3px; }
-  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }
-  thead tr { background: #0f172a; color: #ffffff; }
-  thead th { padding: 9px 12px; text-align: left; font-weight: 600; font-size: 12px; letter-spacing: 0.3px; }
-  tbody tr:nth-child(even) { background: #f8fafc; }
-  tbody td { padding: 8px 12px; color: #334155; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
-  .pipeline-bar { height: 8px; background: #e2e8f0; border-radius: 4px; margin: 6px 0; overflow: hidden; }
-  .pipeline-bar-fill { height: 100%; background: #0f172a; border-radius: 4px; }
-  .bullet-list { list-style: none; padding: 0; margin: 10px 0; }
-  .bullet-list li { padding: 6px 0 6px 18px; position: relative; font-size: 13px; color: #334155; border-bottom: 1px solid #f1f5f9; line-height: 1.5; }
-  .bullet-list li::before { content: "▸"; position: absolute; left: 0; color: #0f172a; font-size: 11px; top: 8px; }
-  .outlook-box { background: #eff6ff; border: 1px solid #bfdbfe; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 14px 0; border-radius: 0 4px 4px 0; font-size: 13px; color: #1d4ed8; }
-  .footer { background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 40px; font-size: 11px; color: #94a3b8; text-align: center; }
-  p { font-size: 13px; line-height: 1.6; color: #475569; margin: 8px 0; }
-</style>
+<title>${displayTitle}</title>
 </head>
-<body>
-<div class="wrapper">
-  <div class="header">
-    <h1>${subject}</h1>
-    <p class="subtitle">ERP Funds — Submarket Intelligence Report</p>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;">
+<div style="max-width:680px;margin:32px auto;background:#ffffff;">
+
+  <!-- Header -->
+  <div style="padding:28px 40px 20px;border-bottom:2px solid #e2e8f0;">
+    <p style="font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;margin:0 0 10px;">ERP Funds &middot; Internal Research</p>
+    <h1 style="font-size:24px;font-weight:700;color:#0f172a;margin:0 0 6px;line-height:1.2;">&#127959;&#65039; ${displayTitle}</h1>
+    <p style="font-size:13px;color:#64748b;margin:0;">${displayDate}</p>
   </div>
-  <div class="verified-banner">Verified Research — Internal Use Only</div>
-  <div class="body">
+
+  <!-- Body -->
+  <div style="padding:28px 40px 8px;">
     ${bodyContent}
   </div>
-  <div class="footer">ERP Funds Internal Research System &bull; Confidential &bull; Not for distribution</div>
+
+  <!-- Footer -->
+  <div style="padding:16px 40px 28px;border-top:1px solid #e2e8f0;margin-top:16px;">
+    <p style="font-size:11px;color:#94a3b8;line-height:1.8;margin:0;">${sourcesLine}</p>
+    <p style="font-size:11px;color:#94a3b8;font-style:italic;margin:6px 0 0;">Questions or corrections &#x2192; reply to this email.</p>
+  </div>
+
 </div>
 </body>
 </html>`;
@@ -164,12 +147,15 @@ Return ONLY valid JSON, no markdown, no extra text.`,
   const section5Items = (data.section5_items as Array<{ title: string; body: string }> | undefined) ?? [];
   const section6Bullets = (data.section6_bullets as string[] | undefined) ?? [];
 
+  const secLabel = (text: string) =>
+    `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
+
   const metricsGrid = keyMetrics
     .map(
-      (m) => `<div class="metric-card">
-  <div class="metric-label">${m.label}</div>
-  <div class="metric-value">${m.value}</div>
-  <div class="metric-sub">${m.sub}</div>
+      (m) => `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:4px;">${m.label}</div>
+  <div style="font-size:20px;font-weight:700;color:#0f172a;">${m.value}</div>
+  <div style="font-size:12px;color:#94a3b8;margin-top:3px;">${m.sub}</div>
 </div>`
     )
     .join("\n");
@@ -177,82 +163,93 @@ Return ONLY valid JSON, no markdown, no extra text.`,
   const s1TableRows = section1Table
     .map(
       (r) =>
-        `<tr><td><strong>${r.submarket ?? ""}</strong></td><td>${r.vacancy ?? "—"}</td><td>${r.absorption_sf ?? "—"}</td><td>${r.trend ?? "—"}</td></tr>`
+        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.submarket ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.vacancy ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.absorption_sf ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.trend ?? "—"}</td></tr>`
     )
     .join("\n");
 
   const s2Cards = section2Items
-    .map((i) => `<div class="card"><div class="card-title">${i.title}</div><div class="card-body">${i.body}</div></div>`)
+    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
     .join("\n");
 
   const s3TableRows = section3Table
     .map(
       (r) =>
-        `<tr><td><strong>${r.asset_type ?? ""}</strong></td><td>${r.asking_rent ?? "—"}</td><td>${r.effective_rent ?? "—"}</td><td>${r.yoy_change ?? "—"}</td><td>${r.cap_rate ?? "—"}</td></tr>`
+        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.asset_type ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.asking_rent ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.effective_rent ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.yoy_change ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.cap_rate ?? "—"}</td></tr>`
     )
     .join("\n");
 
   const s4Cards = section4Items
-    .map((i) => `<div class="card"><div class="card-title">${i.title}</div><div class="card-body">${i.body}</div></div>`)
+    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
     .join("\n");
 
   const s5Cards = section5Items
-    .map((i) => `<div class="card"><div class="card-title">${i.title}</div><div class="card-body">${i.body}</div></div>`)
+    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
     .join("\n");
 
   const s6Bullets = section6Bullets
-    .map((b) => `<li>${b}</li>`)
+    .map((b) => `<li style="font-size:13px;color:#1d4ed8;margin-bottom:4px;">${b}</li>`)
     .join("\n");
 
   const bodyContent = `
 ${
   keyMetrics.length > 0
-    ? `<div class="metrics-grid">${metricsGrid}</div>`
+    ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:16px 0 24px;">${metricsGrid}</div>`
     : ""
 }
 
-<div class="section-header">${(data.section1_title as string) || "§1 — Vacancy & Absorption"}</div>
-<p>${(data.section1_narrative as string) || ""}</p>
+${secLabel((data.section1_title as string) || "§1 — Vacancy &amp; Absorption")}
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section1_narrative as string) || ""}</p>
 ${
   s1TableRows
-    ? `<table>
-  <thead><tr><th>Submarket</th><th>Vacancy</th><th>Net Absorption (SF)</th><th>Trend</th></tr></thead>
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Submarket</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Vacancy</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Net Absorption (SF)</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Trend</th>
+  </tr></thead>
   <tbody>${s1TableRows}</tbody>
 </table>`
     : ""
 }
 
-<div class="section-header">${(data.section2_title as string) || "§2 — New Supply Pipeline"}</div>
-<p>${(data.section2_narrative as string) || ""}</p>
-${s2Cards || '<div class="card"><div class="card-body">No new supply pipeline data available.</div></div>'}
+${secLabel((data.section2_title as string) || "§2 — New Supply Pipeline")}
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section2_narrative as string) || ""}</p>
+${s2Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No new supply pipeline data available.</p></div>'}
 
-<div class="section-header">${(data.section3_title as string) || "§3 — Rent Trends"}</div>
-<p>${(data.section3_narrative as string) || ""}</p>
+${secLabel((data.section3_title as string) || "§3 — Rent Trends")}
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section3_narrative as string) || ""}</p>
 ${
   s3TableRows
-    ? `<table>
-  <thead><tr><th>Asset Type</th><th>Asking Rent</th><th>Effective Rent</th><th>YoY Change</th><th>Cap Rate</th></tr></thead>
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Asset Type</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Asking Rent</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Effective Rent</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">YoY Change</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Cap Rate</th>
+  </tr></thead>
   <tbody>${s3TableRows}</tbody>
 </table>`
     : ""
 }
 
-<div class="section-header">${(data.section4_title as string) || "§4 — Notable Leases & Sales"}</div>
-${s4Cards || '<div class="card"><div class="card-body">No notable transactions this month.</div></div>'}
+${secLabel((data.section4_title as string) || "§4 — Notable Leases &amp; Sales")}
+${s4Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No notable transactions this month.</p></div>'}
 
-<div class="section-header">${(data.section5_title as string) || "§5 — Development Activity"}</div>
-${s5Cards || '<div class="card"><div class="card-body">No development activity data available.</div></div>'}
+${secLabel((data.section5_title as string) || "§5 — Development Activity")}
+${s5Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No development activity data available.</p></div>'}
 
-<div class="section-header">${(data.section6_title as string) || "§6 — Investment Outlook"}</div>
-<p>${(data.section6_narrative as string) || ""}</p>
+${secLabel((data.section6_title as string) || "§6 — Investment Outlook")}
+<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section6_narrative as string) || ""}</p>
 ${
   s6Bullets
-    ? `<div class="outlook-box"><strong>Watch this month:</strong><ul class="bullet-list" style="margin-top:8px;">${s6Bullets}</ul></div>`
+    ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>Watch this month:</strong><ul style="margin:8px 0 0;padding-left:18px;">${s6Bullets}</ul></div>`
     : ""
 }
 `;
 
-  const htmlBody = HTML_WRAPPER(subject, bodyContent);
+  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, "");
   const summary = `Submarket intelligence report generated for ${marketLabel} — ${params.period}. Covers ${section1Table.length} submarkets, ${section2Items.length} pipeline projects, ${section4Items.length} notable transactions.`;
 
   return { subject, htmlBody, summary };
