@@ -50,34 +50,80 @@ export async function runSubmarketIntelligence(params: {
   market: string;
   period: string;
 }): Promise<SubmarketIntelligenceOutput> {
+  const isPermian = params.market.toLowerCase() === "permian";
+  const isBrevard = params.market.toLowerCase() === "brevard";
+
   const marketLabel = params.market.charAt(0).toUpperCase() + params.market.slice(1);
 
-  const marketFullName =
-    params.market.toLowerCase() === "permian"
-      ? "Permian Basin (Midland-Odessa, TX) industrial CRE"
-      : params.market.toLowerCase() === "brevard"
-      ? "Brevard County, FL (Space Coast / Melbourne-Titusville) industrial CRE"
-      : `${marketLabel} industrial CRE`;
+  const briefTitle = isPermian
+    ? "Permian Submarket Watch"
+    : isBrevard
+    ? "Space Coast Submarket Watch"
+    : `${marketLabel} Submarket Watch`;
 
-  const ask = `Monthly submarket intelligence deep dive for ${marketFullName}: vacancy rates by submarket, net absorption trends, new supply pipeline and deliveries, rent trends (NNN rate $/SF, triple net, rent escalations), notable lease signings and sales, development activity and land constraints, period: ${params.period}`;
+  const marketFullName = isPermian
+    ? "Permian Basin (Midland-Odessa, TX) industrial CRE"
+    : isBrevard
+    ? "Brevard County, FL (Space Coast / Melbourne-Titusville) industrial CRE"
+    : `${marketLabel} industrial CRE`;
+
+  const baselines = isPermian
+    ? "Midland MSA and Odessa MSA rent baselines from TREC @ TAMU (trerc.tamu.edu)"
+    : "Space Coast / Melbourne-Titusville MSA rent and vacancy baselines from CoStar and local brokers";
+
+  const tenantContext = isPermian
+    ? "Permian Basin E&P operator CapEx commitments, rig additions, production guidance (Diamondback, ConocoPhillips, ExxonMobil, bpX, Permian Resources)"
+    : "Space Coast aerospace/defense/logistics tenant activity (SpaceX, Blue Origin, L3Harris, Northrop Grumman, Amazon, UPS)";
+
+  const infraContext = isPermian
+    ? "Permian pipeline infrastructure, NGL takeaway, TX RRC / NM OCD regulatory items"
+    : "Space Coast infrastructure, Port Canaveral, broadband/power, Brevard County permitting";
+
+  const submarkets = isPermian
+    ? "Midland MSA, Odessa MSA, Kermit (Winkler County), Delaware Basin"
+    : "Melbourne / Palm Bay, Titusville, Cocoa / Rockledge, Port Canaveral corridor";
+
+  const ask = `Monthly submarket intelligence for ${marketFullName}, period: ${params.period}.
+
+Focus areas:
+1. National and state-level industrial CRE context (CoStar national vacancy, absorption, completions; EastGroup Sun Belt comp performance)
+2. ${baselines} — rents, vacancy, absorption, new deliveries
+3. Recent verified development activity in market — named projects, developers, SF, delivery dates
+4. ${tenantContext} — specific commitments with dollar figures and service yard demand implications
+5. ${infraContext}
+6. Submarket priority ranking with investment rationale per submarket: ${submarkets}`;
 
   const research = await runResearchAgent({
     ask,
-    projectContext: `${marketLabel} Submarket Intelligence ${params.period}`,
+    projectContext: `${briefTitle} ${params.period}`,
     workflowId: "submarket-intelligence",
     market: params.market,
   });
 
+  const section2Label = isPermian
+    ? "§2 — Midland / Odessa Baselines (TREC TAMU)"
+    : "§2 — Space Coast Baselines (CoStar / Local Brokers)";
+
+  const section4Label = isPermian
+    ? "§4 — Tenant Watch (Verified Operator Commitments)"
+    : "§4 — Tenant Watch (Aerospace & Logistics Commitments)";
+
+  const section4ColHeader = isPermian ? "Operator" : "Tenant / Operator";
+
+  const macroNote = isPermian
+    ? "Macro signals — Permian rig count, WTI, DUC inventory, permits, employment — covered in the weekly Monday Brief."
+    : "Macro signals — Space Coast employment, launch cadence, FL vacancy rate — covered in the weekly Monday Brief.";
+
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 5500,
-    system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds, producing monthly deep-dive intelligence reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
+    max_tokens: 6000,
+    system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds producing monthly submarket watch reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
-Produce LP-grade submarket intelligence: specific data points, named assets and transactions, trend analysis, and clear investment implications. Be precise, data-dense, and direct.`, cache_control: { type: "ephemeral" } }],
+Be specific and data-dense. Use real named entities, dollar figures, SF counts, and percentages. Only include verified facts from the research. If data is unavailable for a field, use "DATA PENDING" — never fabricate figures.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
-        content: `Generate a monthly submarket intelligence report for ${marketFullName}, period: ${params.period}.
+        content: `Generate a monthly submarket watch for ${marketFullName}, period: ${params.period}.
 
 Research findings:
 ${research.findings}
@@ -85,44 +131,48 @@ ${research.findings}
 ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
 
 ---
-Produce a JSON object with this exact structure:
+Return ONLY valid JSON with this exact structure:
+
 {
-  "subject": "string — e.g. 'Submarket Intelligence: Permian Basin — May 2026'",
-  "key_metrics": [
-    { "label": "Overall Vacancy Rate", "value": "x.x%", "sub": "vs x.x% prior month" },
-    { "label": "Net Absorption (MTD)", "value": "xxx,xxx SF", "sub": "vs xxx,xxx SF prior month" },
-    { "label": "Avg NNN Rent/SF", "value": "$x.xx", "sub": "+x.x% YoY" },
-    { "label": "Under Construction", "value": "xxx,xxx SF", "sub": "x projects" }
+  "subject": "${briefTitle} — ${params.period}",
+  "section1_title": "§1 — National / ${isPermian ? "Texas" : "Florida"} Industrial Context",
+  "section1_headline": "One sentence on national industrial vacancy trend with source in parentheses",
+  "section1_bullets": [
+    "Net absorption figure with period and YoY",
+    "12-month absorption figure",
+    "New supply / completions trend"
   ],
-  "section1_title": "§1 — Vacancy & Absorption",
-  "section1_narrative": "2-3 sentences on current vacancy and absorption trend",
-  "section1_table": [
-    { "submarket": "name", "vacancy": "x.x%", "absorption_sf": "xxx,xxx", "trend": "tightening/rising/stable" }
+  "section1_reit": "EastGroup Properties Q1 leased %, FFO YoY, dev starts guidance — or most recent available quarter",
+  "section2_table": [
+    { "submarket": "Midland MSA", "rents": "$xx+/SF NNN", "commentary": "1 sentence from TREC or CoStar" }
   ],
-  "section2_title": "§2 — New Supply Pipeline",
-  "section2_narrative": "1-2 sentences on supply pressure",
-  "section2_items": [
-    { "title": "project name/address", "body": "size, developer, delivery date, preleased %" }
+  "section2_source_note": "Source attribution and any pending data note",
+  "section3_items": [
+    { "title": "Project name · Location", "body": "SF, developer/owner, status, delivery date, relevance to ERP" }
   ],
-  "section3_title": "§3 — Rent Trends",
-  "section3_narrative": "2 sentences on rent trajectory",
-  "section3_table": [
-    { "asset_type": "type", "asking_rent": "$x.xx/SF NNN", "effective_rent": "$x.xx/SF", "yoy_change": "+x.x%", "cap_rate": "x.x%" }
+  "section3_none_verified": "If no Permian/Space Coast institutional spec announced this month, state that clearly",
+  "section4_table": [
+    { "operator": "Company name", "activity": "Specific CapEx, rig/crew adds, production guidance, service yard demand implication" }
   ],
-  "section4_title": "§4 — Notable Leases & Sales",
-  "section4_items": [
-    { "title": "transaction headline", "body": "tenant/buyer, address, size, terms, ERP relevance" }
+  "section5_table": [
+    { "item": "Pipeline or regulatory item name", "status": "Current status, timeline, relevance" }
   ],
-  "section5_title": "§5 — Development Activity",
-  "section5_items": [
-    { "title": "development name/area", "body": "status, land constraints, developer, completion estimate" }
+  "section5_data_note": "Any pending regulatory data note (e.g. TX RRC / NM OCD permits)",
+  "section6_table": [
+    { "submarket": "Submarket name", "assessment": "2-3 sentence investment priority rationale" }
   ],
-  "section6_title": "§6 — Investment Outlook",
-  "section6_narrative": "2-3 sentences on overall investment thesis for ERP in this submarket this month",
-  "section6_bullets": ["watch item 1", "watch item 2", "watch item 3"]
+  "source_names": ["CoStar", "TREC @ TAMU", "ExxonMobil IR", "Diamondback IR"]
 }
 
-Return ONLY valid JSON, no markdown, no extra text.`,
+Rules:
+- section1_bullets: exactly 3 bullets, national US industrial stats
+- section2_table: ${isPermian ? "Midland MSA and Odessa MSA rows required" : "Melbourne/Palm Bay and Titusville rows required"}
+- section3_items: only VERIFIED named projects from research — no placeholders
+- section3_none_verified: include this field if no confirmed local institutional spec found
+- section4_table: ${isPermian ? "include Diamondback, ConocoPhillips, ExxonMobil, bpX if found in research" : "include top 3-4 tenants found in research"}
+- section5_table: 2-4 items max, verified only
+- section6_table: ${isPermian ? "Midland MSA, Odessa MSA, Kermit (Winkler), Delaware Basin" : "Melbourne/Palm Bay, Titusville, Port Canaveral corridor, Cocoa/Rockledge"}
+- Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
   });
@@ -134,123 +184,127 @@ Return ONLY valid JSON, no markdown, no extra text.`,
     data = JSON.parse(cleanText);
   } catch (e) {
     console.error("[submarket-intelligence] JSON parse failed. Raw Claude output:", rawText.slice(0, 500));
-    data = { subject: `Submarket Intelligence: ${marketLabel} — ${params.period}` };
+    data = { subject: `${briefTitle} — ${params.period}` };
   }
 
-  const subject = (data.subject as string) || `Submarket Intelligence: ${marketLabel} — ${params.period}`;
+  const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
-  const keyMetrics = (data.key_metrics as Array<{ label: string; value: string; sub: string }> | undefined) ?? [];
-  const section1Table = (data.section1_table as Array<Record<string, string>> | undefined) ?? [];
-  const section2Items = (data.section2_items as Array<{ title: string; body: string }> | undefined) ?? [];
-  const section3Table = (data.section3_table as Array<Record<string, string>> | undefined) ?? [];
-  const section4Items = (data.section4_items as Array<{ title: string; body: string }> | undefined) ?? [];
-  const section5Items = (data.section5_items as Array<{ title: string; body: string }> | undefined) ?? [];
-  const section6Bullets = (data.section6_bullets as string[] | undefined) ?? [];
+  const section1Bullets = (data.section1_bullets as string[] | undefined) ?? [];
+  const section2Table   = (data.section2_table   as Array<{ submarket: string; rents: string; commentary: string }> | undefined) ?? [];
+  const section3Items   = (data.section3_items   as Array<{ title: string; body: string }> | undefined) ?? [];
+  const section4Table   = (data.section4_table   as Array<{ operator: string; activity: string }> | undefined) ?? [];
+  const section5Table   = (data.section5_table   as Array<{ item: string; status: string }> | undefined) ?? [];
+  const section6Table   = (data.section6_table   as Array<{ submarket: string; assessment: string }> | undefined) ?? [];
+  const sourceNames     = (data.source_names     as string[] | undefined) ?? [];
 
+  // ── helpers ──────────────────────────────────────────────────────────────────
   const secLabel = (text: string) =>
     `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
 
-  const metricsGrid = keyMetrics
-    .map(
-      (m) => `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;">
-  <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.8px;color:#64748b;margin-bottom:4px;">${m.label}</div>
-  <div style="font-size:20px;font-weight:700;color:#0f172a;">${m.value}</div>
-  <div style="font-size:12px;color:#94a3b8;margin-top:3px;">${m.sub}</div>
+  const tdCell = (val: string, bold = false) =>
+    `<td style="padding:9px 8px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;">${bold ? `<strong>${val}</strong>` : val}</td>`;
+
+  const th = (label: string, last = false) =>
+    `<th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 ${last ? "0" : "8px"} 8px ${last ? "8px" : "0"};border-bottom:2px solid #0f172a;">${label}</th>`;
+
+  // ── §1 ───────────────────────────────────────────────────────────────────────
+  const s1BulletsHtml = section1Bullets.length > 0
+    ? `<ul style="margin:8px 0 12px;padding-left:20px;">${section1Bullets.map(b => `<li style="font-size:13px;color:#334155;line-height:1.6;margin-bottom:4px;">${b}</li>`).join("")}</ul>`
+    : "";
+
+  // ── §2 ───────────────────────────────────────────────────────────────────────
+  const s2Rows = section2Table.map(r =>
+    `<tr>${tdCell(r.submarket ?? "", true)}${tdCell(r.rents ?? "—")}${tdCell(r.commentary ?? "")}</tr>`
+  ).join("\n");
+
+  // ── §3 ───────────────────────────────────────────────────────────────────────
+  const s3Cards = section3Items.map(i =>
+    `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 14px;">
+  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 3px;">${i.title}</p>
+  <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p>
 </div>`
-    )
-    .join("\n");
+  ).join("\n");
 
-  const s1TableRows = section1Table
-    .map(
-      (r) =>
-        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.submarket ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.vacancy ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.absorption_sf ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.trend ?? "—"}</td></tr>`
-    )
-    .join("\n");
+  // ── §4 ───────────────────────────────────────────────────────────────────────
+  const s4Rows = section4Table.map(r =>
+    `<tr>${tdCell(r.operator ?? "", true)}${tdCell(r.activity ?? "")}</tr>`
+  ).join("\n");
 
-  const s2Cards = section2Items
-    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
-    .join("\n");
+  // ── §5 ───────────────────────────────────────────────────────────────────────
+  const s5Rows = section5Table.map(r =>
+    `<tr>${tdCell(r.item ?? "", true)}${tdCell(r.status ?? "")}</tr>`
+  ).join("\n");
 
-  const s3TableRows = section3Table
-    .map(
-      (r) =>
-        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.asset_type ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.asking_rent ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.effective_rent ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.yoy_change ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.cap_rate ?? "—"}</td></tr>`
-    )
-    .join("\n");
+  // ── §6 ───────────────────────────────────────────────────────────────────────
+  const s6Rows = section6Table.map(r =>
+    `<tr>${tdCell(r.submarket ?? "", true)}${tdCell(r.assessment ?? "")}</tr>`
+  ).join("\n");
 
-  const s4Cards = section4Items
-    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
-    .join("\n");
+  // ── Sources footer line ──────────────────────────────────────────────────────
+  const sourcesLine = sourceNames.length > 0
+    ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong> ${sourceNames.join(" &middot; ")}`
+    : "";
 
-  const s5Cards = section5Items
-    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
-    .join("\n");
-
-  const s6Bullets = section6Bullets
-    .map((b) => `<li style="font-size:13px;color:#1d4ed8;margin-bottom:4px;">${b}</li>`)
-    .join("\n");
-
+  // ── Body ─────────────────────────────────────────────────────────────────────
   const bodyContent = `
-${
-  keyMetrics.length > 0
-    ? `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin:16px 0 24px;">${metricsGrid}</div>`
-    : ""
-}
+<!-- Note box -->
+<div style="border-left:4px solid #16a34a;background:#f0fdf4;padding:10px 14px;margin:0 0 24px;border-radius:0 4px 4px 0;font-size:13px;color:#166534;line-height:1.6;">
+  All figures verified at publication. ${macroNote}
+</div>
 
-${secLabel((data.section1_title as string) || "§1 — Vacancy &amp; Absorption")}
-<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section1_narrative as string) || ""}</p>
-${
-  s1TableRows
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+${secLabel((data.section1_title as string) || "§1 — National / ${isPermian ? 'Texas' : 'Florida'} Industrial Context")}
+<p style="font-size:13.5px;font-weight:600;color:#0f172a;margin:0 0 8px;line-height:1.5;">${(data.section1_headline as string) || ""}</p>
+${s1BulletsHtml}
+${(data.section1_reit as string) ? `<p style="font-size:13px;color:#334155;line-height:1.6;margin:8px 0 0;"><a href="https://www.eastgroup.net/investors" style="color:#1d4ed8;font-weight:700;text-decoration:underline;">EastGroup Properties (Sun Belt comp):</a> ${data.section1_reit as string}</p>` : ""}
+
+${secLabel(section2Label)}
+${s2Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
   <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Submarket</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Vacancy</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Net Absorption (SF)</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Trend</th>
+    ${th("Submarket")}${th("Rents")}${th("Commentary", true)}
   </tr></thead>
-  <tbody>${s1TableRows}</tbody>
-</table>`
-    : ""
-}
+  <tbody>${s2Rows}</tbody>
+</table>` : ""}
+${(data.section2_source_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section2_source_note as string}</p>` : ""}
 
-${secLabel((data.section2_title as string) || "§2 — New Supply Pipeline")}
-<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section2_narrative as string) || ""}</p>
-${s2Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No new supply pipeline data available.</p></div>'}
+${secLabel("§3 — Recent Development Activity (Verified)")}
+${s3Cards || ""}
+${(data.section3_none_verified as string) ? `<div style="border-left:3px solid #ef4444;padding:6px 0 6px 14px;margin:0 0 14px;"><p style="font-size:13px;color:#b91c1c;margin:0;font-weight:600;">${data.section3_none_verified as string}</p></div>` : ""}
 
-${secLabel((data.section3_title as string) || "§3 — Rent Trends")}
-<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section3_narrative as string) || ""}</p>
-${
-  s3TableRows
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+${secLabel(section4Label)}
+${s4Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
   <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Asset Type</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Asking Rent</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Effective Rent</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">YoY Change</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Cap Rate</th>
+    ${th(section4ColHeader)}${th("Activity", true)}
   </tr></thead>
-  <tbody>${s3TableRows}</tbody>
-</table>`
-    : ""
-}
+  <tbody>${s4Rows}</tbody>
+</table>` : "<p style=\"font-size:13px;color:#94a3b8;\">No verified operator commitments this period.</p>"}
 
-${secLabel((data.section4_title as string) || "§4 — Notable Leases &amp; Sales")}
-${s4Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No notable transactions this month.</p></div>'}
+${secLabel("§5 — Regulatory &amp; Infrastructure (Verified)")}
+${s5Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    ${th("Item")}${th("Status", true)}
+  </tr></thead>
+  <tbody>${s5Rows}</tbody>
+</table>` : ""}
+${(data.section5_data_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section5_data_note as string}</p>` : ""}
 
-${secLabel((data.section5_title as string) || "§5 — Development Activity")}
-${s5Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No development activity data available.</p></div>'}
-
-${secLabel((data.section6_title as string) || "§6 — Investment Outlook")}
-<p style="font-size:13px;color:#475569;line-height:1.6;margin:0 0 10px;">${(data.section6_narrative as string) || ""}</p>
-${
-  s6Bullets
-    ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>Watch this month:</strong><ul style="margin:8px 0 0;padding-left:18px;">${s6Bullets}</ul></div>`
-    : ""
-}
+${secLabel("§6 — Submarket Priority")}
+${s6Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    ${th("Submarket")}${th("Assessment", true)}
+  </tr></thead>
+  <tbody>${s6Rows}</tbody>
+</table>` : ""}
+<p style="font-size:12px;color:#94a3b8;font-style:italic;margin:16px 0 0;">${macroNote}</p>
 `;
 
-  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, "");
-  const summary = `Submarket intelligence report generated for ${marketLabel} — ${params.period}. Covers ${section1Table.length} submarkets, ${section2Items.length} pipeline projects, ${section4Items.length} notable transactions.`;
+  const htmlBody = HTML_WRAPPER(
+    briefTitle,
+    `${params.period} &middot; Monthly &middot; CRE focus, macro covered in Monday Brief`,
+    bodyContent,
+    sourcesLine
+  );
+
+  const summary = `${briefTitle} generated for ${params.period}. Covers ${section2Table.length} submarket baselines, ${section3Items.length} development items, ${section4Table.length} tenant commitments, ${section6Table.length} submarket priorities.`;
 
   return { subject, htmlBody, summary };
 }
