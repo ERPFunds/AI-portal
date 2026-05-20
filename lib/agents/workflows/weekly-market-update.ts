@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { runResearchAgent } from "@/lib/agents/research";
 import { fetchFredMacro } from "@/lib/macro/fred";
+import { fetchEiaMacro } from "@/lib/macro/eia";
 
 const anthropic = new Anthropic();
 
@@ -74,8 +75,8 @@ export async function runWeeklyMarketUpdate(params: {
 
   const ask = `Weekly market update for ${marketFullName}: recent industrial transactions, macro indicators (${macroIndicatorList}), supply/demand signals (vacancy rate, absorption, new deliveries), notable news or lease signings, period: ${params.period}`;
 
-  // Fetch FRED macro data and research in parallel
-  const [research, fredRows] = await Promise.all([
+  // Fetch FRED + EIA macro data and research all in parallel
+  const [research, fredRows, eiaRows] = await Promise.all([
     runResearchAgent({
       ask,
       projectContext: `${marketLabel} Weekly Market Update ${params.period}`,
@@ -83,13 +84,20 @@ export async function runWeeklyMarketUpdate(params: {
       market: params.market,
     }),
     fetchFredMacro(params.market),
+    fetchEiaMacro(params.market),
   ]);
 
-  // Build FRED context string for the prompt
-  const fredContext = fredRows && fredRows.length > 0
+  // Merge pre-fetched macro rows: FRED first, then EIA (no duplicates by label)
+  const preFetchedRows = [
+    ...(fredRows ?? []),
+    ...(eiaRows ?? []).filter(e => !(fredRows ?? []).some(f => f.indicator === e.indicator)),
+  ];
+
+  // Build macro context string for the prompt
+  const fredContext = preFetchedRows.length > 0
     ? `\n--- PRE-FETCHED MACRO DATA (use these exact values in macro_table) ---\n` +
-      fredRows.map(r =>
-        `${r.indicator}: latest=${r.latest}, WoW=${r.wow} (${r.wow_dir}), YoY=${r.yoy} (${r.yoy_dir})`
+      preFetchedRows.map(r =>
+        `${r.indicator}: latest=${r.latest}, MoM/WoW=${r.wow} (${r.wow_dir}), YoY=${r.yoy} (${r.yoy_dir})`
       ).join("\n") +
       `\n--- END MACRO DATA ---\n`
     : "";
