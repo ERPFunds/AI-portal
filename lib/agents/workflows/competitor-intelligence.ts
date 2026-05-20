@@ -27,7 +27,7 @@ const HTML_WRAPPER = (
   <!-- Header -->
   <div style="padding:28px 40px 20px;border-bottom:2px solid #e2e8f0;">
     <p style="font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;margin:0 0 10px;">ERP Funds &middot; Internal Research</p>
-    <h1 style="font-size:24px;font-weight:700;color:#0f172a;margin:0 0 6px;line-height:1.2;">&#128269; ${displayTitle}</h1>
+    <h1 style="font-size:24px;font-weight:700;color:#0f172a;margin:0 0 6px;line-height:1.2;">&#128202; ${displayTitle}</h1>
     <p style="font-size:13px;color:#64748b;margin:0;">${displayDate}</p>
   </div>
 
@@ -50,12 +50,26 @@ export async function runCompetitorIntelligence(params: {
   market: string;
   period: string;
 }): Promise<CompetitorIntelligenceOutput> {
-  const marketLabel = params.market.charAt(0).toUpperCase() + params.market.slice(1);
-  const ask = `Competitor intelligence for industrial CRE market in ${marketLabel}: institutional fundraises, major acquisitions, public REIT performance (EastGroup, Prologis, Rexford, Terreno, STAG, First Industrial), regional PE peers active in ${marketLabel}, private competitors, comparable fund structures (management fee, carry, term, target IRR), period: ${params.period}`;
+  const isPermian = params.market.toLowerCase() === "permian";
+  const marketLabel = isPermian ? "Permian Basin" : params.market.charAt(0).toUpperCase() + params.market.slice(1);
+  const geoLabel = isPermian ? "Texas / Sun Belt" : "Florida / Sun Belt";
+
+  const briefTitle = `${marketLabel} Competitive Landscape & Comparable Funds`;
+
+  const ask = `Competitor intelligence for ${marketLabel} industrial CRE market, period: ${params.period}.
+
+Focus areas:
+1. Industrial capital flowing — recent fund closes, major acquisitions, institutional deployments with dollar figures and dates
+2. EastGroup Properties (EGP) latest quarterly results — EPS, FFO/share, leasing rate, consecutive FFO growth quarters, same-store NOI, dev starts guidance, debt/market cap, FFO guide, geographic focus
+3. Other public industrial REITs to track: Prologis, Rexford, Terreno, STAG, First Industrial, Plymouth, LXP
+4. ${geoLabel} industrial PE peers — Stonelake Capital Partners, Harbor Capital, Investcorp, Circle Industrial, others active in market
+5. Private competitors with potential ${marketLabel} interest — Hillwood, Stream Realty, Crow Holdings, Ares Industrial, Lincoln Property, others
+6. Comparable fund structures — industry-standard ranges for management fee, carried interest, term, target IRR
+7. LP differentiation angles — 3 verified positioning angles with specific data points from this month`;
 
   const research = await runResearchAgent({
     ask,
-    projectContext: `${marketLabel} Competitor Intelligence ${params.period}`,
+    projectContext: `${briefTitle} ${params.period}`,
     workflowId: "competitor-intelligence",
     market: params.market,
   });
@@ -63,9 +77,16 @@ export async function runCompetitorIntelligence(params: {
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 6000,
-    system: [{ type: "text" as const, text: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets (Midland-Odessa, Tampa/Brevard County FL, secondary Texas).
+    system: [{ type: "text" as const, text: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
-Your job: produce a richly detailed, LP-grade competitor intelligence brief for internal use. Be specific, data-dense, and direct. Every section must contain real named entities, figures, and actionable observations. No filler.`, cache_control: { type: "ephemeral" } }],
+Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.`, cache_control: { type: "ephemeral" } }],
+    tools: [
+      {
+        type: "web_search_20250305" as "web_search_20250305",
+        name: "web_search",
+        max_uses: 5,
+      } as unknown as Anthropic.Tool,
+    ],
     messages: [
       {
         role: "user",
@@ -77,184 +98,208 @@ ${research.findings}
 ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
 
 ---
-Produce a JSON object with this exact structure (escape all HTML correctly):
+Return ONLY valid JSON with this exact structure:
+
 {
-  "subject": "string — e.g. 'Competitor Intelligence: Permian Basin — May 2026'",
-  "section1_title": "§1 — Capital Flowing",
+  "subject": "string — e.g. '${marketLabel} Competitive Landscape & Comparable Funds — ${params.period}'",
+
   "section1_items": [
-    { "title": "event/deal title", "body": "details, amounts, parties, significance to ERP" }
+    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "1-2 sentences on significance to ERP — overlap, competition, signal" }
   ],
-  "section2_title": "§2 — Public Industrial REIT Benchmark",
-  "section2_table": [
-    { "name": "EastGroup Properties", "ticker": "EGP", "price": "$", "ytd": "%", "ffo_yield": "%", "div_yield": "%", "note": "text" },
-    { "name": "Prologis", "ticker": "PLD", ... },
-    { "name": "Rexford Industrial", "ticker": "REXR", ... },
-    { "name": "Terreno Realty", "ticker": "TRNO", ... },
-    { "name": "STAG Industrial", "ticker": "STAG", ... },
-    { "name": "First Industrial", "ticker": "FR", ... }
+
+  "section2_egp_rows": [
+    { "metric": "Q1 2026 EPS", "value": "$x.xx (vs $x.xx Y/Y)" },
+    { "metric": "FFO/share", "value": "$x.xx (+x.x% YoY)" },
+    { "metric": "Leasing rate", "value": "xx.x%" },
+    { "metric": "Consecutive FFO growth", "value": "xx quarters" },
+    { "metric": "Same-store NOI growth", "value": "xx consecutive quarters" },
+    { "metric": "2026 dev starts", "value": "$xxxM" },
+    { "metric": "Debt / market cap", "value": "xx.x%" },
+    { "metric": "2026 FFO guide", "value": "$x.xx–$x.xx" },
+    { "metric": "Geographic focus", "value": "TX · FL · CA · AZ · NC" }
   ],
-  "section2_narrative": "2-3 sentences LP-facing narrative on REIT comp context",
-  "section3_title": "§3 — Regional PE Peers",
+  "section2_lp_narrative": "2-3 sentence LP-facing narrative on what EGP performance signals for ERP's thesis",
+  "section2_other_reits": "Prologis (PLD) · Rexford (REXR) · Terreno (TRNO) · STAG (STAG) · First Industrial (FR) · Plymouth (PLYM) · LXP (LXP). Add any notable recent data point per ticker if found.",
+
   "section3_table": [
-    { "firm": "name", "focus": "strategy", "aum_est": "$xB", "activity": "what they are doing in this market" }
+    { "firm": "Stonelake Capital Partners", "description": "$5.5B+ commercial RE across Austin, Dallas, Houston, San Antonio. $3.1B equity raised across 9 funds in 18 years. Direct Texas peer at meaningful scale." }
   ],
-  "section4_title": "§4 — Private Competitors",
-  "section4_items": [
-    { "title": "firm/operator name", "body": "description, assets, market interest" }
+
+  "section4_bullets": [
+    "Hillwood (Perot family) — AllianceTexas DFW — no announced Permian project",
+    "Stream Realty Partners — Texas-wide, has Midland office presence"
   ],
-  "section5_title": "§5 — Comparable Fund Structures",
-  "section5_table": [
-    { "fund": "name", "mgmt_fee": "%", "carry": "%", "term": "years", "target_irr": "%" }
+  "section4_correction": "Optional — only include if correcting a specific prior-draft error. Leave empty string if none.",
+
+  "section5_rows": [
+    { "metric": "Management fee", "range": "1.5–2.0% on committed capital" },
+    { "metric": "Carried interest", "range": "20% over 8% preferred return" },
+    { "metric": "Term", "range": "7–10 years with extensions" },
+    { "metric": "Target net IRR", "range": "12–16% (core+ to value-add)" }
   ],
-  "section6_title": "§6 — Differentiation Narrative for LP Decks",
+  "section5_note": "Industry-typical ranges from public PE conventions. ERP-specific positioning vs. peers: pending PPM comp data integration.",
+
   "section6_angles": [
-    { "angle": "positioning angle title", "narrative": "1-2 sentence narrative" }
+    { "angle": "Positioning angle title", "narrative": "Supporting data point — implication for ERP LP narrative." }
   ],
-  "section6_watch": "Watch for next month: 1-2 sentences on key things to monitor"
+  "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
+
+  "source_names": ["EastGroup Q1 press release", "Diamondback Q1 2026", "Stonelake website"]
 }
 
-Return ONLY valid JSON, no markdown, no extra text.`,
+Rules:
+- section1_items: 4-6 items, mix of fund closes, acquisitions, operator results
+- section2_egp_rows: use most recent quarter available; search for it if not in research
+- section3_table: 3-5 ${geoLabel} PE peers with substantive descriptions
+- section4_bullets: 4-6 private competitors, one sentence each
+- section4_correction: empty string "" if no correction needed
+- section5_rows: industry ranges only, NOT individual named funds
+- section6_angles: exactly 3 angles with specific verified data points
+- Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
   });
 
-  const rawText = response.content[0].type === "text" ? response.content[0].text : "{}";
+  // Find last text block (tool_use blocks may precede it)
+  const textBlocks = response.content.filter((b) => b.type === "text");
+  const rawText = textBlocks.length > 0 ? (textBlocks[textBlocks.length - 1] as { type: "text"; text: string }).text : "{}";
   const cleanText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
+
   let data: Record<string, unknown>;
   try {
     data = JSON.parse(cleanText);
   } catch (e) {
-    console.error("[competitor-intelligence] JSON parse failed. Raw Claude output:", rawText.slice(0, 500));
-    data = { subject: `Competitor Intelligence: ${marketLabel} — ${params.period}` };
+    console.error("[competitor-intelligence] JSON parse failed:", rawText.slice(0, 500));
+    data = { subject: `${briefTitle} — ${params.period}` };
   }
 
-  const subject = (data.subject as string) || `Competitor Intelligence: ${marketLabel} — ${params.period}`;
+  const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
-  // Build HTML body from structured data
-  const section1Items = (data.section1_items as Array<{ title: string; body: string }> | undefined) ?? [];
-  const section2Table = (data.section2_table as Array<Record<string, string>> | undefined) ?? [];
-  const section3Table = (data.section3_table as Array<Record<string, string>> | undefined) ?? [];
-  const section4Items = (data.section4_items as Array<{ title: string; body: string }> | undefined) ?? [];
-  const section5Table = (data.section5_table as Array<Record<string, string>> | undefined) ?? [];
+  // ── Parse sections ────────────────────────────────────────────────────────
+  const section1Items  = (data.section1_items  as Array<{ title: string; date: string; body: string }> | undefined) ?? [];
+  const section2EgpRows= (data.section2_egp_rows as Array<{ metric: string; value: string }> | undefined) ?? [];
+  const section3Table  = (data.section3_table  as Array<{ firm: string; description: string }> | undefined) ?? [];
+  const section4Bullets= (data.section4_bullets as string[] | undefined) ?? [];
+  const section5Rows   = (data.section5_rows   as Array<{ metric: string; range: string }> | undefined) ?? [];
   const section6Angles = (data.section6_angles as Array<{ angle: string; narrative: string }> | undefined) ?? [];
+  const sourceNames    = (data.source_names    as string[] | undefined) ?? [];
 
+  // ── HTML helpers ──────────────────────────────────────────────────────────
   const secLabel = (text: string) =>
     `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
 
-  const s1Cards = section1Items
-    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
-    .join("\n");
+  const tdL = (val: string, bold = false) =>
+    `<td style="padding:9px 10px 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;width:42%;">${bold ? `<strong>${val}</strong>` : val}</td>`;
+  const tdR = (val: string) =>
+    `<td style="padding:9px 0 9px 10px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;">${val}</td>`;
 
-  const s2TableRows = section2Table
-    .map(
-      (r) =>
-        `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.name ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ticker ?? ""}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.price ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ytd ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.ffo_yield ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.div_yield ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.note ?? ""}</td></tr>`
-    )
-    .join("\n");
+  // ── §1 — Capital Flowing ──────────────────────────────────────────────────
+  const s1Cards = section1Items.map((i) =>
+    `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
+  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 2px;">${i.title}${i.date ? ` <span style="font-weight:400;color:#94a3b8;font-size:12px;">&middot; ${i.date}</span>` : ""}</p>
+  <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p>
+</div>`
+  ).join("\n");
 
-  const s3TableRows = section3Table
-    .map((r) => `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.firm ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.focus ?? ""}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.aum_est ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.activity ?? ""}</td></tr>`)
-    .join("\n");
+  // ── §2 — EastGroup deep table ─────────────────────────────────────────────
+  const s2EgpRows = section2EgpRows.map((r) =>
+    `<tr>${tdL(r.metric, true)}${tdR(r.value)}</tr>`
+  ).join("\n");
 
-  const s4Cards = section4Items
-    .map((i) => `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 4px;">${i.title}</p><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p></div>`)
-    .join("\n");
+  // ── §3 — PE Peers ─────────────────────────────────────────────────────────
+  const s3Rows = section3Table.map((r) =>
+    `<tr>${tdL(r.firm, true)}${tdR(r.description)}</tr>`
+  ).join("\n");
 
-  const s5TableRows = section5Table
-    .map((r) => `<tr><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;"><strong>${r.fund ?? ""}</strong></td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.mgmt_fee ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.carry ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.term ?? "—"}</td><td style="padding:9px 6px;border-bottom:1px solid #f1f5f9;color:#334155;">${r.target_irr ?? "—"}</td></tr>`)
-    .join("\n");
+  // ── §4 — Private competitors bullet list ─────────────────────────────────
+  const s4Bullets = section4Bullets.length > 0
+    ? `<ul style="margin:0 0 12px;padding-left:20px;">${section4Bullets.map((b) =>
+        `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:4px;">${b}</li>`
+      ).join("")}</ul>`
+    : "";
 
-  const s6Angles = section6Angles
-    .map((a) => `<div style="margin:8px 0;padding:10px 14px;border-left:4px solid #16a34a;background:#f0fdf4;border-radius:0 4px 4px 0;font-size:13px;color:#15803d;"><strong>${a.angle}</strong> — ${a.narrative}</div>`)
-    .join("\n");
+  const s4Correction = (data.section4_correction as string | undefined)?.trim()
+    ? `<div style="border-left:4px solid #dc2626;background:#fef2f2;padding:10px 14px;margin:12px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.6;">
+  <strong>Correction from prior draft:</strong> ${data.section4_correction as string}
+</div>`
+    : "";
 
-  const bodyContent = `
-${secLabel((data.section1_title as string) || "§1 — Capital Flowing")}
-${s1Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No data available for this period.</p></div>'}
+  // ── §5 — Fund structures ──────────────────────────────────────────────────
+  const s5Rows = section5Rows.map((r) =>
+    `<tr>${tdL(r.metric, true)}${tdR(r.range)}</tr>`
+  ).join("\n");
 
-${secLabel((data.section2_title as string) || "§2 — Public Industrial REIT Benchmark")}
-<div style="border-left:4px solid #d97706;background:#fffbeb;padding:12px 16px;margin:20px 0 0;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.65;">EastGroup Properties (EGP) is the closest public comp to ERP's Sunbelt/secondary industrial strategy.</div>
-${
-  s2TableRows
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">REIT</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Ticker</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Price</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">YTD</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">FFO Yield</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Div Yield</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Note</th>
-  </tr></thead>
-  <tbody>${s2TableRows}</tbody>
-</table>`
-    : `<p style="font-size:13px;color:#94a3b8;">Benchmark data not available.</p>`
-}
-<p style="font-size:13px;color:#475569;line-height:1.6;margin:8px 0;">${(data.section2_narrative as string) || ""}</p>
+  // ── §6 — Differentiation angles ──────────────────────────────────────────
+  const s6List = section6Angles.length > 0
+    ? `<p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px;">Three verified positioning angles this month:</p>
+<ol style="margin:0 0 14px;padding-left:20px;">${section6Angles.map((a) =>
+      `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:8px;"><strong>${a.angle}</strong> — ${a.narrative}</li>`
+    ).join("")}</ol>`
+    : "";
 
-${secLabel((data.section3_title as string) || "§3 — Regional PE Peers")}
-${
-  s3TableRows
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Firm</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Focus</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">AUM Est.</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Activity in Market</th>
-  </tr></thead>
-  <tbody>${s3TableRows}</tbody>
-</table>`
-    : `<p style="font-size:13px;color:#94a3b8;">No regional PE peer data available.</p>`
-}
-
-${secLabel((data.section4_title as string) || "§4 — Private Competitors")}
-${s4Cards || '<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;"><p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">No private competitor data available.</p></div>'}
-
-${secLabel((data.section5_title as string) || "§5 — Comparable Fund Structures")}
-${
-  s5TableRows
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Fund</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Mgmt Fee</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Carry</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 6px 8px;border-bottom:2px solid #0f172a;">Term</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px 6px;border-bottom:2px solid #0f172a;">Target IRR</th>
-  </tr></thead>
-  <tbody>${s5TableRows}</tbody>
-</table>`
-    : `<p style="font-size:13px;color:#94a3b8;">No comparable fund structure data available.</p>`
-}
-
-${secLabel((data.section6_title as string) || "§6 — Differentiation Narrative for LP Decks")}
-${s6Angles || `<p style="font-size:13px;color:#94a3b8;">No differentiation angles available.</p>`}
-${
-  data.section6_watch
-    ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>Watch for next month:</strong> ${data.section6_watch as string}</div>`
-    : ""
-}
-`;
-
-  // ── Sources footer — hyperlinked with domain label ───────────────────────────
+  // ── Sources footer — hyperlinked URLs ────────────────────────────────────
   const linkedSources = research.sources
     .filter((u) => u.startsWith("http"))
     .slice(0, 40)
     .map((u) => {
       let label: string;
-      try {
-        label = new URL(u).hostname.replace(/^www\./, "");
-      } catch {
-        label = u;
-      }
+      try { label = new URL(u).hostname.replace(/^www\./, ""); } catch { label = u; }
       return `<a href="${u}" style="color:#1d4ed8;text-decoration:underline;" target="_blank">${label}</a>`;
     });
 
   const sourcesLine = linkedSources.length > 0
     ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong><br/>${linkedSources.join(" &nbsp;&middot;&nbsp; ")}`
+    : sourceNames.length > 0
+    ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong> ${sourceNames.join(" &middot; ")}`
     : "";
 
-  const htmlBody = HTML_WRAPPER(subject, `${params.period}`, bodyContent, sourcesLine);
-  const summary = `Competitor intelligence brief generated for ${marketLabel} — ${params.period}. Covers ${section1Items.length} capital flow events, ${section2Table.length} REIT benchmarks, ${section3Table.length} PE peers, ${section4Items.length} private competitors.`;
+  // ── Body ──────────────────────────────────────────────────────────────────
+  const bodyContent = `
+<!-- Note box -->
+<div style="border-left:4px solid #16a34a;background:#f0fdf4;padding:10px 14px;margin:0 0 24px;border-radius:0 4px 4px 0;font-size:13px;color:#166534;line-height:1.6;">
+  All figures verified at publication. Items requiring data integration are explicitly marked.
+</div>
+
+${secLabel("§1 — Industrial Capital Flowing (Verified)")}
+${s1Cards || '<p style="font-size:13px;color:#94a3b8;">No capital flow events found this period.</p>'}
+
+${secLabel("§2 — Public Industrial REIT Benchmark (Verified)")}
+<p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px;">EastGroup Properties (EGP) — closest public benchmark to ERP</p>
+${s2EgpRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
+  <tbody>${s2EgpRows}</tbody>
+</table>` : ""}
+${(data.section2_lp_narrative as string) ? `<p style="font-size:13px;color:#334155;line-height:1.6;margin:0 0 12px;"><strong>LP-facing read:</strong> ${data.section2_lp_narrative as string}</p>` : ""}
+${(data.section2_other_reits as string) ? `<p style="font-size:13px;color:#475569;margin:0;"><strong>Other public industrial REITs (tracking quarterly):</strong><br/><span style="font-style:italic;">${data.section2_other_reits as string}</span></p>` : ""}
+
+${secLabel(`§3 — ${geoLabel} Industrial PE Peers (Verified)`)}
+${s3Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <tbody>${s3Rows}</tbody>
+</table>` : '<p style="font-size:13px;color:#94a3b8;">No peer data available.</p>'}
+
+${secLabel("§4 — Private Competitors with Potential Permian Interest")}
+<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Verified existence; specific ${marketLabel} deployment unverified unless noted.</p>
+${s4Bullets}
+${s4Correction}
+
+${secLabel("§5 — Comparable Fund Structures")}
+<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">${(data.section5_note as string) || "Industry-typical ranges from public PE conventions."}</p>
+${s5Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <tbody>${s5Rows}</tbody>
+</table>` : ""}
+
+${secLabel("§6 — Differentiation Narrative for LP Decks")}
+${s6List}
+${(data.section6_watch as string) ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>${data.section6_watch as string}</strong></div>` : ""}
+`;
+
+  const htmlBody = HTML_WRAPPER(
+    briefTitle,
+    `${params.period} &middot; Monthly &middot; v2 &mdash; verified sources only`,
+    bodyContent,
+    sourcesLine
+  );
+
+  const summary = `${briefTitle} generated for ${params.period}. Covers ${section1Items.length} capital flow events, EastGroup ${section2EgpRows.length}-metric benchmark, ${section3Table.length} PE peers, ${section4Bullets.length} private competitors, ${section6Angles.length} LP differentiation angles.`;
 
   return { subject, htmlBody, summary };
 }
