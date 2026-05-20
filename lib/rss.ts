@@ -60,6 +60,14 @@ const BREVARD_FEEDS: { url: string; source: string }[] = [
   { url: "https://spaceflightnow.com/feed/",                               source: "SpaceflightNow" },
   { url: "https://spacenews.com/feed/",                                    source: "SpaceNews" },
   { url: "https://www.nasaspaceflight.com/feed/",                          source: "NASASpaceflight.com" },
+  { url: "https://feeds.arstechnica.com/arstechnica/space",                source: "Ars Technica Space" },
+  { url: "https://www.nasa.gov/rss/dyn/breaking_news.rss",                 source: "NASA Breaking News" },
+  { url: "https://blogs.nasa.gov/kennedy/feed/",                           source: "NASA Kennedy Space Center" },
+  { url: "https://www.universetoday.com/feed/",                            source: "Universe Today" },
+
+  // ── Economic development — Space Coast EDC & Enterprise Florida ────────────
+  { url: "https://www.spacecoastedc.org/feed/",                           source: "Space Coast EDC" },
+  { url: "https://floridajobs.org/feeds/news-rss.xml",                    source: "Enterprise Florida" },
 ];
 
 // Submarket intelligence — CRE + macro combined
