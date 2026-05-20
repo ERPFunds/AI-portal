@@ -2908,6 +2908,17 @@ const CONNECTIONS_DATA = [
     ],
   },
   {
+    id: 'census',
+    icon: '🏛️',
+    name: 'Census Bureau API',
+    status: 'disconnected' as const,
+    meta: 'Building permits, population growth, and economic indicators by county — powers Brevard / Space Coast macro signals',
+    sync: 'Not connected',
+    fields: [
+      { label: 'API Key', key: 'apiKey', placeholder: 'Register free at api.census.gov/data/key_signup.html' },
+    ],
+  },
+  {
     id: 'apify',
     icon: '🕷️',
     name: 'Apify',
