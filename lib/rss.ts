@@ -128,6 +128,34 @@ export async function fetchAllFeeds(): Promise<FeedItem[]> {
   return fetchFeedsForWorkflow("permian-brief");
 }
 
+// Stop-words to ignore when comparing article titles for near-duplicate detection
+const STOP_WORDS = new Set([
+  "a","an","the","and","or","but","in","on","at","to","for","of","with",
+  "by","from","as","is","was","are","were","be","been","has","have","had",
+  "its","it","this","that","these","those","new","says","said","will","may",
+  "also","after","over","about","up","out","than","then","into","just","more",
+]);
+
+/** Extract significant tokens from a title for near-duplicate comparison */
+function titleTokens(title: string): Set<string> {
+  return new Set(
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 4 && !STOP_WORDS.has(w))
+  );
+}
+
+/** Returns true if two titles share enough tokens to be considered the same story */
+function isSameStory(a: Set<string>, b: Set<string>): boolean {
+  if (a.size === 0 || b.size === 0) return false;
+  let shared = 0;
+  for (const t of a) if (b.has(t)) shared++;
+  // Overlap ratio relative to the smaller title — 50%+ overlap = same story
+  return shared / Math.min(a.size, b.size) >= 0.5;
+}
+
 /** Fetch RSS articles for a specific workflow + market, deduplicated and sorted newest-first */
 export async function fetchFeedsForWorkflow(
   workflowId: string,
@@ -169,8 +197,20 @@ export async function fetchFeedsForWorkflow(
     })
   );
 
-  // Sort newest first, cap at maxItems
-  return results
-    .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
-    .slice(0, maxItems);
+  // Sort newest first, then remove near-duplicate stories (same story from multiple wires)
+  const sorted = results.sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime());
+
+  const deduped: FeedItem[] = [];
+  const dedupedTokens: Set<string>[] = [];
+
+  for (const item of sorted) {
+    const tokens = titleTokens(item.title);
+    const isDupe = dedupedTokens.some((existing) => isSameStory(tokens, existing));
+    if (!isDupe) {
+      deduped.push(item);
+      dedupedTokens.push(tokens);
+    }
+  }
+
+  return deduped.slice(0, maxItems);
 }
