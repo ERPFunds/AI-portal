@@ -184,11 +184,17 @@ async function fetchSeries(def: SeriesDef, apiKey: string): Promise<FredRow | nu
  * Returns null if no FRED_API_KEY is configured.
  */
 export async function fetchFredMacro(market: string): Promise<FredRow[] | null> {
-  const apiKey = process.env.FRED_API_KEY;
+  // Accept several common naming conventions for the FRED key
+  const apiKey =
+    process.env.FRED_API_KEY ||
+    process.env.FRED_KEY ||
+    process.env.API_KEY ||
+    process.env.FRED_API;
   if (!apiKey) {
-    console.warn("[fred] FRED_API_KEY not set — skipping macro pre-fetch");
+    console.warn("[fred] No FRED API key found (tried FRED_API_KEY, FRED_KEY, API_KEY, FRED_API) — skipping macro pre-fetch");
     return null;
   }
+  console.log("[fred] Using API key from env (first 4 chars):", apiKey.slice(0, 4));
 
   const seriesDefs =
     market.toLowerCase() === "brevard" ? BREVARD_SERIES : PERMIAN_SERIES;
