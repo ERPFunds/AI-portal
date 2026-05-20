@@ -1,15 +1,4 @@
-import nodemailer from "nodemailer";
-
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST ?? "smtp.office365.com",
-  port: Number(process.env.SMTP_PORT ?? 587),
-  secure: false,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
-  },
-  tls: { ciphers: "SSLv3" },
-});
+import { getGraphToken } from "@/lib/agents/graph-token";
 
 function escapeHtml(str: string): string {
   return str
@@ -25,9 +14,7 @@ function markdownToHtmlParagraphs(text: string): string {
     .map((para) => {
       const trimmed = para.trim();
       if (!trimmed) return "";
-      // Bold headers like **[Slide 1] — Title**
       const withBold = trimmed.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-      // Bullet points
       const withBullets = withBold.replace(/^[•\-]\s/gm, "· ");
       return `<p style="line-height:1.7;color:#374151;margin:0 0 14px;font-size:14px;">${withBullets}</p>`;
     })
@@ -80,11 +67,11 @@ export async function sendReplyEmail(params: {
         <div style="font-size:18px;font-weight:700;color:#fff;line-height:1.3;">
           ${escapeHtml(params.originalSubject)}
         </div>
-        <div style="margin-top:8px;display:flex;gap:8px;align-items:center;">
+        <div style="margin-top:8px;">
           <span style="font-size:11px;color:${statusColor};font-weight:600;background:rgba(255,255,255,0.08);padding:3px 10px;border-radius:12px;border:1px solid ${statusColor};">
             ${statusLabel}
           </span>
-          <span style="font-size:12px;color:#94a3b8;">${escapeHtml(params.workflowId)} · ${escapeHtml(params.projectContext)}</span>
+          <span style="font-size:12px;color:#94a3b8;margin-left:8px;">${escapeHtml(params.workflowId)} · ${escapeHtml(params.projectContext)}</span>
         </div>
       </td></tr>
 
@@ -107,10 +94,35 @@ export async function sendReplyEmail(params: {
 </body>
 </html>`;
 
-  await transporter.sendMail({
-    from: `"ERP Agent 1" <${process.env.SMTP_USER}>`,
-    to: params.to,
-    subject: `[Agent 1] Re: ${params.originalSubject}`,
-    html,
-  });
+  // Send via Microsoft Graph API (same as newsletter send — no SMTP auth required)
+  const token = await getGraphToken();
+  if (!token) {
+    throw new Error("Graph token unavailable — AZURE credentials not configured");
+  }
+
+  const senderMailbox = process.env.SMTP_USER ?? "mparad@erpfunds.com";
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(senderMailbox)}/sendMail`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        message: {
+          subject: `[Agent 1] Re: ${params.originalSubject}`,
+          body: { contentType: "HTML", content: html },
+          toRecipients: [{ emailAddress: { address: params.to } }],
+        },
+        saveToSentItems: true,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Graph sendMail failed ${res.status}: ${err}`);
+  }
 }
