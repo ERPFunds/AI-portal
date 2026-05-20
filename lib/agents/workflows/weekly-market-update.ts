@@ -170,7 +170,7 @@ Return ONLY valid JSON — no markdown, no code fences, no extra text. Use this 
 }
 
 Rules:
-- macro_table: Start with any PRE-FETCHED MACRO DATA rows above (copy exact values). Then add remaining indicators from ${macroIndicatorList} using research findings or web search. Direction fields: "up", "down", or "neutral". Use "—" if truly unavailable — do NOT guess numbers.
+- macro_table: Include ONLY indicators NOT already covered in the PRE-FETCHED MACRO DATA block above. Add remaining indicators from ${macroIndicatorList} using research findings. Direction fields: "up", "down", or "neutral". Use "—" if truly unavailable — do NOT guess numbers. Leave macro_table as [] if research has nothing to add (pre-fetched data will be used automatically).
 - articles: include ALL newsworthy items from the research (aim for 4-8). Use the source URL where you can match it from the source URLs list above.
 - narrative: synthesize the week for LP communication — what it means for ERP's thesis, what to watch.
 - source_names: list every publication used.`,
@@ -198,12 +198,21 @@ Rules:
   const displayTitle = (data.display_title as string) || briefTitle;
   const displayDate = (data.display_date as string) || `Week of ${params.period}`;
   const headline = (data.headline as string) || "";
-  const macroTable = (data.macro_table as Array<{
+  // Merge: preFetchedRows are authoritative (real API data); Claude adds any research-only rows
+  const claudeMacroTable = (data.macro_table as Array<{
     indicator: string; latest: string;
     wow: string; wow_dir: string;
     yoy: string; yoy_dir: string;
     trend: string;
   }> | undefined) ?? [];
+
+  // Build final macro table: start with pre-fetched (guaranteed correct),
+  // then append Claude rows whose indicators don't overlap with pre-fetched ones
+  const preFetchedIndicators = new Set(preFetchedRows.map(r => r.indicator.toLowerCase()));
+  const claudeOnlyRows = claudeMacroTable.filter(
+    r => !preFetchedIndicators.has(r.indicator.toLowerCase())
+  );
+  const macroTable = [...preFetchedRows, ...claudeOnlyRows];
   const articles = (data.articles as Array<{
     source: string; title: string; date: string; body: string; url?: string;
   }> | undefined) ?? [];
