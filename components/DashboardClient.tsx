@@ -3723,7 +3723,6 @@ function SOPsView() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <NewsletterPromptLibrary />
         <UploadedFilesCard />
-        {MARKET_DATA_SOURCES.map((mds) => <MarketDataCard key={mds.market} mds={mds} />)}
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
           return (
