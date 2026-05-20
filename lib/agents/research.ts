@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchFeedsForWorkflow, type FeedItem } from "@/lib/rss";
+import { fetchGoogleNews } from "@/lib/apify";
 
 export interface ResearchBundle {
   query: string;
@@ -25,8 +26,20 @@ export async function runResearchAgent(params: {
   workflowId: string;
   market?: string;
 }): Promise<ResearchBundle> {
-  // 1. Fetch RSS articles in parallel with Claude call setup
-  const articles = await fetchFeedsForWorkflow(params.workflowId, params.market, 40);
+  // 1. Fetch RSS feeds + Google News in parallel
+  const [rssArticles, googleArticles] = await Promise.all([
+    fetchFeedsForWorkflow(params.workflowId, params.market, 40),
+    fetchGoogleNews(params.workflowId, params.market ?? "", 20),
+  ]);
+
+  // Merge: RSS first (curated), then Google News deduped by URL, newest-first, cap at 55
+  const seenLinks = new Set(rssArticles.map((a) => a.link));
+  const articles: FeedItem[] = [
+    ...rssArticles,
+    ...googleArticles.filter((a) => !seenLinks.has(a.link)),
+  ]
+    .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
+    .slice(0, 55);
 
   // Build article context string
   const articleContext = articles.length > 0
