@@ -148,9 +148,10 @@ export async function fetchBlsMacro(market: string): Promise<FredRow[] | null> {
     process.env.BLS_API;
 
   if (!apiKey) {
-    console.warn("[bls] No BLS API key found (tried BLS_API_KEY, BLS_KEY, BLS_API) — skipping");
+    console.warn("[bls] No BLS API key found — tried BLS_API_KEY, BLS_KEY, BLS_API — skipping");
     return null;
   }
+  console.log(`[bls] Key found (${apiKey.slice(0, 4)}***), fetching ${seriesDefs.length} series for ${market}`);
 
   const seriesDefs =
     market.toLowerCase() === "brevard" ? BREVARD_SERIES : PERMIAN_SERIES;

@@ -64,25 +64,28 @@ function toRow(
 
 async function fetchPermianDpr(apiKey: string): Promise<FredRow[]> {
   try {
-    const params = new URLSearchParams({
-      api_key: apiKey,
-      frequency: "monthly",
-      "facets[region][]": "permian",
-      "data[0]": "rig-count",
-      "data[1]": "drilled-wells",
-      "data[2]": "completed-wells",
-      "data[3]": "oil-production",
-      "sort[0][column]": "period",
-      "sort[0][direction]": "desc",
-      length: "14",
-    });
+    // Build URL manually — URLSearchParams percent-encodes [ and ] which breaks EIA v2 facet params
+    const url =
+      `${EIA_BASE}/drilling-productivity-report/data/` +
+      `?api_key=${encodeURIComponent(apiKey)}` +
+      `&frequency=monthly` +
+      `&facets[region][]=permian` +
+      `&data[0]=rig-count` +
+      `&data[1]=drilled-wells` +
+      `&data[2]=completed-wells` +
+      `&data[3]=oil-production` +
+      `&sort[0][column]=period` +
+      `&sort[0][direction]=desc` +
+      `&length=14`;
 
-    const res = await fetch(`${EIA_BASE}/drilling-productivity-report/data/?${params}`, {
+    console.log("[eia] Fetching DPR URL (key hidden):", url.replace(encodeURIComponent(apiKey), "***"));
+    const res = await fetch(url, {
       signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
-      console.warn(`[eia] DPR HTTP ${res.status}`);
+      const body = await res.text().catch(() => "");
+      console.warn(`[eia] DPR HTTP ${res.status}:`, body.slice(0, 200));
       return [];
     }
 
@@ -168,16 +171,15 @@ export async function fetchEiaMacro(market: string): Promise<FredRow[] | null> {
     process.env.EIA_API;
 
   if (!apiKey) {
-    console.warn("[eia] No EIA API key found (tried EIA_API_KEY, EIA_KEY, EIA_API) — skipping EIA fetch");
+    console.warn("[eia] No EIA API key found — tried EIA_API_KEY, EIA_KEY, EIA_API — skipping");
     return null;
   }
 
   if (market.toLowerCase() !== "permian") {
-    // No EIA series wired for Brevard yet
     return null;
   }
 
-  console.log("[eia] Fetching Permian DPR data...");
+  console.log(`[eia] Key found (${apiKey.slice(0, 4)}***), fetching Permian DPR...`);
   const rows = await fetchPermianDpr(apiKey);
   console.log(`[eia] Got ${rows.length} rows`);
   return rows.length > 0 ? rows : null;
