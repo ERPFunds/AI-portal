@@ -14,6 +14,10 @@
       "schedule": "0 8 1 * *"
     },
     {
+      "path": "/api/cron/brevard-brief",
+      "schedule": "0 9 * * 1"
+    },
+    {
       "path": "/api/cron/fund-landscape-brief",
       "schedule": "0 8 1 1,4,7,10 *"
     }
