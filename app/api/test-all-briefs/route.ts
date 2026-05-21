@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
     sentTo: TEST_RECIPIENT,
     period,
     successCount,
-    totalCount: briefs.length,
+    totalCount: briefDefs.length,
     results,
   });
 }
