@@ -79,7 +79,17 @@ Workflow type: ${params.workflowId}
 ${articleContext}
 --- END RSS ARTICLES ---
 
-Using the RSS articles above as your primary source material, plus targeted web searches for any specific data gaps (vacancy rates, recent transactions, macro figures), produce a structured research brief with key findings, data points, and source URLs. Prioritize articles from the last 7-14 days. Be specific — include actual numbers, company names, addresses, and dollar figures wherever available.`,
+Using the RSS articles above as your primary source material, plus targeted web searches for any specific data gaps (vacancy rates, recent transactions, macro figures), produce a structured research brief.
+
+CITATION REQUIREMENTS — strictly enforced:
+- Every factual claim, data point, statistic, or transaction must be followed by an inline citation: ([Source Name](URL)) immediately after the sentence.
+- Example: "Industrial vacancy in Midland fell to 4.2% in Q1 2026 ([CoStar News](https://www.costar.com/article/...))."
+- If a finding comes from a web search result, cite the actual article URL you found.
+- If a finding synthesizes multiple articles, cite all of them.
+- At the end of the brief, include a numbered **Sources** section listing every URL cited, with the source name and publication date.
+- Do not make any unattributed claims — if you cannot cite it, flag it as an estimate or note the data gap.
+
+Be specific — include actual numbers, company names, addresses, and dollar figures wherever available. Prioritize articles from the last 7-14 days.`,
       },
     ],
   });
@@ -101,9 +111,24 @@ Using the RSS articles above as your primary source material, plus targeted web 
     }
   }
 
+  const findings = textBlocks.join("\n\n") || "No findings returned.";
+
+  // Build a deduplicated source list from RSS articles used as context
+  // This ensures links always appear in the output even if Claude's inline citations are sparse
+  const allSources = [...new Set([...sources, ...extraSources])].slice(0, 60);
+
+  // Append a sources footer if Claude didn't already include one
+  const hasSources = /^#+\s*sources/im.test(findings) || /^\*\*sources/im.test(findings);
+  const topArticles = articles.slice(0, 20); // top 20 most-recent articles used as context
+  const sourcesFooter = hasSources
+    ? ""
+    : `\n\n---\n**Sources**\n${topArticles
+        .map((a, i) => `${i + 1}. [${a.source} — ${a.title.slice(0, 80)}](${a.link}) (${a.pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })})`)
+        .join("\n")}`;
+
   return {
     query: params.ask,
-    findings: textBlocks.join("\n\n") || "No findings returned.",
-    sources: [...new Set([...sources, ...extraSources])].slice(0, 60),
+    findings: findings + sourcesFooter,
+    sources: allSources,
   };
 }
