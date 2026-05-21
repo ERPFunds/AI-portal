@@ -20,7 +20,7 @@ const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
   : BASE_RECIPIENTS;
 const SENDER_MAILBOX = "mparad@erpfunds.com";
 
-// ── Shared feeds used by both Submarket Watch and Fund Landscape ─────────────
+// ── Shared feeds ──────────────────────────────────────────────────────────────
 const SHARED_FEEDS = [
   { url: "https://www.globest.com/feed/", source: "GlobeSt" },
   { url: "https://commercialobserver.com/feed/", source: "Commercial Observer" },
@@ -30,30 +30,27 @@ const SHARED_FEEDS = [
   { url: "https://connectcre.com/feed/", source: "Connect CRE" },
   { url: "https://www.prnewswire.com/rss/news-releases-list.rss", source: "PR Newswire" },
   { url: "https://www.businesswire.com/rss/home", source: "Business Wire" },
+  { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
 ];
 
-// ── Brevard Submarket Watch ───────────────────────────────────────────────────
-const BREVARD_SUBMARKET_QUERIES = [
+// ── Keyword & query sets ──────────────────────────────────────────────────────
+const SUBMARKET_QUERIES = [
   "Brevard County Florida industrial real estate 2025",
   "Space Coast Florida industrial warehouse lease sale",
   "Melbourne Florida industrial logistics flex space",
   "Titusville Palm Bay Cocoa industrial CRE",
   "Kennedy Space Center aerospace industrial real estate",
-  "Florida I-95 industrial corridor East Orange County",
 ];
 
-const BREVARD_SUBMARKET_KEYWORDS = [
+const SUBMARKET_KEYWORDS = [
   "brevard", "space coast", "melbourne florida", "titusville", "palm bay", "cocoa",
   "kennedy space center", "cape canaveral", "port canaveral",
   "florida industrial", "flex space florida", "logistics florida",
-  "industrial outdoor storage", "service yard",
   "sale comp", "comparable", "absorption", "vacancy", "lease rate",
   "cap rate", "warehouse", "aerospace industrial", "defense contractor",
-  "rockefeller group", "exeter", "greenpointe", "cabot",
 ];
 
-// ── Brevard Fund Landscape ────────────────────────────────────────────────────
-const BREVARD_FUND_QUERIES = [
+const FUND_QUERIES = [
   "Florida industrial CRE fund raise 2025",
   "Space Coast Florida industrial investment fund",
   "aerospace adjacent industrial real estate fund Florida",
@@ -62,13 +59,12 @@ const BREVARD_FUND_QUERIES = [
   "industrial real estate fund IRR benchmarks LP 2025",
 ];
 
-const BREVARD_FUND_KEYWORDS = [
+const FUND_KEYWORDS = [
   "fund raise", "fund launch", "capital raise", "equity raise",
   "private equity industrial", "industrial reit", "reit acquisition",
   "irr", "fund return", "distribution", "carried interest",
   "florida industrial fund", "space coast investment", "aerospace reit",
   "eastgroup", "exeter", "rockefeller group", "greenpointe",
-  "prologis florida", "industrial fund florida",
   "lp appetite", "institutional capital", "industrial cre",
 ];
 
@@ -85,7 +81,7 @@ function getWeekPeriod(): string {
   return `Week of ${now.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`;
 }
 
-async function fetchNews(apifyQueries: string[], keywords: string[], dateFilter: string): Promise<NewsItem[]> {
+async function fetchNews(apifyQueries: string[], keywords: string[]): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
 
   await Promise.allSettled(
@@ -97,12 +93,12 @@ async function fetchNews(apifyQueries: string[], keywords: string[], dateFilter:
             items.push({ title: item.title, link: item.link, pubDate: new Date(item.pubDate), source, summary: item.contentSnippet });
           }
         }
-      } catch { /* skip failing feeds */ }
+      } catch { /* skip */ }
     })
   );
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({ queries: apifyQueries, maxResultsPerQuery: 15, dateFilter });
+    const run = await apify.actor("apify/google-news-scraper").call({ queries: apifyQueries, maxResultsPerQuery: 15, dateFilter: "week" });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as Record<string, unknown>[]) {
       if (i.url && i.title && i.publishedAt) {
@@ -112,50 +108,18 @@ async function fetchNews(apifyQueries: string[], keywords: string[], dateFilter:
   } catch { /* Apify optional */ }
 
   const seen = new Set<string>();
-  const cutoff = new Date(Date.now() - (dateFilter === "week" ? 7 : 30) * 24 * 60 * 60 * 1000);
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   return items
-    .filter((i) => i.pubDate > cutoff)
-    .filter((i) => {
-      const text = `${i.title} ${i.summary ?? ""}`.toLowerCase();
-      return keywords.some((kw) => text.includes(kw));
-    })
+    .filter((i) => i.pubDate > sevenDaysAgo)
+    .filter((i) => { const text = `${i.title} ${i.summary ?? ""}`.toLowerCase(); return keywords.some((kw) => text.includes(kw)); })
     .filter((i) => { if (seen.has(i.link)) return false; seen.add(i.link); return true; })
     .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
-    .slice(0, 25);
-}
-
-function buildEmailHtml(params: { headerLabel: string; subject: string; subtitle: string; narrativeHtml: string; articlesHtml: string; footerLabel: string }): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
-<body style="margin:0;padding:0;background:#f4f5f7;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;padding:32px 16px;">
-  <tr><td align="center">
-    <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
-      <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">${params.headerLabel}</div>
-        <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${params.subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${params.subtitle}</div>
-      </td></tr>
-      <tr><td style="padding:28px 32px;">${params.narrativeHtml}</td></tr>
-      <tr><td style="padding:0 32px;"><hr style="border:none;border-top:2px solid #e5e7eb;margin:0;"></td></tr>
-      <tr><td style="padding:24px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Source Articles This Week</div>
-        <table width="100%" cellpadding="0" cellspacing="0">${params.articlesHtml}</table>
-      </td></tr>
-      <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">${params.footerLabel}</div>
-      </td></tr>
-    </table>
-  </td></tr>
-</table>
-</body>
-</html>`;
+    .slice(0, 20);
 }
 
 function articlesToHtml(news: NewsItem[]): string {
-  return news.slice(0, 20).map((a) =>
+  return news.map((a) =>
     `<tr><td style="padding:10px 0;border-bottom:1px solid #f3f4f6;vertical-align:top;">
       <a href="${a.link}" style="color:#1d4ed8;font-weight:500;text-decoration:none;">${a.title}</a>
       <div style="font-size:12px;color:#6b7280;margin-top:3px;">${a.source} &middot; ${a.pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
@@ -163,123 +127,134 @@ function articlesToHtml(news: NewsItem[]): string {
   ).join("");
 }
 
-// ── Generators ────────────────────────────────────────────────────────────────
+// Shared outer HTML shell used for all merged briefs
+const HTML_SHELL = (title: string, subtitle: string, bodyContent: string) => `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;color:#1e293b;">
+<div style="max-width:680px;margin:32px auto;background:#ffffff;">
+  <div style="padding:28px 40px 20px;border-bottom:2px solid #e2e8f0;">
+    <p style="font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;margin:0 0 10px;">ERP Funds &middot; Brevard / Space Coast &middot; Weekly</p>
+    <h1 style="font-size:24px;font-weight:700;color:#0f172a;margin:0 0 6px;line-height:1.2;">&#127759; ${title}</h1>
+    <p style="font-size:13px;color:#64748b;margin:0;">${subtitle}</p>
+  </div>
+  <div style="padding:28px 40px 8px;">${bodyContent}</div>
+  <div style="padding:16px 40px 28px;border-top:1px solid #e2e8f0;margin-top:16px;">
+    <p style="font-size:11px;color:#94a3b8;font-style:italic;margin:0;">Questions or corrections &rarr; reply to this email.</p>
+  </div>
+</div>
+</body>
+</html>`;
 
-async function generateSubmatchWatch(period: string): Promise<{ subject: string; htmlBody: string }> {
-  const news = await fetchNews(BREVARD_SUBMARKET_QUERIES, BREVARD_SUBMARKET_KEYWORDS, "week");
-  const subject = `Space Coast Submarket Watch — ${period}`;
+// Visual divider between merged sections
+const SECTION_DIVIDER = (label: string) =>
+  `<div style="border-top:3px solid #0f172a;margin:36px 0 24px;padding-top:16px;">
+    <p style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#0f172a;margin:0;">${label}</p>
+  </div>`;
 
-  if (news.length === 0) {
-    return {
-      subject,
-      htmlBody: buildEmailHtml({
-        headerLabel: "ERP Industrials · Agent 1 · Brevard / Space Coast",
-        subject,
-        subtitle: "Sale comps, tenant activity &amp; market shifts · Space Coast / Brevard County",
-        narrativeHtml: `<p style="color:#94a3b8;font-style:italic;">No new Brevard / Space Coast industrial articles found this week.</p>`,
-        articlesHtml: "",
-        footerLabel: "ERP Funds AI Portal · Brevard Submarket Watch · Weekly",
-      }),
-    };
-  }
+// ── Report generators ─────────────────────────────────────────────────────────
 
-  const articleList = news.slice(0, 20).map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
+async function generateSubmarketBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+  // Deep dive from research agent
+  const deepDive = await runSubmarketIntelligence({ market: "brevard", period });
 
-  const msg = await anthropic.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 3000,
-    messages: [{
-      role: "user",
-      content: `You are an industrial CRE market analyst for ERP Funds, a Brevard County / Space Coast industrial investor. Write a Submarket Watch brief (4-5 paragraphs) based on the following news from this week.
+  // News digest for this week
+  const news = await fetchNews(SUBMARKET_QUERIES, SUBMARKET_KEYWORDS);
+  let newsSection = "";
 
-Focus on:
-1. Sale comparable transactions in Brevard County — what are assets trading at? Cap rates, price/SF, price/acre? Include data vintage in every figure (e.g. "5.8% cap rate, CoStar Jan 2026").
-2. Tenant activity — who's leasing, expanding, or contracting? Name specific aerospace, defense, logistics, and flex tenants. 'SLB opened a 40k SF facility in Melbourne (Jan 2026)' is useful. 'Industrial demand is strong' is not.
-3. Submarket trends — vacancy, absorption, asking rents for Brevard / Space Coast vs I-4 corridor. Flag the spread.
-4. Local developer activity — any new permits, groundbreakings, or deliveries from Cuhaci & Peterson, Bravar Industrial, or local family offices.
-5. OM implications — what does this week's activity mean for ERP's active Brevard deals?
+  if (news.length > 0) {
+    const articleList = news.map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
 
-Every statistic must include its source and date. Flag any market shifts affecting pricing or demand narratives.
-
-Articles:
-${articleList}`,
-    }],
-  });
-
-  const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const narrativeHtml = narrative.split("\n\n").map((p) => `<p style="line-height:1.7;color:#374151;margin:0 0 16px;">${p}</p>`).join("");
-
-  return {
-    subject,
-    htmlBody: buildEmailHtml({
-      headerLabel: "ERP Industrials · Agent 1 · Brevard / Space Coast",
-      subject,
-      subtitle: "Sale comps, tenant activity &amp; market shifts · Space Coast / Brevard County",
-      narrativeHtml,
-      articlesHtml: articlesToHtml(news),
-      footerLabel: "ERP Funds AI Portal · Brevard Submarket Watch · Weekly",
-    }),
-  };
-}
-
-async function generateFundLandscape(period: string): Promise<{ subject: string; htmlBody: string }> {
-  const news = await fetchNews(BREVARD_FUND_QUERIES, BREVARD_FUND_KEYWORDS, "week");
-  const subject = `Space Coast Fund Landscape — ${period}`;
-
-  if (news.length === 0) {
-    return {
-      subject,
-      htmlBody: buildEmailHtml({
-        headerLabel: "ERP Industrials · Agent 1 · Brevard / Space Coast",
-        subject,
-        subtitle: "Competitor activity, LP appetite &amp; fund benchmarks · Florida Industrial",
-        narrativeHtml: `<p style="color:#94a3b8;font-style:italic;">No new fund landscape articles found for Florida / Space Coast industrial this week.</p>`,
-        articlesHtml: "",
-        footerLabel: "ERP Funds AI Portal · Brevard Fund Landscape · Weekly",
-      }),
-    };
-  }
-
-  const articleList = news.slice(0, 20).map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
-
-  const msg = await anthropic.messages.create({
-    model: "claude-opus-4-5",
-    max_tokens: 3500,
-    messages: [{
-      role: "user",
-      content: `You are a competitive intelligence analyst for ERP Funds, a Brevard County / Space Coast industrial CRE fund. Write a Fund Landscape Brief (4-5 paragraphs) based on the following news from this week.
-
-Focus on:
-1. Florida industrial competitor fund activity — who is raising capital, who closed, fund sizes, target returns. Name specific firms: Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe, EastGroup.
-2. LP appetite signals for Florida / Space Coast industrial — what asset types and markets are attracting institutional capital? Flex, R&D, logistics, aerospace-adjacent?
-3. Fund benchmarks — what are institutional LPs expecting from Florida industrial CRE funds? (Target IRR, equity multiples, fee structures, fund terms.)
-4. Competitive positioning — how does ERP's Brevard / Space Coast strategy compare to what Florida-active players are doing? What is ERP's differentiated angle for LPs?
-5. Any signals affecting ERP's LP fundraising pitch — cap rate trends, occupancy data, macro tailwinds from Space Force / NASA / defense spending.
-
-Include data vintage on every figure (e.g. "7.2% target IRR, PERE Q4 2025"). Frame analysis for Meghan preparing LP meetings. Be specific; flag intelligence gaps honestly.
+    const msg = await anthropic.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1500,
+      messages: [{
+        role: "user",
+        content: `You are an industrial CRE analyst for ERP Funds. Write a 2-3 paragraph news summary covering these Brevard / Space Coast industrial articles from this week. Focus on: sale comps with $/SF and cap rates (include data vintage), named tenant moves, and any pricing or vacancy shifts. Be specific — named companies, addresses, figures. Every stat needs a date.
 
 Articles:
 ${articleList}`,
-    }],
-  });
+      }],
+    });
 
-  const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const narrativeHtml = narrative.split("\n\n").map((p) => `<p style="line-height:1.7;color:#374151;margin:0 0 16px;">${p}</p>`).join("");
+    const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
+    const narrativeHtml = narrative.split("\n\n").map((p) => `<p style="line-height:1.7;color:#374151;margin:0 0 14px;">${p}</p>`).join("");
 
-  return {
+    newsSection = `
+${SECTION_DIVIDER("This Week's News — Space Coast Industrial")}
+${narrativeHtml}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">${articlesToHtml(news)}</table>
+`;
+  }
+
+  if (deepDive.sourcesLine) {
+    newsSection += `<p style="font-size:11px;color:#94a3b8;line-height:1.8;margin:20px 0 0;">${deepDive.sourcesLine}</p>`;
+  }
+
+  const subject = `Space Coast Submarket Brief — ${period}`;
+  const htmlBody = HTML_SHELL(
     subject,
-    htmlBody: buildEmailHtml({
-      headerLabel: "ERP Industrials · Agent 1 · Brevard / Space Coast",
-      subject,
-      subtitle: "Competitor activity, LP appetite &amp; fund benchmarks · Florida Industrial",
-      narrativeHtml,
-      articlesHtml: articlesToHtml(news),
-      footerLabel: "ERP Funds AI Portal · Brevard Fund Landscape · Weekly",
-    }),
-  };
+    `Deep dive + weekly news digest · Brevard County / Space Coast`,
+    deepDive.bodyContent + newsSection
+  );
+
+  return { subject, htmlBody, summary: deepDive.summary };
 }
 
-// ── Cron Handler ──────────────────────────────────────────────────────────────
+async function generateFundCompetitorBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+  // Structured competitor intelligence
+  const compIntel = await runCompetitorIntelligence({ market: "brevard", period });
+
+  // Fund landscape news digest
+  const news = await fetchNews(FUND_QUERIES, FUND_KEYWORDS);
+  let fundSection = "";
+
+  if (news.length > 0) {
+    const articleList = news.map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
+
+    const msg = await anthropic.messages.create({
+      model: "claude-opus-4-5",
+      max_tokens: 1500,
+      messages: [{
+        role: "user",
+        content: `You are a competitive intelligence analyst for ERP Funds, a Brevard County / Space Coast industrial CRE fund. Write a 2-3 paragraph fund landscape summary based on these articles from this week.
+
+Focus on: Florida industrial fund raises and closings (name the funds and amounts), LP appetite signals for Florida / Space Coast industrial, and any benchmark data on IRR or equity multiples (include data vintage on every figure). Frame for Meghan preparing LP meetings — what is actionable this week?
+
+Articles:
+${articleList}`,
+      }],
+    });
+
+    const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
+    const narrativeHtml = narrative.split("\n\n").map((p) => `<p style="line-height:1.7;color:#374151;margin:0 0 14px;">${p}</p>`).join("");
+
+    fundSection = `
+${SECTION_DIVIDER("This Week's Fund Landscape — Florida Industrial")}
+${narrativeHtml}
+<table width="100%" cellpadding="0" cellspacing="0" style="margin-top:12px;">${articlesToHtml(news)}</table>
+`;
+  }
+
+  if (compIntel.sourcesLine) {
+    fundSection += `<p style="font-size:11px;color:#94a3b8;line-height:1.8;margin:20px 0 0;">${compIntel.sourcesLine}</p>`;
+  }
+
+  const subject = `Space Coast Competitive & Fund Intelligence — ${period}`;
+  const htmlBody = HTML_SHELL(
+    subject,
+    `Competitor tracker + fund landscape · Brevard County / Space Coast`,
+    compIntel.bodyContent + fundSection
+  );
+
+  return { subject, htmlBody, summary: compIntel.summary };
+}
+
+// ── Email sender ──────────────────────────────────────────────────────────────
 
 async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
   let token: string | null;
@@ -313,6 +288,8 @@ async function sendEmailViaGraph(params: { subject: string; htmlBody: string }):
   return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
 }
 
+// ── Cron handler ──────────────────────────────────────────────────────────────
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -335,52 +312,28 @@ export async function GET(request: Request) {
     console.error("[brevard-brief] weekly-update failed:", err);
   }
 
-  // ── 2. Submarket Intelligence ─────────────────────────────────────────────
+  // ── 2. Submarket Watch + Submarket Intelligence (merged) ──────────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await runSubmarketIntelligence({ market, period });
+    const { subject, htmlBody, summary } = await generateSubmarketBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-    results["submarket-intelligence"] = { success: emailResult.success, subject };
-    logAgentRun({ agentId: "lp-intel", workflowId: "submarket-intelligence", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
+    results["submarket"] = { success: emailResult.success, subject };
+    logAgentRun({ agentId: "lp-intel", workflowId: "submarket-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
-    results["submarket-intelligence"] = { success: false, error: String(err) };
-    console.error("[brevard-brief] submarket-intelligence failed:", err);
+    results["submarket"] = { success: false, error: String(err) };
+    console.error("[brevard-brief] submarket failed:", err);
   }
 
-  // ── 3. Competitor Intelligence ────────────────────────────────────────────
+  // ── 3. Competitor Intelligence + Fund Landscape (merged) ──────────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await runCompetitorIntelligence({ market, period });
+    const { subject, htmlBody, summary } = await generateFundCompetitorBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-    results["competitor-intelligence"] = { success: emailResult.success, subject };
-    logAgentRun({ agentId: "lp-intel", workflowId: "competitor-intelligence", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
+    results["fund-competitor"] = { success: emailResult.success, subject };
+    logAgentRun({ agentId: "lp-intel", workflowId: "fund-competitor-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
-    results["competitor-intelligence"] = { success: false, error: String(err) };
-    console.error("[brevard-brief] competitor-intelligence failed:", err);
-  }
-
-  // ── 4. Submarket Watch (news digest) ─────────────────────────────────────
-  try {
-    const startMs = Date.now();
-    const { subject, htmlBody } = await generateSubmatchWatch(period);
-    const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-    results["submarket-watch"] = { success: emailResult.success, subject };
-    logAgentRun({ agentId: "lp-intel", workflowId: "submarket-watch", status: emailResult.success ? "success" : "error", summary: subject, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
-  } catch (err) {
-    results["submarket-watch"] = { success: false, error: String(err) };
-    console.error("[brevard-brief] submarket-watch failed:", err);
-  }
-
-  // ── 5. Fund Landscape ─────────────────────────────────────────────────────
-  try {
-    const startMs = Date.now();
-    const { subject, htmlBody } = await generateFundLandscape(period);
-    const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-    results["fund-landscape"] = { success: emailResult.success, subject };
-    logAgentRun({ agentId: "lp-intel", workflowId: "fund-landscape", status: emailResult.success ? "success" : "error", summary: subject, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
-  } catch (err) {
-    results["fund-landscape"] = { success: false, error: String(err) };
-    console.error("[brevard-brief] fund-landscape failed:", err);
+    results["fund-competitor"] = { success: false, error: String(err) };
+    console.error("[brevard-brief] fund-competitor failed:", err);
   }
 
   const anySuccess = Object.values(results).some((r) => r.success);

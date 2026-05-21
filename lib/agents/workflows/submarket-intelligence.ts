@@ -6,6 +6,8 @@ const anthropic = new Anthropic();
 export interface SubmarketIntelligenceOutput {
   subject: string;
   htmlBody: string;
+  bodyContent: string;
+  sourcesLine: string;
   summary: string;
 }
 
@@ -454,5 +456,5 @@ ${s8Rows ? makeTable(["Submarket", "Investment Assessment"], s8Rows) : ""}
 
   const summary = `${briefTitle} generated for ${params.period}. Covers ${section2Table.length} submarket baselines, ${section3Items.length} pipeline projects, ${section4Table.length} tenant commitments, ${section5Deals.length} transaction comps${isPermian ? `, ${section6Land.length} land comps` : ""}${isBrevard && corridorDeliveries.length > 0 ? `, ${corridorDeliveries.length} corridor deliveries` : ""}, ${section8Table.length} submarket priorities.`;
 
-  return { subject, htmlBody, summary };
+  return { subject, htmlBody, bodyContent, sourcesLine, summary };
 }

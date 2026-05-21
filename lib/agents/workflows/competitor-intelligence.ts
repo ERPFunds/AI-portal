@@ -6,6 +6,8 @@ const anthropic = new Anthropic();
 export interface CompetitorIntelligenceOutput {
   subject: string;
   htmlBody: string;
+  bodyContent: string;
+  sourcesLine: string;
   summary: string;
 }
 
@@ -488,5 +490,5 @@ ${(data.section10_note as string) ? `<p style="font-size:11px;color:#94a3b8;font
 
   const summary = `${briefTitle} generated for ${params.period}. Covers ${section1Items.length} capital flow events, EastGroup ${section2EgpRows.length}-metric benchmark, ${section3Table.length} PE peers, ${section4Bullets.length} private competitors, ${section6Angles.length} LP differentiation angles.${extraSummary}`;
 
-  return { subject, htmlBody, summary };
+  return { subject, htmlBody, bodyContent, sourcesLine, summary };
 }
