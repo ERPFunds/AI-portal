@@ -13,6 +13,7 @@
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@vercel/postgres": "^0.10.0",
+    "adm-zip": "^0.5.16",
     "apify-client": "^2.9.4",
     "date-fns": "^3.6.0",
     "docx": "^9.6.1",
@@ -24,6 +25,7 @@
     "rss-parser": "^3.13.0"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.7",
     "@types/node": "*",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "*",

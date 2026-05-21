@@ -16,18 +16,38 @@ import { runDeckBuilder } from "@/lib/agents/workflows/deck-builder";
 import { runOmEditor } from "@/lib/agents/workflows/om-editor";
 import { runOmWriter, detectSection } from "@/lib/agents/workflows/om-writer";
 import type { ResearchBundle } from "@/lib/agents/research";
+import { extractPptxText } from "@/lib/agents/pptx-parser";
 
+// Normalised attachment shape (PA uses name/contentBytes; direct posts use filename/contentBase64)
 interface Attachment {
   filename: string;
   contentType: string;
   contentBase64: string;
 }
 
+// Raw shape Power Automate sends — field names differ from our internal interface
+interface RawAttachment {
+  filename?: string;
+  name?: string;           // PA field
+  contentType?: string;
+  contentBase64?: string;
+  contentBytes?: string;   // PA field
+}
+
 interface EmailPayload {
   from: string;
   subject: string;
   body: string;
-  attachments?: Attachment[];
+  attachments?: RawAttachment[];
+}
+
+// Normalise PA field names → internal Attachment shape
+function normaliseAttachment(raw: RawAttachment): Attachment {
+  return {
+    filename: raw.filename ?? raw.name ?? "attachment",
+    contentType: raw.contentType ?? "application/octet-stream",
+    contentBase64: raw.contentBase64 ?? raw.contentBytes ?? "",
+  };
 }
 
 // Power Automate posts to this endpoint with x-agent-secret header
@@ -37,6 +57,16 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 function decodeAttachment(att: Attachment): string {
+  const name = att.filename.toLowerCase();
+
+  if (name.endsWith(".pptx")) {
+    return extractPptxText(att.contentBase64);
+  }
+
+  if (name.endsWith(".ppt")) {
+    return "[Old .ppt binary format cannot be parsed. Please save as .pptx (File → Save As → PowerPoint Presentation) and reattach.]";
+  }
+
   try {
     return Buffer.from(att.contentBase64, "base64").toString("utf-8").slice(0, 8000);
   } catch {
@@ -56,7 +86,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON payload" }, { status: 400 });
   }
 
-  const { from, subject, body, attachments } = payload;
+  const { from, subject, body } = payload;
+  // Normalise attachment field names (Power Automate uses name/contentBytes)
+  const attachments: Attachment[] | undefined = payload.attachments?.map(normaliseAttachment);
 
   // ── Step 1: Router Agent ──────────────────────────────────────────────────
   const route = await routeEmail({ from, subject, body });
