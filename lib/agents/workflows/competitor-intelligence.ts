@@ -128,7 +128,7 @@ CRITICAL RULE — DATA VINTAGE LABELS: Every single statistic, vacancy rate, ren
 
 Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.
 
-INLINE CITATIONS RULE: Embed hyperlinks directly inside the text of every body/narrative/description/bullet field — not just at the bottom. Whenever you mention a company name, deal, statistic, or data point that has a source URL, wrap it or the surrounding phrase with an HTML anchor tag: <a href="https://..." style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">anchor text</a>. Every named statistic must have an inline link. Do not collect links only at the end.`, cache_control: { type: "ephemeral" } }],
+URL FIELDS: Every item in the JSON must include a `url` field with the direct source URL. All body/description/narrative/notes text fields must be plain text with no HTML tags.`, cache_control: { type: "ephemeral" } }],
     tools: [
       {
         type: "web_search_20250305" as "web_search_20250305",
@@ -153,7 +153,7 @@ Return ONLY valid JSON with this exact structure:
   "subject": "string — e.g. '${marketLabel} Competitive Landscape & Comparable Funds — ${params.period}'",
 
   "section1_items": [
-    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "ONE sentence max — the single most important signal for ERP. Hyperlink the company name or key stat to its source: <a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">text</a>. No background, no explanation — just the fact and why it matters to ERP in ≤20 words." }
+    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "url": "https://source-url.com", "body": "ONE sentence max ≤20 words — plain text only, no HTML tags. No background, no explanation — just the fact and why it matters to ERP." }
   ],
 
   "section2_egp_rows": [
@@ -171,11 +171,11 @@ Return ONLY valid JSON with this exact structure:
   "section2_other_reits": "One line per ticker — ticker, one key stat with date, hyperlinked to source. Format: <a href=\"URL\">PLD</a> — $x.xx FFO (Q1 2026) · ...",
 
   "section3_table": [
-    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Firm Name</a>", "description": "AUM or fund size · geography · one distinguishing fact. Max 15 words. No sentences — just facts." }
+    { "firm": "Stonelake Capital Partners", "url": "https://stonelake.com", "description": "AUM · geography · one distinguishing fact. Max 15 words. No HTML tags." }
   ],
 
   "section4_bullets": [
-    "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Firm Name</a> — one key fact or most recent known activity with date. ≤12 words."
+    { "firm": "Hillwood", "url": "https://hillwood.com", "fact": "AllianceTexas DFW — no announced Permian project. ≤12 words." }
   ],
   "section4_correction": "Optional — only include if correcting a specific prior-draft error. Leave empty string if none.",
 
@@ -188,24 +188,24 @@ Return ONLY valid JSON with this exact structure:
   "section5_note": "Industry-typical ranges from public PE conventions. ERP-specific positioning vs. peers: pending PPM comp data integration.",
 
   "section6_angles": [
-    { "angle": "Angle title — ≤6 words", "narrative": "One sentence, one data point, one link. <a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">hyperlink the key stat</a>. ≤20 words total." }
+    { "angle": "Angle title ≤6 words", "url": "https://source.com", "narrative": "One sentence, one data point. ≤20 words. Plain text only." }
   ],
   "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
 
   ${isPermian ? `"section7_ios_tracker": [
-    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Stonemont Financial</a>", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type — ≤8 words" }
+    { "firm": "Stonemont Financial", "url": "https://stonemontfinancial.com", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type — ≤8 words plain text" }
   ],
   "section7_ios_note": "If no new deal found for a firm, one-line note on last known activity with date.",
   "section8_form_d": [
-    { "fund": "Fund name", "sponsor": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Sponsor/GP name</a>", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "≤8 words on industrial focus" }
+    { "fund": "Fund name", "sponsor": "Sponsor/GP name", "url": "https://sec.gov/...", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "≤8 words" }
   ],
   "section8_form_d_note": "SEC EDGAR Form D — $50M+ industrial CRE raises. 30-60 day leading indicator.",` : ""}
   ${isBrevard ? `"section7_national_trackers": [
-    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Rockefeller Group</a>", "activity": "One-line: deal or most recent FL activity", "location": "City, FL", "size": "xx,xxx SF or acres", "date": "Mon YYYY", "notes": "≤8 words context" }
+    { "firm": "Rockefeller Group", "url": "https://rockgroup.com", "activity": "One-line deal or FL activity", "location": "City, FL", "size": "xx,xxx SF or acres", "date": "Mon YYYY", "notes": "≤8 words context" }
   ],
   "section7_national_note": "Flex/R&D/logistics only — not big-box REIT.",
   "section8_spillover": [
-    { "signal": "Buyer name or fund type", "detail": "Address · SF · price · buyer HQ — facts only, no sentences", "date": "Mon YYYY", "implication": "≤10 words on pricing signal" }
+    { "signal": "Buyer name", "url": "https://source.com", "detail": "Address · SF · price · buyer HQ — facts only", "date": "Mon YYYY", "implication": "≤10 words" }
   ],
   "section8_cap_rate_spread": { "i4_corridor": "x.x% (source, Mon YYYY)", "brevard": "x.x% (source, Mon YYYY)", "spread": "x.xx% — tightening/stable/widening", "trend": "One sentence max." },
   "section8_spillover_note": "One line if no deed record found.",
@@ -214,7 +214,7 @@ Return ONLY valid JSON with this exact structure:
   ],
   "section9_local_note": "Brevard County building permits — industrial >20,000 SF, last 12 months.",
   "section10_aerospace_reits": [
-    { "entity": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Digital Realty (DLR)</a>", "metric": "Cap rate or yield metric", "value": "x.x% (source, Mon YYYY)", "trend": "Compressing / Stable / Expanding", "relevance": "≤12 words on LP expectation implication" }
+    { "entity": "Digital Realty (DLR)", "url": "https://digitalrealty.com/investors", "metric": "Cap rate or yield metric", "value": "x.x% (source, Mon YYYY)", "trend": "Compressing / Stable / Expanding", "relevance": "≤12 words on LP expectation implication" }
   ],
   "section10_note": "Not direct comps — LP ceiling expectations for defense-corridor industrial.",` : ""}
   "source_names": ["EastGroup Q1 press release", "Diamondback Q1 2026", "Stonelake website"]
@@ -236,7 +236,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
 - section8_spillover: search Brevard County deed records (bcpao.us), CoStar, and FL industrial news for Orlando/Tampa buyers appearing in Brevard. Report the I-4 vs Brevard cap rate spread with dates.
 - section9_local_devs: search Brevard County building permits for industrial >20,000 SF past 12 months. Cuhaci & Peterson, Bravar Industrial, and any local family office. These are ERP's actual competition.
 - section10_aerospace_reits: report Digital Realty, Equinix, Iron Mountain cap rate trends in defense/launch-adjacent markets with dates. Frame for LP expectations.` : ""}
-- INLINE LINKS REQUIRED: In every body/description/narrative/bullet/notes/activity/detail/relevance field, wrap company names, deal names, and statistics that have a source URL in <a href="URL" style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">text</a> tags. Plain text with no inline links is NOT acceptable for any field that cites verifiable information.
+- URL FIELDS REQUIRED: Every firm name, fund, and data source must have a `url` field with the direct source URL. Plain text only in body/description/narrative/notes fields — no HTML tags ever.
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
@@ -266,19 +266,19 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
   // ── Parse sections ────────────────────────────────────────────────────────
-  type IosRow           = { firm: string; deal: string; location: string; size: string; price: string; date: string; notes: string };
-  type FormDRow         = { fund: string; sponsor: string; amount: string; filed: string; focus: string };
-  type NationalTracker  = { firm: string; activity: string; location: string; size: string; date: string; notes: string };
-  type SpilloverRow     = { signal: string; detail: string; date: string; implication: string };
+  type IosRow           = { firm: string; url?: string; deal: string; location: string; size: string; price: string; date: string; notes: string };
+  type FormDRow         = { fund: string; sponsor: string; url?: string; amount: string; filed: string; focus: string };
+  type NationalTracker  = { firm: string; url?: string; activity: string; location: string; size: string; date: string; notes: string };
+  type SpilloverRow     = { signal: string; url?: string; detail: string; date: string; implication: string };
   type LocalDevRow      = { developer: string; project: string; sf: string; location: string; permit_date: string; status: string };
-  type AerospaceReit    = { entity: string; metric: string; value: string; trend: string; relevance: string };
+  type AerospaceReit    = { entity: string; url?: string; metric: string; value: string; trend: string; relevance: string };
 
-  const section1Items        = (data.section1_items          as Array<{ title: string; date: string; body: string }> | undefined) ?? [];
+  const section1Items        = (data.section1_items          as Array<{ title: string; date: string; url?: string; body: string }> | undefined) ?? [];
   const section2EgpRows      = (data.section2_egp_rows       as Array<{ metric: string; value: string }> | undefined) ?? [];
-  const section3Table        = (data.section3_table          as Array<{ firm: string; description: string }> | undefined) ?? [];
-  const section4Bullets      = (data.section4_bullets        as string[] | undefined) ?? [];
+  const section3Table        = (data.section3_table          as Array<{ firm: string; url?: string; description: string }> | undefined) ?? [];
+  const section4Bullets      = (data.section4_bullets        as Array<{ firm: string; url?: string; fact: string }> | undefined) ?? [];
   const section5Rows         = (data.section5_rows           as Array<{ metric: string; range: string }> | undefined) ?? [];
-  const section6Angles       = (data.section6_angles         as Array<{ angle: string; narrative: string }> | undefined) ?? [];
+  const section6Angles       = (data.section6_angles         as Array<{ angle: string; url?: string; narrative: string }> | undefined) ?? [];
   const section7Ios          = isPermian ? (data.section7_ios_tracker    as IosRow[] | undefined) ?? [] : [];
   const section8FormD        = isPermian ? (data.section8_form_d         as FormDRow[] | undefined) ?? [] : [];
   const section7NatTrackers  = isBrevard ? (data.section7_national_trackers as NationalTracker[] | undefined) ?? [] : [];
@@ -297,10 +297,15 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   const tdR = (val: string) =>
     `<td style="padding:9px 0 9px 10px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;">${val}</td>`;
 
+  const linked = (text: string, url?: string) =>
+    url && url.startsWith("http")
+      ? `<a href="${url}" style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;" target="_blank">${text}</a>`
+      : text;
+
   // ── §1 — Capital Flowing ──────────────────────────────────────────────────
   const s1Cards = section1Items.map((i) =>
     `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
-  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 2px;">${i.title}${i.date ? ` <span style="font-weight:400;color:#94a3b8;font-size:12px;">&middot; ${i.date}</span>` : ""}</p>
+  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 2px;"><strong>${linked(i.title, i.url)}</strong>${i.date ? ` <span style="font-weight:400;color:#94a3b8;font-size:12px;">&middot; ${i.date}</span>` : ""}</p>
   <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p>
 </div>`
   ).join("\n");
@@ -312,13 +317,13 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
 
   // ── §3 — PE Peers ─────────────────────────────────────────────────────────
   const s3Rows = section3Table.map((r) =>
-    `<tr>${tdL(r.firm, true)}${tdR(r.description)}</tr>`
+    `<tr>${tdL(linked(r.firm, r.url), true)}${tdR(r.description)}</tr>`
   ).join("\n");
 
   // ── §4 — Private competitors bullet list ─────────────────────────────────
   const s4Bullets = section4Bullets.length > 0
     ? `<ul style="margin:0 0 12px;padding-left:20px;">${section4Bullets.map((b) =>
-        `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:4px;">${b}</li>`
+        `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:4px;">${linked(b.firm, b.url)} — ${b.fact}</li>`
       ).join("")}</ul>`
     : "";
 
@@ -336,7 +341,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   // ── §7 — IOS/Service Yard Tracker (Permian) ──────────────────────────────
   const s7IosRows = section7Ios.map((r) =>
     `<tr>
-      ${tdL(r.firm, true)}
+      ${tdL(linked(r.firm, r.url), true)}
       ${tdR(`<strong>${r.deal || "—"}</strong><br/><span style="font-size:12px;color:#64748b;">${r.location || ""} &middot; ${r.size || ""} &middot; ${r.price || "undisclosed"} &middot; ${r.date || ""}</span>${r.notes ? `<br/><em style="font-size:12px;color:#94a3b8;">${r.notes}</em>` : ""}`)}
     </tr>`
   ).join("\n");
@@ -344,7 +349,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   // ── §8 — Form D Filings (Permian) ────────────────────────────────────────
   const s8FormDRows = section8FormD.map((r) =>
     `<tr>
-      ${tdL(`${r.sponsor || "—"}<br/><em style="font-weight:400;font-size:12px;color:#64748b;">${r.fund || ""}</em>`)}
+      ${tdL(`${linked(r.sponsor || "—", r.url)}<br/><em style="font-weight:400;font-size:12px;color:#64748b;">${r.fund || ""}</em>`)}
       ${tdR(`<strong>${r.amount || "—"}</strong> &middot; Filed ${r.filed || "—"}<br/><span style="font-size:12px;color:#64748b;">${r.focus || ""}</span>`)}
     </tr>`
   ).join("\n");
@@ -352,7 +357,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   // ── §7 — National Competitor Tracker (Brevard) ───────────────────────────
   const s7NatRows = section7NatTrackers.map((r) =>
     `<tr>
-      ${tdL(`<strong>${r.firm || "—"}</strong>`, false)}
+      ${tdL(`<strong>${linked(r.firm || "—", r.url)}</strong>`, false)}
       ${tdR(`${r.activity || "No activity found"}<br/><span style="font-size:12px;color:#64748b;">${[r.location, r.size, r.date].filter(Boolean).join(" &middot; ")}</span>${r.notes ? `<br/><em style="font-size:12px;color:#94a3b8;">${r.notes}</em>` : ""}`)}
     </tr>`
   ).join("\n");
@@ -360,7 +365,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   // ── §8 — Orlando/Tampa Spillover (Brevard) ───────────────────────────────
   const s8SpilloverRows = section8Spillover.map((r) =>
     `<tr>
-      ${tdL(`<strong>${r.signal || "—"}</strong><br/><span style="font-size:12px;color:#64748b;">${r.date || ""}</span>`)}
+      ${tdL(`<strong>${linked(r.signal || "—", r.url)}</strong><br/><span style="font-size:12px;color:#64748b;">${r.date || ""}</span>`)}
       ${tdR(`${r.detail || "—"}<br/><em style="font-size:12px;color:#475569;">${r.implication || ""}</em>`)}
     </tr>`
   ).join("\n");
@@ -385,7 +390,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   // ── §10 — Aerospace REIT Comps (Brevard) ────────────────────────────────
   const s10AerospaceRows = section10AerospaceReits.map((r) =>
     `<tr>
-      ${tdL(`<strong>${r.entity || "—"}</strong><br/><span style="font-weight:400;font-size:12px;color:#64748b;">${r.metric || ""}</span>`)}
+      ${tdL(`<strong>${linked(r.entity || "—", r.url)}</strong><br/><span style="font-weight:400;font-size:12px;color:#64748b;">${r.metric || ""}</span>`)}
       ${tdR(`<strong>${r.value || "—"}</strong> <span style="font-size:12px;color:${r.trend?.toLowerCase().includes("compress") ? "#16a34a" : "#64748b"};">${r.trend ? `&middot; ${r.trend}` : ""}</span><br/><em style="font-size:12px;color:#475569;">${r.relevance || ""}</em>`)}
     </tr>`
   ).join("\n");
@@ -394,7 +399,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   const s6List = section6Angles.length > 0
     ? `<p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px;">Three verified positioning angles this month:</p>
 <ol style="margin:0 0 14px;padding-left:20px;">${section6Angles.map((a) =>
-      `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:8px;"><strong>${a.angle}</strong> — ${a.narrative}</li>`
+      `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:8px;"><strong>${linked(a.angle, a.url)}</strong> — ${a.narrative}</li>`
     ).join("")}</ol>`
     : "";
 
