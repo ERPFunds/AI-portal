@@ -153,29 +153,29 @@ Return ONLY valid JSON with this exact structure:
   "subject": "Space Coast Competitive & Fund Intelligence — Week of ${params.period}",
   "headline": "Single most important competitive signal this period — ≤20 words",
   "capital_items": [
-    { "source": "Publication or firm name", "title": "Fund/deal name or key stat", "url": "https://source.com", "date": "Mon YYYY", "body": "≤20 words — what this means for ERP" }
+    { "source": "GlobeSt", "title": "Stonepeak closes $2.1B industrial fund", "url": "https://source.com", "date": "May 2026", "body": "2-3 sentences: what happened, key figures with date vintage, what it signals for ERP's competitive position or market." }
   ],
   "egp_items": [
-    { "source": "EastGroup (EGP)", "title": "Q1 2026 Results", "url": "https://investor.eastgroup.net/", "date": "Apr 2026", "body": "FFO/share $x.xx (+x.x% YoY) · Leasing x.x% · Dev starts $xxxM · FFO guide $x.xx–$x.xx" },
-    { "source": "Prologis (PLD)", "title": "Q1 2026", "url": "https://ir.prologis.com/", "date": "Apr 2026", "body": "Key metric or signal ≤15 words" }
+    { "source": "EastGroup (EGP)", "title": "Q1 2026 Earnings", "url": "https://investor.eastgroup.net/", "date": "Apr 2026", "body": "FFO/share $x.xx (+x.x% YoY, Q1 2026) · Same-store NOI +x.x% · Leasing x.x% · Dev starts $xxxM · 2026 FFO guide $x.xx–$x.xx. 1-2 sentence narrative on what the results signal for industrial pricing." },
+    { "source": "Prologis (PLD)", "title": "Q1 2026", "url": "https://ir.prologis.com/", "date": "Apr 2026", "body": "Key metrics with date vintage. 1 sentence on relevance to secondary FL markets." }
   ],
   "peer_items": [
-    { "source": "Firm name", "title": "Recent activity or fund", "url": "https://firm.com", "date": "Mon YYYY", "body": "AUM · geography · one distinguishing fact ≤15 words" }
+    { "source": "Stonelake Capital Partners", "title": "Fund V closing / latest Florida activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "2-3 sentences: AUM, most recent deal or fund activity with dollar figures, geographic focus, and what differentiates them from ERP." }
   ],
   "competitor_items": [
-    { "source": "Firm name", "title": "Recent deal or activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "≤12 words — most recent known activity or status" }
+    { "source": "Hillwood", "title": "Most recent FL/Brevard activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "2-3 sentences on latest deal, announcement, or market position with specifics." }
   ],
   "tracker_items": [
-    { "source": "Firm name", "title": "Deal/Project name", "url": "https://source.com", "date": "Mon YYYY", "body": "Location · size · price — ≤15 words" }
+    { "source": "Rockefeller Group", "title": "Deal or project name", "url": "https://source.com", "date": "Mon YYYY", "body": "2-3 sentences: location, size, price/cap rate if known, what it signals for Space Coast competition." }
   ],
   "signal_items": [
-    { "source": "Signal type or publication", "title": "Signal headline", "url": "https://source.com", "date": "Mon YYYY", "body": "≤15 words" }
+    { "source": "CoStar / Brevard County PA", "title": "Signal headline", "url": "https://source.com", "date": "Mon YYYY", "body": "2-3 sentences: the specific data point or event, date vintage, and investment implication for ERP." }
   ],
   "fund_structure": [
     { "metric": "Management fee", "range": "1.5–2.0% on committed capital" }
   ],
   "lp_angles": [
-    { "source": "Publication or data source", "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "≤20 words — one fact, one implication" }
+    { "source": "CoStar", "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "2-3 sentences: specific data point with vintage, what it means for ERP's LP pitch, and the one-line implication." }
   ],
   "lp_narrative": "2-3 sentence LP-facing read. What does this month's competitive landscape mean for ERP's positioning and fundraising narrative?",
   "lp_watch": "Watch for next period: specific items to monitor",
@@ -185,12 +185,13 @@ Return ONLY valid JSON with this exact structure:
 Rules:
 - DATA VINTAGE REQUIRED: Every metric value must include source date in parentheses, e.g. "4.8% (CoStar Q4 2025)" or "$9.25/SF (JLL, Jan 2026)". Never write a bare number without a date.
 - BREVITY: All body/narrative fields strictly limited to word counts in schema. Plain text only — no HTML tags ever.
-- capital_items: 4-6 items — mix of fund closes, acquisitions, operator results. source = publication/firm, title = deal or fund name, body ≤20 words
-- egp_items: 2-4 cards — EastGroup first, then 1-3 comparable public REITs (Prologis, Rexford, STAG). source = ticker+name, title = quarter/report, body packs key metrics: FFO/share, leasing rate, dev starts, FFO guide — all with date vintage. One card per REIT.
-- peer_items: 3-5 ${geoLabel} PE peers — source is firm name (linked to firm website), title is their latest fund or activity, body is AUM/market/one fact ≤15 words
-- competitor_items: 4-6 private competitors — source is firm name (linked to firm website), title is latest deal or activity, body is ≤12 words on latest activity
-- tracker_items: ${isPermian ? "IOS/service yard deals — Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS. If nothing found this period, note last known activity with date." : "national flex/R&D/logistics tracker firms — Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe. Brevard/Space Coast or most recent FL activity. Flex/R&D/logistics focus only."}
-- signal_items: ${isPermian ? "SEC EDGAR Form D filings — $50M+ industrial CRE fund raises. Use title for fund name, body for sponsor + amount + focus." : "spillover signals (I-4 corridor cap rate spread, Orlando/Tampa buyers in Brevard deed records) + local developer permits (Cuhaci & Peterson, Bravar Industrial, Brevard County building permits >20,000 SF) + aerospace REIT cap rate comps (Digital Realty, Equinix, Iron Mountain). Use title to label the signal type."}
+- FORMAT RULE: Every card must have "source" (publication or firm name), "title" (deal/event/report name), "url" (direct source URL), "date", and "body" (2-3 sentences). Source AND title both link to the same URL. Body is prose sentences — NOT bullet points, NOT a word count limit.
+- capital_items: 4-6 items — fund closes, major acquisitions, institutional deployments. source = publication that reported it, title = deal/fund name, body = 2-3 sentences with dollar figures and date vintage, and what it signals for ERP.
+- egp_items: 2-4 cards — EastGroup first, then 1-3 comparable public REITs (Prologis, Rexford, STAG). source = "EastGroup (EGP)" etc., title = quarter/report name, body = key metrics (FFO/share, leasing rate, dev starts, FFO guide) all with quarter vintage + 1 sentence on market signal.
+- peer_items: 3-5 ${geoLabel} PE peers — source = firm name, title = latest fund or major activity, body = 2-3 sentences on AUM, geography, recent activity, differentiators vs ERP.
+- competitor_items: 4-6 private competitors — source = firm name, title = latest deal or announcement, body = 2-3 sentences on what they're doing and why it matters to ERP.
+- tracker_items: ${isPermian ? "IOS/service yard deals — Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS. source = firm name, title = deal name, body = 2-3 sentences: location, SF, price/cap rate, date. If nothing found this period, note last known activity with date." : "national flex/R&D/logistics tracker — Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe. source = firm name, title = specific deal or project, body = 2-3 sentences on Brevard/Space Coast or most recent FL activity and competitive implication."}
+- signal_items: ${isPermian ? "SEC EDGAR Form D filings — $50M+ industrial CRE fund raises. source = publication/EDGAR, title = fund name, body = 2-3 sentences: sponsor, raise amount, focus, date filed, why it matters." : "spillover signals (I-4 corridor cap rate spread, Orlando/Tampa buyers in Brevard deed records) + local developer permits (Cuhaci & Peterson, Bravar Industrial, >20,000 SF permits) + aerospace REIT cap rate comps. source = data source, title = signal type, body = 2-3 sentences with specific figures and investment implication."}
 - fund_structure: industry ranges only, 4-5 rows, NOT individual named funds
 - lp_angles: exactly 3, each with url to direct source
 - lp_narrative: 2-3 sentences, investment-grade prose
