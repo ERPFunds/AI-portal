@@ -115,31 +115,18 @@ ${isBrevard ? `8. Flex/R&D/logistics national competitor tracker — These natio
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 8192,
+    max_tokens: 4000,
     system: [{ type: "text" as const, text: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets including Brevard County / Space Coast, Florida.
 
-For the Brevard / Space Coast market specifically:
-- The competitive set is flex industrial, R&D, and logistics — NOT large-box REIT. National players like Prologis have not arrived yet.
-- Local developers (Cuhaci & Peterson, Bravar Industrial, family offices) are the primary competition. Track permit activity, not press releases.
-- The I-4 corridor cap rate compression is a leading indicator — Orlando/Tampa buyers appearing in Brevard deed records is an early pricing pressure signal.
-- Aerospace and defense REIT cap rate trends (Digital Realty near Cape Canaveral, etc.) set LP return expectations for specialized industrial in launch corridors.
+CRITICAL RULE — DATA VINTAGE LABELS: Every stat, vacancy rate, rent, cap rate, or metric MUST include the source date in parentheses, e.g. "Vacancy 4.8% (Q4 2025)". Never omit the vintage.
 
-CRITICAL RULE — DATA VINTAGE LABELS: Every single statistic, vacancy rate, rent figure, cap rate, price, or metric in your response MUST include the source date in parentheses. Examples: "Vacancy 4.8% (Q4 2025)", "Avg NNN rent $9.25/SF (JLL, Q1 2026)", "Cap rate 5.8% (CoStar, Jan 2026)". A stat without a date is unusable. Never omit the vintage.
+CRITICAL OUTPUT RULE: Return ONLY valid JSON — absolutely no markdown, no code fences, no preamble, no text before or after the JSON object. The response must start with { and end with }.
 
-Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.
-
-URL FIELDS: Every item in the JSON must include a "url" field with the direct source URL. All body/description/narrative/notes text fields must be plain text with no HTML tags.`, cache_control: { type: "ephemeral" } }],
-    tools: [
-      {
-        type: "web_search_20250305" as "web_search_20250305",
-        name: "web_search",
-        max_uses: 7,
-      } as unknown as Anthropic.Tool,
-    ],
+Every item object MUST have a "source" field (the publication, outlet, or firm name). All body/narrative fields must be plain text with no HTML tags.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
-        content: `Generate a competitor intelligence brief for the ${marketLabel} industrial CRE market for the period ${params.period}.
+        content: `Generate a competitor intelligence brief for the ${marketLabel} industrial CRE market for ${params.period}.
 
 Research findings:
 ${research.findings}
@@ -147,60 +134,56 @@ ${research.findings}
 ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
 
 ---
-Return ONLY valid JSON with this exact structure:
+Return ONLY valid JSON (no markdown, no code fences, no text outside the JSON object):
 
 {
-  "subject": "Space Coast Competitive & Fund Intelligence — Week of ${params.period}",
-  "headline": "Single most important competitive signal this period — ≤20 words",
+  "subject": "${briefTitle} — ${params.period}",
+  "headline": "Single most important competitive signal this period (≤20 words)",
   "capital_items": [
-    { "source": "GlobeSt", "title": "Stonepeak closes $2.1B industrial fund", "url": "https://source.com", "date": "May 2026", "body": "2-3 sentences: what happened, key figures with date vintage, what it signals for ERP's competitive position or market." }
+    { "source": "GlobeSt", "title": "Deal or fund name", "url": "https://source.com", "date": "May 2026", "body": "1-2 sentences with named firms, dollar figures, and date vintage in parentheses." }
   ],
   "egp_items": [
-    { "source": "EastGroup (EGP)", "title": "Q1 2026 Earnings", "url": "https://investor.eastgroup.net/", "date": "Apr 2026", "body": "FFO/share $x.xx (+x.x% YoY, Q1 2026) · Same-store NOI +x.x% · Leasing x.x% · Dev starts $xxxM · 2026 FFO guide $x.xx–$x.xx. 1-2 sentence narrative on what the results signal for industrial pricing." },
-    { "source": "Prologis (PLD)", "title": "Q1 2026", "url": "https://ir.prologis.com/", "date": "Apr 2026", "body": "Key metrics with date vintage. 1 sentence on relevance to secondary FL markets." }
+    { "source": "EastGroup (EGP)", "title": "Q1 2026 Earnings", "url": "https://investor.eastgroup.net/", "date": "Apr 2026", "body": "FFO/share, same-store NOI, leasing spread, dev starts — key metrics with quarter vintage. 1-sentence market signal." },
+    { "source": "Prologis (PLD)", "title": "Q1 2026 Results", "url": "https://ir.prologis.com/", "date": "Apr 2026", "body": "Key metrics with date vintage. 1 sentence on secondary market relevance." }
   ],
   "peer_items": [
-    { "source": "Stonelake Capital Partners", "title": "Fund V closing / latest Florida activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "2-3 sentences: AUM, most recent deal or fund activity with dollar figures, geographic focus, and what differentiates them from ERP." }
+    { "source": "Stonelake Capital Partners", "title": "Latest fund or deal", "url": "https://stonelakecapital.com", "date": "Mon YYYY", "body": "AUM, most recent activity with dollar figures and geography." }
   ],
   "competitor_items": [
-    { "source": "Hillwood", "title": "Most recent FL/Brevard activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "2-3 sentences on latest deal, announcement, or market position with specifics." }
+    { "source": "Hillwood", "title": "Most recent activity", "url": "https://hillwood.com", "date": "Mon YYYY", "body": "Latest deal, announcement, or market position with specifics." }
   ],
   "tracker_items": [
-    { "source": "Rockefeller Group", "title": "Deal or project name", "url": "https://source.com", "date": "Mon YYYY", "body": "2-3 sentences: location, size, price/cap rate if known, what it signals for Space Coast competition." }
+    { "source": "${isPermian ? "Stonemont Financial" : "Rockefeller Group"}", "title": "Deal or project name", "url": "https://source.com", "date": "Mon YYYY", "body": "Location, size, price/cap rate if known. What it signals for ERP." }
   ],
   "signal_items": [
-    { "source": "CoStar / Brevard County PA", "title": "Signal headline", "url": "https://source.com", "date": "Mon YYYY", "body": "2-3 sentences: the specific data point or event, date vintage, and investment implication for ERP." }
+    { "source": "${isPermian ? "SEC EDGAR" : "CoStar"}", "title": "Signal headline", "url": "https://source.com", "date": "Mon YYYY", "body": "Specific data point with date vintage and investment implication for ERP." }
   ],
   "fund_structure": [
-    { "metric": "Management fee", "range": "1.5–2.0% on committed capital" }
+    { "metric": "Management fee", "range": "1.5–2.0% on committed capital" },
+    { "metric": "Carried interest", "range": "20% above 8% preferred return" },
+    { "metric": "Fund term", "range": "7–10 years" },
+    { "metric": "Target IRR", "range": "14–18% net" }
   ],
   "lp_angles": [
-    { "source": "CoStar", "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "2-3 sentences: specific data point with vintage, what it means for ERP's LP pitch, and the one-line implication." }
+    { "source": "CoStar", "title": "Angle title (≤6 words)", "url": "https://source.com", "narrative": "Specific data point with vintage and what it means for ERP's LP pitch." }
   ],
-  "lp_narrative": "2-3 sentence LP-facing read. What does this month's competitive landscape mean for ERP's positioning and fundraising narrative?",
-  "lp_watch": "Watch for next period: specific items to monitor",
-  "source_names": ["EastGroup Q1 2026", "CoStar", "SEC EDGAR"]
+  "lp_narrative": "2 sentences of LP-grade investment prose summarizing ERP's positioning this period.",
+  "lp_watch": "One sentence: what to monitor next period.",
+  "source_names": ["EastGroup Q1 2026", "CoStar", "GlobeSt"]
 }
 
-CRITICAL RULES — READ BEFORE WRITING JSON:
-1. *** "source" IS MANDATORY ON EVERY ITEM. Every object in capital_items, egp_items, peer_items, competitor_items, tracker_items, signal_items, and lp_angles MUST have a "source" field. A card without "source" will not display. "source" = the publication, outlet, or firm name (e.g. "GlobeSt", "EastGroup (EGP)", "Rockefeller Group", "CoStar"). ***
-2. DATA VINTAGE: Every metric must include date in parentheses — e.g. "4.8% (CoStar Q4 2025)". Never write a bare number without a date.
-3. PLAIN TEXT ONLY in all body/narrative fields — no HTML tags.
-4. KEEP IT SHORT: body = 1-2 sentences max per card. lp_narrative = exactly 2 sentences.
-
-Item counts (strict):
-- capital_items: exactly 3 — most impactful fund closes or acquisitions this period. source = publication that reported it, title = fund/deal name.
-- egp_items: exactly 2 — EastGroup first, then one peer REIT (Prologis or Rexford). source = ticker+name, body = key metrics with quarter vintage + 1-sentence market signal.
-- peer_items: exactly 3 — top ${geoLabel} PE peers. source = firm name, title = latest fund or deal.
-- competitor_items: exactly 3 — source = firm name, title = latest activity.
-- tracker_items: exactly 3 — ${isPermian ? "IOS/service yard firms: Stonemont, Titan, InSite, Broadstone, Zenith IOS." : "national tracker firms: Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe."} source = firm name, title = deal/project.
-- signal_items: exactly 3 — ${isPermian ? "SEC EDGAR Form D $50M+ industrial fund raises." : "spillover signals, local permits, aerospace REIT comps."} source = data source, title = signal type.
-- fund_structure: exactly 4 rows (management fee, carried interest, fund term, target IRR) — industry ranges only, NOT individual named funds.
-- lp_angles: exactly 3 — source = publication/outlet, title ≤ 6 words, narrative = 1-2 sentences.
-- lp_narrative: exactly 2 sentences of investment-grade prose.
-- lp_watch: one sentence only.
-- All url fields: real source URLs — never placeholder or example.com.
-- Return ONLY valid JSON, no markdown, no extra text.`,
+Rules:
+- capital_items: 3 items. source = publication, title = fund/deal name.
+- egp_items: 2 items — EastGroup first, then Prologis or Rexford. source = "Ticker (Name)".
+- peer_items: 3 items — top ${geoLabel} PE peers. source = firm name.
+- competitor_items: 3 items — source = firm name.
+- tracker_items: 3 items — ${isPermian ? "IOS/service yard firms: Stonemont, Titan, InSite, Broadstone, Zenith IOS." : "Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe."} source = firm name.
+- signal_items: 3 items — ${isPermian ? "SEC EDGAR Form D $50M+ industrial fund raises." : "I-4 spillover signals, local permits, aerospace REIT cap rates."} source = data outlet.
+- fund_structure: exactly 4 rows as shown above (industry ranges only, not named funds).
+- lp_angles: 3 items — source = publication/outlet, title ≤ 6 words.
+- "source" field is REQUIRED on every item in every array. Use the publication, outlet, or firm name.
+- All url fields: use real source URLs from the research. Never use example.com or placeholder URLs.
+- All body/narrative fields: plain text only, no HTML.`,
       },
     ],
   });
