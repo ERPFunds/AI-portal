@@ -8,6 +8,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
+import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-update";
 import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intelligence";
 import { runCompetitorIntelligence } from "@/lib/agents/workflows/competitor-intelligence";
 
@@ -27,6 +28,25 @@ const SHARED_FEEDS = [
   { url: "https://www.prnewswire.com/rss/news-releases-list.rss", source: "PR Newswire" },
   { url: "https://www.businesswire.com/rss/home", source: "Business Wire" },
   { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
+];
+
+const MONDAY_QUERIES = [
+  "Brevard County Florida industrial real estate 2026",
+  "Space Coast Florida industrial warehouse lease sale 2026",
+  "Melbourne Florida industrial CRE deal transaction 2026",
+  "Titusville Cocoa Palm Bay industrial property sale lease 2026",
+  "Brevard County commercial real estate sold 2026",
+  "Space Coast Florida industrial tenant move 2026",
+  "Florida industrial real estate transaction news 2026",
+];
+
+const MONDAY_KEYWORDS = [
+  "brevard", "space coast", "melbourne florida", "titusville", "palm bay", "cocoa",
+  "kennedy space center", "cape canaveral", "port canaveral",
+  "florida industrial", "flex space florida", "logistics florida",
+  "sale comp", "sold", "lease signed", "new tenant", "absorption", "vacancy", "lease rate",
+  "cap rate", "warehouse", "aerospace industrial", "defense contractor", "industrial property",
+  "sq ft", "square feet", "per sf", "nnn", "industrial park", "flex building",
 ];
 
 const SUBMARKET_QUERIES = [
@@ -237,4 +257,46 @@ ${narrativeHtml}
   const subject = `Space Coast Competitive & Fund Intelligence — ${period}`;
   const htmlBody = HTML_SHELL(subject, `Competitor tracker + fund landscape · Brevard County / Space Coast`, compIntel.bodyContent + fundSection);
   return { subject, htmlBody, summary: compIntel.summary };
+}
+
+export async function generateBrevardMondayBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+  const [brief, news] = await Promise.all([
+    runWeeklyMarketUpdate({ market: "brevard", period }),
+    fetchNews(MONDAY_QUERIES, MONDAY_KEYWORDS),
+  ]);
+
+  if (news.length === 0) {
+    return brief;
+  }
+
+  const articleList = news.map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
+
+  const msg = await anthropic.messages.create({
+    model: "claude-opus-4-5",
+    max_tokens: 1200,
+    messages: [{
+      role: "user",
+      content: `You are an industrial CRE analyst for ERP Funds. Write a 2-3 paragraph news summary covering these Brevard County / Space Coast industrial CRE articles from this week. Focus on: sale comps with $/SF and cap rates (include data vintage), named tenant moves, lease signings, new developments, and any pricing or vacancy shifts. Be specific — named companies, addresses, dollar figures. Every stat needs a date.
+
+Articles:
+${articleList}`,
+    }],
+  });
+
+  const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
+  const narrativeHtml = narrative.split("\n\n").map((p) => `<p style="line-height:1.7;color:#374151;margin:0 0 14px;">${p}</p>`).join("");
+
+  const newsSection = `
+${SECTION_DIVIDER("This Week's News — Space Coast Industrial")}
+${narrativeHtml}
+<div style="margin-top:12px;">${articlesToHtml(news)}</div>
+`;
+
+  // Inject news section before the closing footer div
+  const htmlBody = brief.htmlBody.replace(
+    /(<div style="padding:16px 40px 28px;border-top)/,
+    `<div style="padding:0 40px;">${newsSection}</div>\n  $1`
+  );
+
+  return { subject: brief.subject, htmlBody, summary: brief.summary };
 }

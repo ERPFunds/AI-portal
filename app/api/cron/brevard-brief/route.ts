@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
-import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-update";
-import { generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
+import { generateBrevardMondayBrief, generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
 import { logAgentRun } from "@/lib/db";
 
 export const maxDuration = 300;
@@ -59,10 +58,10 @@ export async function GET(request: Request) {
   const market = "brevard";
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
-  // ── 1. Weekly Market Update ───────────────────────────────────────────────
+  // ── 1. Monday Brief (weekly market update + live news digest) ─────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await runWeeklyMarketUpdate({ market, period });
+    const { subject, htmlBody, summary } = await generateBrevardMondayBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     results["weekly-update"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});

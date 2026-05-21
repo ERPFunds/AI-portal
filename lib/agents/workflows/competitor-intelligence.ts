@@ -182,22 +182,24 @@ Return ONLY valid JSON with this exact structure:
   "source_names": ["EastGroup Q1 2026", "CoStar", "SEC EDGAR"]
 }
 
-Rules:
-- DATA VINTAGE REQUIRED: Every metric value must include source date in parentheses, e.g. "4.8% (CoStar Q4 2025)" or "$9.25/SF (JLL, Jan 2026)". Never write a bare number without a date.
-- BREVITY: All body/narrative fields strictly limited to word counts in schema. Plain text only — no HTML tags ever.
-- FORMAT RULE: Every card must have "source" (publication or firm name), "title" (deal/event/report name), "url" (direct source URL), "date", and "body" (2-3 sentences). Source AND title both link to the same URL. Body is prose sentences — NOT bullet points, NOT a word count limit.
-- capital_items: 4-6 items — fund closes, major acquisitions, institutional deployments. source = publication that reported it, title = deal/fund name, body = 2-3 sentences with dollar figures and date vintage, and what it signals for ERP.
-- egp_items: 2-4 cards — EastGroup first, then 1-3 comparable public REITs (Prologis, Rexford, STAG). source = "EastGroup (EGP)" etc., title = quarter/report name, body = key metrics (FFO/share, leasing rate, dev starts, FFO guide) all with quarter vintage + 1 sentence on market signal.
-- peer_items: 3-5 ${geoLabel} PE peers — source = firm name, title = latest fund or major activity, body = 2-3 sentences on AUM, geography, recent activity, differentiators vs ERP.
-- competitor_items: 4-6 private competitors — source = firm name, title = latest deal or announcement, body = 2-3 sentences on what they're doing and why it matters to ERP.
-- tracker_items: ${isPermian ? "IOS/service yard deals — Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS. source = firm name, title = deal name, body = 2-3 sentences: location, SF, price/cap rate, date. If nothing found this period, note last known activity with date." : "national flex/R&D/logistics tracker — Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe. source = firm name, title = specific deal or project, body = 2-3 sentences on Brevard/Space Coast or most recent FL activity and competitive implication."}
-- signal_items: ${isPermian ? "SEC EDGAR Form D filings — $50M+ industrial CRE fund raises. source = publication/EDGAR, title = fund name, body = 2-3 sentences: sponsor, raise amount, focus, date filed, why it matters." : "spillover signals (I-4 corridor cap rate spread, Orlando/Tampa buyers in Brevard deed records) + local developer permits (Cuhaci & Peterson, Bravar Industrial, >20,000 SF permits) + aerospace REIT cap rate comps. source = data source, title = signal type, body = 2-3 sentences with specific figures and investment implication."}
-- fund_structure: industry ranges only, 4-5 rows, NOT individual named funds
-- lp_angles: exactly 3, each with url to direct source
-- lp_narrative: 2-3 sentences, investment-grade prose
-- lp_watch: one sentence, specific items for next period
-- All url fields: direct source URL — never a placeholder
-- All body/narrative fields: plain text, no HTML tags
+CRITICAL RULES — READ BEFORE WRITING JSON:
+1. *** "source" IS MANDATORY ON EVERY ITEM. Every object in capital_items, egp_items, peer_items, competitor_items, tracker_items, signal_items, and lp_angles MUST have a "source" field. A card without "source" will not display. "source" = the publication, outlet, or firm name (e.g. "GlobeSt", "EastGroup (EGP)", "Rockefeller Group", "CoStar"). ***
+2. DATA VINTAGE: Every metric must include date in parentheses — e.g. "4.8% (CoStar Q4 2025)". Never write a bare number without a date.
+3. PLAIN TEXT ONLY in all body/narrative fields — no HTML tags.
+4. KEEP IT SHORT: body = 1-2 sentences max per card. lp_narrative = exactly 2 sentences.
+
+Item counts (strict):
+- capital_items: exactly 3 — most impactful fund closes or acquisitions this period. source = publication that reported it, title = fund/deal name.
+- egp_items: exactly 2 — EastGroup first, then one peer REIT (Prologis or Rexford). source = ticker+name, body = key metrics with quarter vintage + 1-sentence market signal.
+- peer_items: exactly 3 — top ${geoLabel} PE peers. source = firm name, title = latest fund or deal.
+- competitor_items: exactly 3 — source = firm name, title = latest activity.
+- tracker_items: exactly 3 — ${isPermian ? "IOS/service yard firms: Stonemont, Titan, InSite, Broadstone, Zenith IOS." : "national tracker firms: Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe."} source = firm name, title = deal/project.
+- signal_items: exactly 3 — ${isPermian ? "SEC EDGAR Form D $50M+ industrial fund raises." : "spillover signals, local permits, aerospace REIT comps."} source = data source, title = signal type.
+- fund_structure: exactly 4 rows (management fee, carried interest, fund term, target IRR) — industry ranges only, NOT individual named funds.
+- lp_angles: exactly 3 — source = publication/outlet, title ≤ 6 words, narrative = 1-2 sentences.
+- lp_narrative: exactly 2 sentences of investment-grade prose.
+- lp_watch: one sentence only.
+- All url fields: real source URLs — never placeholder or example.com.
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
@@ -247,8 +249,6 @@ Rules:
   // ── HTML helpers ──────────────────────────────────────────────────────────
   const secLabel = (text: string) =>
     `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
-
-  const hasUrl = (item: { url?: string }) => item.url && item.url.startsWith("http");
 
   const renderCards = (items: Array<{ source?: string; title: string; url?: string; date?: string; body: string }>) =>
     items.map(item => {
