@@ -5,6 +5,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-update";
 import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intelligence";
 import { runCompetitorIntelligence } from "@/lib/agents/workflows/competitor-intelligence";
+import { generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
 
 export const maxDuration = 300;
 
@@ -74,33 +75,23 @@ export async function POST(req: NextRequest) {
   const period = getCurrentPeriod();
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
-  const briefs: { id: string; label: string; market: "permian" | "brevard"; type: string }[] = [
-    { id: "permian-weekly",        label: "Permian — Monday Brief",              market: "permian",  type: "weekly"    },
-    { id: "brevard-weekly",        label: "Brevard — Monday Brief",              market: "brevard",  type: "weekly"    },
-    { id: "permian-submarket",     label: "Permian — Submarket Intelligence",    market: "permian",  type: "submarket" },
-    { id: "brevard-submarket",     label: "Brevard — Submarket Brief",           market: "brevard",  type: "submarket" },
-    { id: "permian-competitor",    label: "Permian — Fund Landscape Brief",      market: "permian",  type: "competitor"},
-    { id: "brevard-competitor",    label: "Brevard — Competitive & Fund Brief",  market: "brevard",  type: "competitor"},
+  type BriefRunner = () => Promise<{ subject: string; htmlBody: string }>;
+
+  const briefs: { id: string; run: BriefRunner }[] = [
+    { id: "Permian — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "permian", period }) },
+    { id: "Brevard — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "brevard", period }) },
+    { id: "Permian — Submarket Intelligence",   run: () => runSubmarketIntelligence({ market: "permian", period }) },
+    { id: "Brevard — Submarket Brief",          run: () => generateBrevardSubmarketBrief(period) },
+    { id: "Permian — Fund Landscape Brief",     run: () => runCompetitorIntelligence({ market: "permian", period }) },
+    { id: "Brevard — Competitive & Fund Brief", run: () => generateBrevardFundCompetitorBrief(period) },
   ];
 
   for (const brief of briefs) {
     try {
-      let subject: string;
-      let htmlBody: string;
-
-      if (brief.type === "weekly") {
-        ({ subject, htmlBody } = await runWeeklyMarketUpdate({ market: brief.market, period }));
-      } else if (brief.type === "submarket") {
-        ({ subject, htmlBody } = await runSubmarketIntelligence({ market: brief.market, period }));
-      } else {
-        ({ subject, htmlBody } = await runCompetitorIntelligence({ market: brief.market, period }));
-      }
-
+      const { subject, htmlBody } = await brief.run();
       const emailResult = await sendEmailViaGraph({ subject, htmlBody });
       results[brief.id] = { success: emailResult.success, subject: `[TEST] ${subject}` };
-      if (!emailResult.success) {
-        results[brief.id].error = emailResult.message;
-      }
+      if (!emailResult.success) results[brief.id].error = emailResult.message;
     } catch (err) {
       results[brief.id] = { success: false, error: String(err) };
       console.error(`[test-all-briefs] ${brief.id} failed:`, err);
