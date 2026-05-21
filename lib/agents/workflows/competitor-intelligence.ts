@@ -153,7 +153,7 @@ Return ONLY valid JSON with this exact structure:
   "subject": "string — e.g. '${marketLabel} Competitive Landscape & Comparable Funds — ${params.period}'",
 
   "section1_items": [
-    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "1-2 sentences on significance to ERP — embed inline <a href> links on company names and stats" }
+    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "ONE sentence max — the single most important signal for ERP. Hyperlink the company name or key stat to its source: <a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">text</a>. No background, no explanation — just the fact and why it matters to ERP in ≤20 words." }
   ],
 
   "section2_egp_rows": [
@@ -167,16 +167,15 @@ Return ONLY valid JSON with this exact structure:
     { "metric": "2026 FFO guide", "value": "$x.xx–$x.xx" },
     { "metric": "Geographic focus", "value": "TX · FL · CA · AZ · NC" }
   ],
-  "section2_lp_narrative": "2-3 sentence LP-facing narrative on what EGP performance signals for ERP's thesis — embed inline <a href> links on any cited press release or earnings source",
-  "section2_other_reits": "Prologis (PLD) · Rexford (REXR) · Terreno (TRNO) · STAG (STAG) · First Industrial (FR) · Plymouth (PLYM) · LXP (LXP). Add any notable recent data point per ticker with an inline link to the source.",
+  "section2_lp_narrative": "ONE sentence on what EGP's results signal for ERP's thesis. Hyperlink 'EastGroup' to the earnings release URL.",
+  "section2_other_reits": "One line per ticker — ticker, one key stat with date, hyperlinked to source. Format: <a href=\"URL\">PLD</a> — $x.xx FFO (Q1 2026) · ...",
 
   "section3_table": [
-    { "firm": "Stonelake Capital Partners", "description": "$5.5B+ commercial RE across Austin, Dallas, Houston, San Antonio — embed an inline <a href> on the firm name or any cited stat linking to source." }
+    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Firm Name</a>", "description": "AUM or fund size · geography · one distinguishing fact. Max 15 words. No sentences — just facts." }
   ],
 
   "section4_bullets": [
-    "Hillwood (Perot family) — <a href=\"https://...\">AllianceTexas</a> DFW — no announced Permian project",
-    "Stream Realty Partners — Texas-wide, embed inline links on any cited deal or source"
+    "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Firm Name</a> — one key fact or most recent known activity with date. ≤12 words."
   ],
   "section4_correction": "Optional — only include if correcting a specific prior-draft error. Leave empty string if none.",
 
@@ -189,47 +188,48 @@ Return ONLY valid JSON with this exact structure:
   "section5_note": "Industry-typical ranges from public PE conventions. ERP-specific positioning vs. peers: pending PPM comp data integration.",
 
   "section6_angles": [
-    { "angle": "Positioning angle title", "narrative": "Supporting data point with inline <a href> link to source — implication for ERP LP narrative." }
+    { "angle": "Angle title — ≤6 words", "narrative": "One sentence, one data point, one link. <a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">hyperlink the key stat</a>. ≤20 words total." }
   ],
   "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
 
   ${isPermian ? `"section7_ios_tracker": [
-    { "firm": "Stonemont Financial", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type, tenant if known" }
+    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Stonemont Financial</a>", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type — ≤8 words" }
   ],
-  "section7_ios_note": "If no new deal announcements found for a firm, note last known activity.",
+  "section7_ios_note": "If no new deal found for a firm, one-line note on last known activity with date.",
   "section8_form_d": [
-    { "fund": "Fund name", "sponsor": "Sponsor/GP name", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "Industrial outdoor storage / service yards / flex industrial" }
+    { "fund": "Fund name", "sponsor": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Sponsor/GP name</a>", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "≤8 words on industrial focus" }
   ],
-  "section8_form_d_note": "Source: SEC EDGAR Form D filings. Raises over $50M with industrial CRE focus. Represents 30-60 day advance notice of new capital entering market.",` : ""}
+  "section8_form_d_note": "SEC EDGAR Form D — $50M+ industrial CRE raises. 30-60 day leading indicator.",` : ""}
   ${isBrevard ? `"section7_national_trackers": [
-    { "firm": "Rockefeller Group", "activity": "Project name, deal, or announcement", "location": "City, FL", "size": "xx,xxx SF or acres", "date": "Mon YYYY", "notes": "Brevard/Space Coast specific if found; otherwise most recent FL activity" }
+    { "firm": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Rockefeller Group</a>", "activity": "One-line: deal or most recent FL activity", "location": "City, FL", "size": "xx,xxx SF or acres", "date": "Mon YYYY", "notes": "≤8 words context" }
   ],
-  "section7_national_note": "Focus: flex/R&D/logistics competitors — not big-box REIT. If no Brevard activity found for a firm, state last known Florida activity with date.",
+  "section7_national_note": "Flex/R&D/logistics only — not big-box REIT.",
   "section8_spillover": [
-    { "signal": "Buyer name or fund type", "detail": "Property address, SF, price, buyer HQ city/state", "date": "Mon YYYY", "implication": "What this signals for Brevard pricing pressure" }
+    { "signal": "Buyer name or fund type", "detail": "Address · SF · price · buyer HQ — facts only, no sentences", "date": "Mon YYYY", "implication": "≤10 words on pricing signal" }
   ],
-  "section8_cap_rate_spread": { "i4_corridor": "x.x% (source, Mon YYYY)", "brevard": "x.x% (source, Mon YYYY)", "spread": "x.xx% — tightening/stable/widening", "trend": "narrative" },
-  "section8_spillover_note": "If no specific deed record found, note the cap rate spread trend and what threshold would trigger spillover.",
+  "section8_cap_rate_spread": { "i4_corridor": "x.x% (source, Mon YYYY)", "brevard": "x.x% (source, Mon YYYY)", "spread": "x.xx% — tightening/stable/widening", "trend": "One sentence max." },
+  "section8_spillover_note": "One line if no deed record found.",
   "section9_local_devs": [
     { "developer": "Cuhaci & Peterson", "project": "Project name or address", "sf": "xx,xxx SF", "location": "City, Brevard County", "permit_date": "Mon YYYY", "status": "Under construction / Completed / Permitted" }
   ],
-  "section9_local_note": "Source: Brevard County building permits. Industrial permits > 20,000 SF past 12 months. These are ERP's actual competition — not press-release firms.",
+  "section9_local_note": "Brevard County building permits — industrial >20,000 SF, last 12 months.",
   "section10_aerospace_reits": [
-    { "entity": "Digital Realty (DLR)", "metric": "Cap rate or yield metric", "value": "x.x% (source, Mon YYYY)", "trend": "Compressing / Stable / Expanding", "relevance": "What this implies for Brevard flex/R&D pricing and LP expectations" }
+    { "entity": "<a href=\"URL\" style=\"color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;\">Digital Realty (DLR)</a>", "metric": "Cap rate or yield metric", "value": "x.x% (source, Mon YYYY)", "trend": "Compressing / Stable / Expanding", "relevance": "≤12 words on LP expectation implication" }
   ],
-  "section10_note": "Not direct comps — used to set LP ceiling expectations for specialized industrial in defense/launch corridors.",` : ""}
+  "section10_note": "Not direct comps — LP ceiling expectations for defense-corridor industrial.",` : ""}
   "source_names": ["EastGroup Q1 press release", "Diamondback Q1 2026", "Stonelake website"]
 }
 
 Rules:
 - DATA VINTAGE REQUIRED: Every metric value must include source date in parentheses, e.g. "4.8% (CoStar Q4 2025)" or "$9.25/SF (JLL, Jan 2026)". Never write a bare number without a date.
-- section1_items: 4-6 items, mix of fund closes, acquisitions, operator results — include date on each
+- BREVITY: All text fields are strictly limited. body ≤20 words. description ≤15 words. bullets ≤12 words. narrative ≤20 words. notes/relevance/implication ≤10 words. Readers click the link for more — do NOT explain in the email.
+- section1_items: 4-6 items — title + date + ONE tight sentence. Hyperlink the company name or key stat.
 - section2_egp_rows: use most recent quarter available; search for it if not in research; include quarter in every value
-- section3_table: 3-5 ${geoLabel} PE peers with substantive descriptions; include AUM or deal data with dates
-- section4_bullets: 4-6 private competitors, one sentence each with any known recent activity and date
+- section3_table: 3-5 ${geoLabel} PE peers — firm name hyperlinked, description is facts only (AUM · market · one distinguishing data point), no prose
+- section4_bullets: 4-6 private competitors — firm name hyperlinked, one fact or status, date. No sentences.
 - section4_correction: empty string "" if no correction needed
 - section5_rows: industry ranges only, NOT individual named funds
-- section6_angles: exactly 3 angles with specific verified data points including dates
+- section6_angles: exactly 3 angles — short title + ONE sentence with ONE hyperlinked data point
 ${isPermian ? `- section7_ios_tracker: search specifically for Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS deal announcements. If nothing found this period, note last known activity with date.
 - section8_form_d: search SEC EDGAR for Form D filings from industrial CRE funds. This is a competitive intelligence signal.` : ""}
 ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe for Brevard/Space Coast activity. If nothing found, report last known Florida activity with date. Flex/R&D/logistics focus — not big-box REIT.
