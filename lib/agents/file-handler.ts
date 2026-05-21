@@ -110,13 +110,13 @@ export function buildOneDriveFolder(params: {
   workflowId: string;
 }): string {
   const month = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
-  if (params.prefix === "BUILD" || params.prefix === "WRITE") {
-    const type = params.workflowId === "deck-builder" ? "Decks" : "OMs";
-    return `/${type}/${params.projectContext}`;
+  if (params.prefix === "BUILD") {
+    return `/Build`;
   }
-  if (params.workflowId === "save-file-only") {
-    return `/Research/${month}`;
+  if (params.prefix === "WRITE") {
+    return `/Write`;
   }
+  // RESEARCH (including save-file-only) → monthly subfolder
   return `/Research/${month}`;
 }
 
