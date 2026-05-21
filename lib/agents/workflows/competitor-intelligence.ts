@@ -153,29 +153,29 @@ Return ONLY valid JSON with this exact structure:
   "subject": "Space Coast Competitive & Fund Intelligence — Week of ${params.period}",
   "headline": "Single most important competitive signal this period — ≤20 words",
   "capital_items": [
-    { "title": "Fund/deal name or key stat", "url": "https://source.com", "date": "Mon YYYY", "body": "≤20 words — what this means for ERP" }
+    { "source": "Publication or firm name", "title": "Fund/deal name or key stat", "url": "https://source.com", "date": "Mon YYYY", "body": "≤20 words — what this means for ERP" }
   ],
-  "egp_table": [
-    { "metric": "FFO/share", "value": "$x.xx (+x.x% YoY, Q1 2026)" }
+  "egp_items": [
+    { "source": "EastGroup (EGP)", "title": "Q1 2026 Results", "url": "https://investor.eastgroup.net/", "date": "Apr 2026", "body": "FFO/share $x.xx (+x.x% YoY) · Leasing x.x% · Dev starts $xxxM · FFO guide $x.xx–$x.xx" },
+    { "source": "Prologis (PLD)", "title": "Q1 2026", "url": "https://ir.prologis.com/", "date": "Apr 2026", "body": "Key metric or signal ≤15 words" }
   ],
-  "egp_narrative": "One sentence on what EGP results signal for ERP's thesis.",
   "peer_items": [
-    { "title": "Firm name", "url": "https://firm.com", "date": "Mon YYYY", "body": "AUM · geography · one distinguishing fact ≤15 words" }
+    { "source": "Firm name", "title": "Recent activity or fund", "url": "https://firm.com", "date": "Mon YYYY", "body": "AUM · geography · one distinguishing fact ≤15 words" }
   ],
   "competitor_items": [
-    { "title": "Firm name", "url": "https://firm.com", "date": "Mon YYYY", "body": "≤12 words — most recent known activity or status" }
+    { "source": "Firm name", "title": "Recent deal or activity", "url": "https://firm.com", "date": "Mon YYYY", "body": "≤12 words — most recent known activity or status" }
   ],
   "tracker_items": [
-    { "title": "Firm · Deal/Project", "url": "https://source.com", "date": "Mon YYYY", "body": "Location · size · price — ≤15 words" }
+    { "source": "Firm name", "title": "Deal/Project name", "url": "https://source.com", "date": "Mon YYYY", "body": "Location · size · price — ≤15 words" }
   ],
   "signal_items": [
-    { "title": "Signal or fund name", "url": "https://source.com", "date": "Mon YYYY", "body": "≤15 words" }
+    { "source": "Signal type or publication", "title": "Signal headline", "url": "https://source.com", "date": "Mon YYYY", "body": "≤15 words" }
   ],
   "fund_structure": [
     { "metric": "Management fee", "range": "1.5–2.0% on committed capital" }
   ],
   "lp_angles": [
-    { "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "≤20 words — one fact, one implication" }
+    { "source": "Publication or data source", "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "≤20 words — one fact, one implication" }
   ],
   "lp_narrative": "2-3 sentence LP-facing read. What does this month's competitive landscape mean for ERP's positioning and fundraising narrative?",
   "lp_watch": "Watch for next period: specific items to monitor",
@@ -185,10 +185,10 @@ Return ONLY valid JSON with this exact structure:
 Rules:
 - DATA VINTAGE REQUIRED: Every metric value must include source date in parentheses, e.g. "4.8% (CoStar Q4 2025)" or "$9.25/SF (JLL, Jan 2026)". Never write a bare number without a date.
 - BREVITY: All body/narrative fields strictly limited to word counts in schema. Plain text only — no HTML tags ever.
-- capital_items: 4-6 items — mix of fund closes, acquisitions, operator results
-- egp_table: most recent quarter, all 9 metrics (EPS, FFO/share, leasing rate, consecutive FFO growth quarters, same-store NOI, dev starts guidance, debt/market cap, FFO guide, geographic focus), each value includes the quarter
-- peer_items: 3-5 ${geoLabel} PE peers — title is firm name, url is firm website, body is AUM/market/one fact ≤15 words
-- competitor_items: 4-6 private competitors — title is firm name, url is firm website, body is ≤12 words on latest activity
+- capital_items: 4-6 items — mix of fund closes, acquisitions, operator results. source = publication/firm, title = deal or fund name, body ≤20 words
+- egp_items: 2-4 cards — EastGroup first, then 1-3 comparable public REITs (Prologis, Rexford, STAG). source = ticker+name, title = quarter/report, body packs key metrics: FFO/share, leasing rate, dev starts, FFO guide — all with date vintage. One card per REIT.
+- peer_items: 3-5 ${geoLabel} PE peers — source is firm name (linked to firm website), title is their latest fund or activity, body is AUM/market/one fact ≤15 words
+- competitor_items: 4-6 private competitors — source is firm name (linked to firm website), title is latest deal or activity, body is ≤12 words on latest activity
 - tracker_items: ${isPermian ? "IOS/service yard deals — Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS. If nothing found this period, note last known activity with date." : "national flex/R&D/logistics tracker firms — Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe. Brevard/Space Coast or most recent FL activity. Flex/R&D/logistics focus only."}
 - signal_items: ${isPermian ? "SEC EDGAR Form D filings — $50M+ industrial CRE fund raises. Use title for fund name, body for sponsor + amount + focus." : "spillover signals (I-4 corridor cap rate spread, Orlando/Tampa buyers in Brevard deed records) + local developer permits (Cuhaci & Peterson, Bravar Industrial, Brevard County building permits >20,000 SF) + aerospace REIT cap rate comps (Digital Realty, Equinix, Iron Mountain). Use title to label the signal type."}
 - fund_structure: industry ranges only, 4-5 rows, NOT individual named funds
@@ -226,14 +226,12 @@ Rules:
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
   // ── Parse sections ────────────────────────────────────────────────────────
-  type CardItem = { title: string; url?: string; date?: string; body: string };
-  type EgpRow   = { metric: string; value: string };
+  type CardItem = { source?: string; title: string; url?: string; date?: string; body: string };
   type FundRow  = { metric: string; range: string };
-  type LpAngle  = { title: string; url?: string; narrative: string };
+  type LpAngle  = { source?: string; title: string; url?: string; narrative: string };
 
   const capitalItems    = (data.capital_items    as CardItem[]  | undefined) ?? [];
-  const egpTable        = (data.egp_table        as EgpRow[]    | undefined) ?? [];
-  const egpNarrative    = (data.egp_narrative    as string      | undefined) ?? "";
+  const egpItems        = (data.egp_items        as CardItem[]  | undefined) ?? [];
   const peerItems       = (data.peer_items       as CardItem[]  | undefined) ?? [];
   const competitorItems = (data.competitor_items as CardItem[]  | undefined) ?? [];
   const trackerItems    = (data.tracker_items    as CardItem[]  | undefined) ?? [];
@@ -251,13 +249,21 @@ Rules:
 
   const hasUrl = (item: { url?: string }) => item.url && item.url.startsWith("http");
 
-  const renderCards = (items: Array<{ title: string; url?: string; date?: string; body: string }>) =>
+  const renderCards = (items: Array<{ source?: string; title: string; url?: string; date?: string; body: string }>) =>
     items.map(item => {
-      const titleEl = hasUrl(item)
-        ? `<a href="${item.url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${item.title}</a>`
+      const url = item.url && item.url.startsWith("http") && !item.url.includes("example.com") ? item.url : null;
+      const sourceEl = item.source
+        ? (url
+            ? `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${item.source}</a>`
+            : `<strong style="font-weight:700;color:#0f172a;">${item.source}</strong>`)
+        : "";
+      const titleEl = url
+        ? `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${item.title}</a>`
         : `<strong style="color:#0f172a;">${item.title}</strong>`;
+      const sourcePart = sourceEl ? `${sourceEl}<span style="color:#94a3b8;margin:0 5px;">&middot;</span>` : "";
+      const datePart = item.date ? `<span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${item.date}</span>` : "";
       return `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
-  <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${titleEl}${item.date ? `<span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${item.date}</span>` : ""}</p>
+  <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${sourcePart}${titleEl}${datePart}</p>
   <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${item.body}</p>
 </div>`;
     }).join("\n");
@@ -267,23 +273,10 @@ Rules:
     ? `<div style="border-left:4px solid #d97706;background:#fffbeb;padding:12px 16px;margin:0 0 24px;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.65;">&#128276; <strong>Headline this period:</strong> ${headline}</div>`
     : "";
 
-  // ── EGP table ─────────────────────────────────────────────────────────────
-  const egpRows = egpTable.map((r) =>
-    `<tr>
-  <td style="text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;font-weight:600;">${r.metric}</td>
-  <td style="text-align:left;padding:9px 0 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;">${r.value}</td>
-</tr>`
-  ).join("\n");
-
-  const egpTableHtml = egpTable.length > 0
-    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <thead><tr>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Metric</th>
-    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px;border-bottom:2px solid #0f172a;">Value</th>
-  </tr></thead>
-  <tbody>${egpRows}</tbody>
-</table>`
-    : "";
+  // ── EGP cards ─────────────────────────────────────────────────────────────
+  const egpCardsHtml = egpItems.length > 0
+    ? renderCards(egpItems)
+    : '<p style="font-size:13px;color:#94a3b8;">No EGP data this period.</p>';
 
   // ── Fund structure table ───────────────────────────────────────────────────
   const fundRows = fundStructure.map((r) =>
@@ -347,8 +340,7 @@ Rules:
     capitalItems.length > 0 ? renderCards(capitalItems) : '<p style="font-size:13px;color:#94a3b8;">No capital flow events found this period.</p>',
 
     secLabel("§2 &mdash; EastGroup Benchmark (EGP)"),
-    egpTableHtml,
-    egpNarrative ? `<p style="font-size:13.5px;line-height:1.8;color:#1e293b;margin:14px 0 0;">${egpNarrative}</p>` : "",
+    egpCardsHtml,
 
     secLabel(`§3 &mdash; ${geoLabel} PE &amp; Institutional Peers`),
     peerItems.length > 0 ? renderCards(peerItems) : '<p style="font-size:13px;color:#94a3b8;">No peer data available.</p>',
@@ -366,7 +358,7 @@ Rules:
     signalItems.length > 0 ? renderCards(signalItems) : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No signals found this period.</p>',
 
     secLabel("§8 &mdash; LP Differentiation Angles"),
-    lpAngles.length > 0 ? renderCards(lpAngles.map(a => ({ title: a.title, url: a.url, date: undefined, body: a.narrative }))) : "",
+    lpAngles.length > 0 ? renderCards(lpAngles.map(a => ({ source: a.source, title: a.title, url: a.url, date: undefined, body: a.narrative }))) : "",
 
     secLabel("§9 &mdash; LP Narrative Read"),
     lpNarrativeHtml ? `<div>${lpNarrativeHtml}</div>` : "",
@@ -381,7 +373,7 @@ Rules:
     sourcesLine
   );
 
-  const summary = `${briefTitle} generated for ${params.period}. Covers ${capitalItems.length} capital flow events, EastGroup ${egpTable.length}-metric benchmark, ${peerItems.length} PE peers, ${competitorItems.length} private competitors, ${trackerItems.length} tracker items, ${signalItems.length} signals, ${lpAngles.length} LP angles.`;
+  const summary = `${briefTitle} generated for ${params.period}. Covers ${capitalItems.length} capital flow events, ${egpItems.length} REIT benchmark cards, ${peerItems.length} PE peers, ${competitorItems.length} private competitors, ${trackerItems.length} tracker items, ${signalItems.length} signals, ${lpAngles.length} LP angles.`;
 
   return { subject, htmlBody, bodyContent, sourcesLine, summary };
 }
