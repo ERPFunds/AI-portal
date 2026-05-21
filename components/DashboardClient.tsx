@@ -3469,7 +3469,28 @@ function NewsletterPromptCard({ p }: { p: NewsletterPrompt }) {
 
 function NewsletterPromptLibrary() {
   const [filterMarket, setFilterMarket] = useState<'all' | 'permian' | 'brevard'>('all')
+  const [testState, setTestState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [testResults, setTestResults] = useState<Record<string, { success: boolean; subject?: string; error?: string }>>({})
   const filtered = NEWSLETTER_PROMPTS.filter((p) => filterMarket === 'all' || p.market === filterMarket)
+
+  async function handleTestAll() {
+    setTestState('loading')
+    setTestResults({})
+    try {
+      const res = await fetch('/api/test-all-briefs', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setTestState('error')
+        setTestResults({ error: { success: false, error: data.message || data.error || 'Unknown error' } })
+      } else {
+        setTestState('done')
+        setTestResults(data.results || {})
+      }
+    } catch (err) {
+      setTestState('error')
+      setTestResults({ error: { success: false, error: String(err) } })
+    }
+  }
 
   return (
     <div className="card" style={{ margin: 0 }}>
@@ -3481,7 +3502,7 @@ function NewsletterPromptLibrary() {
             <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs — 1 Permian weekly · 3 Brevard weekly · 2 Permian monthly</div>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           {(['all', 'permian', 'brevard'] as const).map((m) => (
             <button
               key={m}
@@ -3489,8 +3510,33 @@ function NewsletterPromptLibrary() {
               style={{ fontSize: 10, padding: '3px 10px', borderRadius: 5, border: '1px solid', cursor: 'pointer', fontWeight: filterMarket === m ? 700 : 400, background: filterMarket === m ? '#0e7490' : '#fff', color: filterMarket === m ? '#fff' : '#6b7280', borderColor: filterMarket === m ? '#0e7490' : '#d1d5db' }}
             >{m === 'all' ? 'All' : m === 'permian' ? 'Permian' : 'Brevard'}</button>
           ))}
+          <button
+            onClick={handleTestAll}
+            disabled={testState === 'loading'}
+            style={{ fontSize: 10, padding: '3px 12px', borderRadius: 5, border: '1px solid', cursor: testState === 'loading' ? 'not-allowed' : 'pointer', fontWeight: 600, background: testState === 'loading' ? '#f3f4f6' : testState === 'done' ? '#d1fae5' : '#0f172a', color: testState === 'loading' ? '#9ca3af' : testState === 'done' ? '#065f46' : '#fff', borderColor: testState === 'done' ? '#6ee7b7' : '#0f172a', marginLeft: 4 }}
+          >
+            {testState === 'loading' ? '⏳ Sending…' : testState === 'done' ? '✓ Sent to you' : '📧 Send all 6 to me'}
+          </button>
         </div>
       </div>
+
+      {/* Test results */}
+      {(testState === 'done' || testState === 'error') && Object.keys(testResults).length > 0 && (
+        <div style={{ background: testState === 'error' ? '#fef2f2' : '#f0fdf4', border: `1px solid ${testState === 'error' ? '#fecaca' : '#bbf7d0'}`, borderRadius: 6, padding: '10px 14px', marginBottom: 14, fontSize: 12 }}>
+          {testState === 'done' && <div style={{ fontWeight: 600, color: '#065f46', marginBottom: 6 }}>All 6 briefs queued — check mparad@erpfunds.com. Subject lines prefixed with [TEST].</div>}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {Object.entries(testResults).map(([id, r]) => (
+              <div key={id} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                <span>{r.success ? '✓' : '✗'}</span>
+                <span style={{ color: r.success ? '#065f46' : '#991b1b' }}>{r.subject || id}</span>
+                {r.error && <span style={{ color: '#b91c1c', fontSize: 11 }}>— {r.error}</span>}
+              </div>
+            ))}
+          </div>
+          <button onClick={() => setTestState('idle')} style={{ marginTop: 8, fontSize: 10, color: '#6b7280', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>Dismiss</button>
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {filtered.map((p) => <NewsletterPromptCard key={p.id} p={p} />)}
       </div>
