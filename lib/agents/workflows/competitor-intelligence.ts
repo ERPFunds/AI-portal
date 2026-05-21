@@ -126,7 +126,9 @@ For the Brevard / Space Coast market specifically:
 
 CRITICAL RULE — DATA VINTAGE LABELS: Every single statistic, vacancy rate, rent figure, cap rate, price, or metric in your response MUST include the source date in parentheses. Examples: "Vacancy 4.8% (Q4 2025)", "Avg NNN rent $9.25/SF (JLL, Q1 2026)", "Cap rate 5.8% (CoStar, Jan 2026)". A stat without a date is unusable. Never omit the vintage.
 
-Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.`, cache_control: { type: "ephemeral" } }],
+Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.
+
+INLINE CITATIONS RULE: Embed hyperlinks directly inside the text of every body/narrative/description/bullet field — not just at the bottom. Whenever you mention a company name, deal, statistic, or data point that has a source URL, wrap it or the surrounding phrase with an HTML anchor tag: <a href="https://..." style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">anchor text</a>. Every named statistic must have an inline link. Do not collect links only at the end.`, cache_control: { type: "ephemeral" } }],
     tools: [
       {
         type: "web_search_20250305" as "web_search_20250305",
@@ -151,7 +153,7 @@ Return ONLY valid JSON with this exact structure:
   "subject": "string — e.g. '${marketLabel} Competitive Landscape & Comparable Funds — ${params.period}'",
 
   "section1_items": [
-    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "1-2 sentences on significance to ERP — overlap, competition, signal" }
+    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "body": "1-2 sentences on significance to ERP — embed inline <a href> links on company names and stats" }
   ],
 
   "section2_egp_rows": [
@@ -165,16 +167,16 @@ Return ONLY valid JSON with this exact structure:
     { "metric": "2026 FFO guide", "value": "$x.xx–$x.xx" },
     { "metric": "Geographic focus", "value": "TX · FL · CA · AZ · NC" }
   ],
-  "section2_lp_narrative": "2-3 sentence LP-facing narrative on what EGP performance signals for ERP's thesis",
-  "section2_other_reits": "Prologis (PLD) · Rexford (REXR) · Terreno (TRNO) · STAG (STAG) · First Industrial (FR) · Plymouth (PLYM) · LXP (LXP). Add any notable recent data point per ticker if found.",
+  "section2_lp_narrative": "2-3 sentence LP-facing narrative on what EGP performance signals for ERP's thesis — embed inline <a href> links on any cited press release or earnings source",
+  "section2_other_reits": "Prologis (PLD) · Rexford (REXR) · Terreno (TRNO) · STAG (STAG) · First Industrial (FR) · Plymouth (PLYM) · LXP (LXP). Add any notable recent data point per ticker with an inline link to the source.",
 
   "section3_table": [
-    { "firm": "Stonelake Capital Partners", "description": "$5.5B+ commercial RE across Austin, Dallas, Houston, San Antonio. $3.1B equity raised across 9 funds in 18 years. Direct Texas peer at meaningful scale." }
+    { "firm": "Stonelake Capital Partners", "description": "$5.5B+ commercial RE across Austin, Dallas, Houston, San Antonio — embed an inline <a href> on the firm name or any cited stat linking to source." }
   ],
 
   "section4_bullets": [
-    "Hillwood (Perot family) — AllianceTexas DFW — no announced Permian project",
-    "Stream Realty Partners — Texas-wide, has Midland office presence"
+    "Hillwood (Perot family) — <a href=\"https://...\">AllianceTexas</a> DFW — no announced Permian project",
+    "Stream Realty Partners — Texas-wide, embed inline links on any cited deal or source"
   ],
   "section4_correction": "Optional — only include if correcting a specific prior-draft error. Leave empty string if none.",
 
@@ -187,7 +189,7 @@ Return ONLY valid JSON with this exact structure:
   "section5_note": "Industry-typical ranges from public PE conventions. ERP-specific positioning vs. peers: pending PPM comp data integration.",
 
   "section6_angles": [
-    { "angle": "Positioning angle title", "narrative": "Supporting data point — implication for ERP LP narrative." }
+    { "angle": "Positioning angle title", "narrative": "Supporting data point with inline <a href> link to source — implication for ERP LP narrative." }
   ],
   "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
 
@@ -234,6 +236,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
 - section8_spillover: search Brevard County deed records (bcpao.us), CoStar, and FL industrial news for Orlando/Tampa buyers appearing in Brevard. Report the I-4 vs Brevard cap rate spread with dates.
 - section9_local_devs: search Brevard County building permits for industrial >20,000 SF past 12 months. Cuhaci & Peterson, Bravar Industrial, and any local family office. These are ERP's actual competition.
 - section10_aerospace_reits: report Digital Realty, Equinix, Iron Mountain cap rate trends in defense/launch-adjacent markets with dates. Frame for LP expectations.` : ""}
+- INLINE LINKS REQUIRED: In every body/description/narrative/bullet/notes/activity/detail/relevance field, wrap company names, deal names, and statistics that have a source URL in <a href="URL" style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">text</a> tags. Plain text with no inline links is NOT acceptable for any field that cites verifiable information.
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],

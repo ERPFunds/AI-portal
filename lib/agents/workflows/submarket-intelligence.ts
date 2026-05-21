@@ -146,7 +146,9 @@ STRICT DATA RULES:
 - §4 Tenant Watch MUST use real company names with specific actions: "SLB opened a 40,000 SF completion equipment yard in Midland (Jan 2026)" NOT "oilfield services companies are expanding."
 - §5 Deals Closed is the anchor section. Search aggressively for actual transaction comps. Even 1 real deal is better than leaving it empty.
 - Use web_search aggressively before marking anything DATA PENDING. Only use "DATA PENDING" if web search also returns nothing.
-- Never recommend external reports — find the data yourself via web_search.`, cache_control: { type: "ephemeral" } }],
+- Never recommend external reports — find the data yourself via web_search.
+
+INLINE CITATIONS RULE: In every text field (commentary, activity, assessment, source, projects, headline, bullets, notes, status), embed hyperlinks directly in the text using HTML anchor tags wherever you cite a company, deal, or verifiable statistic. Format: <a href="https://..." style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">text</a>. Do NOT collect links only at the footer — they must appear inline where the fact is stated.`, cache_control: { type: "ephemeral" } }],
     tools: [
       {
         type: "web_search_20250305" as "web_search_20250305",
@@ -246,6 +248,7 @@ Rules:
 - section5_deals: the ANCHOR section — search hard. Even 1-2 real comps are acceptable. Include $/SF.
 ${isPermian ? "- section6_land_comps: search for actual Permian IOS/industrial land transactions. $/acre is the key metric." : "- section5_corridor_deliveries: list by corridor — I-95, US-1, SR-528, SR-520.\n- section5_rent_premium: real spread data. If unavailable, estimate directionally with source caveat."}
 - section8_table: ${isPermian ? "4 rows: Midland MSA, Odessa MSA, Kermit/Winkler, Delaware Basin" : "4 rows: Melbourne/Palm Bay, Titusville, Port Canaveral corridor, Cocoa/Rockledge"}
+- INLINE LINKS: Every commentary, activity, assessment, headline, bullet, and notes field MUST embed <a href="URL"> tags for named companies, deal sources, and cited data. Plain text without links is not acceptable for any field that references a verifiable fact.
 - Return ONLY valid JSON, no markdown, no extra text outside the JSON object.`,
       },
     ],
