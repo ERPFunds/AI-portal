@@ -75,28 +75,29 @@ export async function POST(req: NextRequest) {
   const period = getCurrentPeriod();
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
-  type BriefRunner = () => Promise<{ subject: string; htmlBody: string }>;
-
-  const briefs: { id: string; run: BriefRunner }[] = [
-    { id: "Permian — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "permian", period }) },
-    { id: "Brevard — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "brevard", period }) },
-    { id: "Permian — Submarket Intelligence",   run: () => runSubmarketIntelligence({ market: "permian", period }) },
+  const briefDefs = [
+    { id: "Permian — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "permian" as const, period }) },
+    { id: "Brevard — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "brevard" as const, period }) },
+    { id: "Permian — Submarket Intelligence",   run: () => runSubmarketIntelligence({ market: "permian" as const, period }) },
     { id: "Brevard — Submarket Brief",          run: () => generateBrevardSubmarketBrief(period) },
-    { id: "Permian — Fund Landscape Brief",     run: () => runCompetitorIntelligence({ market: "permian", period }) },
+    { id: "Permian — Fund Landscape Brief",     run: () => runCompetitorIntelligence({ market: "permian" as const, period }) },
     { id: "Brevard — Competitive & Fund Brief", run: () => generateBrevardFundCompetitorBrief(period) },
   ];
 
-  for (const brief of briefs) {
-    try {
-      const { subject, htmlBody } = await brief.run();
-      const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-      results[brief.id] = { success: emailResult.success, subject: `[TEST] ${subject}` };
-      if (!emailResult.success) results[brief.id].error = emailResult.message;
-    } catch (err) {
-      results[brief.id] = { success: false, error: String(err) };
-      console.error(`[test-all-briefs] ${brief.id} failed:`, err);
-    }
-  }
+  // Run all 6 in parallel — total time = slowest single brief (~3-4 min) not sum of all
+  await Promise.all(
+    briefDefs.map(async (brief) => {
+      try {
+        const { subject, htmlBody } = await brief.run();
+        const emailResult = await sendEmailViaGraph({ subject, htmlBody });
+        results[brief.id] = { success: emailResult.success, subject: `[TEST] ${subject}` };
+        if (!emailResult.success) results[brief.id].error = emailResult.message;
+      } catch (err) {
+        results[brief.id] = { success: false, error: String(err) };
+        console.error(`[test-all-briefs] ${brief.id} failed:`, err);
+      }
+    })
+  );
 
   const successCount = Object.values(results).filter((r) => r.success).length;
   return NextResponse.json({
