@@ -115,42 +115,81 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
     ]
   },
   "lp-intel": {
-    runs: 3,
-    sent: 3,
+    runs: 6,
+    sent: 6,
     queue: 0,
     wf: [
-      // ── Always-running background (Step 1) ──────────────────────────────
+      // ── Permian Basin — weekly briefs ────────────────────────────────────
       {
-        name: "Monday Brief",
+        name: "Permian — Monday Brief",
         trigger: "schedule",
         frequency: "weekly",
         status: "active",
         steps: [
-          { type: "automated", label: "Fetch News", description: "RSS + Google News · Permian Basin & Florida industrial CRE" },
-          { type: "automated", label: "Write Narrative", description: "Claude drafts 3-4 paragraph market brief covering Permian Basin & Florida" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William" }
+          { type: "automated", label: "Fetch Macro", description: "FRED, EIA, BLS, Census — WTI spot & strip, Permian rig count, DUC inventory, Midland/Odessa MSA jobs, Dallas Fed sentiment" },
+          { type: "automated", label: "Research + News", description: "Web research + live RSS/Google News — Permian Basin industrial transactions, vacancy, rent, IOS deals, general CRE headlines" },
+          { type: "automated", label: "Write Brief", description: "Claude writes macro table, 4-8 article cards, LP narrative, and weekly CRE news digest" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM CT" }
         ]
       },
       {
-        name: "Submarket Watch",
+        name: "Permian — Submarket Watch",
+        trigger: "schedule",
+        frequency: "weekly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Pull Activity", description: "Sale comps, tenant moves, vacancy/absorption — Midland, Odessa, Andrews, Ector, Ward, Reeves counties" },
+          { type: "automated", label: "IOS & Service Yard Scan", description: "Yard deals, outdoor storage comps, Form D fundraising, IOS fund activity from public records and trade press" },
+          { type: "automated", label: "Write Brief", description: "Claude writes §1 market snapshot through §6 LP takeaways — every stat carries data vintage label (source + date)" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM CT" }
+        ]
+      },
+      {
+        name: "Permian — Competitive Landscape",
         trigger: "schedule",
         frequency: "monthly",
         status: "active",
         steps: [
-          { type: "automated", label: "Pull Activity", description: "Sale comps & tenant activity · Permian Basin & Florida submarkets" },
-          { type: "automated", label: "Write Brief", description: "Claude writes submarket conditions brief for Permian Basin & Florida" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William · feeds OM research" }
+          { type: "automated", label: "Scan Fund Activity", description: "Competitor fund raises, Form D filings, LP appetite signals — Permian Basin industrial CRE comparables" },
+          { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning, IOS fund benchmarks, cap rate comparables, and LP meeting prep context" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — monthly" }
+        ]
+      },
+      // ── Brevard / Space Coast — weekly briefs ─────────────────────────
+      {
+        name: "Brevard — Monday Brief",
+        trigger: "schedule",
+        frequency: "weekly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Fetch Macro", description: "FL industrial vacancy, Orlando MSA logistics jobs, FL asking NNN rent/SF, SpaceX/Blue Origin launch cadence, Brevard County employment" },
+          { type: "automated", label: "Research + News", description: "Web research + live RSS/Google News — Space Coast industrial transactions, aerospace tenant demand, flex/R&D activity" },
+          { type: "automated", label: "Write Brief", description: "Claude writes macro table, 4-8 article cards, and LP narrative for Space Coast industrial CRE" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
         ]
       },
       {
-        name: "Fund Landscape Brief",
+        name: "Brevard — Submarket Brief",
         trigger: "schedule",
-        frequency: "quarterly",
+        frequency: "weekly",
         status: "active",
         steps: [
-          { type: "automated", label: "Scan Competitors", description: "Competitor fund activity · Permian Basin & Florida market benchmarks · LP appetite signals" },
-          { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning brief for Permian Basin & Florida industrial CRE" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William · feeds LP meeting prep" }
+          { type: "automated", label: "Deep Dive Research", description: "Sale comps, vacancy/absorption, tenant activity — Melbourne, Titusville, Palm Bay, Cocoa, Cape Canaveral" },
+          { type: "automated", label: "Live News Pull", description: "RSS (GlobeSt, Bisnow South FL, CRE Daily, The Real Deal) + Apify Google News — Space Coast industrial keywords" },
+          { type: "automated", label: "Write Brief", description: "Claude stitches submarket deep dive + AI news narrative in one merged email — all stats carry data vintage" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
+        ]
+      },
+      {
+        name: "Brevard — Competitive & Fund Brief",
+        trigger: "schedule",
+        frequency: "weekly",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Competitor Intelligence", description: "Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe — Space Coast acquisitions, I-4 cap rate spread, local permit activity" },
+          { type: "automated", label: "Fund Landscape News", description: "RSS + Apify — Florida industrial fund raises, LP appetite signals, IRR benchmarks, aerospace REIT comparables" },
+          { type: "automated", label: "Write Brief", description: "Claude writes competitor tracker + LP-focused fund narrative in one merged email — framed for Meghan's LP meetings" },
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
         ]
       },
       // ── Email-triggered RESEARCH: workflows (Step 2) ─────────────────────

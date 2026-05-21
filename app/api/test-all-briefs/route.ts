@@ -6,6 +6,7 @@ import { runWeeklyMarketUpdate } from "@/lib/agents/workflows/weekly-market-upda
 import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intelligence";
 import { runCompetitorIntelligence } from "@/lib/agents/workflows/competitor-intelligence";
 import { generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
+import { generatePermianMondayBrief } from "@/lib/agents/workflows/permian-merged-briefs";
 
 export const maxDuration = 300;
 
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
   const briefDefs = [
-    { id: "Permian — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "permian" as const, period }) },
+    { id: "Permian — Monday Brief",             run: () => generatePermianMondayBrief(period) },
     { id: "Brevard — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "brevard" as const, period }) },
     { id: "Permian — Submarket Intelligence",   run: () => runSubmarketIntelligence({ market: "permian" as const, period }) },
     { id: "Brevard — Submarket Brief",          run: () => generateBrevardSubmarketBrief(period) },

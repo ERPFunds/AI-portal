@@ -134,6 +134,8 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   const [settingsTab, setSettingsTab] = useState('s-profile')
   const [openWorkflows, setOpenWorkflows] = useState<Record<string, boolean>>({})
   const [editingWf, setEditingWf] = useState<string | null>(null)
+  const [testBriefsState, setTestBriefsState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [testBriefsResults, setTestBriefsResults] = useState<Record<string, { success: boolean; subject?: string; error?: string }>>({})
   const [wfOverrides, setWfOverrides] = useState<Record<string, any>>(() => {
     try { return JSON.parse(localStorage.getItem('wf-overrides') || '{}') } catch { return {} }
   })
@@ -176,6 +178,25 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     await supabase.auth.signOut()
     router.push('/')
     router.refresh()
+  }
+
+  async function handleTestAllBriefs() {
+    setTestBriefsState('loading')
+    setTestBriefsResults({})
+    try {
+      const res = await fetch('/api/test-all-briefs', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) {
+        setTestBriefsState('error')
+        setTestBriefsResults({ error: { success: false, error: data.message || data.error || 'Unknown error' } })
+      } else {
+        setTestBriefsState('done')
+        setTestBriefsResults(data.results || {})
+      }
+    } catch (err) {
+      setTestBriefsState('error')
+      setTestBriefsResults({ error: { success: false, error: String(err) } })
+    }
   }
 
   const inboxItems = INBOX_DATA[roleKey] ?? []
@@ -347,6 +368,33 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
         <div className="drawer-body">
           {drawerTab === 'workflows' && (
             <div>
+              {drawerAgentId === 'lp-intel' && (
+                <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 8, padding: '12px 14px', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: testBriefsState === 'done' ? 10 : 0 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#0f172a' }}>Run test send</div>
+                      <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>All 6 briefs → mparad@erpfunds.com with [TEST] prefix</div>
+                    </div>
+                    <button
+                      onClick={handleTestAllBriefs}
+                      disabled={testBriefsState === 'loading'}
+                      style={{ fontSize: 11, padding: '5px 14px', borderRadius: 6, border: '1px solid', cursor: testBriefsState === 'loading' ? 'not-allowed' : 'pointer', fontWeight: 600, background: testBriefsState === 'loading' ? '#f3f4f6' : testBriefsState === 'done' ? '#d1fae5' : '#0f172a', color: testBriefsState === 'loading' ? '#9ca3af' : testBriefsState === 'done' ? '#065f46' : '#fff', borderColor: testBriefsState === 'done' ? '#6ee7b7' : '#0f172a', flexShrink: 0 }}
+                    >
+                      {testBriefsState === 'loading' ? '⏳ Sending…' : testBriefsState === 'done' ? '✓ Sent' : '📧 Send all 6 to me'}
+                    </button>
+                  </div>
+                  {testBriefsState === 'done' && Object.keys(testBriefsResults).length > 0 && (
+                    <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      {Object.entries(testBriefsResults).map(([id, r]) => (
+                        <div key={id} style={{ fontSize: 11, color: r.success ? '#065f46' : '#b91c1c', display: 'flex', gap: 6 }}>
+                          <span>{r.success ? '✓' : '✗'}</span>
+                          <span style={{ color: '#374151' }}>{r.subject || id}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               {drawerWf ? drawerWf.wf.map((baseWf, wi) => {
                 const key = `${drawerAgentId}-${wi}`
                 const wf = { ...baseWf, ...(wfOverrides[key] || {}), steps: (wfOverrides[key]?.steps || baseWf.steps) }
@@ -3769,7 +3817,6 @@ function SOPsView() {
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <NewsletterPromptLibrary />
         <UploadedFilesCard />
         {SOP_CATEGORIES.map((cat) => {
           const catDocs = docs[cat.label] ?? []
