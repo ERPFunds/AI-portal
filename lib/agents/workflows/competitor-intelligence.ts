@@ -236,7 +236,7 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
 - section8_spillover: search Brevard County deed records (bcpao.us), CoStar, and FL industrial news for Orlando/Tampa buyers appearing in Brevard. Report the I-4 vs Brevard cap rate spread with dates.
 - section9_local_devs: search Brevard County building permits for industrial >20,000 SF past 12 months. Cuhaci & Peterson, Bravar Industrial, and any local family office. These are ERP's actual competition.
 - section10_aerospace_reits: report Digital Realty, Equinix, Iron Mountain cap rate trends in defense/launch-adjacent markets with dates. Frame for LP expectations.` : ""}
-- URL FIELDS REQUIRED: Every firm name, fund, and data source must have a `url` field with the direct source URL. Plain text only in body/description/narrative/notes fields — no HTML tags ever.
+- URL FIELDS REQUIRED: Every firm name, fund, and data source must have a "url" field with the direct source URL. Plain text only in body/description/narrative/notes fields — no HTML tags ever.
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
