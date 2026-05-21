@@ -16,7 +16,7 @@ import { runDeckBuilder } from "@/lib/agents/workflows/deck-builder";
 import { runOmEditor } from "@/lib/agents/workflows/om-editor";
 import { runOmWriter, detectSection } from "@/lib/agents/workflows/om-writer";
 import type { ResearchBundle } from "@/lib/agents/research";
-import { extractPptxText } from "@/lib/agents/pptx-parser";
+import { extractPptxText, extractPptText } from "@/lib/agents/pptx-parser";
 
 // Normalised attachment shape (PA uses name/contentBytes; direct posts use filename/contentBase64)
 interface Attachment {
@@ -56,15 +56,16 @@ function isAuthorized(req: NextRequest): boolean {
   return !!process.env.AGENT_WEBHOOK_SECRET && secret === process.env.AGENT_WEBHOOK_SECRET;
 }
 
-function decodeAttachment(att: Attachment): string {
+async function decodeAttachment(att: Attachment): Promise<string> {
   const name = att.filename.toLowerCase();
 
   if (name.endsWith(".pptx")) {
     return extractPptxText(att.contentBase64);
   }
 
+  // Old binary .ppt — auto-convert via officeparser (no client action needed)
   if (name.endsWith(".ppt")) {
-    return "[Old .ppt binary format cannot be parsed. Please save as .pptx (File → Save As → PowerPoint Presentation) and reattach.]";
+    return extractPptText(att.contentBase64);
   }
 
   try {
@@ -161,7 +162,7 @@ export async function POST(req: NextRequest) {
           ask,
           projectContext,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? decodeAttachment(attachments[0]) : undefined,
+          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
           mode: isEdit ? "edit-existing" : "new-draft",
         });
         break;
@@ -174,7 +175,7 @@ export async function POST(req: NextRequest) {
           ask,
           projectContext,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? decodeAttachment(attachments[0]) : undefined,
+          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
           mode: isInsert ? "insert-section" : isEdit ? "edit-existing" : "new-draft",
         });
         break;
@@ -187,7 +188,7 @@ export async function POST(req: NextRequest) {
           projectContext,
           section,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? decodeAttachment(attachments[0]) : undefined,
+          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
         });
         break;
       }

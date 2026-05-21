@@ -65,7 +65,20 @@ Focus areas:
 4. ${geoLabel} industrial PE peers — Stonelake Capital Partners, Harbor Capital, Investcorp, Circle Industrial, others active in market
 5. Private competitors with potential ${marketLabel} interest — Hillwood, Stream Realty, Crow Holdings, Ares Industrial, Lincoln Property, others
 6. Comparable fund structures — industry-standard ranges for management fee, carried interest, term, target IRR
-7. LP differentiation angles — 3 verified positioning angles with specific data points from this month`;
+7. LP differentiation angles — 3 verified positioning angles with specific data points from this month
+${isPermian ? `8. IOS / service yard competitor tracker — These firms are actively acquiring IOS and service yards in Texas and are ERP's direct competition. Search for their deal announcements this period:
+   - Stonemont Financial Group (Atlanta-based, IOS/industrial outdoor storage focus, active Texas)
+   - Titan Industrial (IOS specialist)
+   - InSite Real Estate (industrial, Midwest/Sunbelt)
+   - Broadstone Net Lease (NNN, industrial outdoor)
+   - Zenith IOS (dedicated IOS fund)
+   - Realty Income / STORE Capital (NNN service yards)
+   For each: property acquired, location, acreage/SF, price if available, date.
+9. SEC EDGAR Form D filings — new $50M+ industrial CRE fund raises filed in the past 30-60 days.
+   Search: site:sec.gov/cgi-bin/browse-edgar "Form D" "industrial real estate" OR "industrial outdoor storage" OR "service yard" filed in ${params.period}.
+   Also check: efts.sec.gov/LATEST/search-index?q=%22industrial+real+estate%22&forms=D
+   For each: fund name, sponsor/GP, raise amount, date filed, industrial focus description.` : ""}`;
+
 
   const research = await runResearchAgent({
     ask,
@@ -144,6 +157,14 @@ Return ONLY valid JSON with this exact structure:
   ],
   "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
 
+  ${isPermian ? `"section7_ios_tracker": [
+    { "firm": "Stonemont Financial", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type, tenant if known" }
+  ],
+  "section7_ios_note": "If no new deal announcements found for a firm, note last known activity.",
+  "section8_form_d": [
+    { "fund": "Fund name", "sponsor": "Sponsor/GP name", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "Industrial outdoor storage / service yards / flex industrial" }
+  ],
+  "section8_form_d_note": "Source: SEC EDGAR Form D filings. Raises over $50M with industrial CRE focus. Represents 30-60 day advance notice of new capital entering market.",` : ""}
   "source_names": ["EastGroup Q1 press release", "Diamondback Q1 2026", "Stonelake website"]
 }
 
@@ -155,6 +176,8 @@ Rules:
 - section4_correction: empty string "" if no correction needed
 - section5_rows: industry ranges only, NOT individual named funds
 - section6_angles: exactly 3 angles with specific verified data points
+${isPermian ? `- section7_ios_tracker: search specifically for Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS deal announcements. If nothing found this period, note last known activity.
+- section8_form_d: search SEC EDGAR for Form D filings from industrial CRE funds. This is a competitive intelligence signal.` : ""}
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
@@ -176,13 +199,18 @@ Rules:
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
   // ── Parse sections ────────────────────────────────────────────────────────
-  const section1Items  = (data.section1_items  as Array<{ title: string; date: string; body: string }> | undefined) ?? [];
-  const section2EgpRows= (data.section2_egp_rows as Array<{ metric: string; value: string }> | undefined) ?? [];
-  const section3Table  = (data.section3_table  as Array<{ firm: string; description: string }> | undefined) ?? [];
-  const section4Bullets= (data.section4_bullets as string[] | undefined) ?? [];
-  const section5Rows   = (data.section5_rows   as Array<{ metric: string; range: string }> | undefined) ?? [];
-  const section6Angles = (data.section6_angles as Array<{ angle: string; narrative: string }> | undefined) ?? [];
-  const sourceNames    = (data.source_names    as string[] | undefined) ?? [];
+  type IosRow   = { firm: string; deal: string; location: string; size: string; price: string; date: string; notes: string };
+  type FormDRow = { fund: string; sponsor: string; amount: string; filed: string; focus: string };
+
+  const section1Items   = (data.section1_items   as Array<{ title: string; date: string; body: string }> | undefined) ?? [];
+  const section2EgpRows = (data.section2_egp_rows as Array<{ metric: string; value: string }> | undefined) ?? [];
+  const section3Table   = (data.section3_table   as Array<{ firm: string; description: string }> | undefined) ?? [];
+  const section4Bullets = (data.section4_bullets as string[] | undefined) ?? [];
+  const section5Rows    = (data.section5_rows    as Array<{ metric: string; range: string }> | undefined) ?? [];
+  const section6Angles  = (data.section6_angles  as Array<{ angle: string; narrative: string }> | undefined) ?? [];
+  const section7Ios     = isPermian ? (data.section7_ios_tracker as IosRow[] | undefined) ?? [] : [];
+  const section8FormD   = isPermian ? (data.section8_form_d      as FormDRow[] | undefined) ?? [] : [];
+  const sourceNames     = (data.source_names     as string[] | undefined) ?? [];
 
   // ── HTML helpers ──────────────────────────────────────────────────────────
   const secLabel = (text: string) =>
@@ -227,6 +255,22 @@ Rules:
   // ── §5 — Fund structures ──────────────────────────────────────────────────
   const s5Rows = section5Rows.map((r) =>
     `<tr>${tdL(r.metric, true)}${tdR(r.range)}</tr>`
+  ).join("\n");
+
+  // ── §7 — IOS/Service Yard Tracker (Permian) ──────────────────────────────
+  const s7IosRows = section7Ios.map((r) =>
+    `<tr>
+      ${tdL(r.firm, true)}
+      ${tdR(`<strong>${r.deal || "—"}</strong><br/><span style="font-size:12px;color:#64748b;">${r.location || ""} &middot; ${r.size || ""} &middot; ${r.price || "undisclosed"} &middot; ${r.date || ""}</span>${r.notes ? `<br/><em style="font-size:12px;color:#94a3b8;">${r.notes}</em>` : ""}`)}
+    </tr>`
+  ).join("\n");
+
+  // ── §8 — Form D Filings (Permian) ────────────────────────────────────────
+  const s8FormDRows = section8FormD.map((r) =>
+    `<tr>
+      ${tdL(`${r.sponsor || "—"}<br/><em style="font-weight:400;font-size:12px;color:#64748b;">${r.fund || ""}</em>`)}
+      ${tdR(`<strong>${r.amount || "—"}</strong> &middot; Filed ${r.filed || "—"}<br/><span style="font-size:12px;color:#64748b;">${r.focus || ""}</span>`)}
+    </tr>`
   ).join("\n");
 
   // ── §6 — Differentiation angles ──────────────────────────────────────────
@@ -290,6 +334,18 @@ ${s5Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
 ${secLabel("§6 — Differentiation Narrative for LP Decks")}
 ${s6List}
 ${(data.section6_watch as string) ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>${data.section6_watch as string}</strong></div>` : ""}
+
+${isPermian ? `
+${secLabel("§7 — IOS / Service Yard Competitor Tracker")}
+<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Direct competition — firms acquiring IOS and service yards in Texas. Deal announcements this period.</p>
+${s7IosRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s7IosRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No new deal announcements found this period.</p>'}
+${(data.section7_ios_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section7_ios_note as string}</p>` : ""}
+
+${secLabel("§8 — SEC EDGAR Form D: New Industrial Fund Raises ($50M+)")}
+<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">30–60 day advance notice of new capital entering your market. Source: SEC.gov Form D filings.</p>
+${s8FormDRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s8FormDRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No qualifying Form D filings found this period.</p>'}
+${(data.section8_form_d_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section8_form_d_note as string}</p>` : ""}
+` : ""}
 `;
 
   const htmlBody = HTML_WRAPPER(
