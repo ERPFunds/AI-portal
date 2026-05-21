@@ -150,93 +150,53 @@ ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
 Return ONLY valid JSON with this exact structure:
 
 {
-  "subject": "string — e.g. '${marketLabel} Competitive Landscape & Comparable Funds — ${params.period}'",
-
-  "section1_items": [
-    { "title": "Fund/deal name · amount or key stat", "date": "Month Year", "url": "https://source-url.com", "body": "ONE sentence max ≤20 words — plain text only, no HTML tags. No background, no explanation — just the fact and why it matters to ERP." }
+  "subject": "Space Coast Competitive & Fund Intelligence — Week of ${params.period}",
+  "headline": "Single most important competitive signal this period — ≤20 words",
+  "capital_items": [
+    { "title": "Fund/deal name or key stat", "url": "https://source.com", "date": "Mon YYYY", "body": "≤20 words — what this means for ERP" }
   ],
-
-  "section2_egp_rows": [
-    { "metric": "Q1 2026 EPS", "value": "$x.xx (vs $x.xx Y/Y)" },
-    { "metric": "FFO/share", "value": "$x.xx (+x.x% YoY)" },
-    { "metric": "Leasing rate", "value": "xx.x%" },
-    { "metric": "Consecutive FFO growth", "value": "xx quarters" },
-    { "metric": "Same-store NOI growth", "value": "xx consecutive quarters" },
-    { "metric": "2026 dev starts", "value": "$xxxM" },
-    { "metric": "Debt / market cap", "value": "xx.x%" },
-    { "metric": "2026 FFO guide", "value": "$x.xx–$x.xx" },
-    { "metric": "Geographic focus", "value": "TX · FL · CA · AZ · NC" }
+  "egp_table": [
+    { "metric": "FFO/share", "value": "$x.xx (+x.x% YoY, Q1 2026)" }
   ],
-  "section2_lp_narrative": "ONE sentence on what EGP's results signal for ERP's thesis. Hyperlink 'EastGroup' to the earnings release URL.",
-  "section2_other_reits": "One line per ticker — ticker, one key stat with date, hyperlinked to source. Format: <a href=\"URL\">PLD</a> — $x.xx FFO (Q1 2026) · ...",
-
-  "section3_table": [
-    { "firm": "Stonelake Capital Partners", "url": "https://stonelake.com", "description": "AUM · geography · one distinguishing fact. Max 15 words. No HTML tags." }
+  "egp_narrative": "One sentence on what EGP results signal for ERP's thesis.",
+  "peer_items": [
+    { "title": "Firm name", "url": "https://firm.com", "date": "Mon YYYY", "body": "AUM · geography · one distinguishing fact ≤15 words" }
   ],
-
-  "section4_bullets": [
-    { "firm": "Hillwood", "url": "https://hillwood.com", "fact": "AllianceTexas DFW — no announced Permian project. ≤12 words." }
+  "competitor_items": [
+    { "title": "Firm name", "url": "https://firm.com", "date": "Mon YYYY", "body": "≤12 words — most recent known activity or status" }
   ],
-  "section4_correction": "Optional — only include if correcting a specific prior-draft error. Leave empty string if none.",
-
-  "section5_rows": [
-    { "metric": "Management fee", "range": "1.5–2.0% on committed capital" },
-    { "metric": "Carried interest", "range": "20% over 8% preferred return" },
-    { "metric": "Term", "range": "7–10 years with extensions" },
-    { "metric": "Target net IRR", "range": "12–16% (core+ to value-add)" }
+  "tracker_items": [
+    { "title": "Firm · Deal/Project", "url": "https://source.com", "date": "Mon YYYY", "body": "Location · size · price — ≤15 words" }
   ],
-  "section5_note": "Industry-typical ranges from public PE conventions. ERP-specific positioning vs. peers: pending PPM comp data integration.",
-
-  "section6_angles": [
-    { "angle": "Angle title ≤6 words", "url": "https://source.com", "narrative": "One sentence, one data point. ≤20 words. Plain text only." }
+  "signal_items": [
+    { "title": "Signal or fund name", "url": "https://source.com", "date": "Mon YYYY", "body": "≤15 words" }
   ],
-  "section6_watch": "Watch for ${params.period.split(' ')[0] === params.period ? 'next month' : 'next month'}: specific items to monitor — fund closes, earnings, leasing data",
-
-  ${isPermian ? `"section7_ios_tracker": [
-    { "firm": "Stonemont Financial", "url": "https://stonemontfinancial.com", "deal": "Property name or address", "location": "City, TX", "size": "xx acres or xxx,xxx SF", "price": "$x.xM or undisclosed", "date": "Mon YYYY", "notes": "IOS/service yard type — ≤8 words plain text" }
+  "fund_structure": [
+    { "metric": "Management fee", "range": "1.5–2.0% on committed capital" }
   ],
-  "section7_ios_note": "If no new deal found for a firm, one-line note on last known activity with date.",
-  "section8_form_d": [
-    { "fund": "Fund name", "sponsor": "Sponsor/GP name", "url": "https://sec.gov/...", "amount": "$xxxM", "filed": "Mon YYYY", "focus": "≤8 words" }
+  "lp_angles": [
+    { "title": "Angle title ≤6 words", "url": "https://source.com", "narrative": "≤20 words — one fact, one implication" }
   ],
-  "section8_form_d_note": "SEC EDGAR Form D — $50M+ industrial CRE raises. 30-60 day leading indicator.",` : ""}
-  ${isBrevard ? `"section7_national_trackers": [
-    { "firm": "Rockefeller Group", "url": "https://rockgroup.com", "activity": "One-line deal or FL activity", "location": "City, FL", "size": "xx,xxx SF or acres", "date": "Mon YYYY", "notes": "≤8 words context" }
-  ],
-  "section7_national_note": "Flex/R&D/logistics only — not big-box REIT.",
-  "section8_spillover": [
-    { "signal": "Buyer name", "url": "https://source.com", "detail": "Address · SF · price · buyer HQ — facts only", "date": "Mon YYYY", "implication": "≤10 words" }
-  ],
-  "section8_cap_rate_spread": { "i4_corridor": "x.x% (source, Mon YYYY)", "brevard": "x.x% (source, Mon YYYY)", "spread": "x.xx% — tightening/stable/widening", "trend": "One sentence max." },
-  "section8_spillover_note": "One line if no deed record found.",
-  "section9_local_devs": [
-    { "developer": "Cuhaci & Peterson", "project": "Project name or address", "sf": "xx,xxx SF", "location": "City, Brevard County", "permit_date": "Mon YYYY", "status": "Under construction / Completed / Permitted" }
-  ],
-  "section9_local_note": "Brevard County building permits — industrial >20,000 SF, last 12 months.",
-  "section10_aerospace_reits": [
-    { "entity": "Digital Realty (DLR)", "url": "https://digitalrealty.com/investors", "metric": "Cap rate or yield metric", "value": "x.x% (source, Mon YYYY)", "trend": "Compressing / Stable / Expanding", "relevance": "≤12 words on LP expectation implication" }
-  ],
-  "section10_note": "Not direct comps — LP ceiling expectations for defense-corridor industrial.",` : ""}
-  "source_names": ["EastGroup Q1 press release", "Diamondback Q1 2026", "Stonelake website"]
+  "lp_narrative": "2-3 sentence LP-facing read. What does this month's competitive landscape mean for ERP's positioning and fundraising narrative?",
+  "lp_watch": "Watch for next period: specific items to monitor",
+  "source_names": ["EastGroup Q1 2026", "CoStar", "SEC EDGAR"]
 }
 
 Rules:
 - DATA VINTAGE REQUIRED: Every metric value must include source date in parentheses, e.g. "4.8% (CoStar Q4 2025)" or "$9.25/SF (JLL, Jan 2026)". Never write a bare number without a date.
-- BREVITY: All text fields are strictly limited. body ≤20 words. description ≤15 words. bullets ≤12 words. narrative ≤20 words. notes/relevance/implication ≤10 words. Readers click the link for more — do NOT explain in the email.
-- section1_items: 4-6 items — title + date + ONE tight sentence. Hyperlink the company name or key stat.
-- section2_egp_rows: use most recent quarter available; search for it if not in research; include quarter in every value
-- section3_table: 3-5 ${geoLabel} PE peers — firm name hyperlinked, description is facts only (AUM · market · one distinguishing data point), no prose
-- section4_bullets: 4-6 private competitors — firm name hyperlinked, one fact or status, date. No sentences.
-- section4_correction: empty string "" if no correction needed
-- section5_rows: industry ranges only, NOT individual named funds
-- section6_angles: exactly 3 angles — short title + ONE sentence with ONE hyperlinked data point
-${isPermian ? `- section7_ios_tracker: search specifically for Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS deal announcements. If nothing found this period, note last known activity with date.
-- section8_form_d: search SEC EDGAR for Form D filings from industrial CRE funds. This is a competitive intelligence signal.` : ""}
-${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe for Brevard/Space Coast activity. If nothing found, report last known Florida activity with date. Flex/R&D/logistics focus — not big-box REIT.
-- section8_spillover: search Brevard County deed records (bcpao.us), CoStar, and FL industrial news for Orlando/Tampa buyers appearing in Brevard. Report the I-4 vs Brevard cap rate spread with dates.
-- section9_local_devs: search Brevard County building permits for industrial >20,000 SF past 12 months. Cuhaci & Peterson, Bravar Industrial, and any local family office. These are ERP's actual competition.
-- section10_aerospace_reits: report Digital Realty, Equinix, Iron Mountain cap rate trends in defense/launch-adjacent markets with dates. Frame for LP expectations.` : ""}
-- URL FIELDS REQUIRED: Every firm name, fund, and data source must have a "url" field with the direct source URL. Plain text only in body/description/narrative/notes fields — no HTML tags ever.
+- BREVITY: All body/narrative fields strictly limited to word counts in schema. Plain text only — no HTML tags ever.
+- capital_items: 4-6 items — mix of fund closes, acquisitions, operator results
+- egp_table: most recent quarter, all 9 metrics (EPS, FFO/share, leasing rate, consecutive FFO growth quarters, same-store NOI, dev starts guidance, debt/market cap, FFO guide, geographic focus), each value includes the quarter
+- peer_items: 3-5 ${geoLabel} PE peers — title is firm name, url is firm website, body is AUM/market/one fact ≤15 words
+- competitor_items: 4-6 private competitors — title is firm name, url is firm website, body is ≤12 words on latest activity
+- tracker_items: ${isPermian ? "IOS/service yard deals — Stonemont, Titan Industrial, InSite, Broadstone, Zenith IOS. If nothing found this period, note last known activity with date." : "national flex/R&D/logistics tracker firms — Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe. Brevard/Space Coast or most recent FL activity. Flex/R&D/logistics focus only."}
+- signal_items: ${isPermian ? "SEC EDGAR Form D filings — $50M+ industrial CRE fund raises. Use title for fund name, body for sponsor + amount + focus." : "spillover signals (I-4 corridor cap rate spread, Orlando/Tampa buyers in Brevard deed records) + local developer permits (Cuhaci & Peterson, Bravar Industrial, Brevard County building permits >20,000 SF) + aerospace REIT cap rate comps (Digital Realty, Equinix, Iron Mountain). Use title to label the signal type."}
+- fund_structure: industry ranges only, 4-5 rows, NOT individual named funds
+- lp_angles: exactly 3, each with url to direct source
+- lp_narrative: 2-3 sentences, investment-grade prose
+- lp_watch: one sentence, specific items for next period
+- All url fields: direct source URL — never a placeholder
+- All body/narrative fields: plain text, no HTML tags
 - Return ONLY valid JSON, no markdown, no extra text.`,
       },
     ],
@@ -266,141 +226,93 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
 
   // ── Parse sections ────────────────────────────────────────────────────────
-  type IosRow           = { firm: string; url?: string; deal: string; location: string; size: string; price: string; date: string; notes: string };
-  type FormDRow         = { fund: string; sponsor: string; url?: string; amount: string; filed: string; focus: string };
-  type NationalTracker  = { firm: string; url?: string; activity: string; location: string; size: string; date: string; notes: string };
-  type SpilloverRow     = { signal: string; url?: string; detail: string; date: string; implication: string };
-  type LocalDevRow      = { developer: string; project: string; sf: string; location: string; permit_date: string; status: string };
-  type AerospaceReit    = { entity: string; url?: string; metric: string; value: string; trend: string; relevance: string };
+  type CardItem = { title: string; url?: string; date?: string; body: string };
+  type EgpRow   = { metric: string; value: string };
+  type FundRow  = { metric: string; range: string };
+  type LpAngle  = { title: string; url?: string; narrative: string };
 
-  const section1Items        = (data.section1_items          as Array<{ title: string; date: string; url?: string; body: string }> | undefined) ?? [];
-  const section2EgpRows      = (data.section2_egp_rows       as Array<{ metric: string; value: string }> | undefined) ?? [];
-  const section3Table        = (data.section3_table          as Array<{ firm: string; url?: string; description: string }> | undefined) ?? [];
-  const section4Bullets      = (data.section4_bullets        as Array<{ firm: string; url?: string; fact: string }> | undefined) ?? [];
-  const section5Rows         = (data.section5_rows           as Array<{ metric: string; range: string }> | undefined) ?? [];
-  const section6Angles       = (data.section6_angles         as Array<{ angle: string; url?: string; narrative: string }> | undefined) ?? [];
-  const section7Ios          = isPermian ? (data.section7_ios_tracker    as IosRow[] | undefined) ?? [] : [];
-  const section8FormD        = isPermian ? (data.section8_form_d         as FormDRow[] | undefined) ?? [] : [];
-  const section7NatTrackers  = isBrevard ? (data.section7_national_trackers as NationalTracker[] | undefined) ?? [] : [];
-  const section8Spillover    = isBrevard ? (data.section8_spillover      as SpilloverRow[] | undefined) ?? [] : [];
-  const section8CapRateSpread = isBrevard ? (data.section8_cap_rate_spread as { i4_corridor: string; brevard: string; spread: string; trend: string } | undefined) ?? null : null;
-  const section9LocalDevs    = isBrevard ? (data.section9_local_devs     as LocalDevRow[] | undefined) ?? [] : [];
-  const section10AerospaceReits = isBrevard ? (data.section10_aerospace_reits as AerospaceReit[] | undefined) ?? [] : [];
-  const sourceNames          = (data.source_names            as string[] | undefined) ?? [];
+  const capitalItems    = (data.capital_items    as CardItem[]  | undefined) ?? [];
+  const egpTable        = (data.egp_table        as EgpRow[]    | undefined) ?? [];
+  const egpNarrative    = (data.egp_narrative    as string      | undefined) ?? "";
+  const peerItems       = (data.peer_items       as CardItem[]  | undefined) ?? [];
+  const competitorItems = (data.competitor_items as CardItem[]  | undefined) ?? [];
+  const trackerItems    = (data.tracker_items    as CardItem[]  | undefined) ?? [];
+  const signalItems     = (data.signal_items     as CardItem[]  | undefined) ?? [];
+  const fundStructure   = (data.fund_structure   as FundRow[]   | undefined) ?? [];
+  const lpAngles        = (data.lp_angles        as LpAngle[]   | undefined) ?? [];
+  const lpNarrative     = (data.lp_narrative     as string      | undefined) ?? "";
+  const lpWatch         = (data.lp_watch         as string      | undefined) ?? "";
+  const sourceNames     = (data.source_names     as string[]    | undefined) ?? [];
+  const headline        = (data.headline         as string      | undefined) ?? "";
 
   // ── HTML helpers ──────────────────────────────────────────────────────────
   const secLabel = (text: string) =>
     `<p style="font-size:10px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:#94a3b8;margin:28px 0 12px;">${text}</p>`;
 
-  const tdL = (val: string, bold = false) =>
-    `<td style="padding:9px 10px 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;width:42%;">${bold ? `<strong>${val}</strong>` : val}</td>`;
-  const tdR = (val: string) =>
-    `<td style="padding:9px 0 9px 10px;border-bottom:1px solid #f1f5f9;color:#334155;vertical-align:top;">${val}</td>`;
+  const hasUrl = (item: { url?: string }) => item.url && item.url.startsWith("http");
 
-  const linked = (text: string, url?: string) =>
-    url && url.startsWith("http")
-      ? `<a href="${url}" style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;" target="_blank">${text}</a>`
-      : text;
+  const renderCards = (items: Array<{ title: string; url?: string; date?: string; body: string }>) =>
+    items.map(item => {
+      const titleEl = hasUrl(item)
+        ? `<a href="${item.url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${item.title}</a>`
+        : `<strong style="color:#0f172a;">${item.title}</strong>`;
+      return `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
+  <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${titleEl}${item.date ? `<span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${item.date}</span>` : ""}</p>
+  <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${item.body}</p>
+</div>`;
+    }).join("\n");
 
-  // ── §1 — Capital Flowing ──────────────────────────────────────────────────
-  const s1Cards = section1Items.map((i) =>
-    `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
-  <p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 2px;"><strong>${linked(i.title, i.url)}</strong>${i.date ? ` <span style="font-weight:400;color:#94a3b8;font-size:12px;">&middot; ${i.date}</span>` : ""}</p>
-  <p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${i.body}</p>
-</div>`
-  ).join("\n");
-
-  // ── §2 — EastGroup deep table ─────────────────────────────────────────────
-  const s2EgpRows = section2EgpRows.map((r) =>
-    `<tr>${tdL(r.metric, true)}${tdR(r.value)}</tr>`
-  ).join("\n");
-
-  // ── §3 — PE Peers ─────────────────────────────────────────────────────────
-  const s3Rows = section3Table.map((r) =>
-    `<tr>${tdL(linked(r.firm, r.url), true)}${tdR(r.description)}</tr>`
-  ).join("\n");
-
-  // ── §4 — Private competitors bullet list ─────────────────────────────────
-  const s4Bullets = section4Bullets.length > 0
-    ? `<ul style="margin:0 0 12px;padding-left:20px;">${section4Bullets.map((b) =>
-        `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:4px;">${linked(b.firm, b.url)} — ${b.fact}</li>`
-      ).join("")}</ul>`
+  // ── Headline box (amber) ──────────────────────────────────────────────────
+  const headlineHtml = headline
+    ? `<div style="border-left:4px solid #d97706;background:#fffbeb;padding:12px 16px;margin:0 0 24px;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.65;">&#128276; <strong>Headline this period:</strong> ${headline}</div>`
     : "";
 
-  const s4Correction = (data.section4_correction as string | undefined)?.trim()
-    ? `<div style="border-left:4px solid #dc2626;background:#fef2f2;padding:10px 14px;margin:12px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1c1917;line-height:1.6;">
-  <strong>Correction from prior draft:</strong> ${data.section4_correction as string}
-</div>`
+  // ── EGP table ─────────────────────────────────────────────────────────────
+  const egpRows = egpTable.map((r) =>
+    `<tr>
+  <td style="text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;font-weight:600;">${r.metric}</td>
+  <td style="text-align:left;padding:9px 0 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;">${r.value}</td>
+</tr>`
+  ).join("\n");
+
+  const egpTableHtml = egpTable.length > 0
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Metric</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px;border-bottom:2px solid #0f172a;">Value</th>
+  </tr></thead>
+  <tbody>${egpRows}</tbody>
+</table>`
     : "";
 
-  // ── §5 — Fund structures ──────────────────────────────────────────────────
-  const s5Rows = section5Rows.map((r) =>
-    `<tr>${tdL(r.metric, true)}${tdR(r.range)}</tr>`
-  ).join("\n");
-
-  // ── §7 — IOS/Service Yard Tracker (Permian) ──────────────────────────────
-  const s7IosRows = section7Ios.map((r) =>
+  // ── Fund structure table ───────────────────────────────────────────────────
+  const fundRows = fundStructure.map((r) =>
     `<tr>
-      ${tdL(linked(r.firm, r.url), true)}
-      ${tdR(`<strong>${r.deal || "—"}</strong><br/><span style="font-size:12px;color:#64748b;">${r.location || ""} &middot; ${r.size || ""} &middot; ${r.price || "undisclosed"} &middot; ${r.date || ""}</span>${r.notes ? `<br/><em style="font-size:12px;color:#94a3b8;">${r.notes}</em>` : ""}`)}
-    </tr>`
+  <td style="text-align:left;padding:9px 12px 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;font-weight:600;">${r.metric}</td>
+  <td style="text-align:left;padding:9px 0 9px 0;border-bottom:1px solid #f1f5f9;color:#334155;">${r.range}</td>
+</tr>`
   ).join("\n");
 
-  // ── §8 — Form D Filings (Permian) ────────────────────────────────────────
-  const s8FormDRows = section8FormD.map((r) =>
-    `<tr>
-      ${tdL(`${linked(r.sponsor || "—", r.url)}<br/><em style="font-weight:400;font-size:12px;color:#64748b;">${r.fund || ""}</em>`)}
-      ${tdR(`<strong>${r.amount || "—"}</strong> &middot; Filed ${r.filed || "—"}<br/><span style="font-size:12px;color:#64748b;">${r.focus || ""}</span>`)}
-    </tr>`
-  ).join("\n");
-
-  // ── §7 — National Competitor Tracker (Brevard) ───────────────────────────
-  const s7NatRows = section7NatTrackers.map((r) =>
-    `<tr>
-      ${tdL(`<strong>${linked(r.firm || "—", r.url)}</strong>`, false)}
-      ${tdR(`${r.activity || "No activity found"}<br/><span style="font-size:12px;color:#64748b;">${[r.location, r.size, r.date].filter(Boolean).join(" &middot; ")}</span>${r.notes ? `<br/><em style="font-size:12px;color:#94a3b8;">${r.notes}</em>` : ""}`)}
-    </tr>`
-  ).join("\n");
-
-  // ── §8 — Orlando/Tampa Spillover (Brevard) ───────────────────────────────
-  const s8SpilloverRows = section8Spillover.map((r) =>
-    `<tr>
-      ${tdL(`<strong>${linked(r.signal || "—", r.url)}</strong><br/><span style="font-size:12px;color:#64748b;">${r.date || ""}</span>`)}
-      ${tdR(`${r.detail || "—"}<br/><em style="font-size:12px;color:#475569;">${r.implication || ""}</em>`)}
-    </tr>`
-  ).join("\n");
-
-  const s8CapRateBlock = section8CapRateSpread
-    ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:14px 16px;margin:12px 0;font-size:13px;color:#334155;">
-  <strong>I-4 Corridor cap rate:</strong> ${section8CapRateSpread.i4_corridor || "—"} &nbsp;&nbsp;
-  <strong>Brevard cap rate:</strong> ${section8CapRateSpread.brevard || "—"} &nbsp;&nbsp;
-  <strong>Spread:</strong> ${section8CapRateSpread.spread || "—"}<br/>
-  <span style="color:#64748b;font-style:italic;margin-top:6px;display:block;">${section8CapRateSpread.trend || ""}</span>
-</div>`
+  const fundTableHtml = fundStructure.length > 0
+    ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
+  <thead><tr>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 12px 8px 0;border-bottom:2px solid #0f172a;">Metric</th>
+    <th style="text-align:left;font-size:11px;font-weight:600;color:#64748b;padding:0 0 8px;border-bottom:2px solid #0f172a;">Industry Range</th>
+  </tr></thead>
+  <tbody>${fundRows}</tbody>
+</table>`
     : "";
 
-  // ── §9 — Local Developer Permit Activity (Brevard) ───────────────────────
-  const s9LocalDevRows = section9LocalDevs.map((r) =>
-    `<tr>
-      ${tdL(`<strong>${r.developer || "—"}</strong><br/><span style="font-weight:400;font-size:12px;color:#64748b;">${r.permit_date || ""}</span>`)}
-      ${tdR(`${r.project || "—"} &middot; ${r.sf || "—"}<br/><span style="font-size:12px;color:#64748b;">${r.location || ""}</span><br/><span style="font-size:12px;color:${r.status?.toLowerCase().includes("complet") ? "#16a34a" : "#d97706"};">${r.status || ""}</span>`)}
-    </tr>`
-  ).join("\n");
+  // ── LP narrative ──────────────────────────────────────────────────────────
+  const lpNarrativeHtml = lpNarrative
+    .split(/\n\n+/)
+    .filter(Boolean)
+    .map(p => `<p style="font-size:13.5px;line-height:1.8;color:#1e293b;margin:0 0 14px;">${p.trim()}</p>`)
+    .join("\n");
 
-  // ── §10 — Aerospace REIT Comps (Brevard) ────────────────────────────────
-  const s10AerospaceRows = section10AerospaceReits.map((r) =>
-    `<tr>
-      ${tdL(`<strong>${linked(r.entity || "—", r.url)}</strong><br/><span style="font-weight:400;font-size:12px;color:#64748b;">${r.metric || ""}</span>`)}
-      ${tdR(`<strong>${r.value || "—"}</strong> <span style="font-size:12px;color:${r.trend?.toLowerCase().includes("compress") ? "#16a34a" : "#64748b"};">${r.trend ? `&middot; ${r.trend}` : ""}</span><br/><em style="font-size:12px;color:#475569;">${r.relevance || ""}</em>`)}
-    </tr>`
-  ).join("\n");
-
-  // ── §6 — Differentiation angles ──────────────────────────────────────────
-  const s6List = section6Angles.length > 0
-    ? `<p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px;">Three verified positioning angles this month:</p>
-<ol style="margin:0 0 14px;padding-left:20px;">${section6Angles.map((a) =>
-      `<li style="font-size:13px;color:#334155;line-height:1.7;margin-bottom:8px;"><strong>${linked(a.angle, a.url)}</strong> — ${a.narrative}</li>`
-    ).join("")}</ol>`
+  // ── Watch box (blue) ──────────────────────────────────────────────────────
+  const watchHtml = lpWatch
+    ? `<div style="border-left:4px solid #2563eb;background:#eff6ff;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;line-height:1.6;"><strong>${lpWatch}</strong></div>`
     : "";
 
   // ── Sources footer — hyperlinked URLs ────────────────────────────────────
@@ -419,79 +331,48 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
     ? `<strong style="color:#475569;">Sources verified ${params.period}:</strong> ${sourceNames.join(" &middot; ")}`
     : "";
 
+  const trackerLabel = isPermian
+    ? "§6 &mdash; IOS / Service Yard Tracker"
+    : "§6 &mdash; National Flex / R&D / Logistics Tracker";
+
+  const signalLabel = isPermian
+    ? "§7 &mdash; SEC EDGAR Form D &mdash; New Industrial Fund Raises"
+    : "§7 &mdash; Market Signals (Spillover &middot; Local Permits &middot; Aerospace REITs)";
+
   // ── Body ──────────────────────────────────────────────────────────────────
-  const bodyContent = `
-<!-- Note box -->
-<div style="border-left:4px solid #16a34a;background:#f0fdf4;padding:10px 14px;margin:0 0 24px;border-radius:0 4px 4px 0;font-size:13px;color:#166534;line-height:1.6;">
-  All figures verified at publication. Items requiring data integration are explicitly marked.
-</div>
+  const bodyContent = [
+    headlineHtml,
 
-${secLabel("§1 — Industrial Capital Flowing (Verified)")}
-${s1Cards || '<p style="font-size:13px;color:#94a3b8;">No capital flow events found this period.</p>'}
+    secLabel("§1 &mdash; Industrial Capital Flowing"),
+    capitalItems.length > 0 ? renderCards(capitalItems) : '<p style="font-size:13px;color:#94a3b8;">No capital flow events found this period.</p>',
 
-${secLabel("§2 — Public Industrial REIT Benchmark (Verified)")}
-<p style="font-size:13px;font-weight:700;color:#0f172a;margin:0 0 10px;">EastGroup Properties (EGP) — closest public benchmark to ERP</p>
-${s2EgpRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-bottom:14px;">
-  <tbody>${s2EgpRows}</tbody>
-</table>` : ""}
-${(data.section2_lp_narrative as string) ? `<p style="font-size:13px;color:#334155;line-height:1.6;margin:0 0 12px;"><strong>LP-facing read:</strong> ${data.section2_lp_narrative as string}</p>` : ""}
-${(data.section2_other_reits as string) ? `<p style="font-size:13px;color:#475569;margin:0;"><strong>Other public industrial REITs (tracking quarterly):</strong><br/><span style="font-style:italic;">${data.section2_other_reits as string}</span></p>` : ""}
+    secLabel("§2 &mdash; EastGroup Benchmark (EGP)"),
+    egpTableHtml,
+    egpNarrative ? `<p style="font-size:13.5px;line-height:1.8;color:#1e293b;margin:14px 0 0;">${egpNarrative}</p>` : "",
 
-${secLabel(`§3 — ${geoLabel} Industrial PE Peers (Verified)`)}
-${s3Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <tbody>${s3Rows}</tbody>
-</table>` : '<p style="font-size:13px;color:#94a3b8;">No peer data available.</p>'}
+    secLabel(`§3 &mdash; ${geoLabel} PE &amp; Institutional Peers`),
+    peerItems.length > 0 ? renderCards(peerItems) : '<p style="font-size:13px;color:#94a3b8;">No peer data available.</p>',
 
-${secLabel(`§4 — Private Competitors with Potential ${marketLabel} Interest`)}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Verified existence; specific ${marketLabel} deployment unverified unless noted.</p>
-${s4Bullets}
-${s4Correction}
+    secLabel("§4 &mdash; Private Competitors"),
+    competitorItems.length > 0 ? renderCards(competitorItems) : '<p style="font-size:13px;color:#94a3b8;">No competitor data available.</p>',
 
-${secLabel("§5 — Comparable Fund Structures")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">${(data.section5_note as string) || "Industry-typical ranges from public PE conventions."}</p>
-${s5Rows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;">
-  <tbody>${s5Rows}</tbody>
-</table>` : ""}
+    secLabel("§5 &mdash; Comparable Fund Structures"),
+    fundTableHtml || '<p style="font-size:13px;color:#94a3b8;">No fund structure data available.</p>',
 
-${secLabel("§6 — Differentiation Narrative for LP Decks")}
-${s6List}
-${(data.section6_watch as string) ? `<div style="background:#eff6ff;border-left:4px solid #2563eb;padding:12px 16px;margin:14px 0;border-radius:0 4px 4px 0;font-size:13px;color:#1d4ed8;"><strong>${data.section6_watch as string}</strong></div>` : ""}
+    secLabel(trackerLabel),
+    trackerItems.length > 0 ? renderCards(trackerItems) : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No activity found this period.</p>',
 
-${isPermian ? `
-${secLabel("§7 — IOS / Service Yard Competitor Tracker")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Direct competition — firms acquiring IOS and service yards in Texas. Deal announcements this period.</p>
-${s7IosRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s7IosRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No new deal announcements found this period.</p>'}
-${(data.section7_ios_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section7_ios_note as string}</p>` : ""}
+    secLabel(signalLabel),
+    signalItems.length > 0 ? renderCards(signalItems) : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No signals found this period.</p>',
 
-${secLabel("§8 — SEC EDGAR Form D: New Industrial Fund Raises ($50M+)")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">30–60 day advance notice of new capital entering your market. Source: SEC.gov Form D filings.</p>
-${s8FormDRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s8FormDRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No qualifying Form D filings found this period.</p>'}
-${(data.section8_form_d_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section8_form_d_note as string}</p>` : ""}
-` : ""}
+    secLabel("§8 &mdash; LP Differentiation Angles"),
+    lpAngles.length > 0 ? renderCards(lpAngles.map(a => ({ title: a.title, url: a.url, date: undefined, body: a.narrative }))) : "",
 
-${isBrevard ? `
-${secLabel("§7 — National Flex / R&D / Logistics Competitor Tracker")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe — Space Coast &amp; Florida activity. These are the leading-edge nationals; the big-box REITs have not arrived yet.</p>
-${s7NatRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s7NatRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No new activity found this period for tracked firms.</p>'}
-${(data.section7_national_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section7_national_note as string}</p>` : ""}
+    secLabel("§9 &mdash; LP Narrative Read"),
+    lpNarrativeHtml ? `<div>${lpNarrativeHtml}</div>` : "",
 
-${secLabel("§8 — Tampa / Orlando Spillover Signal")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">When I-4 corridor cap rates compress, capital searches east. Orlando/Tampa buyers in Brevard deed records = early pricing pressure. Track the spread.</p>
-${s8CapRateBlock}
-${s8SpilloverRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:12px;"><tbody>${s8SpilloverRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No cross-market buyer activity found this period.</p>'}
-${(data.section8_spillover_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section8_spillover_note as string}</p>` : ""}
-
-${secLabel("§9 — Local Developer Permit Activity (Last 12 Months)")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Cuhaci &amp; Peterson, Bravar Industrial, local family offices. Sourced from Brevard County building permits — the real competition, not the press-release firms.</p>
-${s9LocalDevRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s9LocalDevRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No qualifying industrial permits found (&gt;20,000 SF).</p>'}
-${(data.section9_local_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section9_local_note as string}</p>` : ""}
-
-${secLabel("§10 — Aerospace / Defense REIT Cap Rate Benchmarks")}
-<p style="font-size:12px;color:#64748b;font-style:italic;margin:0 0 10px;">Digital Realty, Equinix, Iron Mountain — cap rate trends in tech/defense-adjacent markets set LP return expectations for specialized industrial near Cape Canaveral.</p>
-${s10AerospaceRows ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><tbody>${s10AerospaceRows}</tbody></table>` : '<p style="font-size:13px;color:#94a3b8;font-style:italic;">No data found this period.</p>'}
-${(data.section10_note as string) ? `<p style="font-size:11px;color:#94a3b8;font-style:italic;margin:8px 0 0;">${data.section10_note as string}</p>` : ""}
-` : ""}
-`;
+    watchHtml,
+  ].filter(Boolean).join("\n");
 
   const htmlBody = HTML_WRAPPER(
     briefTitle,
@@ -500,11 +381,7 @@ ${(data.section10_note as string) ? `<p style="font-size:11px;color:#94a3b8;font
     sourcesLine
   );
 
-  const extraSummary = isPermian
-    ? ` IOS tracker: ${section7Ios.length} firms. Form D filings: ${section8FormD.length}.`
-    : ` National tracker: ${section7NatTrackers.length} firms. Spillover signals: ${section8Spillover.length}. Local permits: ${section9LocalDevs.length}. Aerospace REIT comps: ${section10AerospaceReits.length}.`;
-
-  const summary = `${briefTitle} generated for ${params.period}. Covers ${section1Items.length} capital flow events, EastGroup ${section2EgpRows.length}-metric benchmark, ${section3Table.length} PE peers, ${section4Bullets.length} private competitors, ${section6Angles.length} LP differentiation angles.${extraSummary}`;
+  const summary = `${briefTitle} generated for ${params.period}. Covers ${capitalItems.length} capital flow events, EastGroup ${egpTable.length}-metric benchmark, ${peerItems.length} PE peers, ${competitorItems.length} private competitors, ${trackerItems.length} tracker items, ${signalItems.length} signals, ${lpAngles.length} LP angles.`;
 
   return { subject, htmlBody, bodyContent, sourcesLine, summary };
 }
