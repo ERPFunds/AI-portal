@@ -52,7 +52,9 @@ export async function saveToOneDrive(params: {
     const siteId = process.env.SHAREPOINT_SITE_ID;
     let uploadUrl: string;
     if (siteId) {
-      uploadUrl = `https://graph.microsoft.com/v1.0/sites/${encodeURIComponent(siteId)}/drive/root:/${encodedPath}:/content`;
+      // siteId format: "hostname,site-collection-id,web-id" — do NOT encodeURIComponent,
+      // the commas must remain literal for Graph API to parse the compound site identifier correctly
+      uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/content`;
     } else {
       const userEmail = process.env.SMTP_USER;
       if (!userEmail) throw new Error("Either SHAREPOINT_SITE_ID or SMTP_USER must be set");

@@ -14,7 +14,13 @@ function markdownToHtmlParagraphs(text: string): string {
     .map((para) => {
       const trimmed = para.trim();
       if (!trimmed) return "";
-      const withBold = trimmed.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      // Convert markdown links [text](url) → clickable anchors BEFORE escaping
+      const withLinks = trimmed.replace(
+        /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g,
+        (_, linkText, url) =>
+          `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;">${linkText}</a>`
+      );
+      const withBold = withLinks.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
       const withBullets = withBold.replace(/^[•\-]\s/gm, "· ");
       return `<p style="line-height:1.7;color:#374151;margin:0 0 14px;font-size:14px;">${withBullets}</p>`;
     })
