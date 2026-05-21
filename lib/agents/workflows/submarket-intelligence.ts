@@ -138,7 +138,7 @@ ${brevardExtrasContext}`;
   // ── Claude prompt ────────────────────────────────────────────────────────────
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 7000,
+    max_tokens: 8192,
     system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds producing monthly submarket watch reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
 STRICT DATA RULES:
@@ -259,8 +259,16 @@ ${isPermian ? "- section6_land_comps: search for actual Permian IOS/industrial l
   try {
     data = JSON.parse(cleanText);
   } catch (e) {
-    console.error("[submarket-intelligence] JSON parse failed. Raw Claude output:", rawText.slice(0, 500));
-    data = { subject: `${briefTitle} — ${params.period}` };
+    console.error("[submarket-intelligence] JSON parse failed — rendering research fallback. Raw:", rawText.slice(0, 400));
+    // Fallback: render research findings directly so the email is never blank
+    const fallbackSubject = `${briefTitle} — ${params.period}`;
+    const fallbackHtml = HTML_WRAPPER(
+      fallbackSubject, `Submarket Intelligence · ${params.period}`,
+      `<p style="font-size:13px;color:#dc2626;margin:0 0 16px;font-weight:600;">Note: structured formatting unavailable this run — raw research below.</p>` +
+      research.findings.split("\n\n").map((p) => `<p style="font-size:13px;line-height:1.7;color:#374151;margin:0 0 14px;">${p}</p>`).join(""),
+      research.sources.join(" · ") || "Web research"
+    );
+    return { subject: fallbackSubject, htmlBody: fallbackHtml, bodyContent: fallbackHtml, sourcesLine: "", summary: research.findings.slice(0, 300) };
   }
 
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;

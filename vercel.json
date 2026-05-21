@@ -6,20 +6,20 @@
   },
   "crons": [
     {
+      "path": "/api/cron/brevard-brief",
+      "schedule": "30 12 * * 1"
+    },
+    {
       "path": "/api/cron/permian-brief",
-      "schedule": "0 8 * * 1"
+      "schedule": "0 13 * * 1"
     },
     {
       "path": "/api/cron/submarket-watch",
-      "schedule": "0 8 1 * *"
-    },
-    {
-      "path": "/api/cron/brevard-brief",
-      "schedule": "0 9 * * 1"
+      "schedule": "0 13 1 * *"
     },
     {
       "path": "/api/cron/fund-landscape-brief",
-      "schedule": "0 8 1 1,4,7,10 *"
+      "schedule": "0 13 1 1,4,7,10 *"
     }
   ]
 }

@@ -115,7 +115,7 @@ ${isBrevard ? `8. Flex/R&D/logistics national competitor tracker — These natio
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 6000,
+    max_tokens: 8192,
     system: [{ type: "text" as const, text: `You are a senior industrial CRE strategist and competitive analyst for ERP Funds. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets including Brevard County / Space Coast, Florida.
 
 For the Brevard / Space Coast market specifically:
@@ -248,8 +248,16 @@ ${isBrevard ? `- section7_national_trackers: search Rockefeller Group, Exeter, C
   try {
     data = JSON.parse(cleanText);
   } catch (e) {
-    console.error("[competitor-intelligence] JSON parse failed:", rawText.slice(0, 500));
-    data = { subject: `${briefTitle} — ${params.period}` };
+    console.error("[competitor-intelligence] JSON parse failed — rendering research fallback. Raw:", rawText.slice(0, 400));
+    // Fallback: render research findings directly so the email is never blank
+    const fallbackSubject = `${briefTitle} — ${params.period}`;
+    const fallbackHtml = HTML_WRAPPER(
+      fallbackSubject, `Competitive Intelligence · ${params.period}`,
+      `<p style="font-size:13px;color:#dc2626;margin:0 0 16px;font-weight:600;">Note: structured formatting unavailable this run — raw research below.</p>` +
+      research.findings.split("\n\n").map((p) => `<p style="font-size:13px;line-height:1.7;color:#374151;margin:0 0 14px;">${p}</p>`).join(""),
+      research.sources.join(" · ") || "Web research"
+    );
+    return { subject: fallbackSubject, htmlBody: fallbackHtml, bodyContent: fallbackHtml, sourcesLine: "", summary: research.findings.slice(0, 300) };
   }
 
   const subject = (data.subject as string) || `${briefTitle} — ${params.period}`;
