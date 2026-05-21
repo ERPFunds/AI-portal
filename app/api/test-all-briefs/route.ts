@@ -73,10 +73,17 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Optional: pass { "only": ["Brevard — Competitive & Fund Brief"] } to run a subset
+  let onlyIds: string[] | null = null;
+  try {
+    const body = await req.json().catch(() => ({}));
+    if (Array.isArray(body?.only) && body.only.length > 0) onlyIds = body.only as string[];
+  } catch {}
+
   const period = getCurrentPeriod();
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
-  const briefDefs = [
+  const allBriefDefs = [
     { id: "Permian — Monday Brief",             run: () => generatePermianMondayBrief(period) },
     { id: "Brevard — Monday Brief",             run: () => runWeeklyMarketUpdate({ market: "brevard" as const, period }) },
     { id: "Permian — Submarket Intelligence",   run: () => runSubmarketIntelligence({ market: "permian" as const, period }) },
@@ -84,8 +91,9 @@ export async function POST(req: NextRequest) {
     { id: "Permian — Fund Landscape Brief",     run: () => runCompetitorIntelligence({ market: "permian" as const, period }) },
     { id: "Brevard — Competitive & Fund Brief", run: () => generateBrevardFundCompetitorBrief(period) },
   ];
+  const briefDefs = onlyIds ? allBriefDefs.filter((b) => onlyIds!.includes(b.id)) : allBriefDefs;
 
-  // Run all 6 in parallel — total time = slowest single brief (~3-4 min) not sum of all
+  // Run in parallel — total time = slowest single brief (~3-4 min) not sum of all
   await Promise.all(
     briefDefs.map(async (brief) => {
       try {
