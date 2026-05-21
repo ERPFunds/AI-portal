@@ -23,7 +23,7 @@ export async function saveToOneDrive(params: {
       url: null,
       version: null,
       saved: false,
-      message: `OneDrive auth failed: ${String(err)}. Output saved to portal log only.`,
+      message: `Shared Drive auth failed: ${String(err)}. Output saved to portal log only.`,
     };
   }
 
@@ -32,7 +32,7 @@ export async function saveToOneDrive(params: {
       url: null,
       version: null,
       saved: false,
-      message: "OneDrive not configured — AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET not set. Output saved to portal log only.",
+      message: "Shared Drive not configured — AZURE_TENANT_ID / AZURE_CLIENT_ID / AZURE_CLIENT_SECRET not set. Output saved to portal log only.",
     };
   }
 
@@ -90,14 +90,14 @@ export async function saveToOneDrive(params: {
       url: fileData.webUrl ?? null,
       version: fileData.eTag ?? fileData.id ?? null,
       saved: true,
-      message: `Saved to OneDrive: ${fileData.webUrl ?? fullPath}`,
+      message: `Saved to Shared Drive: ${fileData.webUrl ?? fullPath}`,
     };
   } catch (err) {
     return {
       url: null,
       version: null,
       saved: false,
-      message: `OneDrive save failed: ${String(err)}. Output saved to portal log only.`,
+      message: `Shared Drive save failed: ${String(err)}. Output saved to portal log only.`,
     };
   }
 }

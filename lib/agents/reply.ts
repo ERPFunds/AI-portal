@@ -38,7 +38,7 @@ export async function sendReplyEmail(params: {
     ? `<tr><td style="padding:0 24px 16px;">
         <a href="${escapeHtml(params.oneDriveUrl)}"
            style="display:inline-block;background:#0f172a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-size:13px;font-weight:600;">
-          View in OneDrive →
+          View in Shared Drive →
         </a>
       </td></tr>`
     : "";

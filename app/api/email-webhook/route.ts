@@ -211,12 +211,17 @@ export async function POST(req: NextRequest) {
   const emailOutputContent =
     output.outputType === "filed" ? null : outputContent?.slice(0, 3000) ?? null;
 
+  // If the file save failed, append the reason to the summary so it's visible in the reply
+  const replySummary = fileResult.saved
+    ? output.summary
+    : `${output.summary}\n\n⚠️ File save failed: ${fileResult.message}`;
+
   await sendReplyEmail({
     to: from,
     originalSubject: subject,
     workflowId,
     projectContext,
-    summary: output.summary,
+    summary: replySummary,
     oneDriveUrl: fileResult.url,
     outputContent: emailOutputContent,
   }).catch((err) => console.error("[email-webhook] reply send failed:", err));
