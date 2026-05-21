@@ -305,6 +305,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     peopleops: <StubView title="People Ops" icon="👥" desc="Team directory, onboarding checklists, and HR policy Q&A" />,
     vendors: <StubView title="Vendor Contracts" icon="🔑" desc="Vendor master list, contract status, and COI tracking" />,
     docvault: <StubView title="Document Vault" icon="📁" desc="Centralized file store feeding all agent knowledge bases" />,
+    'output-files': <OutputFilesView />,
     requests: <RequestsView roleKey={roleKey} roleName={role.name} roleTitle={role.title} />,
   }
 
@@ -2965,6 +2966,7 @@ const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string
   { icon: '🔧', agent: 'Agent 1 · Permian Brief', name: 'World Oil',            url: 'https://www.worldoil.com/rss/news',                         desc: 'Operator activity, frac sand, midstream, in-basin facilities' },
   { icon: '📡', agent: 'Agent 1 · Permian Brief', name: 'Rigzone',              url: 'https://www.rigzone.com/rss/news.aspx',                     desc: 'Rig counts, offshore/onshore drilling, and energy workforce news' },
   { icon: '⚡', agent: 'Agent 1 · Permian Brief', name: 'EIA Today in Energy',  url: 'https://www.eia.gov/rss/todayinenergy.xml',                 desc: 'Permian production updates, regulatory changes, basin economics — from EIA' },
+  { icon: '🏦', agent: 'Agent 1 · Permian Brief', name: 'Dallas Fed Research',  url: 'https://www.dallasfed.org/rss/research',                    desc: 'Dallas Fed Energy Survey (quarterly) — E&P capex, activity outlook, and breakeven prices; leading demand signal for Permian industrial' },
   { icon: '🛢️', agent: 'Agent 1 · Permian Brief', name: 'OilPrice.com',         url: 'https://oilprice.com/rss/main',                             desc: 'Energy press, WTI commentary, occasional Permian operator coverage' },
   { icon: '🏙️', agent: 'Agent 1 · Permian Brief', name: 'Bisnow Texas',         url: 'https://bisnow.com/rss/houston',                            desc: 'Texas CRE coverage — filter to Permian/Midland/Odessa activity' },
   { icon: '🔗', agent: 'Agent 1 · Permian Brief', name: 'Connect CRE',          url: 'https://connectcre.com/feed/',                              desc: 'Texas and national CRE — Permian-adjacent industrial transactions' },
@@ -4057,6 +4059,129 @@ function RequestsView({ roleKey, roleName, roleTitle }: { roleKey: string; roleN
             </div>
           )}
         </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Output Files View ────────────────────────────────────────────────────────
+
+const WORKFLOW_LABELS: Record<string, string> = {
+  'market-update-digest': 'Market Update',
+  'lp-ready-summary':     'LP Summary',
+  'sub-sector-deep-dive': 'Deep Dive',
+  'sale-comps-pull':      'Sale Comps',
+  'save-file-only':       'File Save',
+  'deck-builder':         'Deck',
+  'om-editor':            'OM Edit',
+  'om-writer':            'OM Writer',
+}
+
+const PREFIX_COLORS: Record<string, string> = {
+  RESEARCH: '#0e7490',
+  BUILD:    '#7c3aed',
+  WRITE:    '#b45309',
+}
+
+function OutputFilesView() {
+  const [rows, setRows] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    fetch('/api/research-log')
+      .then(r => r.json())
+      .then(d => { setRows(d.rows ?? []); setLoading(false) })
+      .catch(e => { setError(String(e)); setLoading(false) })
+  }, [])
+
+  function fmtDate(iso: string) {
+    const d = new Date(iso)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+      ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  }
+
+  function stripPrefix(subject: string) {
+    return subject.replace(/^(RESEARCH|BUILD|WRITE):\s*/i, '')
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <h2>🗂️ Shared Drive Output Log</h2>
+        <p>All files saved by Agent 1 — click any row to open in SharePoint</p>
+      </div>
+      <div style={{ padding: '0 24px 24px' }}>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>Loading…</div>
+        )}
+        {error && (
+          <div style={{ textAlign: 'center', padding: 60, color: '#dc2626', fontSize: 13 }}>{error}</div>
+        )}
+        {!loading && !error && rows.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>No files saved yet.</div>
+        )}
+        {!loading && rows.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Date</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Subject / Project</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Workflow</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>File</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row: any) => (
+                <tr
+                  key={row.id}
+                  style={{ borderBottom: '1px solid #f3f4f6', cursor: row.onedrive_url ? 'pointer' : 'default' }}
+                  onClick={() => row.onedrive_url && window.open(row.onedrive_url, '_blank')}
+                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+                >
+                  <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
+                    {fmtDate(row.created_at)}
+                  </td>
+                  <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 340 }}>
+                    <div style={{ fontWeight: 600, color: '#111827', marginBottom: 3 }}>{stripPrefix(row.subject ?? '')}</div>
+                    {row.output_summary && (
+                      <div style={{ fontSize: 11, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
+                        {row.output_summary}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                    {row.prefix && (
+                      <span style={{
+                        display: 'inline-block', marginRight: 6, fontSize: 10, fontWeight: 700,
+                        color: PREFIX_COLORS[row.prefix] ?? '#6b7280',
+                        background: (PREFIX_COLORS[row.prefix] ?? '#6b7280') + '15',
+                        border: `1px solid ${PREFIX_COLORS[row.prefix] ?? '#6b7280'}40`,
+                        borderRadius: 4, padding: '1px 6px',
+                      }}>{row.prefix}</span>
+                    )}
+                    <span style={{ color: '#374151' }}>{WORKFLOW_LABELS[row.workflow_id] ?? row.workflow_id}</span>
+                  </td>
+                  <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                    {row.onedrive_url ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        background: '#0f172a', color: '#fff',
+                        fontSize: 11, fontWeight: 600,
+                        padding: '4px 10px', borderRadius: 5,
+                      }}>
+                        View →
+                      </span>
+                    ) : (
+                      <span style={{ color: '#d1d5db', fontSize: 11 }}>No file</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

@@ -8,7 +8,8 @@ export interface FeedItem {
   summary?: string;
 }
 
-const parser = new Parser();
+// 10-second timeout per feed — prevents slow/unresponsive feeds from hanging the entire fetch
+const parser = new Parser({ timeout: 10000 });
 
 // ── Shared industrial CRE feeds (used in both Permian and Brevard) ────────────────
 const INDUSTRIAL_CRE_FEEDS: { url: string; source: string }[] = [
@@ -59,6 +60,7 @@ const PERMIAN_BRIEF_FEEDS: { url: string; source: string }[] = [
   { url: "https://oilprice.com/rss/main",                                  source: "OilPrice.com" },
   { url: "https://www.hartenergy.com/rss",                                 source: "Hart Energy" },
   { url: "https://www.ogj.com/rss/all-ogj-news.rss",                      source: "Oil & Gas Journal" },
+  { url: "https://www.dallasfed.org/rss/research",                         source: "Dallas Fed Research" },
 ];
 
 // Agent 3 — Competitive Landscape Profile

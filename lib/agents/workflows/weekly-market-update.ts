@@ -123,7 +123,7 @@ export async function runWeeklyMarketUpdate(params: {
 
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 5500,
+    max_tokens: 4000,
     system: [{ type: "text" as const, text: `You are a CRE market analyst for ERP Funds producing weekly email briefs for the investment team. ERP Funds is an industrial CRE firm focused on service yards, IOS, flex industrial, logistics, and cold storage in the Permian Basin and secondary markets including Brevard County FL.
 
 Tone: professional, data-first, punchy. Use real numbers from the research. LP narrative should be polished investment-grade prose — direct, specific, defensible. No filler sentences.`, cache_control: { type: "ephemeral" } }],
@@ -178,7 +178,8 @@ Rules:
     ],
   });
 
-  const rawText = response.content[0].type === "text" ? response.content[0].text : "{}";
+  const textBlock = response.content.find((b) => b.type === "text");
+  const rawText = textBlock?.type === "text" ? textBlock.text : "{}";
   const cleanText = rawText.replace(/^```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
   let data: Record<string, unknown>;
   try {

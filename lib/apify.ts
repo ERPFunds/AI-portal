@@ -108,7 +108,7 @@ export async function fetchGoogleNews(
   try {
     const url =
       `${APIFY_BASE}/acts/apify~google-news-scraper/run-sync-get-dataset-items` +
-      `?token=${apiToken}&timeout=60&memory=256`;
+      `?token=${apiToken}&timeout=25&memory=256`;
 
     const res = await fetch(url, {
       method: "POST",
@@ -119,7 +119,7 @@ export async function fetchGoogleNews(
         language: "en",
         country: "US",
       }),
-      signal: AbortSignal.timeout(65000),
+      signal: AbortSignal.timeout(30000),
     });
 
     if (!res.ok) {

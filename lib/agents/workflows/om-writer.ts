@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+﻿import Anthropic from "@anthropic-ai/sdk";
 
 export type OmSection = "Investment Thesis" | "Executive Summary" | "Demand Drivers";
 

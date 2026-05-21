@@ -17,8 +17,8 @@ interface SendBriefPayload {
 }
 
 const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
-const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT
-  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT])]
+const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
+  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
   : BASE_RECIPIENTS;
 const SENDER_MAILBOX = "mparad@erpfunds.com";
 
@@ -141,10 +141,11 @@ export async function POST(req: NextRequest) {
       summary = result.summary;
     }
   } catch (err) {
-    console.error(`[send-brief] workflow error — market=${market} reportType=${reportType}:`, err);
-    logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: String(err) }).catch(() => {});
+    const errMsg = err instanceof Error ? `${err.message}\n${err.stack ?? ""}` : String(err);
+    console.error(`[send-brief] workflow error — market=${market} reportType=${reportType}:`, errMsg);
+    logAgentRun({ agentId: "lp-intel", workflowId, status: "error", market, durationMs: Date.now() - startMs, errorMessage: errMsg.slice(0, 500) }).catch(() => {});
     return NextResponse.json(
-      { error: "workflow-failed", message: String(err) },
+      { error: "workflow-failed", message: errMsg.slice(0, 1000) },
       { status: 500 }
     );
   }
