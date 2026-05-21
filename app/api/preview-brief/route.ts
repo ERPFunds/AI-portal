@@ -8,7 +8,7 @@ import { runSubmarketIntelligence } from "@/lib/agents/workflows/submarket-intel
 export const maxDuration = 300;
 
 type Market = "permian" | "brevard";
-type ReportType = "weekly-update" | "submarket-intelligence" | "competitor-intelligence";
+type ReportType = "weekly-update" | "submarket-intelligence" | "competitor-intelligence" | "submarket-brief" | "fund-competitor-brief";
 
 function getCurrentPeriod(): string {
   const now = new Date();
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   if (!market || !["permian", "brevard"].includes(market)) {
     return NextResponse.json({ error: "Invalid market" }, { status: 400 });
   }
-  if (!reportType || !["weekly-update", "submarket-intelligence", "competitor-intelligence"].includes(reportType)) {
+  if (!reportType || !["weekly-update", "submarket-intelligence", "competitor-intelligence", "submarket-brief", "fund-competitor-brief"].includes(reportType)) {
     return NextResponse.json({ error: "Invalid reportType" }, { status: 400 });
   }
 
@@ -59,12 +59,14 @@ export async function POST(req: NextRequest) {
   try {
     let result: { subject: string; htmlBody: string; summary: string };
 
-    if (reportType === "competitor-intelligence") {
-      result = await runCompetitorIntelligence({ market, period });
-    } else if (reportType === "weekly-update") {
+    if (reportType === "weekly-update") {
       result = await runWeeklyMarketUpdate({ market, period });
-    } else {
+    } else if (reportType === "submarket-intelligence" || reportType === "submarket-brief") {
+      // submarket-brief is the merged weekly Brevard version — previewed via submarket-intelligence
       result = await runSubmarketIntelligence({ market, period });
+    } else {
+      // competitor-intelligence and fund-competitor-brief both preview via competitor-intelligence
+      result = await runCompetitorIntelligence({ market, period });
     }
 
     return NextResponse.json({

@@ -3478,7 +3478,7 @@ function NewsletterPromptLibrary() {
           <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>📰</div>
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Agent 1 — Newsletter Prompt Library</div>
-            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs for all 6 scheduled newsletters</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Full prompt instructions, sources, and output specs — 1 Permian weekly · 3 Brevard weekly · 2 Permian monthly</div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
