@@ -128,7 +128,7 @@ CRITICAL RULE — DATA VINTAGE LABELS: Every single statistic, vacancy rate, ren
 
 Produce a richly detailed, LP-grade competitor intelligence brief. Be specific and data-dense. Every section must contain real named entities, figures, and actionable observations. Use web_search aggressively to fill gaps before marking anything as data pending.
 
-URL FIELDS: Every item in the JSON must include a `url` field with the direct source URL. All body/description/narrative/notes text fields must be plain text with no HTML tags.`, cache_control: { type: "ephemeral" } }],
+URL FIELDS: Every item in the JSON must include a "url" field with the direct source URL. All body/description/narrative/notes text fields must be plain text with no HTML tags.`, cache_control: { type: "ephemeral" } }],
     tools: [
       {
         type: "web_search_20250305" as "web_search_20250305",
