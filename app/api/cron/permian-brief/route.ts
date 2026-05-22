@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { fetchNewsItems } from "@/lib/fetch-news";
 import { archiveBrief } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
+import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 const anthropic = new Anthropic();
 
@@ -117,6 +118,7 @@ export async function GET(request: Request) {
     });
 
     await sendBriefEmail({ subject, html });
+    saveNewsletterToSharePoint({ market: "Permian", briefType: "Weekly Market Update", htmlBody: html }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject, recipients: RECIPIENTS });
   } catch (error) {

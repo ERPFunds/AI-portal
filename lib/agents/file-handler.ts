@@ -120,6 +120,31 @@ export function buildOneDriveFolder(params: {
   return `/Research/${month}`;
 }
 
+// ── Newsletter archiving ──────────────────────────────────────────────────────
+
+/**
+ * Save a newsletter HTML file to SharePoint under:
+ *   Newsletters/{Market}/{Month Year}/{briefType} - {YYYY-MM-DD}.html
+ *
+ * Examples:
+ *   Newsletters/Brevard/May 2026/Brevard Weekly Market Update - 2026-05-22.html
+ *   Newsletters/Permian/May 2026/Permian Submarket Watch - 2026-05-22.html
+ *
+ * Failures are non-fatal — the caller can fire-and-forget with .catch().
+ */
+export async function saveNewsletterToSharePoint(params: {
+  market: string;       // e.g. "Brevard" or "Permian"
+  briefType: string;    // e.g. "Weekly Market Update", "Submarket Watch"
+  htmlBody: string;
+}): Promise<FileHandlerResult> {
+  const now = new Date();
+  const monthYear = now.toLocaleDateString("en-US", { month: "long", year: "numeric" }); // e.g. "May 2026"
+  const dateStr = now.toISOString().split("T")[0]; // e.g. "2026-05-22"
+  const filename = `${params.market} ${params.briefType} - ${dateStr}.html`;
+  const folder = `Newsletters/${params.market}/${monthYear}`;
+  return saveToOneDrive({ content: params.htmlBody, filename, folder, contentType: "text/html; charset=utf-8" });
+}
+
 export function buildFilename(params: {
   projectContext: string;
   workflowId: string;

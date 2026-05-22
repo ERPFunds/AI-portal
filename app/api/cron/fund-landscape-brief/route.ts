@@ -4,6 +4,7 @@ import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
 import { archiveBrief } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
+import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 const anthropic = new Anthropic();
 const parser = new Parser();
@@ -204,6 +205,7 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
 
     await archiveBrief({ agentName: "fund-landscape-brief", subject, html, narrative, macro: {}, news });
     await sendBriefEmail({ subject, html });
+    saveNewsletterToSharePoint({ market: "Permian", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject });
   } catch (error) {

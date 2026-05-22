@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { generateBrevardMondayBrief, generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
 import { logAgentRun } from "@/lib/db";
+import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 export const maxDuration = 300;
 
@@ -63,6 +64,7 @@ export async function GET(request: Request) {
     const startMs = Date.now();
     const { subject, htmlBody, summary } = await generateBrevardMondayBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
+    saveNewsletterToSharePoint({ market: "Brevard", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
     results["weekly-update"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
@@ -75,6 +77,7 @@ export async function GET(request: Request) {
     const startMs = Date.now();
     const { subject, htmlBody, summary } = await generateBrevardSubmarketBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
+    saveNewsletterToSharePoint({ market: "Brevard", briefType: "Submarket Intelligence", htmlBody }).catch(() => {});
     results["submarket"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "submarket-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
@@ -87,6 +90,7 @@ export async function GET(request: Request) {
     const startMs = Date.now();
     const { subject, htmlBody, summary } = await generateBrevardFundCompetitorBrief(period);
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
+    saveNewsletterToSharePoint({ market: "Brevard", briefType: "Competitive Intel", htmlBody }).catch(() => {});
     results["fund-competitor"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "fund-competitor-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {

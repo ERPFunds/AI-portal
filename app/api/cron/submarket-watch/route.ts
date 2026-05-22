@@ -4,6 +4,7 @@ import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
 import { archiveBrief } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
+import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 const anthropic = new Anthropic();
 const parser = new Parser();
@@ -202,6 +203,7 @@ Write with data density and specificity. Flag any market shifts that could affec
 
     await archiveBrief({ agentName: "submarket-watch", subject, html, narrative, macro: {}, news });
     await sendBriefEmail({ subject, html });
+    saveNewsletterToSharePoint({ market: "Permian", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject });
   } catch (error) {
