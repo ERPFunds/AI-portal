@@ -138,24 +138,16 @@ ${brevardExtrasContext}`;
   // ── Claude prompt ────────────────────────────────────────────────────────────
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 8192,
+    max_tokens: 4000,
     system: [{ type: "text" as const, text: `You are a senior CRE submarket analyst for ERP Funds producing monthly submarket watch reports. ERP Funds focuses on industrial outdoor storage (IOS), service yards, flex industrial, logistics, and cold storage in the Permian Basin and secondary Sunbelt markets.
 
 STRICT DATA RULES:
-- §3 Development Pipeline MUST be a table with specific project names, not prose. If you cannot find a named project, say "No confirmed spec starts this period" — do NOT invent names.
-- §4 Tenant Watch MUST use real company names with specific actions: "SLB opened a 40,000 SF completion equipment yard in Midland (Jan 2026)" NOT "oilfield services companies are expanding."
-- §5 Deals Closed is the anchor section. Search aggressively for actual transaction comps. Even 1 real deal is better than leaving it empty.
-- Use web_search aggressively before marking anything DATA PENDING. Only use "DATA PENDING" if web search also returns nothing.
-- Never recommend external reports — find the data yourself via web_search.
+- §3 Development Pipeline: specific project names only. If none found, use section3_none_verified field.
+- §4 Tenant Watch: real company names with specific actions and dates.
+- §5 Deals Closed: the anchor section — include every real comp found, even partial data.
+- All text fields may include inline <a href="..."> tags for verifiable facts.
 
-INLINE CITATIONS RULE: In every text field (commentary, activity, assessment, source, projects, headline, bullets, notes, status), embed hyperlinks directly in the text using HTML anchor tags wherever you cite a company, deal, or verifiable statistic. Format: <a href="https://..." style="color:#1d4ed8;text-decoration:none;border-bottom:1px dotted #93c5fd;">text</a>. Do NOT collect links only at the footer — they must appear inline where the fact is stated.`, cache_control: { type: "ephemeral" } }],
-    tools: [
-      {
-        type: "web_search_20250305" as "web_search_20250305",
-        name: "web_search",
-        max_uses: 7,
-      } as unknown as Anthropic.Tool,
-    ],
+CRITICAL OUTPUT RULE: Return ONLY valid JSON — no markdown, no code fences, no text before or after the JSON object. Start with { and end with }.`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
@@ -165,16 +157,6 @@ Research findings:
 ${research.findings}
 
 ${research.sources.length > 0 ? `Sources:\n${research.sources.join("\n")}` : ""}
-
-IMPORTANT — use web_search NOW for any missing data, especially:
-- §3: "${isPermian ? "Permian Basin" : "Brevard County"} industrial development ${new Date().getFullYear()}" or "${isPermian ? "Midland TX" : "Melbourne FL"} warehouse construction project"
-- §4: "${isPermian ? "SLB OR Halliburton OR ProPetro Permian expansion 2025" : "SpaceX OR L3Harris OR Northrop Grumman Brevard expansion 2025"}"
-- §5: "${isPermian ? "Midland TX OR Odessa TX industrial sale 2025" : "Brevard County industrial sale 2025"}"
-${isPermian ? `- §6: "Midland TX industrial land $/acre 2025" OR "Permian Basin IOS land value"` : ""}
-- §7: "${isPermian ? "Waha gas hub price differential 2025 OR Permian pipeline capacity" : "Port Canaveral expansion 2025 OR Brevard County industrial zoning"}"
-${isBrevard ? `- Tourism: "Space Coast visitor statistics 2025 OR Port Canaveral cruise volume"
-- Corridors: "Brevard County industrial delivery 2025 I-95 corridor"
-- Rent spread: "Brevard County industrial rent vs Orlando 2025"` : ""}
 
 ---
 Return ONLY valid JSON with this exact structure:
