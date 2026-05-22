@@ -57,7 +57,7 @@ interface NewsItem {
   summary?: string;
 }
 
-async function fetchPermianNews(): Promise<NewsItem[]> {
+async function fetchPermianNews(excludeUrls?: Set<string>): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
 
   await Promise.allSettled(
@@ -88,6 +88,7 @@ async function fetchPermianNews(): Promise<NewsItem[]> {
 
   return items
     .filter((i) => i.pubDate > sevenDaysAgo)
+    .filter((i) => !excludeUrls?.has(i.link))
     .filter((i) => { const text = `${i.title} ${i.summary ?? ""}`.toLowerCase(); return PERMIAN_KEYWORDS.some((kw) => text.includes(kw.toLowerCase())); })
     .filter((i) => { if (seen.has(i.link)) return false; seen.add(i.link); return true; })
     .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
@@ -125,14 +126,14 @@ const SECTION_DIVIDER = (label: string) =>
 
 // ── Exported generator ────────────────────────────────────────────────────────
 
-export async function generatePermianMondayBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+export async function generatePermianMondayBrief(period: string, opts?: { excludeUrls?: Set<string> }): Promise<{ subject: string; htmlBody: string; summary: string; newsItems: NewsItem[] }> {
   const [brief, news] = await Promise.all([
     runWeeklyMarketUpdate({ market: "permian", period }),
-    fetchPermianNews(),
+    fetchPermianNews(opts?.excludeUrls),
   ]);
 
   if (news.length === 0) {
-    return brief;
+    return { ...brief, newsItems: [] };
   }
 
   const articleList = news.map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
@@ -165,5 +166,5 @@ ${narrativeHtml}
     `<div style="padding:0 40px;">${newsSection}</div>\n  $1`
   );
 
-  return { subject: brief.subject, htmlBody, summary: brief.summary };
+  return { subject: brief.subject, htmlBody, summary: brief.summary, newsItems: news };
 }

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { generateBrevardMondayBrief, generateBrevardSubmarketBrief, generateBrevardFundCompetitorBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
-import { logAgentRun } from "@/lib/db";
+import { logAgentRun, getSeenNewsletterArticleUrls, recordNewsletterRun } from "@/lib/db";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 export const maxDuration = 300;
@@ -59,12 +59,18 @@ export async function GET(request: Request) {
   const market = "brevard";
   const results: Record<string, { success: boolean; subject?: string; error?: string }> = {};
 
+  // Load this week's already-seen article URLs once. Articles are added to this
+  // set after each brief so even within a single run there are no repeats.
+  const seenUrls = await getSeenNewsletterArticleUrls().catch(() => new Set<string>());
+
   // ── 1. Monday Brief (weekly market update + live news digest) ─────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await generateBrevardMondayBrief(period);
+    const { subject, htmlBody, summary, newsItems } = await generateBrevardMondayBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
+    recordNewsletterRun({ agentName: "brevard-weekly", subject, articles: newsItems.map(n => ({ url: n.link, title: n.title, source: n.source, pubDate: n.pubDate })) }).catch(() => {});
+    newsItems.forEach((n) => seenUrls.add(n.link));
     results["weekly-update"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
@@ -75,9 +81,11 @@ export async function GET(request: Request) {
   // ── 2. Submarket Brief (deep dive + news digest) ──────────────────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await generateBrevardSubmarketBrief(period);
+    const { subject, htmlBody, summary, newsItems } = await generateBrevardSubmarketBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Submarket Intelligence", htmlBody }).catch(() => {});
+    recordNewsletterRun({ agentName: "brevard-submarket", subject, articles: newsItems.map(n => ({ url: n.link, title: n.title, source: n.source, pubDate: n.pubDate })) }).catch(() => {});
+    newsItems.forEach((n) => seenUrls.add(n.link));
     results["submarket"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "submarket-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {
@@ -88,9 +96,11 @@ export async function GET(request: Request) {
   // ── 3. Competitive & Fund Brief (competitor intel + fund news) ────────────
   try {
     const startMs = Date.now();
-    const { subject, htmlBody, summary } = await generateBrevardFundCompetitorBrief(period);
+    const { subject, htmlBody, summary, newsItems } = await generateBrevardFundCompetitorBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Competitive Intel", htmlBody }).catch(() => {});
+    recordNewsletterRun({ agentName: "brevard-fund", subject, articles: newsItems.map(n => ({ url: n.link, title: n.title, source: n.source, pubDate: n.pubDate })) }).catch(() => {});
+    newsItems.forEach((n) => seenUrls.add(n.link));
     results["fund-competitor"] = { success: emailResult.success, subject };
     logAgentRun({ agentId: "lp-intel", workflowId: "fund-competitor-brief", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
   } catch (err) {

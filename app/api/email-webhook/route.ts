@@ -158,11 +158,15 @@ export async function POST(req: NextRequest) {
 
       case "deck-builder": {
         const isEdit = /tighten|edit|update|revise|change/i.test(ask);
+        const attachmentContent = attachments?.length
+          ? (await Promise.all(attachments.map((a, i) => decodeAttachment(a).then((text) => `--- Document ${i + 1}: ${a.filename} ---\n${text}`))))
+              .join("\n\n")
+          : undefined;
         output = await runDeckBuilder({
           ask,
           projectContext,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
+          attachmentContent,
           mode: isEdit ? "edit-existing" : "new-draft",
         });
         break;
@@ -171,11 +175,15 @@ export async function POST(req: NextRequest) {
       case "om-editor": {
         const isInsert = /add|insert|append/i.test(ask);
         const isEdit = /edit|tighten|revise|update/i.test(ask);
+        const attachmentContent = attachments?.length
+          ? (await Promise.all(attachments.map((a, i) => decodeAttachment(a).then((text) => `--- Document ${i + 1}: ${a.filename} ---\n${text}`))))
+              .join("\n\n")
+          : undefined;
         output = await runOmEditor({
           ask,
           projectContext,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
+          attachmentContent,
           mode: isInsert ? "insert-section" : isEdit ? "edit-existing" : "new-draft",
         });
         break;
@@ -183,12 +191,16 @@ export async function POST(req: NextRequest) {
 
       case "om-writer": {
         const section = detectSection(ask);
+        const attachmentContent = attachments?.length
+          ? (await Promise.all(attachments.map((a, i) => decodeAttachment(a).then((text) => `--- Document ${i + 1}: ${a.filename} ---\n${text}`))))
+              .join("\n\n")
+          : undefined;
         output = await runOmWriter({
           ask,
           projectContext,
           section,
           researchFindings: research?.findings,
-          attachmentContent: attachments?.[0] ? await decodeAttachment(attachments[0]) : undefined,
+          attachmentContent,
         });
         break;
       }

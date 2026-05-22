@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
-import { archiveBrief } from "@/lib/db";
+import { archiveBrief, getSeenNewsletterArticleUrls } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
@@ -117,7 +117,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const news = await fetchSubmatchNews();
+    const [rawNews, seenUrls] = await Promise.all([
+      fetchSubmatchNews(),
+      getSeenNewsletterArticleUrls().catch(() => new Set<string>()),
+    ]);
+    const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
       return NextResponse.json({ message: "No new submarket articles this month." });

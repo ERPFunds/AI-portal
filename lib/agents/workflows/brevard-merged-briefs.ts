@@ -93,7 +93,7 @@ interface NewsItem {
   summary?: string;
 }
 
-async function fetchNews(apifyQueries: string[], keywords: string[]): Promise<NewsItem[]> {
+async function fetchNews(apifyQueries: string[], keywords: string[], excludeUrls?: Set<string>): Promise<NewsItem[]> {
   const items: NewsItem[] = [];
 
   await Promise.allSettled(
@@ -124,6 +124,7 @@ async function fetchNews(apifyQueries: string[], keywords: string[]): Promise<Ne
 
   return items
     .filter((i) => i.pubDate > sevenDaysAgo)
+    .filter((i) => !excludeUrls?.has(i.link))
     .filter((i) => { const text = `${i.title} ${i.summary ?? ""}`.toLowerCase(); return keywords.some((kw) => text.includes(kw)); })
     .filter((i) => { if (seen.has(i.link)) return false; seen.add(i.link); return true; })
     .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
@@ -183,10 +184,10 @@ const SECTION_DIVIDER = (label: string) =>
 
 // ── Exported generators ───────────────────────────────────────────────────────
 
-export async function generateBrevardSubmarketBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+export async function generateBrevardSubmarketBrief(period: string, opts?: { excludeUrls?: Set<string> }): Promise<{ subject: string; htmlBody: string; summary: string; newsItems: NewsItem[] }> {
   const [deepDive, news] = await Promise.all([
     runSubmarketIntelligence({ market: "brevard", period }),
-    fetchNews(SUBMARKET_QUERIES, SUBMARKET_KEYWORDS),
+    fetchNews(SUBMARKET_QUERIES, SUBMARKET_KEYWORDS, opts?.excludeUrls),
   ]);
 
   let newsSection = "";
@@ -222,13 +223,13 @@ ${narrativeHtml}
 
   const subject = `Space Coast Submarket Brief — ${period}`;
   const htmlBody = HTML_SHELL(subject, `Deep dive + weekly news digest · Brevard County / Space Coast`, deepDive.bodyContent + newsSection);
-  return { subject, htmlBody, summary: deepDive.summary };
+  return { subject, htmlBody, summary: deepDive.summary, newsItems: news };
 }
 
-export async function generateBrevardFundCompetitorBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+export async function generateBrevardFundCompetitorBrief(period: string, opts?: { excludeUrls?: Set<string> }): Promise<{ subject: string; htmlBody: string; summary: string; newsItems: NewsItem[] }> {
   const [compIntel, news] = await Promise.all([
     runCompetitorIntelligence({ market: "brevard", period }),
-    fetchNews(FUND_QUERIES, FUND_KEYWORDS),
+    fetchNews(FUND_QUERIES, FUND_KEYWORDS, opts?.excludeUrls),
   ]);
 
   let fundSection = "";
@@ -266,17 +267,17 @@ ${narrativeHtml}
 
   const subject = `Space Coast Competitive & Fund Intelligence — ${period}`;
   const htmlBody = HTML_SHELL(subject, `Competitor tracker + fund landscape · Brevard County / Space Coast`, compIntel.bodyContent + fundSection);
-  return { subject, htmlBody, summary: compIntel.summary };
+  return { subject, htmlBody, summary: compIntel.summary, newsItems: news };
 }
 
-export async function generateBrevardMondayBrief(period: string): Promise<{ subject: string; htmlBody: string; summary: string }> {
+export async function generateBrevardMondayBrief(period: string, opts?: { excludeUrls?: Set<string> }): Promise<{ subject: string; htmlBody: string; summary: string; newsItems: NewsItem[] }> {
   const [brief, news] = await Promise.all([
     runWeeklyMarketUpdate({ market: "brevard", period }),
-    fetchNews(MONDAY_QUERIES, MONDAY_KEYWORDS),
+    fetchNews(MONDAY_QUERIES, MONDAY_KEYWORDS, opts?.excludeUrls),
   ]);
 
   if (news.length === 0) {
-    return brief;
+    return { ...brief, newsItems: [] };
   }
 
   const articleList = news.map((a, i) => `${i + 1}. [${a.source}] ${a.title} (${a.pubDate.toLocaleDateString()})`).join("\n");
@@ -309,5 +310,5 @@ ${narrativeHtml}
     `<div style="padding:0 40px;">${newsSection}</div>\n  $1`
   );
 
-  return { subject: brief.subject, htmlBody, summary: brief.summary };
+  return { subject: brief.subject, htmlBody, summary: brief.summary, newsItems: news };
 }

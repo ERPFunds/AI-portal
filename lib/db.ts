@@ -45,6 +45,61 @@ export async function getLatestBrief(agentName: string) {
   return rows[0];
 }
 
+// ── Newsletter article deduplication ─────────────────────────────────────────
+
+const NEWSLETTER_AGENTS = [
+  "brevard-weekly", "brevard-submarket", "brevard-fund",
+  "permian-brief",  "submarket-watch",  "fund-landscape-brief",
+];
+
+/**
+ * Returns the set of article URLs already used in any newsletter brief
+ * in the past 7 days. Used to suppress repeats across all newsletters
+ * for the current week. Test sends never call this, so they're excluded.
+ */
+export async function getSeenNewsletterArticleUrls(): Promise<Set<string>> {
+  try {
+    const { rows } = await sql`
+      SELECT DISTINCT ba.article_url
+      FROM brief_articles ba
+      JOIN briefs b ON b.id = ba.brief_id
+      WHERE b.agent_name IN (
+        'brevard-weekly', 'brevard-submarket', 'brevard-fund',
+        'permian-brief',  'submarket-watch',   'fund-landscape-brief'
+      )
+        AND b.sent_at > NOW() - INTERVAL '7 days'
+    `;
+    return new Set(rows.map((r: any) => r.article_url));
+  } catch {
+    return new Set();
+  }
+}
+
+/**
+ * Records articles used by a Brevard brief (which doesn't call archiveBrief).
+ * Creates a minimal brief stub so brief_articles FKs resolve.
+ * Non-fatal — caller should .catch(() => {}).
+ */
+export async function recordNewsletterRun(params: {
+  agentName: string;
+  subject: string;
+  articles: Array<{ url: string; title: string; source: string; pubDate: Date }>;
+}): Promise<void> {
+  const { rows } = await sql`
+    INSERT INTO briefs (agent_name, subject, html, narrative, macro_data)
+    VALUES (${params.agentName}, ${params.subject}, '', '', '{}')
+    RETURNING id
+  `;
+  const briefId = rows[0].id;
+  for (const a of params.articles) {
+    await sql`
+      INSERT INTO brief_articles (brief_id, article_url, source, title, pub_date)
+      VALUES (${briefId}, ${a.url}, ${a.source}, ${a.title}, ${a.pubDate.toISOString()})
+      ON CONFLICT DO NOTHING
+    `;
+  }
+}
+
 // ── research_log — Agent 1 email-triggered workflow log ───────────────────
 
 export async function logResearchEntry(params: {

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchNewsItems } from "@/lib/fetch-news";
-import { archiveBrief } from "@/lib/db";
+import { archiveBrief, getSeenNewsletterArticleUrls } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
@@ -16,7 +16,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const news = await fetchNewsItems();
+    const [rawNews, seenUrls] = await Promise.all([
+      fetchNewsItems(),
+      getSeenNewsletterArticleUrls().catch(() => new Set<string>()),
+    ]);
+    const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
       return NextResponse.json({ message: "No new articles to publish." });
