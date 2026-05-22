@@ -94,13 +94,23 @@ async function fetchPermianNews(): Promise<NewsItem[]> {
     .slice(0, 20);
 }
 
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function articlesToHtml(news: NewsItem[]): string {
   return news.map((a) => {
     const url = a.link;
     const dateStr = a.pubDate.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-    const sourceEl = `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${a.source}</a>`;
-    const titleEl = `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${a.title}</a>`;
-    const bodyText = a.summary ? `<p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${a.summary}</p>` : "";
+    const safeSource = escapeHtml(a.source);
+    const safeTitle = escapeHtml(a.title);
+    const sourceEl = `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${safeSource}</a>`;
+    const titleEl = `<a href="${url}" style="font-weight:700;color:#1d4ed8;text-decoration:underline;">${safeTitle}</a>`;
+    const bodyText = a.summary ? `<p style="font-size:13px;color:#475569;line-height:1.6;margin:0;">${escapeHtml(a.summary)}</p>` : "";
     return `<div style="border-left:3px solid #cbd5e1;padding:6px 0 6px 14px;margin:0 0 16px;">
   <p style="font-size:12px;margin:0 0 4px;line-height:1.5;">${sourceEl}<span style="color:#94a3b8;margin:0 5px;">&middot;</span>${titleEl}<span style="color:#94a3b8;margin:0 5px;">&middot;</span><span style="color:#94a3b8;">${dateStr}</span></p>
   ${bodyText}
@@ -148,9 +158,10 @@ ${narrativeHtml}
 <div style="margin-top:12px;">${articlesToHtml(news)}</div>
 `;
 
-  // Inject news section before the closing </div></body></html>
+  // Inject news section before the footer — anchor on the static HTML comment
+  // so dynamic article content can never accidentally match the pattern.
   const htmlBody = brief.htmlBody.replace(
-    /(<div style="padding:16px 40px 28px;border-top)/,
+    /([ \t]*<!-- Footer -->)/,
     `<div style="padding:0 40px;">${newsSection}</div>\n  $1`
   );
 
