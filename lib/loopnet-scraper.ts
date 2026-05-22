@@ -1,19 +1,11 @@
 /**
- * LoopNet vacancy scraper
+ * LoopNet vacancy data layer
  *
- * Uses Apify's website-content-crawler (JS-rendered) to pull the LoopNet
- * industrial-for-lease search page, then uses Claude to extract structured
- * listing objects from the raw page text.
- *
- * Road-corridor filter for the Permian newsletter is exported separately so
- * the cron route can apply it after fetching.
+ * Listings arrive via Power Automate (daily LoopNet alert emails → /api/loopnet-ingest).
+ * This module provides the DB query helpers used by the weekly cron newsletters.
  */
 
-import { ApifyClient } from "apify-client";
-import Anthropic from "@anthropic-ai/sdk";
-
-const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
-const anthropic = new Anthropic();
+import { sql } from "@vercel/postgres";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,8 +16,9 @@ export interface LoopNetListing {
   availableSpace?: string; // available SF
   price?: string;          // asking rent or price
   propertyType?: string;
-  url: string;
+  url?: string;
   description?: string;
+  receivedAt?: Date;
 }
 
 // ── Permian corridor filter ───────────────────────────────────────────────────
@@ -51,102 +44,73 @@ export function isOnPermianCorridor(listing: LoopNetListing): boolean {
   return PERMIAN_ROAD_PATTERNS.some((re) => re.test(text));
 }
 
-// ── LoopNet search URLs ───────────────────────────────────────────────────────
+// ── DB queries ────────────────────────────────────────────────────────────────
 
-const SEARCH_URLS: Record<"brevard" | "permian", string[]> = {
-  brevard: [
-    "https://www.loopnet.com/search/industrial-properties/brevard-county-fl/for-lease/",
-  ],
-  permian: [
-    "https://www.loopnet.com/search/industrial-properties/midland-tx/for-lease/",
-    "https://www.loopnet.com/search/industrial-properties/odessa-tx/for-lease/",
-  ],
-};
-
-// ── Crawl a single LoopNet page via Apify ────────────────────────────────────
-
-async function crawlPage(url: string): Promise<string> {
-  try {
-    const run = await apify
-      .actor("apify/website-content-crawler")
-      .call(
-        {
-          startUrls: [{ url }],
-          maxCrawlPages: 1,
-          maxCrawlDepth: 0,
-          crawlerType: "playwright:firefox",
-          // Increase wait so JS-heavy listing cards have time to render
-          pageLoadTimeoutSecs: 45,
-        },
-        { timeoutSecs: 180 }
-      );
-
-    const { items } = await apify.dataset(run.defaultDatasetId).listItems();
-    const page = items[0] as Record<string, unknown> | undefined;
-    const text =
-      (page?.text as string) ??
-      (page?.markdown as string) ??
-      (page?.content as string) ??
-      "";
-    return text;
-  } catch (err) {
-    console.error(`[loopnet-scraper] crawl failed for ${url}:`, err);
-    return "";
-  }
-}
-
-// ── Main export ───────────────────────────────────────────────────────────────
-
+/**
+ * Returns all listings for a market received in the past 7 days,
+ * ordered newest-first. Used by the weekly cron newsletters.
+ */
 export async function fetchLoopNetListings(params: {
   market: "brevard" | "permian";
   maxListings?: number;
 }): Promise<LoopNetListing[]> {
-  const { market, maxListings = 40 } = params;
-
-  const urls = SEARCH_URLS[market];
-  const pageTexts = await Promise.all(urls.map(crawlPage));
-  const combinedText = pageTexts.filter((t) => t.trim()).join("\n\n---PAGE BREAK---\n\n");
-
-  if (!combinedText.trim()) {
-    console.warn(`[loopnet-scraper] No page content retrieved for ${market}`);
-    return [];
-  }
-
-  // Claude extracts structured listings from the raw page text.
-  // We truncate to ~14 k chars to stay within a reasonable token budget.
-  const prompt = `You are extracting industrial property listings from a LoopNet search results page. The raw page text is below.
-
-Return a JSON array of listing objects. Each object must have:
-- address (string, required — street address including city/state if present)
-- propertyName (string or null)
-- size (string or null — total building SF, e.g. "24,500 SF")
-- availableSpace (string or null — available SF, e.g. "12,000 SF")
-- price (string or null — asking rent or sale price, e.g. "$8.50/SF/YR")
-- propertyType (string or null)
-- url (string — full URL if visible, otherwise empty string)
-- description (string or null — one-sentence summary if available)
-
-Only include listings that have a recognisable street address. Omit entries with no address.
-Return ONLY the raw JSON array — no markdown, no code fences, no explanation.
-
-Page text (truncated):
-${combinedText.slice(0, 14000)}`;
-
-  let listings: LoopNetListing[] = [];
+  const { market, maxListings = 60 } = params;
   try {
-    const msg = await anthropic.messages.create({
-      model: "claude-opus-4-5",
-      max_tokens: 4096,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const raw = msg.content[0].type === "text" ? msg.content[0].text.trim() : "[]";
-    listings = JSON.parse(raw) as LoopNetListing[];
+    const { rows } = await sql`
+      SELECT
+        address, property_name, size, available_space,
+        price, property_type, url, description, received_at
+      FROM loopnet_listings
+      WHERE market = ${market}
+        AND received_at > NOW() - INTERVAL '7 days'
+      ORDER BY received_at DESC
+      LIMIT ${maxListings}
+    `;
+    return rows.map((r) => ({
+      address: r.address,
+      propertyName: r.property_name ?? undefined,
+      size: r.size ?? undefined,
+      availableSpace: r.available_space ?? undefined,
+      price: r.price ?? undefined,
+      propertyType: r.property_type ?? undefined,
+      url: r.url ?? undefined,
+      description: r.description ?? undefined,
+      receivedAt: r.received_at ? new Date(r.received_at) : undefined,
+    }));
   } catch (err) {
-    console.error("[loopnet-scraper] Claude parse failed:", err);
+    console.error(`[loopnet-scraper] DB query failed for ${market}:`, err);
     return [];
   }
+}
 
-  return listings
-    .filter((l) => l.address?.trim())
-    .slice(0, maxListings);
+/**
+ * Inserts one or more parsed listings into the DB.
+ * Called by /api/loopnet-ingest after Claude extracts listings from the alert email.
+ */
+export async function storeLoopNetListings(params: {
+  market: "brevard" | "permian";
+  listings: LoopNetListing[];
+  sourceSubject: string;
+}): Promise<number> {
+  const { market, listings, sourceSubject } = params;
+  let inserted = 0;
+  for (const l of listings) {
+    if (!l.address?.trim()) continue;
+    try {
+      await sql`
+        INSERT INTO loopnet_listings
+          (market, address, property_name, size, available_space,
+           price, property_type, url, description, source_email_subject)
+        VALUES
+          (${market}, ${l.address}, ${l.propertyName ?? null}, ${l.size ?? null},
+           ${l.availableSpace ?? null}, ${l.price ?? null}, ${l.propertyType ?? null},
+           ${l.url ?? null}, ${l.description ?? null}, ${sourceSubject})
+        ON CONFLICT DO NOTHING
+      `;
+      inserted++;
+    } catch (err) {
+      console.error("[loopnet-scraper] insert failed:", err);
+    }
+  }
+  return inserted;
 }
