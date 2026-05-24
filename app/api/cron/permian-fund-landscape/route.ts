@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
-import { archiveBrief, getSeenNewsletterArticleUrls } from "@/lib/db";
+import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
@@ -115,6 +115,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const startMs = Date.now();
+
   try {
     const [rawNews, seenUrls] = await Promise.all([
       fetchFundNews(),
@@ -211,10 +213,12 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
     await archiveBrief({ agentName: "permian-fund-landscape", subject, html, narrative, macro: {}, news });
     await sendBriefEmail({ subject, html });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: "success", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject });
   } catch (error) {
     console.error("Permian Fund Landscape Brief error:", error);
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});
     return NextResponse.json({ error: "Permian Fund Landscape Brief generation failed" }, { status: 500 });
   }
 }

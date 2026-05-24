@@ -669,17 +669,27 @@ const AGENT_LABEL: Record<string, { icon: string; name: string }> = Object.fromE
 )
 
 const WF_LABEL: Record<string, string> = {
-  'weekly-market-update': 'Monday Brief',
-  'submarket-intelligence': 'Submarket Watch',
-  'competitor-intelligence': 'Fund Landscape',
-  'market-update-digest': 'Market Update Digest',
-  'lp-ready-summary': 'LP-Ready Summary',
-  'sub-sector-deep-dive': 'Sub-Sector Deep Dive',
-  'sale-comps-pull': 'Sale Comps Pull',
-  'email-escalation': 'Email Escalation',
-  'attachment-filer': 'Attachment Filer',
-  'dialogue-logger': 'Dialogue Log',
-  'lp-onboarding': 'LP Onboarding',
+  // Monday Briefs
+  'weekly-market-update':    'Monday Brief',
+  'submarket-brief':         'Submarket Brief',
+  'fund-competitor-brief':   'Fund & Competitor Brief',
+  // Submarket Watch
+  'submarket-intelligence':      'Submarket Watch',
+  'brevard-submarket-watch':     'Brevard Submarket Watch',
+  'permian-submarket-watch':     'Permian Submarket Watch',
+  // Fund Landscape
+  'competitor-intelligence':     'Fund Landscape',
+  'brevard-fund-landscape':      'Brevard Fund Landscape',
+  'permian-fund-landscape':      'Permian Fund Landscape',
+  // Research workflows
+  'market-update-digest':    'Market Update Digest',
+  'lp-ready-summary':        'LP-Ready Summary',
+  'sub-sector-deep-dive':    'Sub-Sector Deep Dive',
+  'sale-comps-pull':         'Sale Comps Pull',
+  'email-escalation':        'Email Escalation',
+  'attachment-filer':        'Attachment Filer',
+  'dialogue-logger':         'Dialogue Log',
+  'lp-onboarding':           'LP Onboarding',
 }
 
 function timeAgo(iso: string): string {

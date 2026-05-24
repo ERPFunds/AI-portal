@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
-import { archiveBrief, getSeenNewsletterArticleUrls } from "@/lib/db";
+import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
@@ -115,6 +115,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const startMs = Date.now();
+
   try {
     const [rawNews, seenUrls] = await Promise.all([
       fetchNews(),
@@ -210,10 +212,12 @@ Write with data density and specificity. Flag any market shifts that could affec
     await archiveBrief({ agentName: "permian-submarket-watch", subject, html, narrative, macro: {}, news });
     await sendBriefEmail({ subject, html });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-submarket-watch", status: "success", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject });
   } catch (error) {
     console.error("Permian Submarket Watch error:", error);
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-submarket-watch", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});
     return NextResponse.json({ error: "Permian Submarket Watch generation failed" }, { status: 500 });
   }
 }

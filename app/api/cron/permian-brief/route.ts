@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { fetchNewsItems } from "@/lib/fetch-news";
-import { archiveBrief, getSeenNewsletterArticleUrls } from "@/lib/db";
+import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
 import { sendBriefEmail } from "@/lib/mailer";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
@@ -14,6 +14,8 @@ export async function GET(request: Request) {
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const startMs = Date.now();
 
   try {
     const [rawNews, seenUrls] = await Promise.all([
@@ -123,10 +125,12 @@ export async function GET(request: Request) {
 
     await sendBriefEmail({ subject, html });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Weekly Market Update", htmlBody: html }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: "success", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs }).catch(() => {});
 
     return NextResponse.json({ success: true, articles: news.length, subject, recipients: RECIPIENTS });
   } catch (error) {
     console.error("Permian brief error:", error);
+    logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});
     return NextResponse.json({ error: "Brief generation failed" }, { status: 500 });
   }
 }
