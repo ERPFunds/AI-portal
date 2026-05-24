@@ -4211,13 +4211,19 @@ function OutputFilesView() {
   const [rows, setRows] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [syncing, setSyncing] = React.useState(false)
+  const [syncResult, setSyncResult] = React.useState<{ ok: boolean; message: string; count?: number } | null>(null)
 
-  React.useEffect(() => {
+  function loadRows() {
+    setLoading(true)
+    setError(null)
     fetch('/api/research-log')
       .then(r => r.json())
       .then(d => { setRows(d.rows ?? []); setLoading(false) })
       .catch(e => { setError(String(e)); setLoading(false) })
-  }, [])
+  }
+
+  React.useEffect(() => { loadRows() }, [])
 
   function fmtDate(iso: string) {
     const d = new Date(iso)
@@ -4229,12 +4235,61 @@ function OutputFilesView() {
     return subject.replace(/^(RESEARCH|BUILD|WRITE):\s*/i, '')
   }
 
+  async function testSharePointSync() {
+    setSyncing(true)
+    setSyncResult(null)
+    try {
+      const res = await fetch('/api/sharepoint-sync')
+      const data = await res.json()
+      if (!res.ok) {
+        setSyncResult({ ok: false, message: data.error ?? 'SharePoint sync failed' })
+      } else {
+        setSyncResult({ ok: true, message: data.message, count: data.count })
+        loadRows()
+      }
+    } catch (e) {
+      setSyncResult({ ok: false, message: String(e) })
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div>
-      <div className="page-header">
-        <h2>🗂️ Shared Drive Output Log</h2>
-        <p>All files saved by Agent 1 — click any row to open in SharePoint</p>
+      <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h2>📁 Research Files</h2>
+          <p>Agent output files saved to SharePoint — click any row to open</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 4 }}>
+          <button
+            onClick={loadRows}
+            disabled={loading}
+            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 500 }}
+          >
+            🔄 Refresh
+          </button>
+          <button
+            onClick={testSharePointSync}
+            disabled={syncing}
+            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #0ea5e9', background: syncing ? '#e0f2fe' : '#f0f9ff', color: '#0369a1', cursor: 'pointer', fontWeight: 600 }}
+          >
+            {syncing ? 'Syncing…' : '☁️ Sync SharePoint'}
+          </button>
+        </div>
       </div>
+      {syncResult && (
+        <div style={{
+          margin: '0 24px 12px', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
+          background: syncResult.ok ? '#f0fdf4' : '#fef2f2',
+          border: `1px solid ${syncResult.ok ? '#86efac' : '#fca5a5'}`,
+          color: syncResult.ok ? '#166534' : '#dc2626',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        }}>
+          <span>{syncResult.ok ? '✅' : '❌'} {syncResult.message}{syncResult.count !== undefined ? ` (${syncResult.count} files found in SharePoint)` : ''}</span>
+          <button onClick={() => setSyncResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'inherit', opacity: 0.6 }}>×</button>
+        </div>
+      )}
       <div style={{ padding: '0 24px 24px' }}>
         {loading && (
           <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>Loading…</div>
