@@ -4207,23 +4207,53 @@ const PREFIX_COLORS: Record<string, string> = {
   WRITE:    '#b45309',
 }
 
+interface SPFile {
+  name: string
+  webUrl: string
+  lastModifiedDateTime: string
+  size: number
+  folder: string
+  path: string
+}
+
+function inferLabel(file: SPFile): string {
+  const parts = file.path.split('/')
+  if (file.folder.toLowerCase() === 'newsletters') {
+    return [parts[1], parts[2]].filter(Boolean).join(' · ')
+  }
+  return parts.slice(1).join(' / ') || file.folder
+}
+
+function folderBadge(folder: string) {
+  const colors: Record<string, { bg: string; text: string; border: string }> = {
+    Research:    { bg: '#ecfeff', text: '#0e7490', border: '#a5f3fc' },
+    Newsletters: { bg: '#faf5ff', text: '#7c3aed', border: '#ddd6fe' },
+    Build:       { bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
+    Write:       { bg: '#f0fdf4', text: '#166534', border: '#bbf7d0' },
+  }
+  const c = colors[folder] ?? { bg: '#f3f4f6', text: '#6b7280', border: '#e5e7eb' }
+  return (
+    <span style={{
+      display: 'inline-block', fontSize: 10, fontWeight: 700,
+      color: c.text, background: c.bg, border: `1px solid ${c.border}`,
+      borderRadius: 4, padding: '1px 6px',
+    }}>{folder.toUpperCase()}</span>
+  )
+}
+
+function fmtBytes(bytes: number) {
+  if (!bytes) return ''
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 function OutputFilesView() {
-  const [rows, setRows] = React.useState<any[]>([])
+  const [files, setFiles] = React.useState<SPFile[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [syncing, setSyncing] = React.useState(false)
   const [syncResult, setSyncResult] = React.useState<{ ok: boolean; message: string; count?: number } | null>(null)
-
-  function loadRows() {
-    setLoading(true)
-    setError(null)
-    fetch('/api/research-log')
-      .then(r => r.json())
-      .then(d => { setRows(d.rows ?? []); setLoading(false) })
-      .catch(e => { setError(String(e)); setLoading(false) })
-  }
-
-  React.useEffect(() => { loadRows() }, [])
 
   function fmtDate(iso: string) {
     const d = new Date(iso)
@@ -4231,9 +4261,20 @@ function OutputFilesView() {
       ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
-  function stripPrefix(subject: string) {
-    return subject.replace(/^(RESEARCH|BUILD|WRITE):\s*/i, '')
+  function loadFiles() {
+    setLoading(true)
+    setError(null)
+    fetch('/api/sharepoint-sync')
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); setLoading(false); return }
+        setFiles(d.files ?? [])
+        setLoading(false)
+      })
+      .catch(e => { setError(String(e)); setLoading(false) })
   }
+
+  React.useEffect(() => { loadFiles() }, [])
 
   async function testSharePointSync() {
     setSyncing(true)
@@ -4245,7 +4286,7 @@ function OutputFilesView() {
         setSyncResult({ ok: false, message: data.error ?? 'SharePoint sync failed' })
       } else {
         setSyncResult({ ok: true, message: data.message, count: data.count })
-        loadRows()
+        setFiles(data.files ?? [])
       }
     } catch (e) {
       setSyncResult({ ok: false, message: String(e) })
@@ -4263,7 +4304,7 @@ function OutputFilesView() {
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 4 }}>
           <button
-            onClick={loadRows}
+            onClick={loadFiles}
             disabled={loading}
             style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 500 }}
           >
@@ -4297,64 +4338,49 @@ function OutputFilesView() {
         {error && (
           <div style={{ textAlign: 'center', padding: 60, color: '#dc2626', fontSize: 13 }}>{error}</div>
         )}
-        {!loading && !error && rows.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>No files saved yet.</div>
+        {!loading && !error && files.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>No files saved yet — files will appear here once agents run.</div>
         )}
-        {!loading && rows.length > 0 && (
+        {!loading && files.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Date</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Subject / Project</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Workflow</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Modified</th>
                 <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>File</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Location</th>
+                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Size</th>
+                <th style={{ padding: '8px 12px' }}></th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row: any) => (
+              {files.map((file, i) => (
                 <tr
-                  key={row.id}
-                  style={{ borderBottom: '1px solid #f3f4f6', cursor: row.onedrive_url ? 'pointer' : 'default' }}
-                  onClick={() => row.onedrive_url && window.open(row.onedrive_url, '_blank')}
+                  key={i}
+                  style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
+                  onClick={() => window.open(file.webUrl, '_blank')}
                   onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
                   onMouseLeave={e => (e.currentTarget.style.background = '')}
                 >
                   <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                    {fmtDate(row.created_at)}
+                    {fmtDate(file.lastModifiedDateTime)}
                   </td>
                   <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 340 }}>
-                    <div style={{ fontWeight: 600, color: '#111827', marginBottom: 3 }}>{stripPrefix(row.subject ?? '')}</div>
-                    {row.output_summary && (
-                      <div style={{ fontSize: 11, color: '#6b7280', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 320 }}>
-                        {row.output_summary}
-                      </div>
-                    )}
+                    <div style={{ fontWeight: 600, color: '#111827' }}>{file.name}</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{inferLabel(file)}</div>
                   </td>
                   <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                    {row.prefix && (
-                      <span style={{
-                        display: 'inline-block', marginRight: 6, fontSize: 10, fontWeight: 700,
-                        color: PREFIX_COLORS[row.prefix] ?? '#6b7280',
-                        background: (PREFIX_COLORS[row.prefix] ?? '#6b7280') + '15',
-                        border: `1px solid ${PREFIX_COLORS[row.prefix] ?? '#6b7280'}40`,
-                        borderRadius: 4, padding: '1px 6px',
-                      }}>{row.prefix}</span>
-                    )}
-                    <span style={{ color: '#374151' }}>{WORKFLOW_LABELS[row.workflow_id] ?? row.workflow_id}</span>
+                    {folderBadge(file.folder)}
+                  </td>
+                  <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                    {fmtBytes(file.size)}
                   </td>
                   <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                    {row.onedrive_url ? (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        background: '#0f172a', color: '#fff',
-                        fontSize: 11, fontWeight: 600,
-                        padding: '4px 10px', borderRadius: 5,
-                      }}>
-                        View →
-                      </span>
-                    ) : (
-                      <span style={{ color: '#d1d5db', fontSize: 11 }}>No file</span>
-                    )}
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      background: '#0f172a', color: '#fff',
+                      fontSize: 11, fontWeight: 600,
+                      padding: '4px 10px', borderRadius: 5,
+                    }}>Open →</span>
                   </td>
                 </tr>
               ))}
