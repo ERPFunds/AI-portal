@@ -48,8 +48,14 @@ export async function getLatestBrief(agentName: string) {
 // ── Newsletter article deduplication ─────────────────────────────────────────
 
 const NEWSLETTER_AGENTS = [
+  // brevard-brief internal runs
   "brevard-weekly", "brevard-submarket", "brevard-fund",
-  "permian-brief",  "submarket-watch",  "fund-landscape-brief",
+  // standalone Brevard cron routes
+  "brevard-submarket-watch", "brevard-fund-landscape",
+  // Permian cron routes
+  "permian-brief", "permian-submarket-watch", "permian-fund-landscape",
+  // legacy route names (kept for backward compat)
+  "submarket-watch", "fund-landscape-brief",
 ];
 
 /**
@@ -65,7 +71,9 @@ export async function getSeenNewsletterArticleUrls(): Promise<Set<string>> {
       JOIN briefs b ON b.id = ba.brief_id
       WHERE b.agent_name IN (
         'brevard-weekly', 'brevard-submarket', 'brevard-fund',
-        'permian-brief',  'submarket-watch',   'fund-landscape-brief'
+        'brevard-submarket-watch', 'brevard-fund-landscape',
+        'permian-brief', 'permian-submarket-watch', 'permian-fund-landscape',
+        'submarket-watch', 'fund-landscape-brief'
       )
         AND b.sent_at > NOW() - INTERVAL '7 days'
     `;
