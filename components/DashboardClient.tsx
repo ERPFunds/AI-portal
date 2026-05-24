@@ -2868,17 +2868,14 @@ const CONNECTIONS_DATA = [
     ],
   },
   {
-    id: 'teams',
-    icon: '💬',
-    name: 'Microsoft Teams',
+    id: 'granola',
+    icon: '🎙️',
+    name: 'Granola',
     status: 'disconnected' as const,
-    meta: 'Meeting transcripts and recordings via Microsoft Graph API — powers Executive Assistant and CIO follow-up workflows',
+    meta: 'AI meeting notes — captures transcripts and summaries from investor calls, LP meetings, and deal reviews to power Executive Assistant follow-up workflows',
     sync: 'Not connected',
     fields: [
-      { label: 'Tenant ID',      key: 'tenant',   placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { label: 'Client ID',      key: 'client',   placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
-      { label: 'Webhook URL',    key: 'webhook',  placeholder: 'https://yourapp.com/webhooks/teams' },
-      { label: 'Transcript Path',key: 'path',     placeholder: '/drives/{driveId}/items/{folderId}' },
+      { label: 'API Key', key: 'apiKey', placeholder: 'Granola API key' },
     ],
   },
   {
@@ -2905,19 +2902,6 @@ const CONNECTIONS_DATA = [
       { label: 'Tenant ID',      key: 'tenant',   placeholder: 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx' },
       { label: 'Client ID',      key: 'client',   placeholder: 'App Registration Client ID' },
       { label: 'Template Folder',key: 'folder',   placeholder: '/sites/{site}/drives/{drive}/root:/Templates' },
-    ],
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    icon: '📓',
-    status: 'disconnected' as const,
-    meta: 'Routes team requests to the Agent Pipeline Requests database and syncs knowledge base documents. Requires an internal Notion integration token.',
-    sync: 'Not connected',
-    fields: [
-      { label: 'Integration Token', key: 'token',  placeholder: 'secret_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' },
-      { label: 'Requests DB ID',    key: 'dbId',   placeholder: '32-character Notion database ID' },
-      { label: 'Workspace ID',      key: 'ws',     placeholder: 'Optional — leave blank to use token default' },
     ],
   },
   {
