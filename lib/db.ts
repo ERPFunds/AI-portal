@@ -311,15 +311,15 @@ export async function getRecentAgentRuns(limit = 40) {
   // Unified feed: agent_runs + research_log (lp-intel) + ir_email_log (ir)
   try {
     const { rows } = await sql`
-      SELECT agent_id, workflow_id, status, summary, market, created_at
+      SELECT agent_id, workflow_id, status, summary, market, created_at, NULL AS prefix
       FROM agent_runs
       UNION ALL
       SELECT 'lp-intel' AS agent_id, workflow_id, 'success' AS status,
-             output_summary AS summary, NULL AS market, created_at
+             output_summary AS summary, NULL AS market, created_at, prefix
       FROM research_log
       UNION ALL
       SELECT 'ir' AS agent_id, workflow_id, 'success' AS status,
-             summary, NULL AS market, created_at
+             summary, NULL AS market, created_at, NULL AS prefix
       FROM ir_email_log
       ORDER BY created_at DESC
       LIMIT ${limit}

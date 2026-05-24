@@ -681,15 +681,28 @@ const WF_LABEL: Record<string, string> = {
   'competitor-intelligence':     'Fund Landscape',
   'brevard-fund-landscape':      'Brevard Fund Landscape',
   'permian-fund-landscape':      'Permian Fund Landscape',
-  // Research workflows
-  'market-update-digest':    'Market Update Digest',
+  // RESEARCH: email-triggered workflows
+  'market-update-digest':    'Market Update',
   'lp-ready-summary':        'LP-Ready Summary',
   'sub-sector-deep-dive':    'Sub-Sector Deep Dive',
   'sale-comps-pull':         'Sale Comps Pull',
+  'save-file-only':          'File to KB',
+  // BUILD: email-triggered workflows
+  'deck-builder':            'Deck Build',
+  'om-editor':               'OM Build',
+  // WRITE: email-triggered workflows
+  'om-writer':               'OM Prose Draft',
+  // IR workflows
   'email-escalation':        'Email Escalation',
   'attachment-filer':        'Attachment Filer',
   'dialogue-logger':         'Dialogue Log',
   'lp-onboarding':           'LP Onboarding',
+}
+
+const PREFIX_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
+  RESEARCH: { label: 'RESEARCH', bg: '#ecfeff', color: '#0e7490', border: '#a5f3fc' },
+  BUILD:    { label: 'BUILD',    bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
+  WRITE:    { label: 'WRITE',    bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
 }
 
 function timeAgo(iso: string): string {
@@ -732,13 +745,19 @@ function RightRail({ recentRuns }: { recentRuns: any[] }) {
                 const agent = AGENT_LABEL[run.agent_id] ?? { icon: '🤖', name: run.agent_id }
                 const wfLabel = WF_LABEL[run.workflow_id] ?? run.workflow_id
                 const isErr = run.status === 'error'
+                const pfx = run.prefix ? PREFIX_BADGE[run.prefix as string] : null
                 return (
                   <div key={i} style={{ display: 'flex', gap: 9, padding: '9px 12px', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start' }}>
                     <div style={{ width: 26, height: 26, borderRadius: 6, background: isErr ? '#fef2f2' : '#f0f9fa', border: `1px solid ${isErr ? '#fecaca' : '#a5f3fc'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0, marginTop: 1 }}>
                       {agent.icon}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        {pfx && (
+                          <span style={{ fontSize: 9, fontWeight: 700, background: pfx.bg, color: pfx.color, border: `1px solid ${pfx.border}`, borderRadius: 3, padding: '1px 5px', letterSpacing: '.3px' }}>
+                            {pfx.label}
+                          </span>
+                        )}
                         {wfLabel}
                         {isErr && <span style={{ fontSize: 9, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 3, padding: '1px 4px' }}>error</span>}
                       </div>
