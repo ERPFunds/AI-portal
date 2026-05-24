@@ -21,6 +21,7 @@ export async function sendBriefEmail(params: {
       "mparad@erpfunds.com",
       "mberry@erpfunds.com",
       "wmeyer@erpfunds.com",
+      "bberry@erpfunds.com",
     ].join(", "),
     subject: params.subject,
     html: params.html,

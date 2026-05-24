@@ -6,7 +6,7 @@ import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 export const maxDuration = 300;
 
-const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
+const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com", "bberry@erpfunds.com"];
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
   ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
   : BASE_RECIPIENTS;

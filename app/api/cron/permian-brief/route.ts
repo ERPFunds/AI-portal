@@ -7,7 +7,7 @@ import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 const anthropic = new Anthropic();
 
-const RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com"];
+const RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com", "bberry@erpfunds.com"];
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
