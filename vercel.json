@@ -7,19 +7,19 @@
   "crons": [
     {
       "path": "/api/cron/brevard-brief",
-      "schedule": "30 12 * * 1"
+      "schedule": "0 15 25 5 *"
     },
     {
       "path": "/api/cron/permian-brief",
-      "schedule": "0 13 * * 1"
+      "schedule": "10 15 25 5 *"
     },
     {
       "path": "/api/cron/brevard-submarket-watch",
-      "schedule": "30 13 * * 1"
+      "schedule": "20 15 25 5 *"
     },
     {
       "path": "/api/cron/brevard-fund-landscape",
-      "schedule": "0 14 * * 1"
+      "schedule": "30 15 25 5 *"
     },
     {
       "path": "/api/cron/permian-submarket-watch",
