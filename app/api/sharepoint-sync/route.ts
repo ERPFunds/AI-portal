@@ -7,6 +7,7 @@ interface SPFile {
   name: string;
   webUrl: string;
   lastModifiedDateTime: string;
+  lastModifiedBy?: { user?: { displayName?: string; email?: string } };
   size: number;
   folder: string;   // top-level agent folder (Research, Newsletters, etc.)
   path: string;     // full relative path, e.g. "Newsletters/Brevard/May 2026"
@@ -42,7 +43,7 @@ export async function GET() {
 
   // ── List drive root ──────────────────────────────────────────────────────────
   const rootRes = await fetch(
-    `${driveBase}/root/children?$select=name,folder,file,size,webUrl,lastModifiedDateTime&$top=50`,
+    `${driveBase}/root/children?$select=name,folder,file,size,webUrl,lastModifiedDateTime,lastModifiedBy&$top=50`,
     { headers }
   );
 
@@ -65,7 +66,7 @@ export async function GET() {
 
   async function collectFiles(pathSegments: string[], depth: number) {
     const encodedPath = pathSegments.map(encodeURIComponent).join("/");
-    const url = `${driveBase}/root:/${encodedPath}:/children?$select=name,folder,file,size,webUrl,lastModifiedDateTime&$top=200`;
+    const url = `${driveBase}/root:/${encodedPath}:/children?$select=name,folder,file,size,webUrl,lastModifiedDateTime,lastModifiedBy&$top=200`;
     const res = await fetch(url, { headers });
     if (!res.ok) return;
     const data = await res.json();
@@ -77,6 +78,7 @@ export async function GET() {
           name: item.name,
           webUrl: item.webUrl,
           lastModifiedDateTime: item.lastModifiedDateTime,
+          lastModifiedBy: item.lastModifiedBy,
           size: item.size ?? 0,
           folder: pathSegments[0],
           path: pathSegments.join("/"),

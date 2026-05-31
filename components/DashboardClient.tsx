@@ -4255,6 +4255,7 @@ interface SPFile {
   name: string
   webUrl: string
   lastModifiedDateTime: string
+  lastModifiedBy?: { user?: { displayName?: string; email?: string } }
   size: number
   folder: string
   path: string
@@ -4569,7 +4570,7 @@ function OutputFilesView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                  {['Modified', 'File', 'Location', 'Size', ''].map((h, i) => (
+                  {['Modified', 'File', 'By', 'Location', 'Size', ''].map((h, i) => (
                     <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -4581,6 +4582,19 @@ function OutputFilesView() {
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 340 }}>
                       <div style={{ fontWeight: 600, color: '#111827' }}>{file.name}</div>
                       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{inferLabel(file)}</div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        const dn = file.lastModifiedBy?.user?.displayName
+                        const em = file.lastModifiedBy?.user?.email?.toLowerCase()
+                        if (!dn && !em) return <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                        const name = (em && EMAIL_DISPLAY[em]) ?? (dn ? dn.split(' ')[0] : em?.split('@')[0] ?? '?')
+                        return (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 4, padding: '2px 7px' }}>
+                            {name}
+                          </span>
+                        )
+                      })()}
                     </td>
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{folderBadge(file.folder)}</td>
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtBytes(file.size)}</td>
