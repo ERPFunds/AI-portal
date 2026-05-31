@@ -1,5 +1,6 @@
 ﻿import Anthropic from "@anthropic-ai/sdk";
 import type { ResearchBundle } from "../research";
+import { readCommitmentStatus } from "@/lib/agents/workflows/update-commitment-schedule";
 
 const anthropic = new Anthropic();
 
@@ -14,6 +15,12 @@ export async function runLpReadySummary(params: {
   projectContext: string;
   research: ResearchBundle;
 }): Promise<LpReadySummaryOutput> {
+  // Pull current raise status in parallel with the main Claude call
+  const commitmentStatus = await readCommitmentStatus().catch(() => null);
+  const commitmentContext = commitmentStatus && !commitmentStatus.error
+    ? `\nFund IV Raise Status (live): ${commitmentStatus.formattedTotal} committed across ${commitmentStatus.lpCount} LPs`
+    : "";
+
   const response = await anthropic.messages.create({
     model: "claude-opus-4-5",
     max_tokens: 2500,
@@ -30,6 +37,7 @@ Project: ${params.projectContext}
 
 Research findings:
 ${params.research.findings}
+${commitmentContext}
 
 ${params.research.sources.length > 0 ? `Sources:\n${params.research.sources.join("\n")}` : ""}
 

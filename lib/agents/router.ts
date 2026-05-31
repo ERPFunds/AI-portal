@@ -4,6 +4,7 @@ const AUTHORIZED_SENDERS = new Set([
   "mparad@erpfunds.com",
   "mberry@erpfunds.com",
   "wmeyer@erpfunds.com",
+  "bberry@erpfunds.com",
 ]);
 
 export type Prefix = "RESEARCH" | "BUILD" | "WRITE";
@@ -16,7 +17,11 @@ export type WorkflowId =
   | "save-file-only"
   | "deck-builder"
   | "om-editor"
-  | "om-writer";
+  | "om-writer"
+  | "competitive-intel-xls"
+  | "update-buyer-list"
+  | "update-pipeline-comps"
+  | "update-commitment-schedule";
 
 export interface RouterResult {
   prefix: Prefix;
@@ -48,6 +53,14 @@ BUILD: prefix workflows:
   Examples: "Q2 LP update deck — Q1 fund performance attached", "Tighten the Permian section of the Q2 LP deck"
 - om-editor: Assemble or edit an Offering Memorandum
   Examples: "OM for Tampa logistics property — underwriting model attached", "Add comparable transactions section to the Tampa OM"
+- competitive-intel-xls: Add competitor fund details to the competitive intelligence Excel tracker
+  Examples: "Competitive intel: Blackstone raised $5B industrial fund, 18% IRR target", "Add these fund details to the tracker — EQT IOS fund closed", "Competitive intel from this PERE article — add to spreadsheet"
+- update-buyer-list: Add new potential buyers or acquirers to the buyer list spreadsheet
+  Examples: "Add these buyers to the list — Link Logistics and Prologis both active in Permian", "New IOS buyer: Industrial Outdoor Ventures — add to buyer list", "Update buyer list with acquirers from this CBRE report"
+- update-pipeline-comps: Add new pipeline deals or sale comps to the Brevard or Permian pipeline tracker spreadsheet
+  Examples: "Add this Permian comp to the tracker — 40ac service yard sold at $85k/acre", "New Brevard pipeline deal — add to pipeline comps", "Update comps with these Space Coast transactions"
+- update-commitment-schedule: Add a new LP investor commitment to the Fund IV commitment schedule
+  Examples: "Add LP commitment — Jones Trust committed $500K soft circle", "Log new commitment: Smith Family Office in for $1M hard", "Update commitment schedule — new LP committed"
 
 WRITE: prefix workflows:
 - om-writer: Draft polished thesis-style prose for an OM section
@@ -65,7 +78,7 @@ export async function routeEmail(params: {
   if (!AUTHORIZED_SENDERS.has(fromNorm)) {
     return {
       error: "unauthorized",
-      message: `Sender ${params.from} is not authorized. Authorized senders: Meghan (mberry@erpfunds.com), William (wmeyer@erpfunds.com), Michele (mparad@erpfunds.com).`,
+      message: `Sender ${params.from} is not authorized. Authorized senders: Meghan (mberry@erpfunds.com), William (wmeyer@erpfunds.com), Michele (mparad@erpfunds.com), Brennan (bberry@erpfunds.com).`,
     };
   }
 

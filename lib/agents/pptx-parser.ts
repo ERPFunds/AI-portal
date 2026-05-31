@@ -60,3 +60,26 @@ export async function extractPptText(base64Content: string): Promise<string> {
     try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
   }
 }
+
+/**
+ * Generic office file extractor using officeparser.
+ * Handles: .xlsx, .xls, .pdf, .docx, .doc, .ods, .odp, .odt
+ * Writes to /tmp (writable in Vercel serverless) then deletes.
+ */
+export async function extractOfficeFile(base64Content: string, filename: string): Promise<string> {
+  const ext = filename.split(".").pop()?.toLowerCase() ?? "bin";
+  const tmpFile = path.join(os.tmpdir(), `office_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`);
+  try {
+    const buffer = Buffer.from(base64Content, "base64");
+    fs.writeFileSync(tmpFile, buffer);
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const officeParser = require("officeparser");
+    const text: string = await officeParser.parseOfficeAsync(tmpFile);
+    return (text ?? "").trim().slice(0, 8000) || `[No text content found in ${filename}]`;
+  } catch (err) {
+    return `[Could not parse ${filename}: ${String(err)}]`;
+  } finally {
+    try { fs.unlinkSync(tmpFile); } catch { /* ignore */ }
+  }
+}

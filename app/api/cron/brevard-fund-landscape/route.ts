@@ -3,12 +3,52 @@ import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
 import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
-import { sendBriefEmail } from "@/lib/mailer";
+import { getGraphToken } from "@/lib/agents/graph-token";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
+
+export const maxDuration = 300;
 
 const anthropic = new Anthropic();
 const parser = new Parser();
 const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+
+const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com", "bberry@erpfunds.com"];
+const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
+  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
+  : BASE_RECIPIENTS;
+const SENDER_MAILBOX = "mparad@erpfunds.com";
+
+async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
+  let token: string | null;
+  try {
+    token = await getGraphToken();
+  } catch (err) {
+    return { success: false, message: `Auth failed: ${String(err)}` };
+  }
+  if (!token) return { success: false, message: "AZURE credentials not configured" };
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(SENDER_MAILBOX)}/sendMail`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: params.subject,
+          body: { contentType: "HTML", content: params.htmlBody },
+          toRecipients: RECIPIENTS.map((address) => ({ emailAddress: { address } })),
+        },
+        saveToSentItems: true,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    return { success: false, message: `Graph API ${res.status}: ${err}` };
+  }
+  return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
+}
 
 const FUND_FEEDS = [
   { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
@@ -211,12 +251,12 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
 </body>
 </html>`;
 
-    await archiveBrief({ agentName: "brevard-fund-landscape", subject, html, narrative, macro: {}, news });
-    await sendBriefEmail({ subject, html });
+    archiveBrief({ agentName: "brevard-fund-landscape", subject, html, narrative, macro: {}, news }).catch(() => {});
+    const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
-    logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: "success", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
-    return NextResponse.json({ success: true, articles: news.length, subject });
+    return NextResponse.json({ success: emailResult.success, articles: news.length, subject });
   } catch (error) {
     console.error("Brevard Fund Landscape Brief error:", error);
     logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: "error", market: "brevard", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});

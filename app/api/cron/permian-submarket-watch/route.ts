@@ -3,12 +3,52 @@ import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
 import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
-import { sendBriefEmail } from "@/lib/mailer";
+import { getGraphToken } from "@/lib/agents/graph-token";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
+
+export const maxDuration = 300;
 
 const anthropic = new Anthropic();
 const parser = new Parser();
 const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+
+const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com", "bberry@erpfunds.com"];
+const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
+  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
+  : BASE_RECIPIENTS;
+const SENDER_MAILBOX = "mparad@erpfunds.com";
+
+async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
+  let token: string | null;
+  try {
+    token = await getGraphToken();
+  } catch (err) {
+    return { success: false, message: `Auth failed: ${String(err)}` };
+  }
+  if (!token) return { success: false, message: "AZURE credentials not configured" };
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(SENDER_MAILBOX)}/sendMail`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: params.subject,
+          body: { contentType: "HTML", content: params.htmlBody },
+          toRecipients: RECIPIENTS.map((address) => ({ emailAddress: { address } })),
+        },
+        saveToSentItems: true,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    return { success: false, message: `Graph API ${res.status}: ${err}` };
+  }
+  return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
+}
 
 const FEEDS = [
   { url: "https://www.globest.com/feed/", source: "GlobeSt" },
@@ -76,7 +116,7 @@ async function fetchNews(): Promise<NewsItem[]> {
     const run = await apify.actor("apify/google-news-scraper").call({
       queries: APIFY_QUERIES,
       maxResultsPerQuery: 15,
-      dateFilter: "month",
+      dateFilter: "week",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
@@ -125,7 +165,7 @@ export async function GET(request: Request) {
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No new Permian submarket articles this month." });
+      return NextResponse.json({ message: "No new Permian submarket articles this week." });
     }
 
     const articleList = news
@@ -145,7 +185,7 @@ Focus on:
 1. Sale comparable transactions — what are assets trading at? Cap rates, price/SF, price/acre?
 2. Tenant activity — who's leasing, expanding, contracting in Permian Basin industrial markets?
 3. Submarket trends — vacancy, absorption, asking rents, any notable market shifts
-4. OM implications — what does this month's activity mean for ERP's active Permian deals?
+4. OM implications — what does this week's activity mean for ERP's active Permian deals?
 
 Articles:
 ${articleList}
@@ -159,6 +199,7 @@ Write with data density and specificity. Flag any market shifts that could affec
 
     const subject = `Permian Submarket Watch — ${new Date().toLocaleDateString("en-US", {
       month: "long",
+      day: "numeric",
       year: "numeric",
     })}`;
 
@@ -197,11 +238,11 @@ Write with data density and specificity. Flag any market shifts that could affec
       </td></tr>
       <tr><td style="padding:0 32px;"><hr style="border:none;border-top:2px solid #e5e7eb;margin:0;"></td></tr>
       <tr><td style="padding:24px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Articles This Month (${news.length})</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Articles This Week (${news.length})</div>
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Submarket Watch · Monthly</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Submarket Watch · Weekly</div>
       </td></tr>
     </table>
   </td></tr>
@@ -209,12 +250,12 @@ Write with data density and specificity. Flag any market shifts that could affec
 </body>
 </html>`;
 
-    await archiveBrief({ agentName: "permian-submarket-watch", subject, html, narrative, macro: {}, news });
-    await sendBriefEmail({ subject, html });
+    archiveBrief({ agentName: "permian-submarket-watch", subject, html, narrative, macro: {}, news }).catch(() => {});
+    const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
-    logAgentRun({ agentId: "lp-intel", workflowId: "permian-submarket-watch", status: "success", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-submarket-watch", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
-    return NextResponse.json({ success: true, articles: news.length, subject });
+    return NextResponse.json({ success: emailResult.success, articles: news.length, subject });
   } catch (error) {
     console.error("Permian Submarket Watch error:", error);
     logAgentRun({ agentId: "lp-intel", workflowId: "permian-submarket-watch", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});

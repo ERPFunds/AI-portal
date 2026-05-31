@@ -104,14 +104,84 @@ export async function saveToOneDrive(params: {
   }
 }
 
+/**
+ * Upload a binary Buffer directly to SharePoint / OneDrive.
+ * Used for .pptx and other non-text outputs.
+ */
+export async function saveBufferToOneDrive(params: {
+  buffer: Buffer;
+  filename: string;
+  folder: string;
+  contentType: string;
+}): Promise<FileHandlerResult> {
+  let token: string | null;
+  try {
+    token = await getGraphToken();
+  } catch (err) {
+    return { url: null, version: null, saved: false, message: `Auth failed: ${String(err)}` };
+  }
+  if (!token) {
+    return { url: null, version: null, saved: false, message: "AZURE credentials not configured." };
+  }
+
+  try {
+    const folderPath = params.folder.startsWith("/") ? params.folder : `/${params.folder}`;
+    const fullPath = `${folderPath}/${params.filename}`;
+    const encodedPath = fullPath
+      .split("/")
+      .filter(Boolean)
+      .map((seg) => encodeURIComponent(seg))
+      .join("/");
+
+    const siteId = process.env.SHAREPOINT_SITE_ID;
+    let uploadUrl: string;
+    if (siteId) {
+      uploadUrl = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/root:/${encodedPath}:/content`;
+    } else {
+      const userEmail = process.env.SMTP_USER;
+      if (!userEmail) throw new Error("Either SHAREPOINT_SITE_ID or SMTP_USER must be set");
+      uploadUrl = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(userEmail)}/drive/root:/${encodedPath}:/content`;
+    }
+
+    const res = await fetch(uploadUrl, {
+      method: "PUT",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": params.contentType,
+        "Content-Length": String(params.buffer.length),
+      },
+      body: new Uint8Array(params.buffer),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`Graph API ${res.status}: ${errText}`);
+    }
+
+    const fileData = await res.json();
+    return {
+      url: fileData.webUrl ?? null,
+      version: fileData.eTag ?? fileData.id ?? null,
+      saved: true,
+      message: `Saved to Shared Drive: ${fileData.webUrl ?? fullPath}`,
+    };
+  } catch (err) {
+    return { url: null, version: null, saved: false, message: `Save failed: ${String(err)}` };
+  }
+}
+
 export function buildOneDriveFolder(params: {
   prefix: string;
   projectContext: string;
   workflowId: string;
+  ask?: string; // used for BUILD keyword routing
 }): string {
   const month = new Date().toLocaleString("en-US", { month: "long", year: "numeric" });
   if (params.prefix === "BUILD") {
-    return `/Build`;
+    // Route to the correct SharePoint library based on keywords in the ask/subject
+    const haystack = `${params.ask ?? ""} ${params.projectContext}`.toLowerCase();
+    const isFund = /fund|lp |investor|capital raise|fundrais|erp iv|fund iv/.test(haystack);
+    return isFund ? `ERP Funds IV` : `ERP Deal Pipelines`;
   }
   if (params.prefix === "WRITE") {
     return `/Write`;
@@ -154,6 +224,9 @@ export function buildFilename(params: {
     .trim()
     .replace(/\s+/g, "-")
     .slice(0, 40);
-  const date = new Date().toISOString().split("T")[0];
-  return `${slug}-${params.workflowId}-${date}.docx`;
+  const now = new Date();
+  const date = now.toISOString().split("T")[0]; // YYYY-MM-DD
+  const hhmm = now.toISOString().slice(11, 16).replace(":", ""); // HHmm
+  const ext = params.workflowId === "deck-builder" ? "pptx" : "docx";
+  return `${slug}-${params.workflowId}-${date}-${hhmm}.${ext}`;
 }

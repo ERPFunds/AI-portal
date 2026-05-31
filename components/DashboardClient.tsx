@@ -475,15 +475,40 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
           )}
           {drawerTab === 'activity' && (
             <div>
-              {AGENT_ACTIVITY.map((item, i) => (
-                <div key={i} className="activity-item">
-                  <div className="activity-dot" style={{ background: item.color }} />
-                  <div className="activity-content">
-                    <div className="activity-action">{item.action}</div>
-                    <div className="activity-time">{item.time}</div>
-                  </div>
-                </div>
-              ))}
+              {(() => {
+                const agentRuns = recentRuns.filter((r) => r.agent_id === drawerAgentId)
+                if (agentRuns.length === 0) {
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '28px 16px', gap: 8, color: '#9ca3af' }}>
+                      <div style={{ fontSize: 20 }}>📭</div>
+                      <div style={{ fontSize: 11, textAlign: 'center' }}>No activity yet — runs will appear here once this agent executes</div>
+                    </div>
+                  )
+                }
+                return agentRuns.map((run, i) => {
+                  const wfLabel = WF_LABEL[run.workflow_id] ?? run.workflow_id
+                  const isErr = run.status === 'error'
+                  const pfx = run.prefix ? PREFIX_BADGE[run.prefix as string] : null
+                  return (
+                    <div key={i} className="activity-item" style={{ display: 'flex', gap: 9, padding: '9px 0', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start' }}>
+                      <div className="activity-dot" style={{ background: isErr ? '#ef4444' : '#3DAE7A', marginTop: 5, flexShrink: 0 }} />
+                      <div className="activity-content" style={{ flex: 1, minWidth: 0 }}>
+                        <div className="activity-action" style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                          {pfx && (
+                            <span style={{ fontSize: 9, fontWeight: 700, background: pfx.bg, color: pfx.color, border: `1px solid ${pfx.border}`, borderRadius: 3, padding: '1px 5px', letterSpacing: '.3px' }}>
+                              {pfx.label}
+                            </span>
+                          )}
+                          {wfLabel}
+                          {isErr && <span style={{ fontSize: 9, background: '#fef2f2', color: '#dc2626', border: '1px solid #fecaca', borderRadius: 3, padding: '1px 4px' }}>error</span>}
+                        </div>
+                        {run.summary && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{run.summary}</div>}
+                        <div className="activity-time">{timeAgo(run.created_at)}</div>
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
             </div>
           )}
           {drawerTab === 'config' && drawerAgentId && (
@@ -4260,19 +4285,73 @@ function folderBadge(folder: string) {
   )
 }
 
+// ─── SharePoint Browse types ──────────────────────────────────────────────────
+
+interface BrowseItem {
+  id: string
+  name: string
+  type: 'file' | 'folder'
+  extension: string
+  size: number
+  webUrl: string
+  lastModifiedDateTime: string
+}
+
+// Quick-access top-level folders shown as chips
+const BROWSE_ROOT_FOLDERS = [
+  { label: 'ERP Funds IV',       icon: '💼', path: 'ERP Funds IV' },
+  { label: 'Deal Pipelines',     icon: '🏭', path: 'ERP Deal Pipelines' },
+  { label: 'Research',           icon: '🔬', path: 'Research' },
+  { label: 'Newsletters',        icon: '📰', path: 'Newsletters' },
+  { label: 'Write',              icon: '✍️',  path: 'Write' },
+]
+
+function fileIcon(ext: string): string {
+  switch (ext) {
+    case '.xlsx': case '.xls': case '.csv': return '📊'
+    case '.pptx': case '.ppt': return '📑'
+    case '.docx': case '.doc': return '📄'
+    case '.pdf':  return '🗎'
+    case '.html': return '🌐'
+    case '.txt':  return '📝'
+    default:      return '📎'
+  }
+}
+
+function extBadgeColor(ext: string): { bg: string; text: string; border: string } {
+  if (['.xlsx', '.xls', '.csv'].includes(ext))  return { bg: '#f0fdf4', text: '#166534', border: '#86efac' }
+  if (['.pptx', '.ppt'].includes(ext))          return { bg: '#fff7ed', text: '#c2410c', border: '#fed7aa' }
+  if (['.docx', '.doc'].includes(ext))          return { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' }
+  if (ext === '.pdf')                           return { bg: '#fef2f2', text: '#b91c1c', border: '#fca5a5' }
+  if (ext === '.html')                          return { bg: '#faf5ff', text: '#7c3aed', border: '#ddd6fe' }
+  return { bg: '#f3f4f6', text: '#4b5563', border: '#e5e7eb' }
+}
+
+// ─── OutputFilesView ──────────────────────────────────────────────────────────
+
 function OutputFilesView() {
+  // ── Agent output tab state ───────────────────────────────────────────────
   const [files, setFiles] = React.useState<SPFile[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [syncing, setSyncing] = React.useState(false)
   const [syncResult, setSyncResult] = React.useState<{ ok: boolean; message: string; count?: number } | null>(null)
 
+  // ── Browse tab state ─────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = React.useState<'output' | 'browse'>('output')
+  const [browsePath, setBrowsePath] = React.useState('')           // current folder path
+  const [browseItems, setBrowseItems] = React.useState<BrowseItem[]>([])
+  const [browseLoading, setBrowseLoading] = React.useState(false)
+  const [browseError, setBrowseError] = React.useState<string | null>(null)
+
   function fmtDate(iso: string) {
+    if (!iso) return '—'
     const d = new Date(iso)
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
       ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
   }
 
+  // ── Agent output loaders ─────────────────────────────────────────────────
   function loadFiles() {
     setLoading(true)
     setError(null)
@@ -4307,99 +4386,237 @@ function OutputFilesView() {
     }
   }
 
+  // ── Browse loaders ───────────────────────────────────────────────────────
+  async function browseTo(path: string) {
+    setBrowsePath(path)
+    setBrowseLoading(true)
+    setBrowseError(null)
+    setBrowseItems([])
+    try {
+      const url = '/api/sharepoint/browse' + (path ? `?folder=${encodeURIComponent(path)}` : '')
+      const res = await fetch(url)
+      const data = await res.json()
+      if (!res.ok || data.error) { setBrowseError(data.error ?? 'Failed to load folder'); setBrowseLoading(false); return }
+      setBrowseItems(data.items ?? [])
+    } catch (e) { setBrowseError(String(e)) }
+    finally { setBrowseLoading(false) }
+  }
+
+  // Navigate into a subfolder
+  function enterFolder(item: BrowseItem) {
+    const next = browsePath ? `${browsePath}/${item.name}` : item.name
+    browseTo(next)
+  }
+
+  // Breadcrumb segments: ['ERP Funds IV', 'Subfolder']
+  const breadcrumbs = browsePath ? browsePath.split('/') : []
+
+  // Tab style helper
+  function tabStyle(tab: 'output' | 'browse') {
+    const active = activeTab === tab
+    return {
+      padding: '6px 16px', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer',
+      border: active ? '1px solid #0ea5e9' : '1px solid #e5e7eb',
+      background: active ? '#f0f9ff' : '#fff',
+      color: active ? '#0369a1' : '#6b7280',
+    } as React.CSSProperties
+  }
+
   return (
     <div>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div className="page-header" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2>📁 Research Files</h2>
-          <p>Agent output files saved to SharePoint — click any row to open</p>
+          <h2>📁 SharePoint Files</h2>
+          <p>Agent output files and direct SharePoint folder browser</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', paddingTop: 4 }}>
-          <button
-            onClick={loadFiles}
-            disabled={loading}
-            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 500 }}
-          >
-            🔄 Refresh
-          </button>
-          <button
-            onClick={testSharePointSync}
-            disabled={syncing}
-            style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #0ea5e9', background: syncing ? '#e0f2fe' : '#f0f9ff', color: '#0369a1', cursor: 'pointer', fontWeight: 600 }}
-          >
-            {syncing ? 'Syncing…' : '☁️ Sync SharePoint'}
-          </button>
+          {activeTab === 'output' ? (
+            <>
+              <button onClick={loadFiles} disabled={loading} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
+                🔄 Refresh
+              </button>
+              <button onClick={testSharePointSync} disabled={syncing} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #0ea5e9', background: syncing ? '#e0f2fe' : '#f0f9ff', color: '#0369a1', cursor: 'pointer', fontWeight: 600 }}>
+                {syncing ? 'Syncing…' : '☁️ Sync'}
+              </button>
+            </>
+          ) : (
+            <button onClick={() => browseTo(browsePath)} disabled={browseLoading} style={{ fontSize: 12, padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer', fontWeight: 500 }}>
+              🔄 Refresh
+            </button>
+          )}
         </div>
       </div>
-      {syncResult && (
-        <div style={{
-          margin: '0 24px 12px', padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500,
-          background: syncResult.ok ? '#f0fdf4' : '#fef2f2',
-          border: `1px solid ${syncResult.ok ? '#86efac' : '#fca5a5'}`,
-          color: syncResult.ok ? '#166534' : '#dc2626',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        }}>
-          <span>{syncResult.ok ? '✅' : '❌'} {syncResult.message}{syncResult.count !== undefined ? ` (${syncResult.count} files found in SharePoint)` : ''}</span>
-          <button onClick={() => setSyncResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'inherit', opacity: 0.6 }}>×</button>
+
+      {/* ── Tab switcher ───────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', gap: 6, padding: '0 24px 16px' }}>
+        <button style={tabStyle('output')} onClick={() => setActiveTab('output')}>Agent Output</button>
+        <button style={tabStyle('browse')} onClick={() => { setActiveTab('browse'); if (!browsePath && browseItems.length === 0) browseTo('') }}>Browse SharePoint</button>
+      </div>
+
+      {/* ── Agent Output tab ───────────────────────────────────────────────── */}
+      {activeTab === 'output' && (
+        <div style={{ padding: '0 24px 24px' }}>
+          {syncResult && (
+            <div style={{ marginBottom: 12, padding: '10px 14px', borderRadius: 8, fontSize: 12, fontWeight: 500, background: syncResult.ok ? '#f0fdf4' : '#fef2f2', border: `1px solid ${syncResult.ok ? '#86efac' : '#fca5a5'}`, color: syncResult.ok ? '#166534' : '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>{syncResult.ok ? '✅' : '❌'} {syncResult.message}{syncResult.count !== undefined ? ` (${syncResult.count} files)` : ''}</span>
+              <button onClick={() => setSyncResult(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, color: 'inherit', opacity: 0.6 }}>×</button>
+            </div>
+          )}
+          {loading && <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
+          {error && <div style={{ textAlign: 'center', padding: 60, color: '#dc2626', fontSize: 13 }}>{error}</div>}
+          {!loading && !error && files.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>No files saved yet — files will appear here once agents run.</div>
+          )}
+          {!loading && files.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  {['Modified', 'File', 'Location', 'Size', ''].map((h, i) => (
+                    <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {files.map((file, i) => (
+                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }} onClick={() => window.open(file.webUrl, '_blank')} onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')} onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                    <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap', verticalAlign: 'top' }}>{fmtDate(file.lastModifiedDateTime)}</td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 340 }}>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>{file.name}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{inferLabel(file)}</div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{folderBadge(file.folder)}</td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtBytes(file.size)}</td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5 }}>Open →</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
       )}
-      <div style={{ padding: '0 24px 24px' }}>
-        {loading && (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-        )}
-        {error && (
-          <div style={{ textAlign: 'center', padding: 60, color: '#dc2626', fontSize: 13 }}>{error}</div>
-        )}
-        {!loading && !error && files.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>No files saved yet — files will appear here once agents run.</div>
-        )}
-        {!loading && files.length > 0 && (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Modified</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>File</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Location</th>
-                <th style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>Size</th>
-                <th style={{ padding: '8px 12px' }}></th>
-              </tr>
-            </thead>
-            <tbody>
-              {files.map((file, i) => (
-                <tr
-                  key={i}
-                  style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
-                  onClick={() => window.open(file.webUrl, '_blank')}
-                  onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-                  onMouseLeave={e => (e.currentTarget.style.background = '')}
+
+      {/* ── Browse SharePoint tab ───────────────────────────────────────────── */}
+      {activeTab === 'browse' && (
+        <div style={{ padding: '0 24px 24px' }}>
+
+          {/* Quick-access folder chips */}
+          {!browsePath && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+              {BROWSE_ROOT_FOLDERS.map(f => (
+                <button
+                  key={f.path}
+                  onClick={() => browseTo(f.path)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', fontSize: 13, fontWeight: 600, color: '#374151', cursor: 'pointer', boxShadow: '0 1px 2px rgba(0,0,0,0.04)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc'; e.currentTarget.style.borderColor = '#94a3b8' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '#fff'; e.currentTarget.style.borderColor = '#e5e7eb' }}
                 >
-                  <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap', verticalAlign: 'top' }}>
-                    {fmtDate(file.lastModifiedDateTime)}
-                  </td>
-                  <td style={{ padding: '10px 12px', verticalAlign: 'top', maxWidth: 340 }}>
-                    <div style={{ fontWeight: 600, color: '#111827' }}>{file.name}</div>
-                    <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{inferLabel(file)}</div>
-                  </td>
-                  <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                    {folderBadge(file.folder)}
-                  </td>
-                  <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#9ca3af', whiteSpace: 'nowrap' }}>
-                    {fmtBytes(file.size)}
-                  </td>
-                  <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      background: '#0f172a', color: '#fff',
-                      fontSize: 11, fontWeight: 600,
-                      padding: '4px 10px', borderRadius: 5,
-                    }}>Open →</span>
-                  </td>
-                </tr>
+                  <span style={{ fontSize: 16 }}>{f.icon}</span> {f.label}
+                </button>
               ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              <button
+                onClick={() => browseTo('')}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 8, border: '1px dashed #d1d5db', background: '#fafafa', fontSize: 13, fontWeight: 500, color: '#6b7280', cursor: 'pointer' }}
+              >
+                📂 Browse all
+              </button>
+            </div>
+          )}
+
+          {/* Breadcrumb */}
+          {browsePath && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16, fontSize: 12, flexWrap: 'wrap' }}>
+              <button onClick={() => { setBrowsePath(''); setBrowseItems([]); setBrowseError(null) }} style={{ background: 'none', border: 'none', color: '#0369a1', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 12 }}>Home</button>
+              {breadcrumbs.map((seg, idx) => {
+                const pathUpTo = breadcrumbs.slice(0, idx + 1).join('/')
+                const isLast = idx === breadcrumbs.length - 1
+                return (
+                  <React.Fragment key={idx}>
+                    <span style={{ color: '#d1d5db' }}>/</span>
+                    {isLast
+                      ? <span style={{ color: '#111827', fontWeight: 700 }}>{seg}</span>
+                      : <button onClick={() => browseTo(pathUpTo)} style={{ background: 'none', border: 'none', color: '#0369a1', cursor: 'pointer', fontWeight: 600, padding: 0, fontSize: 12 }}>{seg}</button>
+                    }
+                  </React.Fragment>
+                )
+              })}
+              <button
+                onClick={() => {
+                  const parent = breadcrumbs.slice(0, -1).join('/')
+                  parent ? browseTo(parent) : (setBrowsePath(''), setBrowseItems([]), setBrowseError(null))
+                }}
+                style={{ marginLeft: 8, padding: '2px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', fontSize: 11, color: '#6b7280', cursor: 'pointer', fontWeight: 500 }}
+              >
+                ← Up
+              </button>
+            </div>
+          )}
+
+          {/* Loading / error */}
+          {browseLoading && <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
+          {browseError && <div style={{ padding: '12px 14px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fca5a5', color: '#dc2626', fontSize: 12, marginBottom: 12 }}>❌ {browseError}</div>}
+
+          {/* Empty state */}
+          {!browseLoading && !browseError && browsePath && browseItems.length === 0 && (
+            <div style={{ textAlign: 'center', padding: 60, color: '#9ca3af', fontSize: 13 }}>This folder is empty.</div>
+          )}
+
+          {/* Folder/file list */}
+          {!browseLoading && browseItems.length > 0 && (
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                  {['Name', 'Type', 'Modified', 'Size', ''].map((h, i) => (
+                    <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {browseItems.map((item, i) => {
+                  const isFolder = item.type === 'folder'
+                  const c = isFolder ? null : extBadgeColor(item.extension)
+                  return (
+                    <tr
+                      key={i}
+                      style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer' }}
+                      onClick={() => isFolder ? enterFolder(item) : window.open(item.webUrl, '_blank')}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                      onMouseLeave={e => (e.currentTarget.style.background = '')}
+                    >
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', maxWidth: 380 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 16 }}>{isFolder ? '📁' : fileIcon(item.extension)}</span>
+                          <span style={{ fontWeight: isFolder ? 700 : 500, color: isFolder ? '#1d4ed8' : '#111827' }}>{item.name}</span>
+                        </div>
+                      </td>
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        {isFolder
+                          ? <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 4, padding: '1px 6px' }}>FOLDER</span>
+                          : c && <span style={{ fontSize: 10, fontWeight: 700, color: c.text, background: c.bg, border: `1px solid ${c.border}`, borderRadius: 4, padding: '1px 6px' }}>{item.extension.toUpperCase().replace('.', '')}</span>
+                        }
+                      </td>
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                        {item.lastModifiedDateTime ? fmtDate(item.lastModifiedDateTime) : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', color: '#9ca3af', whiteSpace: 'nowrap' }}>
+                        {isFolder ? '—' : fmtBytes(item.size)}
+                      </td>
+                      <td style={{ padding: '10px 12px', verticalAlign: 'middle', whiteSpace: 'nowrap' }}>
+                        {isFolder
+                          ? <span style={{ fontSize: 11, color: '#0369a1', fontWeight: 600 }}>Open →</span>
+                          : <span style={{ display: 'inline-flex', alignItems: 'center', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5 }}>Open →</span>
+                        }
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
     </div>
   )
 }

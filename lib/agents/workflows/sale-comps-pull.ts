@@ -1,6 +1,7 @@
 ﻿import Anthropic from "@anthropic-ai/sdk";
 import type { ResearchBundle } from "../research";
 import { fetchCoStarComps } from "@/lib/costar";
+import { readPipelineComps } from "@/lib/agents/workflows/update-pipeline-comps";
 
 const anthropic = new Anthropic();
 
@@ -17,24 +18,46 @@ export async function runSaleCompsPull(params: {
   fileId?: string;
 }): Promise<SaleCompsPullOutput> {
   // Augment research with live CoStar comps if available
-  const costarMarket = params.ask.toLowerCase().includes("permian") || params.ask.toLowerCase().includes("midland") ? "Midland-Odessa TX"
-    : params.ask.toLowerCase().includes("tampa") || params.ask.toLowerCase().includes("brevard") ? "Tampa FL"
+  const askLower = params.ask.toLowerCase();
+  const costarMarket = askLower.includes("permian") || askLower.includes("midland") ? "Midland-Odessa TX"
+    : askLower.includes("tampa") || askLower.includes("brevard") || askLower.includes("space coast") ? "Tampa FL"
     : params.projectContext;
 
-  const costarAssetType = params.ask.toLowerCase().includes("ios") || params.ask.toLowerCase().includes("outdoor storage") ? "industrial outdoor storage"
-    : params.ask.toLowerCase().includes("service yard") ? "service yard"
+  const costarAssetType = askLower.includes("ios") || askLower.includes("outdoor storage") ? "industrial outdoor storage"
+    : askLower.includes("service yard") ? "service yard"
     : "industrial";
 
-  const costar = await fetchCoStarComps({ market: costarMarket, assetType: costarAssetType });
+  // Detect market for pipeline/comps spreadsheet
+  const xlsMarket: "permian" | "brevard" =
+    askLower.includes("brevard") || askLower.includes("space coast") || askLower.includes("cocoa") || askLower.includes("melbourne")
+      ? "brevard"
+      : "permian";
+
+  // Pull existing comps from our SharePoint pipeline tracker in parallel with CoStar
+  const [costar, xlsComps] = await Promise.all([
+    fetchCoStarComps({ market: costarMarket, assetType: costarAssetType }),
+    readPipelineComps(xlsMarket).catch(() => ({ headers: [], records: [], webUrl: "" })),
+  ]);
+
   const costarSection = costar.available && costar.rawText
     ? `\n\nCoStar Comps (live):\n${costar.rawText}`
     : "\n\n(CoStar subscription not yet provisioned — comps sourced from public records and broker reports)";
+
+  // Summarise existing pipeline comps (up to 30 rows to stay within context)
+  const xlsSection =
+    xlsComps.records.length > 0
+      ? `\n\nERP Pipeline & Comps Tracker (${xlsMarket === "brevard" ? "Brevard" : "Permian"}) — ${xlsComps.records.length} existing records:\n` +
+        xlsComps.records
+          .slice(0, 30)
+          .map((r) => Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join(" | "))
+          .join("\n")
+      : "";
 
   const userText = `Pull sale comparables for: ${params.ask}
 Project context: ${params.projectContext}
 
 Research findings:
-${params.research.findings}${costarSection}
+${params.research.findings}${costarSection}${xlsSection}
 
 ${params.research.sources.length > 0 ? `Sources:\n${params.research.sources.join("\n")}` : ""}
 

@@ -1,10 +1,15 @@
 ﻿import Anthropic from "@anthropic-ai/sdk";
+import { readLatestFundsDeck } from "@/lib/agents/sharepoint-files";
+import { readCommitmentStatus } from "@/lib/agents/workflows/update-commitment-schedule";
+import { generatePptx } from "@/lib/agents/pptx-generator";
 
 const anthropic = new Anthropic();
 
 export interface DeckBuilderOutput {
   summary: string;
   slideContent: string;
+  /** Binary .pptx buffer — present when PPTX generation succeeded */
+  pptxBuffer?: Buffer;
   outputType: "deck";
 }
 
@@ -18,9 +23,27 @@ export async function runDeckBuilder(params: {
 }): Promise<DeckBuilderOutput> {
   const mode = params.mode ?? "new-draft";
 
+  // In edit mode, read the current deck + raise status from SharePoint in parallel
+  const [currentDeck, commitmentStatus] = mode === "edit-existing"
+    ? await Promise.all([
+        readLatestFundsDeck().catch(() => null),
+        readCommitmentStatus().catch(() => null),
+      ])
+    : [null, null];
+
+  const currentDeckSection = currentDeck?.text
+    ? `\n\nCurrent deck content (${currentDeck.name}):\n${currentDeck.text.slice(0, 6000)}`
+    : "";
+
+  const commitmentContext = commitmentStatus && !commitmentStatus.error
+    ? `\n\nFund IV Raise Status (live): ${commitmentStatus.formattedTotal} committed across ${commitmentStatus.lpCount} LPs`
+    : "";
+
   const contextData = [
     params.researchFindings && `Market Research:\n${params.researchFindings}`,
     params.attachmentContent && `Internal Data (fund performance / portfolio / underwriting):\n${params.attachmentContent}`,
+    currentDeckSection,
+    commitmentContext,
   ]
     .filter(Boolean)
     .join("\n\n---\n\n");
@@ -88,7 +111,17 @@ For each slide, produce:
 
   const slideContent = response.content[0].type === "text" ? response.content[0].text : "";
   const slideCount = (slideContent.match(/^\*\*\[Slide/gm) ?? []).length;
-  const summary = `LP deck ${mode === "edit-existing" ? "edits" : "draft"} complete for ${params.projectContext}. ${slideCount} slides outlined. Ready for PowerPoint build.`;
 
-  return { summary, slideContent, outputType: "deck" };
+  // Generate the actual .pptx binary
+  let pptxBuffer: Buffer | undefined;
+  try {
+    pptxBuffer = await generatePptx(slideContent, params.projectContext);
+  } catch (err) {
+    console.error("[deck-builder] pptxgenjs error:", err);
+    // Non-fatal — fall back to text output
+  }
+
+  const summary = `LP deck ${mode === "edit-existing" ? "edits" : "draft"} complete for ${params.projectContext}. ${slideCount} slides built${pptxBuffer ? " as .pptx" : " as text outline"}.`;
+
+  return { summary, slideContent, pptxBuffer, outputType: "deck" };
 }

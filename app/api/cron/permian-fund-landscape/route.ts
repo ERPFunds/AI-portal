@@ -3,12 +3,52 @@ import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
 import { archiveBrief, getSeenNewsletterArticleUrls, logAgentRun } from "@/lib/db";
-import { sendBriefEmail } from "@/lib/mailer";
+import { getGraphToken } from "@/lib/agents/graph-token";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
+
+export const maxDuration = 300;
 
 const anthropic = new Anthropic();
 const parser = new Parser();
 const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
+
+const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@erpfunds.com", "bberry@erpfunds.com"];
+const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
+  ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
+  : BASE_RECIPIENTS;
+const SENDER_MAILBOX = "mparad@erpfunds.com";
+
+async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
+  let token: string | null;
+  try {
+    token = await getGraphToken();
+  } catch (err) {
+    return { success: false, message: `Auth failed: ${String(err)}` };
+  }
+  if (!token) return { success: false, message: "AZURE credentials not configured" };
+
+  const res = await fetch(
+    `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(SENDER_MAILBOX)}/sendMail`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: params.subject,
+          body: { contentType: "HTML", content: params.htmlBody },
+          toRecipients: RECIPIENTS.map((address) => ({ emailAddress: { address } })),
+        },
+        saveToSentItems: true,
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const err = await res.text();
+    return { success: false, message: `Graph API ${res.status}: ${err}` };
+  }
+  return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
+}
 
 const FUND_FEEDS = [
   { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
@@ -76,7 +116,7 @@ async function fetchFundNews(): Promise<NewsItem[]> {
     const run = await apify.actor("apify/google-news-scraper").call({
       queries: FUND_APIFY_QUERIES,
       maxResultsPerQuery: 15,
-      dateFilter: "3months",
+      dateFilter: "week",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
@@ -95,10 +135,10 @@ async function fetchFundNews(): Promise<NewsItem[]> {
   }
 
   const seen = new Set<string>();
-  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   return items
-    .filter((i) => i.pubDate > ninetyDaysAgo)
+    .filter((i) => i.pubDate > thirtyDaysAgo)
     .filter(isFundRelevant)
     .filter((i) => {
       if (seen.has(i.link)) return false;
@@ -125,7 +165,7 @@ export async function GET(request: Request) {
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No new fund landscape articles this month." });
+      return NextResponse.json({ message: "No new fund landscape articles this week." });
     }
 
     const articleList = news
@@ -160,6 +200,7 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
 
     const subject = `Permian Fund Landscape Brief — ${new Date().toLocaleDateString("en-US", {
       month: "long",
+      day: "numeric",
       year: "numeric",
     })}`;
 
@@ -202,7 +243,7 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Fund Landscape Brief · Monthly</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Fund Landscape Brief · Weekly</div>
       </td></tr>
     </table>
   </td></tr>
@@ -210,12 +251,12 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
 </body>
 </html>`;
 
-    await archiveBrief({ agentName: "permian-fund-landscape", subject, html, narrative, macro: {}, news });
-    await sendBriefEmail({ subject, html });
+    archiveBrief({ agentName: "permian-fund-landscape", subject, html, narrative, macro: {}, news }).catch(() => {});
+    const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
-    logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: "success", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs }).catch(() => {});
+    logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "permian", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
-    return NextResponse.json({ success: true, articles: news.length, subject });
+    return NextResponse.json({ success: emailResult.success, articles: news.length, subject });
   } catch (error) {
     console.error("Permian Fund Landscape Brief error:", error);
     logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});

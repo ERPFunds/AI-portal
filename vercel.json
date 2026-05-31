@@ -7,27 +7,27 @@
   "crons": [
     {
       "path": "/api/cron/brevard-brief",
-      "schedule": "30 14 25 5 *"
+      "schedule": "30 12 * * 1"
     },
     {
       "path": "/api/cron/permian-brief",
-      "schedule": "35 14 25 5 *"
+      "schedule": "0 13 * * 1"
     },
     {
       "path": "/api/cron/brevard-submarket-watch",
-      "schedule": "40 14 25 5 *"
+      "schedule": "30 13 * * 1"
     },
     {
       "path": "/api/cron/brevard-fund-landscape",
-      "schedule": "45 14 25 5 *"
+      "schedule": "0 14 * * 1"
     },
     {
       "path": "/api/cron/permian-submarket-watch",
-      "schedule": "30 13 1 * *"
+      "schedule": "30 14 * * 1"
     },
     {
       "path": "/api/cron/permian-fund-landscape",
-      "schedule": "0 14 1 * *"
+      "schedule": "0 15 * * 1"
     }
   ]
 }

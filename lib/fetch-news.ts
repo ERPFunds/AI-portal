@@ -51,7 +51,7 @@ export async function fetchNewsItems(): Promise<FeedItem[]> {
   const [rssItems, apifyItems, alreadyPublished] = await Promise.all([
     fetchAllFeeds(),
     fetchApifyItems(),
-    getPreviouslyPublishedUrls(AGENT_NAME),
+    getPreviouslyPublishedUrls(AGENT_NAME).catch(() => new Set<string>()),
   ]);
 
   const allItems = [...rssItems, ...apifyItems];
