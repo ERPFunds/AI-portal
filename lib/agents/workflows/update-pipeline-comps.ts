@@ -85,8 +85,14 @@ If no new deals or comps are found, return [].`,
   let entries: Record<string, string>[] = [];
 
   try {
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) entries = JSON.parse(jsonMatch[0]);
+    // Match the outermost JSON array (array of objects: [{...}, {...}])
+    const jsonMatch = text.match(/(\[\s*\{[\s\S]*\}\s*\])/);
+    if (jsonMatch) {
+      entries = JSON.parse(jsonMatch[1]);
+    } else {
+      const flatMatch = text.match(/\[[\s\S]*\]/);
+      if (flatMatch) entries = JSON.parse(flatMatch[0]);
+    }
   } catch {
     /* leave empty */
   }

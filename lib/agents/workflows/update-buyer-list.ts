@@ -185,7 +185,7 @@ If no new buyers are found, return [].`,
   // ── Step 3: Ask Claude to map buyers into column-ordered arrays ─────────────
   const rowMsg = await anthropic.messages.create({
     model: "claude-opus-4-5",
-    max_tokens: 1000,
+    max_tokens: 2000,
     messages: [
       {
         role: "user",
@@ -200,8 +200,9 @@ ${JSON.stringify(buyers, null, 2)}
 For each buyer, return a JSON array of arrays — one inner array per buyer, with values in the EXACT column order above.
 - For any column that has no matching data, use an empty string "".
 - Every inner array must have exactly ${headers.length} values.
+- Do NOT reference column names anywhere — output ONLY the JSON array.
 
-Return ONLY the JSON (no prose):
+Return ONLY valid JSON, starting with [[ and ending with ]]:
 [[value1, value2, ...], [value1, value2, ...]]`,
       },
     ],
@@ -210,9 +211,17 @@ Return ONLY the JSON (no prose):
   const rowText = rowMsg.content[0].type === "text" ? rowMsg.content[0].text : "[]";
   let newRows: string[][] = [];
   try {
-    const jsonMatch = rowText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) newRows = JSON.parse(jsonMatch[0]);
-  } catch { /* leave empty */ }
+    // Use a specific pattern for array-of-arrays to avoid mismatching on
+    // any column-name references Claude may include in prose before the JSON
+    const jsonMatch = rowText.match(/(\[\s*\[[\s\S]*\]\s*\])/);
+    if (jsonMatch) {
+      newRows = JSON.parse(jsonMatch[1]);
+    } else {
+      // Fallback: try the whole text if no nested-array pattern found
+      const flatMatch = rowText.match(/\[[\s\S]*\]/);
+      if (flatMatch) newRows = JSON.parse(flatMatch[0]);
+    }
+  } catch { /* leave empty — fallback below handles it */ }
 
   // Pad/trim each row to match column count
   newRows = newRows.map((row) => {
