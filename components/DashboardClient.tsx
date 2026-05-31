@@ -3113,6 +3113,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   )
   const [expandedConn, setExpandedConn] = useState<string | null>(null)
   const [revealedFields, setRevealedFields] = useState<Set<string>>(new Set())
+  const [envDriven, setEnvDriven] = useState<Set<string>>(new Set())
   const toggleReveal = (key: string) =>
     setRevealedFields(prev => { const s = new Set(prev); s.has(key) ? s.delete(key) : s.add(key); return s })
 
@@ -3122,8 +3123,9 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   const [showAddM365, setShowAddM365] = useState(false)
   const [newM365, setNewM365] = useState({ label: '', email: '', tenantId: '', clientId: '' })
 
-  // Load shared connector + M365 state from Supabase on mount
+  // Load shared connector + M365 state from Supabase, then overlay real env-var status
   useEffect(() => {
+    // 1. Load saved field values from Supabase
     fetch('/api/app-settings?key=conn-state')
       .then(r => r.json())
       .then(d => {
@@ -3136,6 +3138,24 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
       .then(r => r.json())
       .then(d => {
         if (Array.isArray(d.value) && d.value.length > 0) setM365Accounts(d.value)
+      })
+      .catch(() => {})
+    // 2. Overlay actual connected/disconnected status from server env vars
+    fetch('/api/env-status')
+      .then(r => r.json())
+      .then(d => {
+        if (d.status) {
+          const driven = new Set<string>()
+          setConns(prev => {
+            const next = { ...prev }
+            for (const [id, st] of Object.entries(d.status as Record<string, 'connected' | 'disconnected'>)) {
+              next[id] = { ...(next[id] ?? { values: {} }), status: st }
+              driven.add(id)
+            }
+            return next
+          })
+          setEnvDriven(driven)
+        }
       })
       .catch(() => {})
   }, [])
@@ -3323,6 +3343,7 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
           const state = conns[conn.id]
           const isConnected = state.status === 'connected'
           const isExpanded = expandedConn === conn.id
+          const isEnvDriven = envDriven.has(conn.id)
           return (
             <div key={conn.id} className="conn-card" style={{ display: 'flex', flexDirection: 'column' }}>
               <div className="conn-header">
@@ -3333,13 +3354,17 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
                     {isConnected ? '● Connected' : '○ Disconnected'}
                   </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => toggleConnStatus(conn.id)}>
-                  <div className={`toggle ${isConnected ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
-                </div>
+                {isEnvDriven ? (
+                  <span title="Status is read directly from Vercel environment variables" style={{ fontSize: 10, fontWeight: 600, color: '#6366f1', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 4, padding: '2px 6px', whiteSpace: 'nowrap' }}>🔐 Vercel env</span>
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5, cursor: 'pointer' }} onClick={() => toggleConnStatus(conn.id)}>
+                    <div className={`toggle ${isConnected ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
+                  </div>
+                )}
               </div>
               <div className="conn-meta">{conn.meta}</div>
               <div className="conn-footer">
-                <span className="sync-badge">{isConnected ? '✓ Connected' : conn.sync}</span>
+                <span className="sync-badge">{isConnected ? (isEnvDriven ? '✓ Active — key set in Vercel' : '✓ Connected') : conn.sync}</span>
                 <button className="btn btn-ghost" style={{ fontSize: 11, padding: '3px 10px' }} onClick={() => toggleConn(conn.id)}>
                   {isExpanded ? 'Close' : 'Configure'}
                 </button>
