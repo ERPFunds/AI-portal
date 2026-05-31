@@ -4348,9 +4348,32 @@ const EXCEL_EDIT_LABEL: Record<string, { icon: string; label: string; color: str
 interface EditLogRow {
   id: number
   created_at: string
+  from_email: string | null
   workflow_id: string
   output_summary: string | null
   onedrive_url: string | null
+}
+
+const EMAIL_DISPLAY: Record<string, string> = {
+  'mparad@erpfunds.com':  'Michele P.',
+  'mberry@erpfunds.com':  'Meghan',
+  'wmeyer@erpfunds.com':  'William',
+  'bberry@erpfunds.com':  'Brennan',
+}
+
+function senderChip(email: string | null) {
+  if (!email) return null
+  const name = EMAIL_DISPLAY[email.toLowerCase()] ?? email.split('@')[0]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 10, fontWeight: 600, color: '#374151',
+      background: '#f3f4f6', border: '1px solid #e5e7eb',
+      borderRadius: 10, padding: '2px 7px',
+    }}>
+      <span style={{ fontSize: 11 }}>👤</span>{name}
+    </span>
+  )
 }
 
 function OutputFilesView() {
@@ -4554,7 +4577,7 @@ function OutputFilesView() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
-                    {['When', 'Workflow', 'Summary', ''].map((h, i) => (
+                    {['When', 'Workflow / By', 'Summary', ''].map((h, i) => (
                       <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
                     ))}
                   </tr>
@@ -4571,6 +4594,7 @@ function OutputFilesView() {
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: meta.color, background: `${meta.color}14`, border: `1px solid ${meta.color}33`, borderRadius: 4, padding: '2px 7px' }}>
                             {meta.icon} {meta.label}
                           </span>
+                          <div style={{ marginTop: 5 }}>{senderChip(row.from_email)}</div>
                         </td>
                         <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#374151', maxWidth: 420 }}>
                           <div style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
