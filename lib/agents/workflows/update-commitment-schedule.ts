@@ -243,8 +243,14 @@ If no new commitment is mentioned, return [].`,
   const extractText = extractMsg.content[0].type === "text" ? extractMsg.content[0].text : "[]";
   let entries: CommitmentEntry[] = [];
   try {
-    const jsonMatch = extractText.match(/\[[\s\S]*\]/);
-    if (jsonMatch) entries = JSON.parse(jsonMatch[0]);
+    // Match array-of-objects pattern to avoid grabbing prose brackets
+    const jsonMatch = extractText.match(/(\[\s*\{[\s\S]*\}\s*\])/);
+    if (jsonMatch) {
+      entries = JSON.parse(jsonMatch[1]);
+    } else {
+      const flatMatch = extractText.match(/\[[\s\S]*\]/);
+      if (flatMatch) entries = JSON.parse(flatMatch[0]);
+    }
   } catch { /* leave empty */ }
 
   console.log(`[commitment] entries extracted: ${entries.length} — ${JSON.stringify(entries.map(e => e.investor))}`);

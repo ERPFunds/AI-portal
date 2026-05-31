@@ -175,8 +175,14 @@ If no fund data is present, return [].`,
   let rows: FundRow[] = [];
 
   try {
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) rows = JSON.parse(jsonMatch[0]);
+    // Match array-of-objects pattern to avoid grabbing prose brackets
+    const jsonMatch = text.match(/(\[\s*\{[\s\S]*\}\s*\])/);
+    if (jsonMatch) {
+      rows = JSON.parse(jsonMatch[1]);
+    } else {
+      const flatMatch = text.match(/\[[\s\S]*\]/);
+      if (flatMatch) rows = JSON.parse(flatMatch[0]);
+    }
   } catch {
     /* leave empty */
   }
