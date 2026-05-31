@@ -11,23 +11,23 @@
     },
     {
       "path": "/api/cron/permian-brief",
-      "schedule": "0 13 * * 1"
+      "schedule": "40 12 * * 1"
     },
     {
       "path": "/api/cron/brevard-submarket-watch",
-      "schedule": "30 13 * * 1"
+      "schedule": "50 12 * * 1"
     },
     {
       "path": "/api/cron/brevard-fund-landscape",
-      "schedule": "0 14 * * 1"
+      "schedule": "0 13 * * 1"
     },
     {
       "path": "/api/cron/permian-submarket-watch",
-      "schedule": "30 14 * * 1"
+      "schedule": "10 13 * * 1"
     },
     {
       "path": "/api/cron/permian-fund-landscape",
-      "schedule": "0 15 * * 1"
+      "schedule": "20 13 * * 1"
     }
   ]
 }
