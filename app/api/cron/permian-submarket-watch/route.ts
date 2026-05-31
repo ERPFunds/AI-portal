@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -16,7 +16,7 @@ const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@e
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
   ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
   : BASE_RECIPIENTS;
-const SENDER_MAILBOX = "mparad@erpfunds.com";
+const SENDER_MAILBOX = "team@erpfunds.com";
 
 async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
   let token: string | null;
@@ -179,13 +179,13 @@ export async function GET(request: Request) {
       messages: [
         {
           role: "user",
-          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market — Midland, Odessa, and surrounding West Texas.
+          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market â€” Midland, Odessa, and surrounding West Texas.
 
 Focus on:
-1. Sale comparable transactions — what are assets trading at? Cap rates, price/SF, price/acre?
-2. Tenant activity — who's leasing, expanding, contracting in Permian Basin industrial markets?
-3. Submarket trends — vacancy, absorption, asking rents, any notable market shifts
-4. OM implications — what does this week's activity mean for ERP's active Permian deals?
+1. Sale comparable transactions â€” what are assets trading at? Cap rates, price/SF, price/acre?
+2. Tenant activity â€” who's leasing, expanding, contracting in Permian Basin industrial markets?
+3. Submarket trends â€” vacancy, absorption, asking rents, any notable market shifts
+4. OM implications â€” what does this week's activity mean for ERP's active Permian deals?
 
 Articles:
 ${articleList}
@@ -197,7 +197,7 @@ Write with data density and specificity. Flag any market shifts that could affec
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Permian Submarket Watch — ${new Date().toLocaleDateString("en-US", {
+    const subject = `Permian Submarket Watch â€” ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -228,9 +228,9 @@ Write with data density and specificity. Flag any market shifts that could affec
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials · Agent 1 · Submarket Watch</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials Â· Agent 1 Â· Submarket Watch</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Sale comps &amp; tenant activity · Permian Basin Industrial</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Sale comps &amp; tenant activity Â· Permian Basin Industrial</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Market Narrative</div>
@@ -242,7 +242,7 @@ Write with data density and specificity. Flag any market shifts that could affec
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Submarket Watch · Weekly</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Permian Submarket Watch Â· Weekly</div>
       </td></tr>
     </table>
   </td></tr>

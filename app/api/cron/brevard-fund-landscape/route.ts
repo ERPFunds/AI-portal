@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -16,7 +16,7 @@ const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@e
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
   ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
   : BASE_RECIPIENTS;
-const SENDER_MAILBOX = "mparad@erpfunds.com";
+const SENDER_MAILBOX = "team@erpfunds.com";
 
 async function sendEmailViaGraph(params: { subject: string; htmlBody: string }): Promise<{ success: boolean; message: string }> {
   let token: string | null;
@@ -182,10 +182,10 @@ export async function GET(request: Request) {
           content: `You are a competitive intelligence analyst for ERP Industrials, an industrial CRE fund with assets in Florida (Brevard County / Space Coast). Write a Fund Landscape Brief (4-6 paragraphs) based on the following recent news.
 
 Focus on:
-1. Competitor fund activity — who's raising, who closed, fund sizes, target IRRs
-2. Fund benchmarks — what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
-3. Competitive positioning — how does ERP's Fund IV strategy compare to what larger players are doing?
-4. LP appetite signals — what asset types and markets are attracting capital right now?
+1. Competitor fund activity â€” who's raising, who closed, fund sizes, target IRRs
+2. Fund benchmarks â€” what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
+3. Competitive positioning â€” how does ERP's Fund IV strategy compare to what larger players are doing?
+4. LP appetite signals â€” what asset types and markets are attracting capital right now?
 5. Any market shifts that could affect ERP's Fund IV fundraising pitch
 
 Articles:
@@ -198,7 +198,7 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Brevard Fund Landscape Brief — ${new Date().toLocaleDateString("en-US", {
+    const subject = `Brevard Fund Landscape Brief â€” ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -229,9 +229,9 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials · Agent 1 · Fund Landscape Brief</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials Â· Agent 1 Â· Fund Landscape Brief</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Competitor activity &amp; fund benchmarks · Florida Industrial</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Competitor activity &amp; fund benchmarks Â· Florida Industrial</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Landscape Brief</div>
@@ -243,7 +243,7 @@ Be specific about fund names, sizes, and metrics where available. Flag intellige
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Brevard Fund Landscape Brief · Weekly</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Brevard Fund Landscape Brief Â· Weekly</div>
       </td></tr>
     </table>
   </td></tr>

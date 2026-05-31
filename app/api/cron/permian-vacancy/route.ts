@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Weekly Permian Basin industrial vacancy newsletter
  *
  * Cron: Fridays 13:00 UTC (9:00 am EDT)
@@ -6,8 +6,8 @@
  * then filters to properties on ERP's target road corridors before sending.
  *
  * Target roads:
- *   Highway 191 · Interstate 20 · Business 20 · FM 1788
- *   Highway 158 · Murphy Street · Industrial Avenue
+ *   Highway 191 Â· Interstate 20 Â· Business 20 Â· FM 1788
+ *   Highway 158 Â· Murphy Street Â· Industrial Avenue
  *
  * Recipients: mparad, mberry, wmeyer, bbery
  */
@@ -29,7 +29,7 @@ const RECIPIENTS = [
   "wmeyer@erpfunds.com",
   "bbery@erpfunds.com",
 ];
-const SENDER_MAILBOX = "mparad@erpfunds.com";
+const SENDER_MAILBOX = "team@erpfunds.com";
 
 const TARGET_ROADS = [
   "Highway 191",
@@ -41,7 +41,7 @@ const TARGET_ROADS = [
   "Industrial Avenue",
 ];
 
-// ── Graph email sender ────────────────────────────────────────────────────────
+// â”€â”€ Graph email sender â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function sendEmailViaGraph(params: {
   subject: string;
@@ -78,7 +78,7 @@ async function sendEmailViaGraph(params: {
   return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────────
+// â”€â”€ Route handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -92,25 +92,25 @@ export async function GET(request: Request) {
     day: "numeric",
     year: "numeric",
   });
-  const subject = `Permian Industrial Vacancies — Week of ${weekOf}`;
+  const subject = `Permian Industrial Vacancies â€” Week of ${weekOf}`;
 
   try {
-    // ── 1. Fetch listings and apply road filter ─────────────────────────────
+    // â”€â”€ 1. Fetch listings and apply road filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const allListings = await fetchLoopNetListings({ market: "permian", maxListings: 60 });
     const listings = allListings.filter(isOnPermianCorridor);
 
-    // ── 2. Build HTML ───────────────────────────────────────────────────────
+    // â”€â”€ 2. Build HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Always include a section for "off-corridor" listings so the team can
     // see what was filtered out (shown below a divider, greyed out).
     const offCorridor = allListings.filter((l) => !isOnPermianCorridor(l));
 
-    // Narrative — only if we have corridor listings
+    // Narrative â€” only if we have corridor listings
     let narrative = "";
     if (listings.length > 0) {
       const listingText = listings
         .map(
           (l, i) =>
-            `${i + 1}. ${l.address}${l.size ? ` | ${l.size}` : ""}${l.availableSpace ? ` | Avail: ${l.availableSpace}` : ""}${l.price ? ` | ${l.price}` : ""}${l.description ? ` — ${l.description}` : ""}`
+            `${i + 1}. ${l.address}${l.size ? ` | ${l.size}` : ""}${l.availableSpace ? ` | Avail: ${l.availableSpace}` : ""}${l.price ? ` | ${l.price}` : ""}${l.description ? ` â€” ${l.description}` : ""}`
         )
         .join("\n");
 
@@ -125,9 +125,9 @@ export async function GET(request: Request) {
 Target corridors: ${TARGET_ROADS.join(", ")}
 
 Focus on:
-1. What's available this week — size, location on which corridor, clustering patterns
-2. Pricing signals — asking rents, any notable spread across corridors
-3. IOS / service yard flags — any listings that look like outdoor storage, yard space, or truck-friendly industrial relevant to ERP's strategy?
+1. What's available this week â€” size, location on which corridor, clustering patterns
+2. Pricing signals â€” asking rents, any notable spread across corridors
+3. IOS / service yard flags â€” any listings that look like outdoor storage, yard space, or truck-friendly industrial relevant to ERP's strategy?
 
 On-corridor listings (${listings.length}):
 ${listingText}
@@ -156,7 +156,7 @@ Be specific and data-dense. Flag intelligence gaps. If you see properties releva
         <div style="font-size:12px;color:#374151;margin-top:4px;">
           ${[l.size && `${l.size} total`, l.availableSpace && `${l.availableSpace} available`, l.price].filter(Boolean).join(" &middot; ")}
         </div>
-        ${l.url ? `<a href="${l.url}" style="font-size:11px;color:#1d4ed8;">View on LoopNet →</a>` : ""}
+        ${l.url ? `<a href="${l.url}" style="font-size:11px;color:#1d4ed8;">View on LoopNet â†’</a>` : ""}
       </td>
     </tr>`;
 
@@ -178,9 +178,9 @@ Be specific and data-dense. Flag intelligence gaps. If you see properties releva
 
       <!-- Header -->
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds · Vacancy Watch · Permian Basin</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds Â· Vacancy Watch Â· Permian Basin</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} on-corridor · ${offCorridor.length} off-corridor · Midland &amp; Odessa TX</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} on-corridor Â· ${offCorridor.length} off-corridor Â· Midland &amp; Odessa TX</div>
       </td></tr>
 
       <!-- Corridor chips -->
@@ -219,7 +219,7 @@ Be specific and data-dense. Flag intelligence gaps. If you see properties releva
 
       <!-- Footer -->
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Permian Vacancy Watch · Weekly · Source: LoopNet</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Permian Vacancy Watch Â· Weekly Â· Source: LoopNet</div>
       </td></tr>
 
     </table>
@@ -228,7 +228,7 @@ Be specific and data-dense. Flag intelligence gaps. If you see properties releva
 </body>
 </html>`;
 
-    // ── 3. Send & save ──────────────────────────────────────────────────────
+    // â”€â”€ 3. Send & save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({
       market: "Permian",

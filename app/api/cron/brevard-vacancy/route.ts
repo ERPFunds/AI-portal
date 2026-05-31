@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Weekly Brevard County industrial vacancy newsletter
  *
  * Cron: Fridays 12:30 UTC (8:30 am EDT)
@@ -25,9 +25,9 @@ const RECIPIENTS = [
   "wmeyer@erpfunds.com",
   "bbery@erpfunds.com",
 ];
-const SENDER_MAILBOX = "mparad@erpfunds.com";
+const SENDER_MAILBOX = "team@erpfunds.com";
 
-// ── Graph email sender ────────────────────────────────────────────────────────
+// â”€â”€ Graph email sender â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 async function sendEmailViaGraph(params: {
   subject: string;
@@ -64,7 +64,7 @@ async function sendEmailViaGraph(params: {
   return { success: true, message: `Sent to ${RECIPIENTS.join(", ")}` };
 }
 
-// ── Route handler ─────────────────────────────────────────────────────────────
+// â”€â”€ Route handler â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -78,10 +78,10 @@ export async function GET(request: Request) {
     day: "numeric",
     year: "numeric",
   });
-  const subject = `Brevard Industrial Vacancies — Week of ${weekOf}`;
+  const subject = `Brevard Industrial Vacancies â€” Week of ${weekOf}`;
 
   try {
-    // ── 1. Fetch listings ───────────────────────────────────────────────────
+    // â”€â”€ 1. Fetch listings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const listings = await fetchLoopNetListings({ market: "brevard", maxListings: 40 });
 
     if (listings.length === 0) {
@@ -97,11 +97,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ success: false, message: "No listings found" });
     }
 
-    // ── 2. Claude narrative ─────────────────────────────────────────────────
+    // â”€â”€ 2. Claude narrative â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const listingText = listings
       .map(
         (l, i) =>
-          `${i + 1}. ${l.address}${l.size ? ` | ${l.size}` : ""}${l.availableSpace ? ` | Avail: ${l.availableSpace}` : ""}${l.price ? ` | ${l.price}` : ""}${l.description ? ` — ${l.description}` : ""}`
+          `${i + 1}. ${l.address}${l.size ? ` | ${l.size}` : ""}${l.availableSpace ? ` | Avail: ${l.availableSpace}` : ""}${l.price ? ` | ${l.price}` : ""}${l.description ? ` â€” ${l.description}` : ""}`
       )
       .join("\n");
 
@@ -114,9 +114,9 @@ export async function GET(request: Request) {
           content: `You are an industrial CRE analyst for ERP Funds. Write a concise 3-paragraph vacancy summary for the Brevard County, FL industrial market based on the listings below.
 
 Focus on:
-1. Overall picture — how much space is available, what size tranches are showing up, any clustering by submarket (Cocoa, Melbourne, Titusville, etc.)
-2. Pricing — what are asking rents? Any notable outliers?
-3. Opportunity flags — any properties or pockets worth tracking for ERP's Space Coast strategy?
+1. Overall picture â€” how much space is available, what size tranches are showing up, any clustering by submarket (Cocoa, Melbourne, Titusville, etc.)
+2. Pricing â€” what are asking rents? Any notable outliers?
+3. Opportunity flags â€” any properties or pockets worth tracking for ERP's Space Coast strategy?
 
 Listings this week (${listings.length} total):
 ${listingText}
@@ -128,7 +128,7 @@ Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    // ── 3. Build HTML ───────────────────────────────────────────────────────
+    // â”€â”€ 3. Build HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const narrativeHtml = narrative
       .split("\n\n")
       .filter(Boolean)
@@ -144,7 +144,7 @@ Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
           <div style="font-size:12px;color:#374151;margin-top:4px;">
             ${[l.size && `${l.size} total`, l.availableSpace && `${l.availableSpace} available`, l.price].filter(Boolean).join(" &middot; ")}
           </div>
-          ${l.url ? `<a href="${l.url}" style="font-size:11px;color:#1d4ed8;">View on LoopNet →</a>` : ""}
+          ${l.url ? `<a href="${l.url}" style="font-size:11px;color:#1d4ed8;">View on LoopNet â†’</a>` : ""}
         </td>
       </tr>`
       )
@@ -158,9 +158,9 @@ Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds · Vacancy Watch · Brevard County</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds Â· Vacancy Watch Â· Brevard County</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} industrial listings · Space Coast, FL</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} industrial listings Â· Space Coast, FL</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Market Summary</div>
@@ -172,7 +172,7 @@ Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
         <table width="100%" cellpadding="0" cellspacing="0">${listingsHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Brevard Vacancy Watch · Weekly · Source: LoopNet</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Brevard Vacancy Watch Â· Weekly Â· Source: LoopNet</div>
       </td></tr>
     </table>
   </td></tr>
@@ -180,7 +180,7 @@ Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
 </body>
 </html>`;
 
-    // ── 4. Send & save ──────────────────────────────────────────────────────
+    // â”€â”€ 4. Send & save â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({
       market: "Brevard",
