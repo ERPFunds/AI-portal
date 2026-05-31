@@ -160,7 +160,7 @@ If no new buyers are found, return [].`,
     return {
       summary: `No new buyer contacts found for "${projectContext}". Either no buyers were mentioned or all were already in the list.`,
       outputType: "info",
-      xlsUrl: fileWebUrl,
+      xlsUrl: fileWebUrl ?? undefined,
     };
   }
 
@@ -248,6 +248,6 @@ Return ONLY the JSON (no prose):
     summary,
     outputType: "buyer-list",
     omContent: buyerList,
-    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl,
+    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl ?? undefined,
   };
 }

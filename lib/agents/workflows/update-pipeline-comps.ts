@@ -95,7 +95,7 @@ If no new deals or comps are found, return [].`,
     return {
       summary: `No new pipeline or comp entries found for "${projectContext}" (${marketLabel}).`,
       outputType: "info",
-      xlsUrl: fileWebUrl,
+      xlsUrl: fileWebUrl ?? undefined,
     };
   }
 
@@ -134,7 +134,7 @@ If no new deals or comps are found, return [].`,
     summary,
     outputType: "pipeline-comps",
     omContent: entryList,
-    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl,
+    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl ?? undefined,
   };
 }
 
