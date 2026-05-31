@@ -75,6 +75,7 @@ export async function runUpdateBuyerList(params: {
 
   // ── Read existing buyers to get headers + avoid duplicates ────────────────
   const existingData = await withExcelFile(EXCEL_FILES.buyerList, "read");
+  const fileWebUrl: string | null = existingData.webUrl || null;
 
   // Determine actual column order from the file (fall back to defaults)
   const headers = existingData.headers.length > 0
@@ -159,6 +160,7 @@ If no new buyers are found, return [].`,
     return {
       summary: `No new buyer contacts found for "${projectContext}". Either no buyers were mentioned or all were already in the list.`,
       outputType: "info",
+      xlsUrl: fileWebUrl,
     };
   }
 
@@ -246,6 +248,6 @@ Return ONLY the JSON (no prose):
     summary,
     outputType: "buyer-list",
     omContent: buyerList,
-    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? existingData.webUrl,
+    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl,
   };
 }

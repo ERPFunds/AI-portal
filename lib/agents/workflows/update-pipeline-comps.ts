@@ -33,6 +33,9 @@ export async function runUpdatePipelineComps(params: {
 
   // ── Read existing rows to get the header schema + avoid duplicate entries ─
   const existingData = await withExcelFile(filename, "read");
+  // Capture the SharePoint URL now — we include it in every return path so the
+  // email reply always has the "View in Shared Drive" button (even on no-entries).
+  const fileWebUrl: string | null = existingData.webUrl || null;
   const headers = existingData.headers;
   const headerStr = headers.length > 0 ? `Existing columns: ${headers.join(" | ")}` : "";
 
@@ -92,6 +95,7 @@ If no new deals or comps are found, return [].`,
     return {
       summary: `No new pipeline or comp entries found for "${projectContext}" (${marketLabel}).`,
       outputType: "info",
+      xlsUrl: fileWebUrl,
     };
   }
 
@@ -130,7 +134,7 @@ If no new deals or comps are found, return [].`,
     summary,
     outputType: "pipeline-comps",
     omContent: entryList,
-    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? existingData.webUrl,
+    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl,
   };
 }
 

@@ -82,7 +82,7 @@ export async function sendReplyEmail(params: {
       </td></tr>
 
       <tr><td style="padding:20px 24px 12px;">
-        <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${escapeHtml(params.summary)}</p>
+        ${markdownToHtmlParagraphs(params.summary)}
       </td></tr>
 
       ${driveSection}
