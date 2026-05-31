@@ -52,8 +52,8 @@ export function parseDeckText(text: string): ParsedSlide[] {
     const trimmed = block.trim();
     if (!trimmed) continue;
 
-    // Slide number + title: **[Slide 3] — Title**
-    const headerMatch = trimmed.match(/\*\*\[Slide\s*(\d+)\]\s*[—–-]+\s*([^\n*]+)\*\*/i);
+    // Slide number + title: **[Slide 3] — Title** (tolerates varied dashes, spacing, bold markers)
+    const headerMatch = trimmed.match(/\*{1,2}\[Slide\s*(\d+)\][^\n]{0,6}[-—–]+\s*(.+?)\*{0,2}\s*$/m);
     if (!headerMatch) continue;
 
     const number = parseInt(headerMatch[1], 10);
@@ -304,6 +304,10 @@ export async function generatePptx(
   pptx.subject = projectContext;
 
   const parsedSlides = parseDeckText(slideText);
+  console.log(`[pptx-generator] parsed ${parsedSlides.length} slides from deck text (${slideText.length} chars)`);
+  if (parsedSlides.length === 0) {
+    console.error("[pptx-generator] WARNING: 0 slides parsed — check Claude output format. First 300 chars:", slideText.slice(0, 300));
+  }
 
   // 1. Cover slide
   const coverTitle = projectContext || "LP Investor Update";

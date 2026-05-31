@@ -50,8 +50,8 @@ export async function runDeckBuilder(params: {
 
   const modeInstruction =
     mode === "edit-existing"
-      ? "Edit and tighten the deck per the request. Revise specific slides as directed."
-      : "Create a complete LP deck outline with all slides structured and content-filled.";
+      ? `Update the deck per the request below. Output the COMPLETE deck — every slide, in order. For slides not mentioned in the request, reproduce their content exactly as shown in the current deck. Only modify the specific slides that were asked to change or add. Never drop slides.`
+      : "Create a complete LP deck with all slides fully written out.";
 
   const promptText = `${modeInstruction}
 
@@ -61,7 +61,9 @@ Project: ${params.projectContext}
 ${contextData || "No internal data attached — build from ERP context and flag where internal data should be inserted with [INSERT: description]."}
 
 ---
-Produce a complete deck outline. Standard LP update structure:
+${mode === "edit-existing" && currentDeck?.text
+  ? "Reproduce the full deck below, applying the requested changes:"
+  : `Standard LP update structure:
 1. Cover / Title
 2. Executive Summary
 3. Portfolio Overview
@@ -70,17 +72,20 @@ Produce a complete deck outline. Standard LP update structure:
 6. Portfolio Deep Dive (1-2 slides on key assets)
 7. Investment Strategy & Pipeline
 8. Outlook / Forward Guidance
-9. Appendix markers (Fund terms, team, disclosures)
+9. Appendix markers (Fund terms, team, disclosures)`}
 
-For each slide, use this format:
----
-**[Slide N] — [Title]**
-Headline: [one sentence]
-• [bullet]
-• [bullet]
-• [bullet]
+IMPORTANT — use EXACTLY this format for every slide (the parser requires it):
+
+**[Slide 1] — Title Here**
+Headline: One punchy thesis sentence.
+• Bullet one with data
+• Bullet two with data
+• Bullet three with data
 [Visual: suggested chart or exhibit]
----`;
+
+**[Slide 2] — Next Title**
+Headline: ...
+...`;
 
   const userContent: Anthropic.MessageParam["content"] = params.fileId
     ? [
