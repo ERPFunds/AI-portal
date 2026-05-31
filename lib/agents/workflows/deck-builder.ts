@@ -9,6 +9,8 @@ const anthropic = new Anthropic();
 export interface DeckBuilderOutput {
   summary: string;
   slideContent: string;
+  /** Human-readable changelog of what was added/changed — used in the reply email */
+  changeLog: string;
   /** Binary .pptx buffer — present when PPTX generation succeeded */
   pptxBuffer?: Buffer;
   outputType: "deck";
@@ -52,8 +54,23 @@ export async function runDeckBuilder(params: {
     .join("\n\n---\n\n");
 
   const modeInstruction = hasMasterDeck
-    ? `You have the existing master deck below. Output the COMPLETE updated deck — every slide in order. Reproduce unchanged slides verbatim. Only modify or add slides that the request specifically asks for. Never drop slides.`
-    : `Create a complete LP deck with all slides fully written out.`;
+    ? `You have the existing master deck below. Output the COMPLETE updated deck — every slide in order. Reproduce unchanged slides verbatim. Only modify or add slides that the request specifically asks for. Never drop slides.
+
+After ALL slides, append a changes summary block in EXACTLY this format (required):
+
+---CHANGES---
+• Slide X — [what changed and why]
+• Slide Y — [what was added]
+(list only slides that were modified or added; if nothing changed write "No slides modified")
+---END CHANGES---`
+    : `Create a complete LP deck with all slides fully written out.
+
+After ALL slides, append a changes summary block in EXACTLY this format (required):
+
+---CHANGES---
+• Slide X — [description of slide added]
+(list every slide created)
+---END CHANGES---`;
 
   const structureGuide = hasMasterDeck
     ? `Reproduce the full deck, applying only the requested changes (${params.ask}).`
@@ -118,7 +135,16 @@ For each slide, produce:
     messages: [{ role: "user", content: userContent }],
   });
 
-  const slideContent = response.content[0].type === "text" ? response.content[0].text : "";
+  const rawOutput = response.content[0].type === "text" ? response.content[0].text : "";
+
+  // ── Extract changelog block ────────────────────────────────────────────────
+  const changeBlockMatch = rawOutput.match(/---CHANGES---([\s\S]*?)---END CHANGES---/);
+  const changeLog = changeBlockMatch
+    ? changeBlockMatch[1].trim()
+    : "Deck updated — open the .pptx file to review changes.";
+
+  // Strip the changelog block from slide content so the injector doesn't see it
+  const slideContent = rawOutput.replace(/---CHANGES---[\s\S]*?---END CHANGES---/, "").trim();
   const slideCount = (slideContent.match(/^\*\*\[Slide/gm) ?? []).length;
 
   // ── Generate .pptx ────────────────────────────────────────────────────────
@@ -154,7 +180,7 @@ For each slide, produce:
     }
   }
 
-  const summary = `LP deck ${mode === "edit-existing" ? "edits" : "draft"} complete for ${params.projectContext}. ${slideCount} slides built${pptxBuffer ? " as .pptx" : " as text outline"}.`;
+  const summary = `LP deck ${mode === "edit-existing" ? "updated" : "drafted"} — ${slideCount} slides${pptxBuffer ? " (.pptx saved)" : " (text outline saved)"}.\n\nChanges made:\n${changeLog}`;
 
-  return { summary, slideContent, pptxBuffer, outputType: "deck" };
+  return { summary, slideContent, changeLog, pptxBuffer, outputType: "deck" };
 }

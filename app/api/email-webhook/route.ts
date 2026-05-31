@@ -375,6 +375,7 @@ export async function POST(req: NextRequest) {
     "pipeline-comps",
     "competitive-intel",
     "commitment",
+    "deck",   // reply uses summary+changelog, not raw slide text
     "info",
     "error",
   ]);
