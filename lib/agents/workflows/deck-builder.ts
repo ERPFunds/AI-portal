@@ -1,7 +1,8 @@
 ﻿import Anthropic from "@anthropic-ai/sdk";
-import { readLatestFundsDeck } from "@/lib/agents/sharepoint-files";
+import { readLatestFundsDeck, downloadLatestFundsDeckBuffer } from "@/lib/agents/sharepoint-files";
 import { readCommitmentStatus } from "@/lib/agents/workflows/update-commitment-schedule";
-import { generatePptx } from "@/lib/agents/pptx-generator";
+import { generatePptx, parseDeckText } from "@/lib/agents/pptx-generator";
+import { injectSlidesIntoPptx } from "@/lib/agents/pptx-injector";
 
 const anthropic = new Anthropic();
 
@@ -120,13 +121,37 @@ For each slide, produce:
   const slideContent = response.content[0].type === "text" ? response.content[0].text : "";
   const slideCount = (slideContent.match(/^\*\*\[Slide/gm) ?? []).length;
 
-  // Generate the actual .pptx binary
+  // ── Generate .pptx ────────────────────────────────────────────────────────
+  // Preferred path: download the master deck binary and inject/update slides
+  // via adm-zip so the original formatting, images, and charts are preserved.
+  // Fallback: rebuild from scratch with pptxgenjs (no master available).
   let pptxBuffer: Buffer | undefined;
-  try {
-    pptxBuffer = await generatePptx(slideContent, params.projectContext);
-  } catch (err) {
-    console.error("[deck-builder] pptxgenjs error:", err);
-    // Non-fatal — fall back to text output
+
+  if (hasMasterDeck) {
+    try {
+      const masterBuffer = await downloadLatestFundsDeckBuffer();
+      if (masterBuffer) {
+        const parsedSlides = parseDeckText(slideContent);
+        console.log(
+          `[deck-builder] injecting ${parsedSlides.length} slides into master (${masterBuffer.length} bytes)`
+        );
+        pptxBuffer = injectSlidesIntoPptx(masterBuffer, parsedSlides);
+      } else {
+        console.warn("[deck-builder] master buffer download failed — falling back to pptxgenjs");
+      }
+    } catch (err) {
+      console.error("[deck-builder] pptx-injector error:", err);
+    }
+  }
+
+  // Fallback: build from scratch (no master, or injector failed)
+  if (!pptxBuffer) {
+    try {
+      pptxBuffer = await generatePptx(slideContent, params.projectContext);
+    } catch (err) {
+      console.error("[deck-builder] pptxgenjs fallback error:", err);
+      // Non-fatal — caller receives text output only
+    }
   }
 
   const summary = `LP deck ${mode === "edit-existing" ? "edits" : "draft"} complete for ${params.projectContext}. ${slideCount} slides built${pptxBuffer ? " as .pptx" : " as text outline"}.`;

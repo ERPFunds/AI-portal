@@ -158,6 +158,31 @@ export async function readLatestFundsDeck(): Promise<FundsDeckContent> {
   };
 }
 
+/**
+ * Download the raw binary buffer of the most recent LP investor deck PPTX.
+ * Used by the deck-builder to open and modify the master deck in-place
+ * rather than rebuilding from scratch (perfect preservation).
+ *
+ * Returns null on any failure (caller falls back to pptxgenjs rebuild).
+ */
+export async function downloadLatestFundsDeckBuffer(): Promise<Buffer | null> {
+  let token: string | null;
+  try {
+    token = await getGraphToken();
+  } catch {
+    return null;
+  }
+  if (!token) return null;
+
+  const siteId = process.env.SHAREPOINT_SITE_ID;
+  if (!siteId) return null;
+
+  const fileInfo = await findLatestFile(token, siteId, FUNDS_FOLDER, ".pptx");
+  if (!fileInfo?.downloadUrl) return null;
+
+  return downloadFileAsBuffer(fileInfo.downloadUrl);
+}
+
 export interface CommitmentScheduleContent {
   name: string;
   webUrl: string;
