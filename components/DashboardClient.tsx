@@ -3122,33 +3122,35 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
   const [showAddM365, setShowAddM365] = useState(false)
   const [newM365, setNewM365] = useState({ label: '', email: '', tenantId: '', clientId: '' })
 
-  // Load persisted connector + M365 state after hydration (avoids SSR mismatch)
+  // Load shared connector + M365 state from Supabase on mount
   useEffect(() => {
-    try {
-      const savedConns = localStorage.getItem('conn-state')
-      if (savedConns) {
-        const parsed = JSON.parse(savedConns)
-        setConns((prev) => ({ ...prev, ...parsed }))
-      }
-    } catch {}
-    try {
-      const savedM365 = localStorage.getItem('m365-state')
-      if (savedM365) setM365Accounts(JSON.parse(savedM365))
-    } catch {}
+    fetch('/api/app-settings?key=conn-state')
+      .then(r => r.json())
+      .then(d => {
+        if (d.value && Object.keys(d.value).length > 0) {
+          setConns((prev) => ({ ...prev, ...d.value }))
+        }
+      })
+      .catch(() => {})
+    fetch('/api/app-settings?key=m365-state')
+      .then(r => r.json())
+      .then(d => {
+        if (Array.isArray(d.value) && d.value.length > 0) setM365Accounts(d.value)
+      })
+      .catch(() => {})
   }, [])
-
-  // Auto-save connector values to localStorage on every change
-  useEffect(() => {
-    try { localStorage.setItem('conn-state', JSON.stringify(conns)) } catch {}
-  }, [conns])
 
   function toggleConn(id: string) {
     setExpandedConn((prev) => (prev === id ? null : id))
   }
+  function persistConns(next: Record<string, { status: 'connected' | 'disconnected'; values: Record<string, string> }>) {
+    fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'conn-state', value: next }) }).catch(() => {})
+  }
+
   function toggleConnStatus(id: string) {
     setConns((prev) => {
       const next = { ...prev, [id]: { ...prev[id], status: prev[id].status === 'connected' ? 'disconnected' as const : 'connected' as const } }
-      try { localStorage.setItem('conn-state', JSON.stringify(next)) } catch {}
+      persistConns(next)
       return next
     })
   }
@@ -3163,14 +3165,14 @@ function ConnectionsTab({ saved, saveChanges }: { saved: boolean; saveChanges: (
     const newStatus: 'connected' | 'disconnected' = allFilled ? 'connected' : 'disconnected'
     const next = { ...conns, [id]: { ...conns[id], status: newStatus, values } }
     setConns(next)
-    try { localStorage.setItem('conn-state', JSON.stringify(next)) } catch {}
+    persistConns(next)
     saveChanges()
     setExpandedConn(null)
   }
 
   function saveM365(next: M365Account[]) {
     setM365Accounts(next)
-    try { localStorage.setItem('m365-state', JSON.stringify(next)) } catch {}
+    fetch('/api/app-settings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key: 'm365-state', value: next }) }).catch(() => {})
   }
   function updateM365Account(id: string, field: keyof M365Account, val: string) {
     saveM365(m365Accounts.map((a) => a.id === id ? { ...a, [field]: val } : a))
