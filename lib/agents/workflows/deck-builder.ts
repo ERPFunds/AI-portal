@@ -23,16 +23,18 @@ export async function runDeckBuilder(params: {
 }): Promise<DeckBuilderOutput> {
   const mode = params.mode ?? "new-draft";
 
-  // In edit mode, read the current deck + raise status from SharePoint in parallel
-  const [currentDeck, commitmentStatus] = mode === "edit-existing"
-    ? await Promise.all([
-        readLatestFundsDeck().catch(() => null),
-        readCommitmentStatus().catch(() => null),
-      ])
-    : [null, null];
+  // Always read the master deck + live raise status — used as base content for both
+  // new builds and edits. readLatestFundsDeck skips agent-output files so this always
+  // returns the human-uploaded master (e.g. "ERP Funds IV - Investor Presentation").
+  const [currentDeck, commitmentStatus] = await Promise.all([
+    readLatestFundsDeck().catch(() => null),
+    readCommitmentStatus().catch(() => null),
+  ]);
 
-  const currentDeckSection = currentDeck?.text
-    ? `\n\nCurrent deck content (${currentDeck.name}):\n${currentDeck.text.slice(0, 6000)}`
+  const hasMasterDeck = !!(currentDeck?.text && currentDeck.text.length > 100);
+
+  const currentDeckSection = hasMasterDeck
+    ? `\n\nExisting deck (${currentDeck!.name}) — use this as your base:\n${currentDeck!.text.slice(0, 8000)}`
     : "";
 
   const commitmentContext = commitmentStatus && !commitmentStatus.error
@@ -48,10 +50,22 @@ export async function runDeckBuilder(params: {
     .filter(Boolean)
     .join("\n\n---\n\n");
 
-  const modeInstruction =
-    mode === "edit-existing"
-      ? `Update the deck per the request below. Output the COMPLETE deck — every slide, in order. For slides not mentioned in the request, reproduce their content exactly as shown in the current deck. Only modify the specific slides that were asked to change or add. Never drop slides.`
-      : "Create a complete LP deck with all slides fully written out.";
+  const modeInstruction = hasMasterDeck
+    ? `You have the existing master deck below. Output the COMPLETE updated deck — every slide in order. Reproduce unchanged slides verbatim. Only modify or add slides that the request specifically asks for. Never drop slides.`
+    : `Create a complete LP deck with all slides fully written out.`;
+
+  const structureGuide = hasMasterDeck
+    ? `Reproduce the full deck, applying only the requested changes (${params.ask}).`
+    : `Standard LP update structure:
+1. Cover / Title
+2. Executive Summary
+3. Portfolio Overview
+4. Market Conditions (Permian + relevant secondary)
+5. Performance Highlights
+6. Portfolio Deep Dive (1-2 slides on key assets)
+7. Investment Strategy & Pipeline
+8. Outlook / Forward Guidance
+9. Appendix markers (Fund terms, team, disclosures)`;
 
   const promptText = `${modeInstruction}
 
@@ -61,18 +75,7 @@ Project: ${params.projectContext}
 ${contextData || "No internal data attached — build from ERP context and flag where internal data should be inserted with [INSERT: description]."}
 
 ---
-${mode === "edit-existing" && currentDeck?.text
-  ? "Reproduce the full deck below, applying the requested changes:"
-  : `Standard LP update structure:
-1. Cover / Title
-2. Executive Summary
-3. Portfolio Overview
-4. Market Conditions (Permian + relevant secondary)
-5. Performance Highlights
-6. Portfolio Deep Dive (1-2 slides on key assets)
-7. Investment Strategy & Pipeline
-8. Outlook / Forward Guidance
-9. Appendix markers (Fund terms, team, disclosures)`}
+${structureGuide}
 
 IMPORTANT — use EXACTLY this format for every slide (the parser requires it):
 

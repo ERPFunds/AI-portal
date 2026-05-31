@@ -58,7 +58,12 @@ export async function findLatestFile(
     "@microsoft.graph.downloadUrl"?: string;
   }> = data.value ?? [];
 
-  const match = items.find((i) => i.name.toLowerCase().endsWith(extension.toLowerCase()));
+  // Exclude agent-generated files (e.g. "…-deck-builder-2026-05-30-1423.pptx") so we
+  // always return the human-uploaded master file, not the agent's own prior output.
+  const agentPattern = /-(deck-builder|om-writer|om-editor)-\d{4}-\d{2}-\d{2}/i;
+  const match = items.find(
+    (i) => i.name.toLowerCase().endsWith(extension.toLowerCase()) && !agentPattern.test(i.name)
+  );
   if (!match) return null;
 
   // If download URL wasn't returned inline, fetch it separately
