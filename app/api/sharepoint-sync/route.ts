@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { sql } from "@vercel/postgres";
 
 export const dynamic = "force-dynamic";
 
@@ -11,6 +12,8 @@ interface SPFile {
   size: number;
   folder: string;   // top-level agent folder (Research, Newsletters, etc.)
   path: string;     // full relative path, e.g. "Newsletters/Brevard/May 2026"
+  triggeredBy?: string;   // from_email of whoever triggered the workflow that created this file
+  workflowId?: string;    // workflow that created this file
 }
 
 export async function GET() {
@@ -106,6 +109,29 @@ export async function GET() {
   allFiles.sort((a, b) =>
     new Date(b.lastModifiedDateTime).getTime() - new Date(a.lastModifiedDateTime).getTime()
   );
+
+  // ── Cross-reference with research_log to attach who triggered each file ──────
+  try {
+    const { rows } = await sql`
+      SELECT DISTINCT ON (onedrive_url) onedrive_url, from_email, workflow_id
+      FROM research_log
+      WHERE onedrive_url IS NOT NULL
+      ORDER BY onedrive_url, created_at DESC
+    `;
+    const logMap = new Map<string, { from_email: string; workflow_id: string }>();
+    for (const row of rows) {
+      logMap.set(row.onedrive_url, { from_email: row.from_email, workflow_id: row.workflow_id });
+    }
+    for (const file of allFiles) {
+      const match = logMap.get(file.webUrl);
+      if (match) {
+        file.triggeredBy = match.from_email;
+        file.workflowId  = match.workflow_id;
+      }
+    }
+  } catch {
+    // research_log may not exist yet — silently skip
+  }
 
   // ── Build response message ───────────────────────────────────────────────────
   const totalFiles = allFiles.length;

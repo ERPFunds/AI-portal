@@ -4286,6 +4286,8 @@ interface SPFile {
   size: number
   folder: string
   path: string
+  triggeredBy?: string   // from_email of whoever triggered the workflow
+  workflowId?: string
 }
 
 function inferLabel(file: SPFile): string {
@@ -4612,15 +4614,20 @@ function OutputFilesView() {
                     </td>
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>
                       {(() => {
+                        // 1st priority: research_log from_email (who triggered the workflow)
+                        const trigEmail = file.triggeredBy?.toLowerCase()
+                        if (trigEmail) {
+                          const name = EMAIL_DISPLAY[trigEmail] ?? trigEmail.split('@')[0]
+                          return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 4, padding: '2px 7px' }}>{name}</span>
+                        }
+                        // 2nd priority: SharePoint lastModifiedBy.user (works for manually uploaded files)
                         const dn = file.lastModifiedBy?.user?.displayName
                         const em = file.lastModifiedBy?.user?.email?.toLowerCase()
-                        if (!dn && !em) return <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
-                        const name = (em && EMAIL_DISPLAY[em]) ?? (dn ? dn.split(' ')[0] : em?.split('@')[0] ?? '?')
-                        return (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 4, padding: '2px 7px' }}>
-                            {name}
-                          </span>
-                        )
+                        if (dn || em) {
+                          const name = (em && EMAIL_DISPLAY[em]) ?? (dn ? dn.split(' ')[0] : em?.split('@')[0] ?? '?')
+                          return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, background: '#f0f9ff', color: '#0369a1', border: '1px solid #bae6fd', borderRadius: 4, padding: '2px 7px' }}>{name}</span>
+                        }
+                        return <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
                       })()}
                     </td>
                     <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' }}>{folderBadge(file.folder)}</td>
