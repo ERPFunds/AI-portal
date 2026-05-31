@@ -120,8 +120,31 @@ export async function readExcelRows(
 
   if (values.length === 0) return { headers: [], rows: [], records: [] };
 
-  const headers = values[0];
-  const rows = values.slice(1).filter((r) => r.some((c) => c.trim() !== ""));
+  // Find the actual header row: skip title/blank rows (fewer than 3 non-empty cells)
+  // and use the first row that looks like real column headers (≥ 3 non-empty cells).
+  // This handles spreadsheets with title blocks at the top (e.g. Commitment Schedule,
+  // Permian Pipeline) without breaking simple single-header sheets.
+  const MIN_HEADER_COLS = 3;
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(values.length, 12); i++) {
+    const nonEmpty = values[i].filter((c) => c.trim() !== "").length;
+    if (nonEmpty >= MIN_HEADER_COLS) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  // Trim trailing empty columns from the header row to avoid phantom-cell inflation
+  const rawHeaderRow = values[headerIdx];
+  let lastNonEmpty = 0;
+  rawHeaderRow.forEach((h, i) => { if (h.trim()) lastNonEmpty = i; });
+  const headers = rawHeaderRow.slice(0, lastNonEmpty + 1);
+
+  const rows = values
+    .slice(headerIdx + 1)
+    .filter((r) => r.some((c) => c.trim() !== ""))
+    .map((r) => r.slice(0, headers.length)); // trim data rows to header width
+
   const records = rows.map((row) =>
     Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ""]))
   );
