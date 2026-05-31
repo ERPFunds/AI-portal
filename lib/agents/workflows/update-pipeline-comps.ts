@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { withExcelFile, EXCEL_FILES } from "@/lib/agents/excel-utils";
+import { withExcelFile, EXCEL_FILES, listWorksheetNames, getExcelItemId } from "@/lib/agents/excel-utils";
+import { getGraphToken } from "@/lib/agents/graph-token";
 import type { ResearchBundle } from "@/lib/agents/research";
 
 const anthropic = new Anthropic();
@@ -19,6 +20,24 @@ function detectMarket(ask: string, projectContext: string): "permian" | "brevard
   return "permian"; // default
 }
 
+/**
+ * For the Permian Pipeline file, detect which tab to use:
+ *  - Tab 0 (first):  ERP acquisition pipeline — new ERP locations, sites under evaluation
+ *  - Tab 1 (second): Pipeline & Market Analysis — market comps, third-party sales, market data
+ *
+ * Default to tab 1 (comps) since that's the most common update.
+ */
+function detectPermianTab(ask: string, projectContext: string): { tabIndex: number; tabLabel: string } {
+  const haystack = `${ask} ${projectContext}`.toLowerCase();
+  const isErpAcquisition =
+    /\b(erp\s+(location|site|acquisition|target|deal)|new\s+erp|we('re|are)\s+(looking|evaluating|under\s+contract)|loi|letter\s+of\s+intent|erp\s+is\s+buying|erp\s+pipeline)\b/.test(haystack) ||
+    /\b(our\s+(acquisition|pipeline|target|deal)|erp\s+fund|fund\s+iv\s+(target|deal|acqui))\b/.test(haystack);
+  if (isErpAcquisition) {
+    return { tabIndex: 0, tabLabel: "New ERP Location (Tab 1)" };
+  }
+  return { tabIndex: 1, tabLabel: "Pipeline & Market Analysis (Tab 2)" };
+}
+
 export async function runUpdatePipelineComps(params: {
   ask: string;
   projectContext: string;
@@ -31,8 +50,34 @@ export async function runUpdatePipelineComps(params: {
     market === "brevard" ? EXCEL_FILES.brevardPipeline : EXCEL_FILES.permianPipeline;
   const marketLabel = market === "brevard" ? "Brevard / Space Coast" : "Permian Basin";
 
+  // ── For Permian, detect which tab to use ─────────────────────────────────
+  let worksheetIndex = 0;
+  let tabLabel = "Tab 1";
+  let sheetNames: string[] = [];
+
+  if (market === "permian") {
+    const { tabIndex, tabLabel: tl } = detectPermianTab(ask, projectContext);
+    worksheetIndex = tabIndex;
+    tabLabel = tl;
+
+    // Fetch actual sheet names so the reply shows the real tab name
+    try {
+      const token = await getGraphToken();
+      const siteId = process.env.SHAREPOINT_SITE_ID;
+      if (token && siteId) {
+        const fileInfo = await getExcelItemId(token, siteId, filename);
+        if (fileInfo) {
+          sheetNames = await listWorksheetNames(token, siteId, fileInfo.itemId);
+          if (sheetNames[worksheetIndex]) {
+            tabLabel = `"${sheetNames[worksheetIndex]}" (Tab ${worksheetIndex + 1})`;
+          }
+        }
+      }
+    } catch { /* non-fatal — tabLabel already set */ }
+  }
+
   // ── Read existing rows to get the header schema + avoid duplicate entries ─
-  const existingData = await withExcelFile(filename, "read");
+  const existingData = await withExcelFile(filename, "read", undefined, worksheetIndex);
   // Capture the SharePoint URL now — we include it in every return path so the
   // email reply always has the "View in Shared Drive" button (even on no-entries).
   const fileWebUrl: string | null = existingData.webUrl || null;
@@ -113,7 +158,7 @@ If no new deals or comps are found, return [].`,
     newRows = entries.map((e) => Object.values(e).map(String));
   }
 
-  const appendResult = await withExcelFile(filename, "append", newRows);
+  const appendResult = await withExcelFile(filename, "append", newRows, worksheetIndex);
 
   // Compact display for email reply
   const entryList = entries
@@ -130,11 +175,12 @@ If no new deals or comps are found, return [].`,
     })
     .join("\n");
 
+  const tabNote = market === "permian" ? ` [${tabLabel}]` : "";
   const xlsNote = appendResult.success
-    ? `✅ ${appendResult.message} → ${filename}`
+    ? `✅ ${appendResult.message} → ${filename}${tabNote}`
     : `⚠️ Excel update failed: ${appendResult.message}`;
 
-  const summary = `Pipeline & Comps updated — ${entries.length} new record(s) added to ${marketLabel} tracker for "${projectContext}".\n\n${entryList}\n\n${xlsNote}`;
+  const summary = `Pipeline & Comps updated — ${entries.length} new record(s) added to ${marketLabel} tracker${tabNote} for "${projectContext}".\n\n${entryList}\n\n${xlsNote}`;
 
   return {
     summary,

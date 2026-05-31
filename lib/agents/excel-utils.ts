@@ -55,13 +55,31 @@ function fileBaseUrl(siteId: string, itemId: string): string {
 // ── Core API calls ─────────────────────────────────────────────────────────────
 
 /**
- * Returns the id of the first worksheet in a workbook.
- * Falls back to the literal name "Sheet1" if enumeration fails.
+ * Fetch all worksheet names sorted by position.
  */
-async function getFirstWorksheetId(
+export async function listWorksheetNames(
   token: string,
   siteId: string,
   itemId: string
+): Promise<string[]> {
+  const url = `${fileBaseUrl(siteId, itemId)}/worksheets?$select=id,name,position`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  const sheets: Array<{ id: string; name: string; position: number }> = data.value ?? [];
+  sheets.sort((a, b) => a.position - b.position);
+  return sheets.map((s) => s.name);
+}
+
+/**
+ * Returns the URL-encoded worksheet id for the sheet at the given 0-based index.
+ * Falls back to "Sheet1" if enumeration fails.
+ */
+async function getWorksheetId(
+  token: string,
+  siteId: string,
+  itemId: string,
+  worksheetIndex = 0
 ): Promise<string> {
   const url = `${fileBaseUrl(siteId, itemId)}/worksheets?$select=id,name,position`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
@@ -69,10 +87,18 @@ async function getFirstWorksheetId(
   const data = await res.json();
   const sheets: Array<{ id: string; name: string; position: number }> = data.value ?? [];
   if (sheets.length === 0) return "Sheet1";
-  // Sort by position ascending, take the first
   sheets.sort((a, b) => a.position - b.position);
-  // Use the sheet name (cleaner in URLs than the GUID which contains braces)
-  return encodeURIComponent(sheets[0].name);
+  const sheet = sheets[worksheetIndex] ?? sheets[0];
+  return encodeURIComponent(sheet.name);
+}
+
+/** @deprecated use getWorksheetId(…, 0) */
+async function getFirstWorksheetId(
+  token: string,
+  siteId: string,
+  itemId: string
+): Promise<string> {
+  return getWorksheetId(token, siteId, itemId, 0);
 }
 
 /**
@@ -100,15 +126,16 @@ export async function getExcelItemId(
 }
 
 /**
- * Read all used rows from the first worksheet.
+ * Read all used rows from the specified worksheet (0-based index, default 0).
  * Returns headers (row 0) and data rows separately.
  */
 export async function readExcelRows(
   token: string,
   siteId: string,
-  itemId: string
+  itemId: string,
+  worksheetIndex = 0
 ): Promise<ExcelReadResult> {
-  const sheetId = await getFirstWorksheetId(token, siteId, itemId);
+  const sheetId = await getWorksheetId(token, siteId, itemId, worksheetIndex);
   const url = `${fileBaseUrl(siteId, itemId)}/worksheets/${sheetId}/usedRange`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
@@ -153,17 +180,18 @@ export async function readExcelRows(
 }
 
 /**
- * Append one or more rows to the first worksheet after the last used row.
+ * Append one or more rows to the specified worksheet (0-based index, default 0).
  * Rows must match the column count of the existing data.
  */
 export async function appendExcelRows(
   token: string,
   siteId: string,
   itemId: string,
-  newRows: (string | number)[][]
+  newRows: (string | number)[][],
+  worksheetIndex = 0
 ): Promise<ExcelAppendResult> {
   // 1. Get current used range to find dimensions
-  const sheetId = await getFirstWorksheetId(token, siteId, itemId);
+  const sheetId = await getWorksheetId(token, siteId, itemId, worksheetIndex);
   const usedUrl = `${fileBaseUrl(siteId, itemId)}/worksheets/${sheetId}/usedRange`;
   const usedRes = await fetch(usedUrl, { headers: { Authorization: `Bearer ${token}` } });
   if (!usedRes.ok) {
@@ -237,19 +265,23 @@ export async function appendExcelRows(
  */
 export async function withExcelFile(
   filename: string,
-  mode: "read"
+  mode: "read",
+  rows?: undefined,
+  worksheetIndex?: number
 ): Promise<ExcelReadResult & { webUrl: string; error?: string }>;
 
 export async function withExcelFile(
   filename: string,
   mode: "append",
-  rows: (string | number)[][]
+  rows: (string | number)[][],
+  worksheetIndex?: number
 ): Promise<ExcelAppendResult>;
 
 export async function withExcelFile(
   filename: string,
   mode: "read" | "append",
-  rows?: (string | number)[][]
+  rows?: (string | number)[][],
+  worksheetIndex = 0
 ): Promise<(ExcelReadResult & { webUrl: string; error?: string }) | ExcelAppendResult> {
   let token: string | null;
   try {
@@ -285,10 +317,10 @@ export async function withExcelFile(
   }
 
   if (mode === "read") {
-    const result = await readExcelRows(token, siteId, fileInfo.itemId);
+    const result = await readExcelRows(token, siteId, fileInfo.itemId, worksheetIndex);
     return { ...result, webUrl: fileInfo.webUrl };
   } else {
-    const appendResult = await appendExcelRows(token, siteId, fileInfo.itemId, rows ?? []);
+    const appendResult = await appendExcelRows(token, siteId, fileInfo.itemId, rows ?? [], worksheetIndex);
     return { ...appendResult, webUrl: fileInfo.webUrl };
   }
 }
