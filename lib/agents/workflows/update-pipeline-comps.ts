@@ -81,6 +81,7 @@ export async function runUpdatePipelineComps(params: {
   // Capture the SharePoint URL now — we include it in every return path so the
   // email reply always has the "View in Shared Drive" button (even on no-entries).
   const fileWebUrl: string | null = existingData.webUrl || null;
+  console.log(`[pipeline-comps] market=${market} file="${filename}" tab=${worksheetIndex} fileWebUrl=${fileWebUrl} readError=${(existingData as { error?: string }).error ?? "none"}`);
   const headers = existingData.headers;
   const headerStr = headers.length > 0 ? `Existing columns: ${headers.join(" | ")}` : "";
 
@@ -159,6 +160,7 @@ If no new deals or comps are found, return [].`,
   }
 
   const appendResult = await withExcelFile(filename, "append", newRows, worksheetIndex);
+  console.log(`[pipeline-comps] appendResult success=${appendResult.success} msg="${appendResult.message}" webUrl=${(appendResult as { webUrl?: string }).webUrl ?? "undefined"}`);
 
   // Compact display for email reply
   const entryList = entries
