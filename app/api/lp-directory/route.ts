@@ -139,7 +139,12 @@ export async function GET() {
           sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
         } satisfies LpRecord;
       })
-      .filter(lp => lp.investor.length > 0);
+      .filter(lp => {
+        if (!lp.investor) return false;
+        // Skip metadata / summary rows that aren't real LP entries
+        const low = lp.investor.toLowerCase();
+        return !/^(total|target|initial|subtotal|note[s]?|tbd|n\/a|blank|fund target|initial target|target list)/.test(low);
+      });
 
     return NextResponse.json({
       lps, lpCount: lps.length,
