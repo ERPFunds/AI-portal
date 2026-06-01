@@ -60,7 +60,7 @@ export async function GET(request: Request) {
 
   // Load this week's already-seen article URLs to avoid repeating articles
   // that ran in any of the other 5 newsletters earlier this week.
-  const seenUrls = await getSeenNewsletterArticleUrls().catch(() => new Set<string>());
+  const seenUrls = await getSeenNewsletterArticleUrls('brevard-weekly').catch(() => new Set<string>());
 
   try {
     const startMs = Date.now();

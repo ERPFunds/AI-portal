@@ -59,24 +59,36 @@ const NEWSLETTER_AGENTS = [
 ];
 
 /**
- * Returns the set of article URLs already used in any newsletter brief
- * in the past 7 days. Used to suppress repeats across all newsletters
- * for the current week. Test sends never call this, so they're excluded.
+ * Returns the set of article URLs already used by a specific newsletter
+ * agent in the past 7 days. Scoped per-agent so that, e.g., brevard-brief
+ * consuming articles does not starve brevard-submarket-watch of the same
+ * articles — each newsletter type maintains its own deduplication history.
+ *
+ * Pass agentName to scope to that newsletter's own history.
+ * Omit (or pass undefined) to get the union across all newsletters (legacy).
  */
-export async function getSeenNewsletterArticleUrls(): Promise<Set<string>> {
+export async function getSeenNewsletterArticleUrls(agentName?: string): Promise<Set<string>> {
   try {
-    const { rows } = await sql`
-      SELECT DISTINCT ba.article_url
-      FROM brief_articles ba
-      JOIN briefs b ON b.id = ba.brief_id
-      WHERE b.agent_name IN (
-        'brevard-weekly', 'brevard-submarket', 'brevard-fund',
-        'brevard-submarket-watch', 'brevard-fund-landscape',
-        'permian-brief', 'permian-submarket-watch', 'permian-fund-landscape',
-        'submarket-watch', 'fund-landscape-brief'
-      )
-        AND b.sent_at > NOW() - INTERVAL '7 days'
-    `;
+    const { rows } = agentName
+      ? await sql`
+          SELECT DISTINCT ba.article_url
+          FROM brief_articles ba
+          JOIN briefs b ON b.id = ba.brief_id
+          WHERE b.agent_name = ${agentName}
+            AND b.sent_at > NOW() - INTERVAL '7 days'
+        `
+      : await sql`
+          SELECT DISTINCT ba.article_url
+          FROM brief_articles ba
+          JOIN briefs b ON b.id = ba.brief_id
+          WHERE b.agent_name IN (
+            'brevard-weekly', 'brevard-submarket', 'brevard-fund',
+            'brevard-submarket-watch', 'brevard-fund-landscape',
+            'permian-brief', 'permian-submarket-watch', 'permian-fund-landscape',
+            'submarket-watch', 'fund-landscape-brief'
+          )
+            AND b.sent_at > NOW() - INTERVAL '7 days'
+        `;
     return new Set(rows.map((r: any) => r.article_url));
   } catch {
     return new Set();

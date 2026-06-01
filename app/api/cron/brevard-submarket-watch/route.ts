@@ -160,7 +160,7 @@ export async function GET(request: Request) {
   try {
     const [rawNews, seenUrls] = await Promise.all([
       fetchNews(),
-      getSeenNewsletterArticleUrls().catch(() => new Set<string>()),
+      getSeenNewsletterArticleUrls('brevard-submarket-watch').catch(() => new Set<string>()),
     ]);
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
