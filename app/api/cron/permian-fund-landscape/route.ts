@@ -51,28 +51,33 @@ async function sendEmailViaGraph(params: { subject: string; htmlBody: string }):
 }
 
 const FUND_FEEDS = [
-  { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
-  { url: "https://www.prnewswire.com/rss/news-releases-list.rss", source: "PR Newswire" },
-  { url: "https://www.businesswire.com/rss/home", source: "Business Wire" },
-  { url: "https://therealdeal.com/feed/", source: "The Real Deal" },
+  { url: "https://pere.privateequityinternational.com/feed/", source: "PERE" },
+  { url: "https://www.nreionline.com/rss.xml", source: "NREI" },
+  { url: "https://www.irei.com/feed/", source: "Institutional RE" },
   { url: "https://www.globest.com/feed/", source: "GlobeSt" },
+  { url: "https://credaily.com/feed/", source: "CRE Daily" },
+  { url: "https://www.costar.com/rss", source: "CoStar News" },
 ];
 
 const FUND_APIFY_QUERIES = [
-  "industrial CRE private equity fund raise 2025",
-  "industrial outdoor storage fund acquisition 2025",
-  "Permian Basin industrial REIT acquisition fund",
-  "industrial real estate fund benchmarks IRR 2025",
-  "EQT Blackstone Prologis industrial fund raise",
+  "industrial outdoor storage IOS fund raise close 2025 2026",
+  "Permian Basin West Texas industrial CRE fund acquisition LP",
+  "industrial net lease private equity fund IRR 2026",
+  "small mid-market industrial REIT fund raise 2025 2026",
+  "industrial CRE fund LP capital raise close Midland Odessa",
+  "outdoor storage truck terminal service yard fund acquisition",
+  "industrial real estate fund benchmark distribution 2025 2026",
 ];
 
 const FUND_KEYWORDS = [
-  "fund raise", "fund launch", "capital raise", "equity raise",
+  "fund raise", "fund launch", "capital raise", "equity raise", "fund close",
   "private equity industrial", "industrial reit", "reit acquisition",
-  "irr", "fund return", "distribution", "carried interest",
-  "industrial fund", "eim", "benchmark", "fund iv", "fund v",
-  "prologis", "blackstone real estate", "eqt", "nuveen", "ares industrial",
-  "istar", "link logistics", "duke realty", "logistics reit",
+  "irr", "equity multiple", "fund return", "carried interest",
+  "industrial fund", "outdoor storage fund", "ios fund", "benchmark",
+  "fund iv", "fund v", "fund vi", "limited partner", "lp appetite",
+  "prologis", "blackstone real estate", "eqt exeter", "nuveen industrial",
+  "ares industrial", "link logistics", "istar", "clarion industrial",
+  "industrial logistics fund", "net lease fund", "west texas industrial",
 ];
 
 interface NewsItem {
@@ -164,8 +169,9 @@ export async function GET(request: Request) {
     ]);
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
-    if (news.length === 0) {
-      return NextResponse.json({ message: "No new fund landscape articles this week." });
+    if (news.length < 3) {
+      logAgentRun({ agentId: "lp-intel", workflowId: "permian-fund-landscape", status: "error", market: "permian", durationMs: Date.now() - startMs, errorMessage: `Only ${news.length} articles found — skipping send` }).catch(() => {});
+      return NextResponse.json({ message: `Only ${news.length} fund landscape articles found this week — skipping send.` });
     }
 
     const articleList = news
@@ -179,19 +185,21 @@ export async function GET(request: Request) {
       messages: [
         {
           role: "user",
-          content: `You are a competitive intelligence analyst for ERP Industrials, a Permian Basin industrial CRE fund. Write a Fund Landscape Brief (4-6 paragraphs) based on the following recent news.
+          content: `You are a competitive intelligence analyst for ERP Industrials, a Permian Basin industrial CRE fund manager raising Fund IV. Write a Fund Landscape Brief (4-5 paragraphs) for Meghan (head of fundraising) to use in LP meetings this week.
 
-Focus on:
-1. Competitor fund activity â€” who's raising, who closed, fund sizes, target IRRs
-2. Fund benchmarks â€” what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
-3. Competitive positioning â€” how does ERP's Fund IV strategy compare to what larger players are doing?
-4. LP appetite signals â€” what asset types and markets are attracting capital right now?
-5. Any market shifts that could affect ERP's Fund IV fundraising pitch
+ERP context: ~$50M fund targeting Permian Basin industrial outdoor storage (IOS), service yards, and small-bay industrial. Competing against larger generalist industrial funds but differentiated by West Texas market depth.
+
+From the articles below, synthesize what's relevant for LP conversations:
+1. Which funds are actively raising or just closed — sizes, strategies, target returns
+2. What LP appetite signals are visible — what asset types and geographies are attracting capital?
+3. How do ERP's IOS/Permian focus compare to what competitors are doing — is it differentiated or crowded?
+4. Any IRR benchmarks, fee structures, or LP preference shifts worth noting
+5. Broader industrial CRE sentiment that affects the fundraising environment
 
 Articles:
 ${articleList}
 
-Be specific about fund names, sizes, and metrics where available. Flag intelligence gaps honestly. Frame the analysis for Meghan (head of fundraising) preparing LP meetings.`,
+Write with confidence — synthesize what the articles tell you and draw LP-facing implications from them. If an article is only tangentially relevant, extract what IS useful for the fundraising narrative. Do not apologize for limited data; write a tight, usable brief from what's available.`,
         },
       ],
     });

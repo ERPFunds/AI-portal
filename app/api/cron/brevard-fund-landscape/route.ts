@@ -51,28 +51,34 @@ async function sendEmailViaGraph(params: { subject: string; htmlBody: string }):
 }
 
 const FUND_FEEDS = [
-  { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
-  { url: "https://www.prnewswire.com/rss/news-releases-list.rss", source: "PR Newswire" },
-  { url: "https://www.businesswire.com/rss/home", source: "Business Wire" },
-  { url: "https://therealdeal.com/feed/", source: "The Real Deal" },
+  { url: "https://pere.privateequityinternational.com/feed/", source: "PERE" },
+  { url: "https://www.nreionline.com/rss.xml", source: "NREI" },
+  { url: "https://www.irei.com/feed/", source: "Institutional RE" },
   { url: "https://www.globest.com/feed/", source: "GlobeSt" },
+  { url: "https://credaily.com/feed/", source: "CRE Daily" },
+  { url: "https://bisnow.com/rss/south-florida", source: "Bisnow South Florida" },
 ];
 
 const FUND_APIFY_QUERIES = [
-  "industrial CRE private equity fund raise 2025",
-  "industrial outdoor storage fund acquisition 2025",
-  "Florida industrial REIT acquisition fund 2025",
-  "industrial real estate fund benchmarks IRR 2025",
-  "EQT Blackstone Prologis industrial fund raise",
+  "Florida industrial CRE fund raise close 2025 2026",
+  "Space Coast Brevard industrial real estate fund LP capital",
+  "industrial net lease fund raise IRR 2025 2026",
+  "Florida logistics industrial private equity acquisition 2026",
+  "small mid-market industrial fund raise close southeast 2025 2026",
+  "industrial real estate fund benchmark equity multiple distribution 2026",
+  "aerospace defense industrial real estate fund Florida",
 ];
 
 const FUND_KEYWORDS = [
-  "fund raise", "fund launch", "capital raise", "equity raise",
+  "fund raise", "fund launch", "capital raise", "equity raise", "fund close",
   "private equity industrial", "industrial reit", "reit acquisition",
-  "irr", "fund return", "distribution", "carried interest",
-  "industrial fund", "eim", "benchmark", "fund iv", "fund v",
-  "prologis", "blackstone real estate", "eqt", "nuveen", "ares industrial",
-  "istar", "link logistics", "duke realty", "logistics reit",
+  "irr", "equity multiple", "fund return", "carried interest",
+  "industrial fund", "benchmark", "fund iv", "fund v", "fund vi",
+  "limited partner", "lp appetite", "florida industrial fund",
+  "prologis", "blackstone real estate", "eqt exeter", "nuveen industrial",
+  "ares industrial", "link logistics", "cabot industrial", "centerbridge",
+  "rockefeller group", "greenpointe", "industrial logistics fund",
+  "net lease fund", "space coast industrial", "brevard industrial",
 ];
 
 interface NewsItem {
@@ -164,8 +170,9 @@ export async function GET(request: Request) {
     ]);
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
-    if (news.length === 0) {
-      return NextResponse.json({ message: "No new fund landscape articles this week." });
+    if (news.length < 3) {
+      logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: "error", market: "brevard", durationMs: Date.now() - startMs, errorMessage: `Only ${news.length} articles found — skipping send` }).catch(() => {});
+      return NextResponse.json({ message: `Only ${news.length} fund landscape articles found this week — skipping send.` });
     }
 
     const articleList = news
