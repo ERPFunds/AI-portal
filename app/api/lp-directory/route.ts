@@ -1,27 +1,39 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
-import { readExcelRows } from "@/lib/agents/excel-utils";
+import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 
 export const dynamic = "force-dynamic";
 
 export interface LpRecord {
   investor: string;
-  commitment: string;      // raw string e.g. "$500K", "$1M", "TBD"
-  commitmentUsd: number;   // parsed numeric value in dollars
-  commitType: string;      // "Soft Circle" | "Hard Commit" | "Signed Docs" | "Verbal" | "TBD" | ""
+  commitment: string;
+  commitmentUsd: number;
+  commitType: string;
   contact: string;
   email: string;
   phone: string;
   date: string;
   notes: string;
-  // Salesforce placeholders — populated when SF is connected
-  sfLpType: string | null;       // "Institutional" | "Family Office" | "HNWI" | etc.
-  sfCalled: number | null;       // capital called in dollars
+  sfLpType: string | null;
+  sfCalled: number | null;
   sfDistributions: number | null;
   sfCrmId: string | null;
 }
+
+interface LpUpdateBody {
+  investor: string;
+  commitment?: string;
+  commitType?: string;
+  contact?: string;
+  email?: string;
+  phone?: string;
+  notes?: string;
+  date?: string;
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function parseDollar(raw: string): number {
   const s = raw.replace(/[$,\s]/g, "").toUpperCase();
@@ -34,117 +46,212 @@ function parseDollar(raw: string): number {
   return num;
 }
 
-/** Extract commit type and plain notes from a Notes cell like "Type: Soft Circle | Date: 2026-05-31 | some text" */
 function parseNotesCell(raw: string): { commitType: string; date: string; notes: string } {
   const parts = raw.split("|").map(p => p.trim());
   let commitType = "";
   let date = "";
   const plainParts: string[] = [];
   for (const part of parts) {
-    if (/^type:/i.test(part)) {
-      commitType = part.replace(/^type:\s*/i, "").trim();
-    } else if (/^date:/i.test(part)) {
-      date = part.replace(/^date:\s*/i, "").trim();
-    } else if (part) {
-      plainParts.push(part);
-    }
+    if (/^type:/i.test(part))  commitType = part.replace(/^type:\s*/i, "").trim();
+    else if (/^date:/i.test(part)) date = part.replace(/^date:\s*/i, "").trim();
+    else if (part) plainParts.push(part);
   }
   return { commitType, date, notes: plainParts.join(" · ") };
 }
+
+function packNotesCell(commitType: string, date: string, notes: string): string {
+  return [
+    commitType ? `Type: ${commitType}` : "",
+    date       ? `Date: ${date}`       : "",
+    notes      || "",
+  ].filter(Boolean).join(" | ");
+}
+
+function colLetter(index: number): string {
+  let result = "";
+  let n = index;
+  while (n >= 0) {
+    result = String.fromCharCode((n % 26) + 65) + result;
+    n = Math.floor(n / 26) - 1;
+  }
+  return result;
+}
+
+/** Shared: locate commitment schedule + auth, return token/siteId/scheduleInfo */
+async function getScheduleContext() {
+  const scheduleInfo = await findCommitmentSchedule();
+  if (scheduleInfo.error || !scheduleInfo.itemId) throw new Error(scheduleInfo.error ?? "Commitment schedule not found");
+  const token = await getGraphToken();
+  if (!token) throw new Error("SharePoint auth failed");
+  const siteId = process.env.SHAREPOINT_SITE_ID;
+  if (!siteId) throw new Error("SHAREPOINT_SITE_ID not configured");
+  return { scheduleInfo, token, siteId };
+}
+
+/** Parse header + column indices from raw values[][] */
+function parseHeaders(values: string[][]) {
+  const headerRowIdx = values.findIndex(row => row.some(cell => /^investor$/i.test(cell.trim())));
+  if (headerRowIdx === -1) throw new Error("Header row not found in commitment schedule");
+  const raw = values[headerRowIdx];
+  let lastNonEmpty = 0;
+  raw.forEach((h, i) => { if (h.trim()) lastNonEmpty = i; });
+  const headers = raw.slice(0, lastNonEmpty + 1);
+  const hLower = headers.map(h => h.toLowerCase().trim());
+  const idx = (pat: RegExp) => hLower.findIndex(h => h && pat.test(h));
+  return {
+    headerRowIdx,
+    headers,
+    iInvestor:   idx(/investor|lp\s*name|^name$/),
+    iCommitment: idx(/commitment|amount|total/),
+    iContact:    idx(/contact|primary/),
+    iEmail:      idx(/email/),
+    iPhone:      idx(/phone/),
+    iNotes:      idx(/notes|comment/),
+  };
+}
+
+// ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function GET() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  // Locate the commitment schedule file
-  const scheduleInfo = await findCommitmentSchedule();
-  if (scheduleInfo.error || !scheduleInfo.itemId) {
-    return NextResponse.json({ error: scheduleInfo.error ?? "Commitment schedule not found" }, { status: 404 });
+  try {
+    const { scheduleInfo, token, siteId } = await getScheduleContext();
+    const { headers: rawHeaders, rows: rawRows } = await readExcelRows(token, siteId, scheduleInfo.itemId);
+
+    const allRows = [rawHeaders, ...rawRows];
+    const { headerRowIdx, headers, iInvestor, iCommitment, iContact, iEmail, iPhone, iNotes } =
+      parseHeaders(allRows);
+
+    const dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
+
+    const lps: LpRecord[] = dataRows
+      .map(row => {
+        const g = (i: number) => (i >= 0 ? row[i] ?? "" : "").trim();
+        const { commitType, date, notes } = parseNotesCell(g(iNotes));
+        return {
+          investor: g(iInvestor), commitment: g(iCommitment),
+          commitmentUsd: parseDollar(g(iCommitment)), commitType,
+          contact: g(iContact), email: g(iEmail), phone: g(iPhone),
+          date, notes,
+          sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
+        } satisfies LpRecord;
+      })
+      .filter(lp => lp.investor.length > 0);
+
+    return NextResponse.json({
+      lps, lpCount: lps.length,
+      totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
+      scheduleName: scheduleInfo.name,
+      webUrl: scheduleInfo.webUrl,
+      syncedAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
+}
 
-  const token = await getGraphToken();
-  if (!token) return NextResponse.json({ error: "SharePoint auth failed" }, { status: 500 });
+// ── PATCH ─────────────────────────────────────────────────────────────────────
 
-  const siteId = process.env.SHAREPOINT_SITE_ID;
-  if (!siteId) return NextResponse.json({ error: "SHAREPOINT_SITE_ID not configured" }, { status: 500 });
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { headers: rawHeaders, rows: rawRows } = await readExcelRows(token, siteId, scheduleInfo.itemId);
+  const body: LpUpdateBody = await req.json();
+  if (!body.investor) return NextResponse.json({ error: "investor is required" }, { status: 400 });
 
-  // The commitment schedule has title rows before the real headers.
-  // Find the row containing "Investor".
-  const allRows = [rawHeaders, ...rawRows];
-  const headerRowIdx = allRows.findIndex(row =>
-    row.some(cell => /^investor$/i.test(cell.trim()))
-  );
+  try {
+    const { scheduleInfo, token, siteId } = await getScheduleContext();
+    const base = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${scheduleInfo.itemId}/workbook`;
 
-  let headers: string[];
-  let dataRows: string[][];
-  if (headerRowIdx >= 0) {
-    const raw = allRows[headerRowIdx];
-    let lastNonEmpty = 0;
-    raw.forEach((h, i) => { if (h.trim()) lastNonEmpty = i; });
-    headers = raw.slice(0, lastNonEmpty + 1);
-    dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
-  } else {
-    headers = rawHeaders;
-    dataRows = rawRows;
+    // Get first worksheet id
+    const sheetNames = await listWorksheetNames(token, siteId, scheduleInfo.itemId);
+    const sheetId = encodeURIComponent(sheetNames[0] ?? "Sheet1");
+
+    // Read raw usedRange (we need the address to compute absolute Excel row numbers)
+    const usedRes = await fetch(`${base}/worksheets/${sheetId}/usedRange`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!usedRes.ok) throw new Error(`Could not read usedRange: ${await usedRes.text()}`);
+    const usedData = await usedRes.json();
+
+    const values: string[][] = (usedData.values ?? []).map((row: unknown[]) =>
+      row.map(c => String(c ?? ""))
+    );
+
+    // Parse start row from address like "Sheet1!A2:K30" → 2
+    const address: string = usedData.address ?? "";
+    const startRow = parseInt(address.match(/[A-Z]+(\d+):/)?.[1] ?? "1");
+
+    const { headerRowIdx, headers, iInvestor, iCommitment, iContact, iEmail, iPhone, iNotes } =
+      parseHeaders(values);
+
+    // Find the investor's row within data rows
+    const dataValues = values.slice(headerRowIdx + 1);
+    const rowIdx = dataValues.findIndex(row =>
+      String(row[iInvestor] ?? "").trim().toLowerCase() === body.investor.trim().toLowerCase()
+    );
+    if (rowIdx === -1)
+      return NextResponse.json({ error: `LP "${body.investor}" not found in schedule` }, { status: 404 });
+
+    // Build the updated row (copy current, patch changed fields)
+    const currentRow = dataValues[rowIdx].slice();
+    while (currentRow.length < headers.length) currentRow.push("");
+
+    if (iCommitment >= 0 && body.commitment !== undefined) currentRow[iCommitment] = body.commitment;
+    if (iContact    >= 0 && body.contact    !== undefined) currentRow[iContact]    = body.contact;
+    if (iEmail      >= 0 && body.email      !== undefined) currentRow[iEmail]      = body.email;
+    if (iPhone      >= 0 && body.phone      !== undefined) currentRow[iPhone]      = body.phone;
+    if (iNotes >= 0) {
+      const current = parseNotesCell(dataValues[rowIdx][iNotes] ?? "");
+      currentRow[iNotes] = packNotesCell(
+        body.commitType ?? current.commitType,
+        body.date       ?? current.date,
+        body.notes      ?? current.notes,
+      );
+    }
+
+    // Open workbook session
+    const sessionRes = await fetch(`${base}/createSession`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ persistChanges: true }),
+    });
+    if (!sessionRes.ok) throw new Error(`Session open failed: ${await sessionRes.text()}`);
+    const { id: sessionId } = await sessionRes.json();
+    const closeSession = () =>
+      fetch(`${base}/closeSession`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "workbook-session-id": sessionId },
+      }).catch(() => {});
+
+    // Calculate the exact Excel row number and PATCH it
+    const excelRow = startRow + headerRowIdx + 1 + rowIdx;
+    const lastCol = colLetter(headers.length - 1);
+    const rangeAddr = `A${excelRow}:${lastCol}${excelRow}`;
+
+    const patchRes = await fetch(
+      `${base}/worksheets/${sheetId}/range(address='${rangeAddr}')`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "workbook-session-id": sessionId,
+        },
+        body: JSON.stringify({ values: [currentRow.slice(0, headers.length)] }),
+      }
+    );
+
+    await closeSession();
+
+    if (!patchRes.ok) throw new Error(`Excel write failed: ${await patchRes.text()}`);
+
+    return NextResponse.json({ success: true, investor: body.investor, excelRow });
+  } catch (err) {
+    return NextResponse.json({ error: String(err) }, { status: 500 });
   }
-
-  // Map header names to indices (case-insensitive)
-  const hLower = headers.map(h => h.toLowerCase().trim());
-  const idx = (pat: RegExp) => hLower.findIndex(h => h && pat.test(h));
-
-  const iInvestor   = idx(/investor|lp\s*name|^name$/);
-  const iCommitment = idx(/commitment|amount|total/);
-  const iContact    = idx(/contact|primary/);
-  const iEmail      = idx(/email/);
-  const iPhone      = idx(/phone/);
-  const iAddress    = idx(/address/);
-  const iNotes      = idx(/notes|comment/);
-
-  const records = dataRows.map(row =>
-    Object.fromEntries(headers.map((h, i) => [h, row[i] ?? ""]))
-  );
-
-  const lps: LpRecord[] = records
-    .map(r => {
-      const investor   = (iInvestor   >= 0 ? r[headers[iInvestor]]   : "") ?? "";
-      const commitment = (iCommitment >= 0 ? r[headers[iCommitment]] : "") ?? "";
-      const contact    = (iContact    >= 0 ? r[headers[iContact]]    : "") ?? "";
-      const email      = (iEmail      >= 0 ? r[headers[iEmail]]      : "") ?? "";
-      const phone      = (iPhone      >= 0 ? r[headers[iPhone]]      : "") ?? "";
-      const notesRaw   = (iNotes      >= 0 ? r[headers[iNotes]]      : "") ?? "";
-
-      const { commitType, date, notes } = parseNotesCell(notesRaw);
-
-      return {
-        investor: investor.trim(),
-        commitment: commitment.trim(),
-        commitmentUsd: parseDollar(commitment),
-        commitType,
-        contact: contact.trim(),
-        email: email.trim(),
-        phone: phone.trim(),
-        date,
-        notes,
-        // Salesforce fields — null until connected
-        sfLpType: null,
-        sfCalled: null,
-        sfDistributions: null,
-        sfCrmId: null,
-      } satisfies LpRecord;
-    })
-    .filter(lp => lp.investor.length > 0);
-
-  const totalCommittedUsd = lps.reduce((s, lp) => s + lp.commitmentUsd, 0);
-
-  return NextResponse.json({
-    lps,
-    lpCount: lps.length,
-    totalCommittedUsd,
-    scheduleName: scheduleInfo.name,
-    webUrl: scheduleInfo.webUrl,
-    syncedAt: new Date().toISOString(),
-  });
 }

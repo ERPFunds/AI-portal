@@ -1583,11 +1583,21 @@ const COMMIT_TYPE_BG: Record<string, string> = {
   'Hard Commit': '#f0fdf4', 'Signed Docs': '#dcfce7',
   'Soft Circle': '#eff6ff', 'Verbal': '#fffbeb', 'TBD': '#f9fafb',
 }
+interface LpEditState {
+  commitment: string; commitType: string; contact: string;
+  email: string; phone: string; notes: string; date: string;
+}
+const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verbal', 'TBD']
+
 function LpDirectoryView() {
   const [tab, setTab] = React.useState<'lps' | 'calls'>('lps')
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [editingRow, setEditingRow] = React.useState<string | null>(null)
+  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '' })
+  const [saving, setSaving] = React.useState(false)
+  const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
 
   React.useEffect(() => {
     fetch('/api/lp-directory')
@@ -1597,6 +1607,56 @@ function LpDirectoryView() {
       .finally(() => setLoading(false))
   }, [])
 
+  function startEdit(lp: LpRecord) {
+    setEditingRow(lp.investor)
+    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date })
+    setSaveMsg(null)
+  }
+  function cancelEdit() { setEditingRow(null); setSaveMsg(null) }
+
+  async function saveEdit(investor: string) {
+    setSaving(true)
+    setSaveMsg(null)
+    try {
+      const res = await fetch('/api/lp-directory', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ investor, ...editValues }),
+      })
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        setSaveMsg({ ok: false, text: result.error ?? 'Save failed' })
+      } else {
+        // Optimistically update local state
+        setData(prev => prev ? {
+          ...prev,
+          lps: prev.lps.map(lp => lp.investor === investor ? {
+            ...lp, ...editValues,
+            commitmentUsd: parseLpUsd(editValues.commitment),
+          } : lp),
+        } : prev)
+        setEditingRow(null)
+        setSaveMsg({ ok: true, text: `${investor} saved to Excel` })
+        setTimeout(() => setSaveMsg(null), 3000)
+      }
+    } catch (e) {
+      setSaveMsg({ ok: false, text: String(e) })
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function parseLpUsd(raw: string): number {
+    const s = raw.replace(/[$,\s]/g, '').toUpperCase()
+    if (!s || s === 'TBD') return 0
+    const n = parseFloat(s.replace(/[MBK]/, ''))
+    if (isNaN(n)) return 0
+    if (s.endsWith('B')) return n * 1e9
+    if (s.endsWith('M')) return n * 1e6
+    if (s.endsWith('K')) return n * 1e3
+    return n
+  }
+
   const badge = (s: string) => (
     <span style={{ fontSize: 10, fontWeight: 600, color: COMMIT_TYPE_COLOR[s] ?? '#6b7280', background: COMMIT_TYPE_BG[s] ?? '#f3f4f6', border: `1px solid ${COMMIT_TYPE_COLOR[s] ?? '#e5e7eb'}22`, borderRadius: 5, padding: '2px 7px' }}>{s || 'TBD'}</span>
   )
@@ -1605,6 +1665,7 @@ function LpDirectoryView() {
       {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title="Connect Salesforce to populate">— <span style={{ fontSize: 9, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>SF</span></span>}
     </td>
   )
+  const inputStyle: React.CSSProperties = { fontSize: 12, border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 7px', width: '100%', outline: 'none', background: '#fafafa' }
 
   const syncedLabel = data
     ? `Synced from ${data.scheduleName} · ${new Date(data.syncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -1648,11 +1709,16 @@ function LpDirectoryView() {
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
           {loading && <div style={{ padding: 24, color: '#9ca3af', fontSize: 13 }}>Loading commitment schedule…</div>}
           {error && <div style={{ padding: 24, color: '#dc2626', fontSize: 13 }}>Error: {error}</div>}
+          {saveMsg && (
+            <div style={{ padding: '8px 14px', background: saveMsg.ok ? '#f0fdf4' : '#fef2f2', borderBottom: '1px solid #e5e7eb', fontSize: 12, color: saveMsg.ok ? '#16a34a' : '#dc2626' }}>
+              {saveMsg.ok ? '✅' : '⚠️'} {saveMsg.text}
+            </div>
+          )}
           {!loading && !error && data && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Commitment', 'Status', 'Contact', 'LP Type', 'Called', 'Distributions', 'Notes'].map(h => (
+                  {['LP Name', 'Commitment', 'Status', 'Contact', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}{(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
                     </th>
@@ -1660,24 +1726,83 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.map((lp, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', maxWidth: 200 }}>
-                      {lp.investor}
-                      {lp.contact && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>{lp.contact}{lp.email ? ` · ${lp.email}` : ''}</div>}
-                    </td>
-                    <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>{lp.commitment || '—'}</td>
-                    <td style={{ padding: '11px 14px' }}>{badge(lp.commitType)}</td>
-                    <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11 }}>{lp.phone || '—'}</td>
-                    {sfCell(lp.sfLpType)}
-                    {sfCell(lp.sfCalled, fmtUsd)}
-                    {sfCell(lp.sfDistributions, fmtUsd)}
-                    <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11, maxWidth: 200 }}>
-                      <span title={lp.notes}>{lp.notes ? lp.notes.slice(0, 60) + (lp.notes.length > 60 ? '…' : '') : '—'}</span>
-                      {lp.date && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.date}</div>}
-                    </td>
-                  </tr>
-                ))}
+                {data.lps.map((lp, i) => {
+                  const isEditing = editingRow === lp.investor
+                  const ev = editValues
+                  return (
+                    <tr key={i} style={{ borderBottom: '1px solid #f3f4f6', background: isEditing ? '#f8faff' : undefined }}>
+                      {/* LP Name — never editable (it's the key) */}
+                      <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', maxWidth: 180 }}>
+                        {lp.investor}
+                        {isEditing ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                            <input value={ev.contact} onChange={e => setEditValues(v => ({ ...v, contact: e.target.value }))} placeholder="Contact name" style={inputStyle} />
+                            <input value={ev.email} onChange={e => setEditValues(v => ({ ...v, email: e.target.value }))} placeholder="Email" style={inputStyle} />
+                          </div>
+                        ) : (
+                          (lp.contact || lp.email) && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>{lp.contact}{lp.email ? ` · ${lp.email}` : ''}</div>
+                        )}
+                      </td>
+
+                      {/* Commitment */}
+                      <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
+                        {isEditing
+                          ? <input value={ev.commitment} onChange={e => setEditValues(v => ({ ...v, commitment: e.target.value }))} placeholder="$1M" style={{ ...inputStyle, width: 80 }} />
+                          : lp.commitment || '—'}
+                      </td>
+
+                      {/* Status / commitType */}
+                      <td style={{ padding: '11px 14px' }}>
+                        {isEditing
+                          ? <select value={ev.commitType} onChange={e => setEditValues(v => ({ ...v, commitType: e.target.value }))} style={{ ...inputStyle, width: 'auto' }}>
+                              {COMMIT_TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
+                            </select>
+                          : badge(lp.commitType)}
+                      </td>
+
+                      {/* Phone */}
+                      <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11 }}>
+                        {isEditing
+                          ? <input value={ev.phone} onChange={e => setEditValues(v => ({ ...v, phone: e.target.value }))} placeholder="Phone" style={inputStyle} />
+                          : lp.phone || '—'}
+                      </td>
+
+                      {/* Salesforce columns */}
+                      {sfCell(lp.sfLpType)}
+                      {sfCell(lp.sfCalled, fmtUsd)}
+                      {sfCell(lp.sfDistributions, fmtUsd)}
+
+                      {/* Notes */}
+                      <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11, maxWidth: 200 }}>
+                        {isEditing
+                          ? <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                              <input value={ev.notes} onChange={e => setEditValues(v => ({ ...v, notes: e.target.value }))} placeholder="Notes" style={inputStyle} />
+                              <input value={ev.date} onChange={e => setEditValues(v => ({ ...v, date: e.target.value }))} placeholder="Date (YYYY-MM-DD)" style={inputStyle} />
+                            </div>
+                          : <><span title={lp.notes}>{lp.notes ? lp.notes.slice(0, 60) + (lp.notes.length > 60 ? '…' : '') : '—'}</span>
+                            {lp.date && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.date}</div>}</>}
+                      </td>
+
+                      {/* Edit / Save / Cancel */}
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => saveEdit(lp.investor)} disabled={saving} style={{ fontSize: 11, fontWeight: 700, background: '#111827', color: '#fff', border: 'none', borderRadius: 5, padding: '5px 12px', cursor: saving ? 'wait' : 'pointer' }}>
+                              {saving ? '…' : 'Save'}
+                            </button>
+                            <button onClick={cancelEdit} disabled={saving} style={{ fontSize: 11, background: 'none', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 5, padding: '5px 10px', cursor: 'pointer' }}>
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => startEdit(lp)} style={{ fontSize: 11, background: 'none', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>
+                            ✎ Edit
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           )}
