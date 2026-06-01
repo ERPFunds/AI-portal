@@ -1576,9 +1576,7 @@ interface LpDirectoryData {
 }
 function fmtUsd(n: number): string {
   if (n === 0) return '—'
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1)}M`
-  if (n >= 1_000) return `$${Math.round(n / 1_000)}K`
-  return `$${n.toLocaleString()}`
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
 const COMMIT_TYPE_COLOR: Record<string, string> = {
   'Hard Commit': '#3DAE7A', 'Signed Docs': '#16a34a',
