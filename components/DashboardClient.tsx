@@ -1790,7 +1790,7 @@ function LpDirectoryView() {
                       <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
                         {isEditing
                           ? <input value={ev.commitment} onChange={e => setEditValues(v => ({ ...v, commitment: e.target.value }))} placeholder="$1M" style={{ ...inputStyle, width: 80 }} />
-                          : lp.commitment || '—'}
+                          : lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : lp.commitment || '—'}
                       </td>
 
                       {/* Status / commitType */}
