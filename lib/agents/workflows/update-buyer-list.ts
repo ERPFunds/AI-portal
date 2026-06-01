@@ -257,6 +257,6 @@ Return ONLY valid JSON, starting with [[ and ending with ]]:
     summary,
     outputType: "buyer-list",
     omContent: buyerList,
-    xlsUrl: (appendResult as { webUrl?: string }).webUrl ?? fileWebUrl ?? undefined,
+    xlsUrl: (appendResult as { webUrl?: string }).webUrl || fileWebUrl || undefined,
   };
 }

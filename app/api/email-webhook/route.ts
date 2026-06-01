@@ -313,7 +313,7 @@ export async function POST(req: NextRequest) {
 
   if (EXCEL_DIRECT_WORKFLOWS.has(workflowId)) {
     // Data already written to Excel — skip the secondary file save
-    const xlsUrl = (output as { xlsUrl?: string }).xlsUrl ?? null;
+    const xlsUrl = (output as { xlsUrl?: string }).xlsUrl || null;
     fileResult = {
       saved: true,
       url: xlsUrl,
