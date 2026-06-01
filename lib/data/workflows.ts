@@ -11,6 +11,7 @@ export interface Workflow {
   frequency?: string;
   status: "active" | "paused" | "draft";
   steps: WfStep[];
+  meta?: { trigger?: string; output?: string; escalate?: string };
 }
 
 export interface AgentWorkflowData {

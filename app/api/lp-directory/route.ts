@@ -16,6 +16,7 @@ export interface LpRecord {
   phone: string;
   date: string;
   notes: string;
+  group: string;
   sfLpType: string | null;
   sfCalled: number | null;
   sfDistributions: number | null;
@@ -127,28 +128,52 @@ export async function GET() {
 
     const dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
 
-    const lps: LpRecord[] = dataRows
-      .map(row => {
-        const g = (i: number) => (i >= 0 ? row[i] ?? "" : "").trim();
-        const { commitType, date, notes } = parseNotesCell(g(iNotes));
-        return {
-          investor: g(iInvestor), commitment: g(iCommitment),
-          commitmentUsd: parseDollar(g(iCommitment)), commitType,
-          contact: g(iContact), email: g(iEmail), phone: g(iPhone),
-          date, notes,
-          sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
-        } satisfies LpRecord;
-      })
-      .filter(lp => {
-        if (!lp.investor) return false;
-        // Skip metadata / summary rows that aren't real LP entries
-        const low = lp.investor.toLowerCase();
-        return !/^(total|target|initial|subtotal|note[s]?|tbd|n\/a|blank|fund target|initial target|target list)/.test(low);
+    // Walk rows — section-header rows (non-empty investor name, empty commitment +
+    // contact + email + phone) become group labels for the LPs that follow them.
+    let currentGroup = "All";
+    const lps: LpRecord[] = [];
+
+    for (const row of dataRows) {
+      const g = (i: number) => (i >= 0 ? row[i] ?? "" : "").trim();
+      const investorName = g(iInvestor);
+      if (!investorName) continue;
+
+      const commitment = g(iCommitment);
+      const contact    = g(iContact);
+      const email      = g(iEmail);
+      const phone      = g(iPhone);
+
+      // A row with only an investor name (no commitment / contact / email / phone)
+      // is a section-header — use it as the group label for subsequent rows.
+      const isSectionHeader = !commitment && !contact && !email && !phone;
+      if (isSectionHeader) {
+        currentGroup = investorName;
+        continue;
+      }
+
+      const { commitType, date, notes } = parseNotesCell(g(iNotes));
+      lps.push({
+        investor: investorName,
+        commitment,
+        commitmentUsd: parseDollar(commitment),
+        commitType,
+        contact, email, phone,
+        date, notes,
+        group: currentGroup,
+        sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
       });
+    }
+
+    // Collect ordered unique groups (preserves sheet order)
+    const groups: string[] = [];
+    for (const lp of lps) {
+      if (!groups.includes(lp.group)) groups.push(lp.group);
+    }
 
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
+      groups,
       scheduleName: scheduleInfo.name,
       webUrl: scheduleInfo.webUrl,
       syncedAt: new Date().toISOString(),

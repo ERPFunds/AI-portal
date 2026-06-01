@@ -1568,10 +1568,12 @@ function FinancialView() {
 interface LpRecord {
   investor: string; commitment: string; commitmentUsd: number; commitType: string;
   contact: string; email: string; phone: string; date: string; notes: string;
+  group: string;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
+  groups: string[];
   scheduleName: string; webUrl: string; syncedAt: string;
 }
 function fmtUsd(n: number): string {
@@ -1594,6 +1596,7 @@ const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verba
 
 function LpDirectoryView() {
   const [tab, setTab] = React.useState<'lps' | 'calls'>('lps')
+  const [groupView, setGroupView] = React.useState<string>('All')
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -1682,24 +1685,60 @@ function LpDirectoryView() {
       </div>
       <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Capital Raising · CIO & Chief of Staff" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
 
-      {/* Summary metrics */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-        {[
-          { label: 'Total LPs',       value: loading ? '…' : data ? `${data.lpCount}` : '—',                         sub: 'Fund IV commitment schedule' },
-          { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(data.totalCommittedUsd) : '—',             sub: 'Across all commitment types' },
-          { label: 'Hard Commits',    value: loading ? '…' : data ? `${data.lps.filter(l => l.commitType === 'Hard Commit' || l.commitType === 'Signed Docs').length}` : '—', sub: 'Hard Commit + Signed Docs' },
-          { label: 'Called to Date',  value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
-          { label: 'Distributions',   value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
-        ].map(k => (
-          <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
-            <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: k.value === '—' ? '#d1d5db' : '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
-            <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
-          </div>
-        ))}
-      </div>
+      {/* Group view tabs — derived from section headers in the Excel sheet */}
+      {data && data.groups.length > 1 && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+          {['All', ...data.groups].map(g => {
+            const isActive = groupView === g
+            const groupLps = g === 'All' ? data.lps : data.lps.filter(lp => lp.group === g)
+            return (
+              <button
+                key={g}
+                onClick={() => setGroupView(g)}
+                style={{
+                  fontSize: 12, fontWeight: isActive ? 700 : 500,
+                  color: isActive ? '#fff' : '#374151',
+                  background: isActive ? '#111827' : '#f3f4f6',
+                  border: `1px solid ${isActive ? '#111827' : '#e5e7eb'}`,
+                  borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {g}
+                <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#d1d5db' : '#9ca3af' }}>
+                  {groupLps.length}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
-      {/* Tabs */}
+      {/* Summary metrics — scoped to the selected group */}
+      {(() => {
+        const visibleLps = !data ? [] : groupView === 'All' ? data.lps : data.lps.filter(lp => lp.group === groupView)
+        const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
+        const hardCommits = visibleLps.filter(l => l.commitType === 'Hard Commit' || l.commitType === 'Signed Docs').length
+        return (
+          <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            {[
+              { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? 'Fund IV commitment schedule' : groupView },
+              { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
+              { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
+              { label: 'Called to Date',  value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
+              { label: 'Distributions',   value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
+            ].map(k => (
+              <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
+                <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
+                <div style={{ fontSize: 20, fontWeight: 700, color: k.value === '—' ? '#d1d5db' : '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
+                <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
+              </div>
+            ))}
+          </div>
+        )
+      })()}
+
+      {/* Section tabs — LP Profiles / Capital Calls */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
         {(['lps', 'calls'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: tab === t ? 700 : 500, color: tab === t ? '#111827' : '#9ca3af', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #111827' : '2px solid transparent', padding: '8px 16px', cursor: 'pointer', marginBottom: -1 }}>
@@ -1729,7 +1768,7 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.map((lp, i) => {
+                {data.lps.filter(lp => groupView === 'All' || lp.group === groupView).map((lp, i) => {
                   const isEditing = editingRow === lp.investor
                   const ev = editValues
                   return (
