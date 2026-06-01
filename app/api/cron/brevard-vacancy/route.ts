@@ -121,7 +121,7 @@ Focus on:
 Listings this week (${listings.length} total):
 ${listingText}
 
-Be specific, data-dense, and brief. Flag intelligence gaps honestly.`,
+Be specific, data-dense, and brief. Write with confidence from the available listings — do not apologize for limited data.`,
         },
       ],
     });

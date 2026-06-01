@@ -198,7 +198,7 @@ Focus on:
 Articles:
 ${articleList}
 
-Be specific about fund names, sizes, and metrics where available. Flag intelligence gaps honestly. Frame the analysis for Meghan (head of fundraising) preparing LP meetings.`,
+Write with confidence — synthesize what the articles tell you and draw LP-facing implications. Be specific about fund names, sizes, and metrics where available. Do not apologize for limited data; write a tight, usable brief from what's available. Frame the analysis for Meghan (head of fundraising) preparing LP meetings.`,
         },
       ],
     });
