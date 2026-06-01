@@ -29,7 +29,7 @@ const RECIPIENTS = [
   "wmeyer@erpfunds.com",
   "bbery@erpfunds.com",
 ];
-const SENDER_MAILBOX = "team@erpfunds.com";
+const SENDER_MAILBOX = "mparad@erpfunds.com";
 
 const TARGET_ROADS = [
   "Highway 191",

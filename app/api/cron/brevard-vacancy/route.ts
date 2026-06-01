@@ -25,7 +25,7 @@ const RECIPIENTS = [
   "wmeyer@erpfunds.com",
   "bbery@erpfunds.com",
 ];
-const SENDER_MAILBOX = "team@erpfunds.com";
+const SENDER_MAILBOX = "mparad@erpfunds.com";
 
 // â”€â”€ Graph email sender â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 

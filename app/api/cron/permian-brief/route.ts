@@ -10,7 +10,7 @@ const BASE_RECIPIENTS = ["mparad@erpfunds.com", "mberry@erpfunds.com", "wmeyer@e
 const RECIPIENTS = process.env.OVERRIDE_EMAIL_RECIPIENT?.trim()
   ? [...new Set([...BASE_RECIPIENTS, process.env.OVERRIDE_EMAIL_RECIPIENT.trim()])]
   : BASE_RECIPIENTS;
-const SENDER_MAILBOX = "team@erpfunds.com";
+const SENDER_MAILBOX = "mparad@erpfunds.com";
 
 function getWeekPeriod(): string {
   const now = new Date();
