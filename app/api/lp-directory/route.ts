@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
+import { getLpLastInteractions } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export interface LpRecord {
   date: string;
   notes: string;
   group: string;
+  lastInteraction: { date: string; note: string; source: "ir" | "sf" } | null;
   sfLpType: string | null;
   sfCalled: number | null;
   sfDistributions: number | null;
@@ -160,8 +162,16 @@ export async function GET() {
         contact, email, phone,
         date, notes,
         group: currentGroup,
+        lastInteraction: null,
         sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
       });
+    }
+
+    // Enrich with last interaction from IR agent logs (non-fatal if DB unavailable)
+    const interactions = await getLpLastInteractions().catch(() => ({} as Record<string, import("@/lib/db").LpLastInteraction>));
+    for (const lp of lps) {
+      const match = interactions[lp.investor.toLowerCase().trim()];
+      if (match) lp.lastInteraction = { date: match.date, note: match.note, source: "ir" };
     }
 
     // Collect ordered unique groups (preserves sheet order)

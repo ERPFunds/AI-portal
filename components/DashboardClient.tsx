@@ -1569,6 +1569,7 @@ interface LpRecord {
   investor: string; commitment: string; commitmentUsd: number; commitType: string;
   contact: string; email: string; phone: string; date: string; notes: string;
   group: string;
+  lastInteraction: { date: string; note: string; source: 'ir' | 'sf' } | null;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
 }
 interface LpDirectoryData {
@@ -1760,9 +1761,11 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Commitment', 'Status', 'Contact', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
-                      {h}{(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {h}
+                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
                   ))}
                 </tr>
@@ -1807,6 +1810,27 @@ function LpDirectoryView() {
                         {isEditing
                           ? <input value={ev.phone} onChange={e => setEditValues(v => ({ ...v, phone: e.target.value }))} placeholder="Phone" style={inputStyle} />
                           : lp.phone || '—'}
+                      </td>
+
+                      {/* Last Interaction — from IR agent logs or Salesforce */}
+                      <td style={{ padding: '11px 14px', fontSize: 11, maxWidth: 200 }}>
+                        {lp.lastInteraction ? (
+                          <div>
+                            <div style={{ color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lp.lastInteraction.note}>
+                              {lp.lastInteraction.note.slice(0, 60)}{lp.lastInteraction.note.length > 60 ? '…' : ''}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
+                              <span style={{ fontSize: 10, color: '#9ca3af' }}>
+                                {new Date(lp.lastInteraction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </span>
+                              <span style={{ fontSize: 9, fontWeight: 700, background: lp.lastInteraction.source === 'ir' ? '#eff6ff' : '#f0fdf4', color: lp.lastInteraction.source === 'ir' ? '#3b82f6' : '#16a34a', borderRadius: 3, padding: '1px 4px' }}>
+                                {lp.lastInteraction.source.toUpperCase()}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
+                        )}
                       </td>
 
                       {/* Salesforce columns */}

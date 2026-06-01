@@ -239,6 +239,63 @@ export async function getDialogueLog(limit = 50) {
   return rows;
 }
 
+// ── LP last-interaction lookup (used by LP Directory) ────────────────────────
+
+export interface LpLastInteraction {
+  lpName: string;
+  date: string;
+  note: string;
+  source: "ir";
+}
+
+/**
+ * For each LP name in the commitment schedule, return the most recent entry
+ * from ir_dialogue_log or ir_email_log (whichever is newer), keyed by
+ * lowercase LP name for easy lookup.
+ */
+export async function getLpLastInteractions(): Promise<Record<string, LpLastInteraction>> {
+  try {
+    const { rows } = await sql`
+      SELECT DISTINCT ON (lower(lp_name))
+        lp_name,
+        created_at,
+        note
+      FROM (
+        SELECT
+          lp_name,
+          created_at,
+          COALESCE(
+            NULLIF(TRIM(interest_level), '') || CASE WHEN next_touch_suggestion IS NOT NULL AND TRIM(next_touch_suggestion) <> '' THEN ' · ' || next_touch_suggestion ELSE '' END,
+            next_touch_suggestion,
+            'Dialogue logged'
+          ) AS note
+        FROM ir_dialogue_log
+        WHERE lp_name IS NOT NULL AND TRIM(lp_name) <> ''
+        UNION ALL
+        SELECT
+          lp_name,
+          created_at,
+          COALESCE(NULLIF(TRIM(summary), ''), 'Email logged') AS note
+        FROM ir_email_log
+        WHERE lp_name IS NOT NULL AND TRIM(lp_name) <> ''
+      ) combined
+      ORDER BY lower(lp_name), created_at DESC
+    `;
+    const map: Record<string, LpLastInteraction> = {};
+    for (const r of rows) {
+      map[String(r.lp_name).toLowerCase().trim()] = {
+        lpName: r.lp_name,
+        date: r.created_at instanceof Date ? r.created_at.toISOString() : String(r.created_at),
+        note: String(r.note),
+        source: "ir",
+      };
+    }
+    return map;
+  } catch {
+    return {};
+  }
+}
+
 // ── uploaded_files — Anthropic Files API tracking ────────────────────────────
 
 export interface UploadedFile {
