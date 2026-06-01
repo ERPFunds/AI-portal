@@ -225,6 +225,25 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Draft", description: "Claude writes the requested section — investment thesis, exec summary, demand drivers, OM prose, or LP narrative" },
           { type: "automated", label: "Save & Reply", description: "Draft filed to SharePoint /Write/ · reply email sent with content" }
         ]
+      },
+      // ── Email-triggered BUILD: workflow ──────────────────────────────────
+      {
+        name: "Build",
+        trigger: "email",
+        triggerSenders: ["mberry@erpfunds.com", "mparad@erpfunds.com", "wmeyer@erpfunds.com"],
+        status: "active",
+        steps: [
+          { type: "automated", label: "Trigger", description: "Email with BUILD: subject prefix sent to agent inbox" },
+          { type: "automated", label: "Research", description: "Claude runs targeted web research for market data, comps, tenant demand, or fund landscape context" },
+          { type: "automated", label: "Route Workflow", description: "Router picks the right sub-workflow: OM · Deck · Pipeline Comps · Buyer List · Commitment Schedule · Competitive Intel" },
+          { type: "automated", label: "Build Output", description: "Claude generates the deliverable — OM section, deck slides, Excel row updates, or buyer contact rows" },
+          { type: "automated", label: "Save & Reply", description: "Output filed to SharePoint or written to Excel · reply email sent with summary and file link" }
+        ],
+        meta: {
+          trigger: "BUILD: [project name] — [what to build]",
+          output: "OM draft · Deck · Pipeline Comps XLS · Buyer List XLS · Commitment Schedule XLS · Competitive Intel XLS",
+          escalate: "Meghan"
+        }
       }
     ]
   },

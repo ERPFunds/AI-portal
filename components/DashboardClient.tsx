@@ -715,8 +715,13 @@ const WF_LABEL: Record<string, string> = {
   // BUILD: email-triggered workflows
   'deck-builder':            'Deck Build',
   'om-editor':               'OM Build',
-  // WRITE: email-triggered workflows
   'om-writer':               'OM Prose Draft',
+  'update-pipeline-comps':   'Pipeline Comps Update',
+  'update-buyer-list':       'Buyer List Update',
+  'update-commitment-schedule': 'Commitment Schedule Update',
+  'competitive-intel-xls':   'Competitive Intel',
+  // WRITE: email-triggered workflows
+  'write':                   'Write',
   // IR workflows
   'email-escalation':        'Email Escalation',
   'attachment-filer':        'Attachment Filer',
