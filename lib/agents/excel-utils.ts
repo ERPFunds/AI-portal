@@ -13,7 +13,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 // ── File name constants ────────────────────────────────────────────────────────
 export const EXCEL_FILES = {
   permianPipeline: "ERP Permian Pipeline & Market Analysis (v.10.28.25).xlsx",
-  brevardPipeline: "ERP Brevard Pipeline & Comp Summary 7.16.20.xlsx",
+  brevardPipeline: "ERP Brevard Pipeline & Comp Summary (7.16.20).xls",
   buyerList: "Buyer List for Portfolio Exit.xlsx",
 } as const;
 
