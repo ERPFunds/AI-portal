@@ -130,7 +130,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Fetch Macro", description: "FRED, EIA, BLS, Census — WTI spot & strip, Permian rig count, DUC inventory, Midland/Odessa MSA jobs, Dallas Fed sentiment" },
           { type: "automated", label: "Research + News", description: "Web research + live RSS/Google News — Permian Basin industrial transactions, vacancy, rent, IOS deals, general CRE headlines" },
           { type: "automated", label: "Write Brief", description: "Claude writes macro table, 4-8 article cards, LP narrative, and weekly CRE news digest" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM CT" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 8:40 AM ET" }
         ]
       },
       {
@@ -142,18 +142,18 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Pull Activity", description: "Sale comps, tenant moves, vacancy/absorption — Midland, Odessa, Andrews, Ector, Ward, Reeves counties" },
           { type: "automated", label: "IOS & Service Yard Scan", description: "Yard deals, outdoor storage comps, Form D fundraising, IOS fund activity from public records and trade press" },
           { type: "automated", label: "Write Brief", description: "Claude writes §1 market snapshot through §6 LP takeaways — every stat carries data vintage label (source + date)" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM CT" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 9:10 AM ET" }
         ]
       },
       {
         name: "Permian — Competitive Landscape",
         trigger: "schedule",
-        frequency: "monthly",
+        frequency: "weekly",
         status: "active",
         steps: [
           { type: "automated", label: "Scan Fund Activity", description: "Competitor fund raises, Form D filings, LP appetite signals — Permian Basin industrial CRE comparables" },
           { type: "automated", label: "Write Brief", description: "Claude writes competitive positioning, IOS fund benchmarks, cap rate comparables, and LP meeting prep context" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — monthly" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 9:20 AM ET" }
         ]
       },
       // ── Brevard / Space Coast — weekly briefs ─────────────────────────
@@ -166,7 +166,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Fetch Macro", description: "FL industrial vacancy, Orlando MSA logistics jobs, FL asking NNN rent/SF, SpaceX/Blue Origin launch cadence, Brevard County employment" },
           { type: "automated", label: "Research + News", description: "Web research + live RSS/Google News — Space Coast industrial transactions, aerospace tenant demand, flex/R&D activity" },
           { type: "automated", label: "Write Brief", description: "Claude writes macro table, 4-8 article cards, and LP narrative for Space Coast industrial CRE" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 8:30 AM ET" }
         ]
       },
       {
@@ -178,7 +178,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Deep Dive Research", description: "Sale comps, vacancy/absorption, tenant activity — Melbourne, Titusville, Palm Bay, Cocoa, Cape Canaveral" },
           { type: "automated", label: "Live News Pull", description: "RSS (GlobeSt, Bisnow South FL, CRE Daily, The Real Deal) + Apify Google News — Space Coast industrial keywords" },
           { type: "automated", label: "Write Brief", description: "Claude stitches submarket deep dive + AI news narrative in one merged email — all stats carry data vintage" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 8:50 AM ET" }
         ]
       },
       {
@@ -190,7 +190,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Competitor Intelligence", description: "Rockefeller Group, Exeter, Cabot/Centerbridge, GreenPointe — Space Coast acquisitions, I-4 cap rate spread, local permit activity" },
           { type: "automated", label: "Fund Landscape News", description: "RSS + Apify — Florida industrial fund raises, LP appetite signals, IRR benchmarks, aerospace REIT comparables" },
           { type: "automated", label: "Write Brief", description: "Claude writes competitor tracker + LP-focused fund narrative in one merged email — framed for Meghan's LP meetings" },
-          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William — every Monday 9 AM ET" }
+          { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 9:00 AM ET" }
         ]
       },
       // ── CoStar data pull (coming soon) ───────────────────────────────────
