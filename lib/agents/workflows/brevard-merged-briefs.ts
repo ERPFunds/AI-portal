@@ -22,11 +22,11 @@ const SHARED_FEEDS = [
   { url: "https://www.globest.com/feed/", source: "GlobeSt" },
   { url: "https://commercialobserver.com/feed/", source: "Commercial Observer" },
   { url: "https://credaily.com/feed/", source: "CRE Daily" },
-  { url: "https://therealdeal.com/feed/", source: "The Real Deal" },
   { url: "https://bisnow.com/rss/south-florida", source: "Bisnow South Florida" },
+  { url: "https://bisnow.com/rss/orlando", source: "Bisnow Orlando" },
   { url: "https://connectcre.com/feed/", source: "Connect CRE" },
-  { url: "https://www.prnewswire.com/rss/news-releases-list.rss", source: "PR Newswire" },
-  { url: "https://www.businesswire.com/rss/home", source: "Business Wire" },
+  { url: "https://www.floridatoday.com/arcio/rss/category/business/", source: "Florida Today" },
+  { url: "https://www.bizjournals.com/orlando/feed/latest/", source: "Orlando Business Journal" },
   { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
 ];
 
@@ -36,17 +36,21 @@ const MONDAY_QUERIES = [
   "Melbourne Florida industrial CRE deal transaction 2026",
   "Titusville Cocoa Palm Bay industrial property sale lease 2026",
   "Brevard County commercial real estate sold 2026",
-  "Space Coast Florida industrial tenant move 2026",
-  "Florida industrial real estate transaction news 2026",
+  "Space Coast Florida industrial tenant aerospace defense 2026",
+  "Central Florida I-95 corridor industrial logistics CRE 2026",
+  "Orlando industrial warehouse sale lease comp 2026",
+  "Florida East Coast industrial real estate vacancy rent 2026",
 ];
 
 const MONDAY_KEYWORDS = [
   "brevard", "space coast", "melbourne florida", "titusville", "palm bay", "cocoa",
   "kennedy space center", "cape canaveral", "port canaveral",
-  "florida industrial", "flex space florida", "logistics florida",
+  "florida industrial", "flex space florida", "logistics florida", "central florida industrial",
+  "orlando industrial", "i-95 florida", "east coast florida industrial",
   "sale comp", "sold", "lease signed", "new tenant", "absorption", "vacancy", "lease rate",
   "cap rate", "warehouse", "aerospace industrial", "defense contractor", "industrial property",
   "sq ft", "square feet", "per sf", "nnn", "industrial park", "flex building",
+  "spacex", "blue origin", "nasa", "l3harris", "northrop grumman", "boeing florida",
 ];
 
 const SUBMARKET_QUERIES = [
@@ -200,7 +204,11 @@ export async function generateBrevardSubmarketBrief(period: string, opts?: { exc
       max_tokens: 1500,
       messages: [{
         role: "user",
-        content: `You are an industrial CRE analyst for ERP Funds. Write a 2-3 paragraph news summary covering these Brevard / Space Coast industrial articles from this week. Focus on: sale comps with $/SF and cap rates (include data vintage), named tenant moves, and any pricing or vacancy shifts. Be specific — named companies, addresses, figures. Every stat needs a date.
+        content: `You are an industrial CRE analyst for ERP Funds, which owns industrial assets in Brevard County / Space Coast, Florida. Write a 2-3 paragraph submarket news summary using the articles below.
+
+The Space Coast is a thin-news market — use direct Brevard transactions when available, and supplement with broader Florida / Central Florida industrial news to contextualize what's happening in adjacent markets. Do NOT refuse or apologize for limited data — extract what IS useful and frame it for a Space Coast industrial investor.
+
+Focus on: sale comps with $/SF and cap rates, named tenant moves, vacancy/absorption shifts, aerospace/defense demand signals. Every stat needs a source and date.
 
 Articles:
 ${articleList}`,
@@ -287,7 +295,13 @@ export async function generateBrevardMondayBrief(period: string, opts?: { exclud
     max_tokens: 1200,
     messages: [{
       role: "user",
-      content: `You are an industrial CRE analyst for ERP Funds. Write a 2-3 paragraph news summary covering these Brevard County / Space Coast industrial CRE articles from this week. Focus on: sale comps with $/SF and cap rates (include data vintage), named tenant moves, lease signings, new developments, and any pricing or vacancy shifts. Be specific — named companies, addresses, dollar figures. Every stat needs a date.
+      content: `You are an industrial CRE analyst for ERP Funds, which owns industrial assets in Brevard County / Space Coast, Florida. Write a 2-3 paragraph market news summary using the articles below.
+
+The Space Coast is a thin-news market — direct Brevard transactions may not appear every week. When they do, lead with them. When they don't, use broader Florida industrial and Central Florida / I-95 corridor news to contextualize the Space Coast opportunity: what are comparable markets doing on rents, vacancy, and tenant demand? What aerospace, defense, or logistics activity signals demand for Space Coast industrial space?
+
+Do NOT refuse to write or say the articles aren't relevant enough. Extract what IS useful from every article and frame it for a Space Coast industrial investor. Write with confidence from what's available.
+
+Focus on: sale comps with $/SF and cap rates, named tenant moves, lease signings, vacancy/absorption shifts, aerospace/defense demand signals. Every stat needs a source and date.
 
 Articles:
 ${articleList}`,
