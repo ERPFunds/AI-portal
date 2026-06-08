@@ -205,7 +205,7 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Brevard Fund Landscape Brief â€” ${new Date().toLocaleDateString("en-US", {
+    const subject = `Brevard Fund Landscape Brief - ${new Date().toLocaleDateString(“en-US”, {
       month: "long",
       day: "numeric",
       year: "numeric",
@@ -236,9 +236,9 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials Â· Agent 1 Â· Fund Landscape Brief</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials &middot; Agent 1 &middot; Fund Landscape Brief</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Competitor activity &amp; fund benchmarks Â· Florida Industrial</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Competitor activity &amp; fund benchmarks &middot; Florida Industrial</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Landscape Brief</div>
@@ -250,7 +250,7 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Brevard Fund Landscape Brief Â· Weekly</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal &middot; Brevard Fund Landscape Brief &middot; Weekly</div>
       </td></tr>
     </table>
   </td></tr>

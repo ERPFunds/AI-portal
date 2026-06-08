@@ -6,8 +6,8 @@
  * then filters to properties on ERP's target road corridors before sending.
  *
  * Target roads:
- *   Highway 191 Â· Interstate 20 Â· Business 20 Â· FM 1788
- *   Highway 158 Â· Murphy Street Â· Industrial Avenue
+ *   Highway 191 &middot; Interstate 20 &middot; Business 20 &middot; FM 1788
+ *   Highway 158 &middot; Murphy Street &middot; Industrial Avenue
  *
  * Recipients: mparad, mberry, wmeyer, bbery
  */
@@ -178,9 +178,9 @@ Be specific and data-dense. Write with confidence from the available listings �
 
       <!-- Header -->
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds Â· Vacancy Watch Â· Permian Basin</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds &middot; Vacancy Watch &middot; Permian Basin</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} on-corridor Â· ${offCorridor.length} off-corridor Â· Midland &amp; Odessa TX</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} on-corridor &middot; ${offCorridor.length} off-corridor &middot; Midland &amp; Odessa TX</div>
       </td></tr>
 
       <!-- Corridor chips -->
@@ -219,7 +219,7 @@ Be specific and data-dense. Write with confidence from the available listings �
 
       <!-- Footer -->
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Permian Vacancy Watch Â· Weekly Â· Source: LoopNet</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal &middot; Permian Vacancy Watch &middot; Weekly &middot; Source: LoopNet</div>
       </td></tr>
 
     </table>

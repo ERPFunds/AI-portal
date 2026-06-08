@@ -158,9 +158,9 @@ Be specific, data-dense, and brief. Write with confidence from the available lis
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds Â· Vacancy Watch Â· Brevard County</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Funds &middot; Vacancy Watch &middot; Brevard County</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} industrial listings Â· Space Coast, FL</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">${listings.length} industrial listings &middot; Space Coast, FL</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Market Summary</div>
@@ -172,7 +172,7 @@ Be specific, data-dense, and brief. Write with confidence from the available lis
         <table width="100%" cellpadding="0" cellspacing="0">${listingsHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Brevard Vacancy Watch Â· Weekly Â· Source: LoopNet</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal &middot; Brevard Vacancy Watch &middot; Weekly &middot; Source: LoopNet</div>
       </td></tr>
     </table>
   </td></tr>
