@@ -19,14 +19,17 @@ const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
 // ── Feeds ────────────────────────────────────────────────────────────────────
 
 const SHARED_FEEDS = [
-  { url: "https://www.globest.com/feed/", source: "GlobeSt" },
-  { url: "https://commercialobserver.com/feed/", source: "Commercial Observer" },
-  { url: "https://credaily.com/feed/", source: "CRE Daily" },
-  { url: "https://bisnow.com/rss/south-florida", source: "Bisnow South Florida" },
-  { url: "https://bisnow.com/rss/orlando", source: "Bisnow Orlando" },
-  { url: "https://connectcre.com/feed/", source: "Connect CRE" },
+  // Local / regional — most likely to have actual Brevard content
   { url: "https://www.floridatoday.com/arcio/rss/category/business/", source: "Florida Today" },
   { url: "https://www.bizjournals.com/orlando/feed/latest/", source: "Orlando Business Journal" },
+  { url: "https://growthspotter.com/feed/", source: "GrowthSpotter" },
+  { url: "https://bisnow.com/rss/orlando", source: "Bisnow Orlando" },
+  { url: "https://bisnow.com/rss/south-florida", source: "Bisnow South Florida" },
+  // National CRE — will pass keyword filter only if they mention Brevard specifically
+  { url: "https://www.globest.com/feed/", source: "GlobeSt" },
+  { url: "https://credaily.com/feed/", source: "CRE Daily" },
+  { url: "https://www.nreionline.com/rss.xml", source: "NREI" },
+  { url: "https://connectcre.com/feed/", source: "Connect CRE" },
   { url: "https://pere.privateequityinternational.com/feed/", source: "PERE / IPE Real Assets" },
 ];
 
@@ -34,23 +37,21 @@ const MONDAY_QUERIES = [
   "Brevard County Florida industrial real estate 2026",
   "Space Coast Florida industrial warehouse lease sale 2026",
   "Melbourne Florida industrial CRE deal transaction 2026",
-  "Titusville Cocoa Palm Bay industrial property sale lease 2026",
-  "Brevard County commercial real estate sold 2026",
-  "Space Coast Florida industrial tenant aerospace defense 2026",
-  "Central Florida I-95 corridor industrial logistics CRE 2026",
-  "Orlando industrial warehouse sale lease comp 2026",
-  "Florida East Coast industrial real estate vacancy rent 2026",
+  "Titusville Cocoa Palm Bay Rockledge industrial property 2026",
+  "Cape Canaveral Port Canaveral industrial commercial real estate 2026",
+  "Brevard County commercial real estate sold leased 2026",
+  "L3Harris Northrop Grumman Boeing Melbourne Florida facility 2026",
+  "SpaceX Blue Origin Brevard County industrial facility 2026",
 ];
 
 const MONDAY_KEYWORDS = [
-  "brevard", "space coast", "melbourne florida", "titusville", "palm bay", "cocoa",
-  "kennedy space center", "cape canaveral", "port canaveral",
-  "florida industrial", "flex space florida", "logistics florida", "central florida industrial",
-  "orlando industrial", "i-95 florida", "east coast florida industrial",
-  "sale comp", "sold", "lease signed", "new tenant", "absorption", "vacancy", "lease rate",
-  "cap rate", "warehouse", "aerospace industrial", "defense contractor", "industrial property",
-  "sq ft", "square feet", "per sf", "nnn", "industrial park", "flex building",
-  "spacex", "blue origin", "nasa", "l3harris", "northrop grumman", "boeing florida",
+  // Brevard / Space Coast geography — must match one of these to pass
+  "brevard", "space coast", "melbourne fl", "melbourne, fl", "titusville", "palm bay",
+  "cocoa fl", "cocoa, fl", "kennedy space center", "cape canaveral", "port canaveral",
+  "rockledge", "viera", "merritt island", "indian harbour beach", "satellite beach",
+  // Aerospace / defense tenants specific to Space Coast
+  "spacex brevard", "blue origin florida", "l3harris", "northrop grumman brevard",
+  "boeing melbourne", "lockheed brevard", "harris corporation",
 ];
 
 const SUBMARKET_QUERIES = [
