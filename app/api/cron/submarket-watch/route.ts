@@ -149,7 +149,7 @@ Focus on:
 Articles:
 ${articleList}
 
-Write with data density and specificity. Flag any market shifts that could affect OM pricing or demand driver narratives.`,
+Write with data density and specificity. Flag any market shifts that could affect OM pricing or demand driver narratives. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
         },
       ],
     });

@@ -199,7 +199,7 @@ From the articles below, synthesize what's relevant for LP conversations:
 Articles:
 ${articleList}
 
-Write with confidence — synthesize what the articles tell you and draw LP-facing implications from them. If an article is only tangentially relevant, extract what IS useful for the fundraising narrative. Do not apologize for limited data; write a tight, usable brief from what's available.`,
+Write with confidence — synthesize what the articles tell you and draw LP-facing implications from them. If an article is only tangentially relevant, extract what IS useful for the fundraising narrative. Do not apologize for limited data; write a tight, usable brief from what's available. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
         },
       ],
     });

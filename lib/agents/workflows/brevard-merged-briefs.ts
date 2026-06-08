@@ -210,6 +210,8 @@ The Space Coast is a thin-news market — use direct Brevard transactions when a
 
 Focus on: sale comps with $/SF and cap rates, named tenant moves, vacancy/absorption shifts, aerospace/defense demand signals. Every stat needs a source and date.
 
+This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the paragraphs and stop.
+
 Articles:
 ${articleList}`,
       }],
@@ -302,6 +304,8 @@ The Space Coast is a thin-news market — direct Brevard transactions may not ap
 Do NOT refuse to write or say the articles aren't relevant enough. Extract what IS useful from every article and frame it for a Space Coast industrial investor. Write with confidence from what's available.
 
 Focus on: sale comps with $/SF and cap rates, named tenant moves, lease signings, vacancy/absorption shifts, aerospace/defense demand signals. Every stat needs a source and date.
+
+This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the paragraphs and stop.
 
 Articles:
 ${articleList}`,

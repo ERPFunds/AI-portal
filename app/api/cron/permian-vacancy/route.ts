@@ -132,7 +132,7 @@ Focus on:
 On-corridor listings (${listings.length}):
 ${listingText}
 
-Be specific and data-dense. Write with confidence from the available listings — do not apologize for limited data. If you see properties relevant to ERP's IOS/industrial outdoor storage thesis, call them out.`,
+Be specific and data-dense. Write with confidence from the available listings — do not apologize for limited data. If you see properties relevant to ERP's IOS/industrial outdoor storage thesis, call them out. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
           },
         ],
       });
