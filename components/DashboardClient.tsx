@@ -9,6 +9,7 @@ import { AGENTS, ACTIVITY_MAP } from '@/lib/data/agents'
 import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
 import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type MarketDataSource } from '@/lib/data/prompts'
+import { PROPERTIES, ENTITY_ORDER, ENTITY_LABELS } from '@/lib/data/properties'
 import MarketResearchView from './MarketResearchView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2099,161 +2100,163 @@ function BrokerageNewsletterView() {
 }
 
 function RentRollView() {
-  const TEAL = '#A6C3C9'
-  const NAVY = '#0D2D52'
+  const [search, setSearch] = React.useState('')
+  const [entityFilter, setEntityFilter] = React.useState('all')
+  const [expanded, setExpanded] = React.useState<number | null>(null)
 
-  const properties = [
-    {
-      name: 'Midland Service Yard',
-      address: '4820 W Industrial Blvd, Midland, TX 79703',
-      market: 'Permian Basin', type: 'Service Yard / IOS',
-      totalSf: 18500, officeSf: 1200, siteSf: 87120,
-      yearBuilt: 2008, clearHeight: 24, dockDoors: 4, driveIn: 2, power: '800A / 480V',
-      acquired: 'Mar 2022', acquisitionPrice: 4.1, currentNoi: 0.24, capRate: 5.8, estValue: 4.8,
-      occupancy: 100, tenants: 1, market_color: TEAL,
-    },
-    {
-      name: 'Odessa IOS Yard',
-      address: '1102 E 52nd St, Odessa, TX 79762',
-      market: 'Permian Basin', type: 'Industrial Outdoor Storage',
-      totalSf: 24000, officeSf: 800, siteSf: 130680,
-      yearBuilt: 2003, clearHeight: 20, dockDoors: 2, driveIn: 4, power: '400A / 240V',
-      acquired: 'Aug 2022', acquisitionPrice: 4.8, currentNoi: 0.31, capRate: 5.6, estValue: 5.7,
-      occupancy: 100, tenants: 1, market_color: TEAL,
-    },
-    {
-      name: 'Midland Flex I',
-      address: '3300 Garden City Hwy, Midland, TX 79701',
-      market: 'Permian Basin', type: 'Flex Industrial',
-      totalSf: 16200, officeSf: 3400, siteSf: 52272,
-      yearBuilt: 1998, clearHeight: 18, dockDoors: 6, driveIn: 2, power: '1200A / 480V',
-      acquired: 'Jan 2023', acquisitionPrice: 3.6, currentNoi: 0.22, capRate: 5.9, estValue: 3.9,
-      occupancy: 90, tenants: 2, market_color: TEAL,
-    },
-    {
-      name: 'Palm Bay Industrial',
-      address: '1875 Malabar Rd NE, Palm Bay, FL 32907',
-      market: 'Brevard County', type: 'Flex Industrial',
-      totalSf: 30800, officeSf: 4200, siteSf: 108900,
-      yearBuilt: 2001, clearHeight: 22, dockDoors: 8, driveIn: 4, power: '1600A / 480V',
-      acquired: 'Jun 2022', acquisitionPrice: 7.8, currentNoi: 0.48, capRate: 5.5, estValue: 9.1,
-      occupancy: 100, tenants: 2, market_color: '#6366f1',
-    },
-    {
-      name: 'Melbourne Cold Storage',
-      address: '655 S Apollo Blvd, Melbourne, FL 32901',
-      market: 'Brevard County', type: 'Cold Storage',
-      totalSf: 14500, officeSf: 900, siteSf: 43560,
-      yearBuilt: 2011, clearHeight: 30, dockDoors: 10, driveIn: 1, power: '2000A / 480V',
-      acquired: 'Nov 2022', acquisitionPrice: 6.2, currentNoi: 0.38, capRate: 5.4, estValue: 7.3,
-      occupancy: 100, tenants: 1, market_color: '#6366f1',
-    },
-    {
-      name: 'Titusville Service Bay',
-      address: '3801 S Hopkins Ave, Titusville, FL 32780',
-      market: 'Brevard County', type: 'Service Bay / Flex',
-      totalSf: 11200, officeSf: 1600, siteSf: 36300,
-      yearBuilt: 2015, clearHeight: 16, dockDoors: 2, driveIn: 6, power: '600A / 240V',
-      acquired: 'Apr 2023', acquisitionPrice: 3.1, currentNoi: 0.18, capRate: 5.7, estValue: 3.4,
-      occupancy: 100, tenants: 2, market_color: '#6366f1',
-    },
-  ]
+  const filtered = PROPERTIES.filter(p => {
+    const matchEntity = entityFilter === 'all' || p.entity === entityFilter
+    const q = search.toLowerCase()
+    const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q)
+    return matchEntity && matchSearch
+  })
 
-  const totalSf  = properties.reduce((s, p) => s + p.totalSf, 0)
-  const totalNoi = properties.reduce((s, p) => s + p.currentNoi, 0)
-  const totalVal = properties.reduce((s, p) => s + p.estValue, 0)
-  const wtdOcc   = Math.round(properties.reduce((s, p) => s + p.occupancy * p.totalSf, 0) / totalSf)
+  const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
+
+  const EC: Record<string, {bg: string, text: string, border: string}> = {
+    DST:        {bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd'},
+    II:         {bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0'},
+    'III-191':  {bg: '#fef3c7', text: '#b45309', border: '#fde68a'},
+    'III-1788': {bg: '#fdf4ff', text: '#7e22ce', border: '#e9d5ff'},
+    IV:         {bg: '#fff1f2', text: '#be123c', border: '#fecdd3'},
+    'III-other':{bg: '#f0f9ff', text: '#0c4a6e', border: '#bae6fd'},
+  }
+
+  const fmtN = (n: number | null) => n ? n.toLocaleString() : '—'
 
   return (
     <div>
       <div className="page-header">
-        <h2>Properties</h2>
-        <p>Asset fact sheets · Specs · Financial snapshot</p>
+        <h2>🏢 Properties</h2>
+        <p>Full portfolio — {PROPERTIES.length} properties across {ENTITY_ORDER.length} funds</p>
       </div>
 
-      <SourceBar source="Yardi · VTS" agents="Property Operations · Investment Analytics" synced="Not yet connected" link="Connect data sources ↗" />
-
-      {/* KPI strip */}
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      {/* Summary bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Assets',      value: `${properties.length}`,                sub: 'Across 2 markets' },
-          { label: 'Total GLA',         value: `${(totalSf/1000).toFixed(0)}k SF`,    sub: 'Gross leasable area' },
-          { label: 'Portfolio Occ.',    value: `${wtdOcc}%`,                          sub: 'Weighted by SF' },
-          { label: 'T12 NOI',           value: `$${totalNoi.toFixed(1)}M`,            sub: 'Trailing 12 months' },
-          { label: 'Est. Portfolio Val',value: `$${totalVal.toFixed(1)}M`,            sub: 'At current cap rates' },
-        ].map(k => (
-          <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
-            <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#111827', lineHeight: 1.1, marginBottom: 3 }}>{k.value}</div>
-            <div style={{ fontSize: 11, color: '#6b7280' }}>{k.sub}</div>
+          { label: 'Total Properties', value: PROPERTIES.length },
+          { label: 'Filtered',         value: filtered.length },
+          { label: 'Occupied',         value: filtered.filter(p => p.type !== 'vacant').length + ' / ' + filtered.length },
+          { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{s.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Property cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        {properties.map((p, i) => (
-          <div key={i} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
-            {/* card header */}
-            <div style={{ borderLeft: `4px solid ${p.market_color}`, padding: '14px 16px 12px', borderBottom: '1px solid #f3f4f6' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 2 }}>{p.name}</div>
-                  <div style={{ fontSize: 11, color: '#6b7280' }}>{p.address}</div>
-                </div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: p.market_color, background: `${p.market_color}18`, border: `1px solid ${p.market_color}44`, borderRadius: 5, padding: '2px 8px', whiteSpace: 'nowrap', marginLeft: 8 }}>{p.type}</span>
-              </div>
-            </div>
-
-            {/* specs + financials */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 0 }}>
-              {/* left: building specs */}
-              <div style={{ padding: '12px 16px', borderRight: '1px solid #f3f4f6' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 8 }}>Building</div>
-                {[
-                  { label: 'Total SF',      value: `${p.totalSf.toLocaleString()} SF` },
-                  { label: 'Office SF',     value: `${p.officeSf.toLocaleString()} SF` },
-                  { label: 'Site',          value: `${(p.siteSf / 43560).toFixed(1)} ac` },
-                  { label: 'Year Built',    value: `${p.yearBuilt}` },
-                  { label: 'Clear Height',  value: `${p.clearHeight}'` },
-                  { label: 'Dock Doors',    value: `${p.dockDoors}` },
-                  { label: 'Drive-In',      value: `${p.driveIn}` },
-                  { label: 'Power',         value: p.power },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{row.value}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* right: financial snapshot */}
-              <div style={{ padding: '12px 16px' }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 8 }}>Financials</div>
-                {[
-                  { label: 'Acquired',      value: p.acquired },
-                  { label: 'Acq. Price',    value: `$${p.acquisitionPrice.toFixed(1)}M` },
-                  { label: 'Est. Value',    value: `$${p.estValue.toFixed(1)}M` },
-                  { label: 'T12 NOI',       value: `$${(p.currentNoi * 1000).toFixed(0)}k` },
-                  { label: 'Cap Rate',      value: `${p.capRate}%` },
-                  { label: 'Occupancy',     value: `${p.occupancy}%` },
-                  { label: 'Tenants',       value: `${p.tenants}` },
-                  { label: 'Market',        value: p.market },
-                ].map(row => (
-                  <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{row.label}</span>
-                    <span style={{ fontSize: 11, fontWeight: 500, color: '#111827' }}>{row.value}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input
+          placeholder="Search address, tenant, corridor..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: 200, padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, outline: 'none' }}
+        />
+        <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="all">All Portfolios ({PROPERTIES.length})</option>
+          {ENTITY_ORDER.map(e => (
+            <option key={e} value={e}>{ENTITY_LABELS[e]} ({PROPERTIES.filter(p => p.entity === e).length})</option>
+          ))}
+        </select>
       </div>
-      <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 12, textAlign: 'center' }}>Placeholder data — connect Yardi to populate live asset records</div>
+
+      {/* Table */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'WB', ''].map((h, i) => (
+                <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(p => {
+              const ec = EC[p.entity] ?? EC.DST
+              const isExp = expanded === p.id
+              return (
+                <React.Fragment key={p.id}>
+                  <tr
+                    style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isExp ? '#f0f9ff' : undefined }}
+                    onClick={() => setExpanded(isExp ? null : p.id)}
+                    onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = '#f8fafc' }}
+                    onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = '' }}
+                  >
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: ec.bg, color: ec.text, border: `1px solid ${ec.border}` }}>
+                        {p.entity}
+                      </span>
+                    </td>
+                    <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827', maxWidth: 200 }}>{p.address}</td>
+                    <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
+                    <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>{p.tenant}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.office)}</td>
+                    <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.warehouse)}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                        background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
+                        color: p.type === 'single' ? '#16a34a' : p.type === 'multi' ? '#d97706' : '#dc2626' }}>
+                        {p.type}
+                      </span>
+                    </td>
+                    <td style={{ padding: '9px 12px', textAlign: 'center' }}>
+                      {p.washBay === 'Yes' ? '✅' : p.washBay === 'No' ? '✗' : '?'}
+                    </td>
+                    <td style={{ padding: '9px 12px', color: '#9ca3af', fontSize: 11 }}>{isExp ? '▲' : '▼'}</td>
+                  </tr>
+                  {isExp && (
+                    <tr style={{ background: '#f0f9ff', borderBottom: '2px solid #A6C3C9' }}>
+                      <td colSpan={11} style={{ padding: '14px 20px' }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, fontSize: 12 }}>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Building</div>
+                            {[['Layout', p.layout], ['Structure', p.structure], ['Cranes', p.cranes ?? '—']].map(([k, v]) => (
+                              <div key={k} style={{ marginBottom: 6 }}>
+                                <span style={{ color: '#9ca3af', fontSize: 11 }}>{k}: </span>
+                                <span style={{ color: '#374151' }}>{v}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Systems</div>
+                            {[['Electrical', p.electrical], ['HVAC', p.hvac], ['Plumbing', p.plumbing]].map(([k, v]) => (
+                              <div key={k} style={{ marginBottom: 6 }}>
+                                <span style={{ color: '#9ca3af', fontSize: 11 }}>{k}: </span>
+                                <span style={{ color: '#374151' }}>{v}</span>
+                              </div>
+                            ))}
+                          </div>
+                          <div>
+                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Site</div>
+                            {[['Exterior', p.exterior], ['Acres', p.acres ? p.acres + ' ac' : '—'], ['Notes', p.notes || '—']].map(([k, v]) => (
+                              <div key={k} style={{ marginBottom: 6 }}>
+                                <span style={{ color: '#9ca3af', fontSize: 11 }}>{k}: </span>
+                                <span style={{ color: '#374151' }}>{v}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )
+            })}
+          </tbody>
+        </table>
+        {filtered.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No properties match your filters.</div>
+        )}
+      </div>
     </div>
   )
 }
+
 function WorkOrdersView() {
   return (
     <div>
