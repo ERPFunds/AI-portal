@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -179,13 +179,13 @@ export async function GET(request: Request) {
       messages: [
         {
           role: "user",
-          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market â€” Midland, Odessa, and surrounding West Texas.
+          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market â€" Midland, Odessa, and surrounding West Texas.
 
 Focus on:
-1. Sale comparable transactions â€” what are assets trading at? Cap rates, price/SF, price/acre?
-2. Tenant activity â€” who's leasing, expanding, contracting in Permian Basin industrial markets?
-3. Submarket trends â€” vacancy, absorption, asking rents, any notable market shifts
-4. OM implications â€” what does this week's activity mean for ERP's active Permian deals?
+1. Sale comparable transactions â€" what are assets trading at? Cap rates, price/SF, price/acre?
+2. Tenant activity â€" who's leasing, expanding, contracting in Permian Basin industrial markets?
+3. Submarket trends â€" vacancy, absorption, asking rents, any notable market shifts
+4. OM implications â€" what does this week's activity mean for ERP's active Permian deals?
 
 Articles:
 ${articleList}
@@ -197,7 +197,7 @@ Write with data density and specificity. Flag any market shifts that could affec
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Permian Submarket Watch - ${new Date().toLocaleDateString(“en-US”, {
+    const subject = `Permian Submarket Watch - ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",

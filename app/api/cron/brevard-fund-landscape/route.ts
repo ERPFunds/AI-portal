@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -189,10 +189,10 @@ export async function GET(request: Request) {
           content: `You are a competitive intelligence analyst for ERP Industrials, an industrial CRE fund with assets in Florida (Brevard County / Space Coast). Write a Fund Landscape Brief (4-6 paragraphs) based on the following recent news.
 
 Focus on:
-1. Competitor fund activity â€” who's raising, who closed, fund sizes, target IRRs
-2. Fund benchmarks â€” what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
-3. Competitive positioning â€” how does ERP's Fund IV strategy compare to what larger players are doing?
-4. LP appetite signals â€” what asset types and markets are attracting capital right now?
+1. Competitor fund activity â€" who's raising, who closed, fund sizes, target IRRs
+2. Fund benchmarks â€" what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
+3. Competitive positioning â€" how does ERP's Fund IV strategy compare to what larger players are doing?
+4. LP appetite signals â€" what asset types and markets are attracting capital right now?
 5. Any market shifts that could affect ERP's Fund IV fundraising pitch
 
 Articles:
@@ -205,7 +205,7 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Brevard Fund Landscape Brief - ${new Date().toLocaleDateString(“en-US”, {
+    const subject = `Brevard Fund Landscape Brief - ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",

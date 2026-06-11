@@ -1,4 +1,4 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -206,7 +206,7 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Permian Fund Landscape Brief - ${new Date().toLocaleDateString(“en-US”, {
+    const subject = `Permian Fund Landscape Brief - ${new Date().toLocaleDateString("en-US", {
       month: "long",
       day: "numeric",
       year: "numeric",
