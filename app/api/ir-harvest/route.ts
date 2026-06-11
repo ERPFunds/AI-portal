@@ -29,6 +29,8 @@ export async function GET(req: NextRequest) {
   const months = Math.min(Number(params.get("months")) || 12, 24);
   const maxMessages = Math.min(Number(params.get("max")) || 200, 500);
   const externalOnly = params.get("externalOnly") !== "false";
+  const after = params.get("after");
+  const before = params.get("before");
 
   let token: string | null;
   try {
@@ -42,12 +44,20 @@ export async function GET(req: NextRequest) {
 
   const since = new Date();
   since.setMonth(since.getMonth() - months);
-  const sinceIso = since.toISOString().split(".")[0] + "Z";
+  const sinceIso = after
+    ? new Date(after).toISOString().split(".")[0] + "Z"
+    : since.toISOString().split(".")[0] + "Z";
+
+  let filter = `sentDateTime ge ${sinceIso}`;
+  if (before) {
+    const beforeIso = new Date(before).toISOString().split(".")[0] + "Z";
+    filter += ` and sentDateTime lt ${beforeIso}`;
+  }
 
   const messages: HarvestedMessage[] = [];
   let url: string | null =
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(mailbox)}/mailFolders/sentitems/messages` +
-    `?$filter=sentDateTime ge ${sinceIso}` +
+    `?$filter=${filter}` +
     `&$select=subject,sentDateTime,toRecipients,body` +
     `&$orderby=sentDateTime desc&$top=50`;
 
