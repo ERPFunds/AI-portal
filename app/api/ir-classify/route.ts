@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       reason: result.reason,
       senderType: result.senderType,
       confidence: result.confidence,
+      contact: result.contact,
     });
   } catch (err) {
     return NextResponse.json({ error: "classify-failed", message: String(err) }, { status: 500 });
