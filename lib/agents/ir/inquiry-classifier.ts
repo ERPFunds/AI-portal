@@ -19,11 +19,11 @@ export interface InquiryClassification {
   // Best-guess contact identity parsed from the From display name + email + signature.
   // lastName is ALWAYS non-empty (Salesforce requires it) — falls back to the email handle.
   contact: {
-    firstName: string | null;
+    firstName: string;
     lastName: string;
-    fullName: string | null;
-    company: string | null;
-    title: string | null;
+    fullName: string;
+    company: string;
+    title: string;
   };
 }
 
@@ -91,13 +91,19 @@ ${(params.body || "").slice(0, 6000)}`,
   if (!jsonMatch) throw new Error("No JSON in inquiry-classifier response");
   const result = JSON.parse(jsonMatch[0]) as InquiryClassification;
 
-  // Guarantee a non-empty lastName for Salesforce, regardless of model output.
+  // Normalize the contact block so every field is always a (possibly empty) string,
+  // never null/undefined. Power Automate's Parse JSON validates the whole response
+  // against a string schema and would fail on a null — so coerce here.
   const handle = (params.from.split("@")[0] || params.from || "Unknown").trim();
   const fallbackLast = handle.charAt(0).toUpperCase() + handle.slice(1);
-  if (!result.contact) {
-    result.contact = { firstName: null, lastName: fallbackLast, fullName: null, company: null, title: null };
-  } else if (!result.contact.lastName || !result.contact.lastName.trim()) {
-    result.contact.lastName = fallbackLast;
-  }
+  const c = result.contact || ({} as InquiryClassification["contact"]);
+  const str = (v: unknown): string => (typeof v === "string" ? v : "");
+  result.contact = {
+    firstName: str(c.firstName),
+    lastName: str(c.lastName).trim() || fallbackLast,
+    fullName: str(c.fullName),
+    company: str(c.company),
+    title: str(c.title),
+  };
   return result;
 }
