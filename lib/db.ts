@@ -359,6 +359,34 @@ export async function deleteUploadedFileRecord(fileId: string) {
   await sql`DELETE FROM uploaded_files WHERE file_id = ${fileId}`;
 }
 
+// ── ir_processed_messages — dedup ledger for the IR inbox sweep ────────────────
+
+/** Given candidate message ids for a mailbox, return only those NOT already processed. */
+export async function filterUnprocessedMessageIds(mailbox: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { rows } = await sql`
+    SELECT message_id FROM ir_processed_messages
+    WHERE mailbox = ${mailbox} AND message_id = ANY(${ids as unknown as string}::text[])
+  `;
+  const seen = new Set(rows.map((r) => r.message_id as string));
+  return new Set(ids.filter((id) => !seen.has(id)));
+}
+
+/** Record that a message was handled by the sweep (idempotent). */
+export async function markMessageProcessed(params: {
+  mailbox: string;
+  messageId: string;
+  internetMessageId: string | null;
+  isInvestor: boolean;
+  action: string | null;
+}) {
+  await sql`
+    INSERT INTO ir_processed_messages (mailbox, message_id, internet_message_id, is_investor, action)
+    VALUES (${params.mailbox}, ${params.messageId}, ${params.internetMessageId}, ${params.isInvestor}, ${params.action})
+    ON CONFLICT (mailbox, message_id) DO NOTHING
+  `;
+}
+
 // ── agent_runs — unified run log for all agents ───────────────────────────────
 
 export async function logAgentRun(params: {

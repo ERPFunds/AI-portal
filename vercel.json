@@ -28,6 +28,10 @@
     {
       "path": "/api/cron/permian-fund-landscape",
       "schedule": "20 13 * * 1"
+    },
+    {
+      "path": "/api/cron/ir-inbox-sweep",
+      "schedule": "*/5 13-23,0-2 * * *"
     }
   ]
 }

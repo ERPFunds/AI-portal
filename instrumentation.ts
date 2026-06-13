@@ -129,6 +129,23 @@ export async function register() {
     await sql`CREATE INDEX IF NOT EXISTS uploaded_files_created_at_idx  ON uploaded_files (created_at DESC)`;
     await sql`CREATE INDEX IF NOT EXISTS uploaded_files_project_tag_idx ON uploaded_files (project_tag)`;
 
+    // Dedup ledger for the IR inbox sweep — one row per message already handled,
+    // so the 5-minute poll never re-classifies or re-forwards the same email.
+    await sql`
+      CREATE TABLE IF NOT EXISTS ir_processed_messages (
+        id                  uuid        PRIMARY KEY DEFAULT gen_random_uuid(),
+        processed_at        timestamptz NOT NULL DEFAULT now(),
+        mailbox             text        NOT NULL,
+        message_id          text        NOT NULL,
+        internet_message_id text,
+        is_investor         boolean     NOT NULL DEFAULT false,
+        action              text,
+        UNIQUE (mailbox, message_id)
+      )
+    `;
+    await sql`CREATE INDEX IF NOT EXISTS ir_processed_messages_mailbox_idx    ON ir_processed_messages (mailbox)`;
+    await sql`CREATE INDEX IF NOT EXISTS ir_processed_messages_processed_idx  ON ir_processed_messages (processed_at DESC)`;
+
     console.log("[instrumentation] Vercel Postgres migrations applied successfully");
   } catch (err) {
     // Non-fatal — app continues even if migrations fail (e.g. no DB configured locally)
