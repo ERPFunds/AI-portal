@@ -60,19 +60,26 @@ const FEEDS = [
 ];
 
 const APIFY_QUERIES = [
-  "Tampa Florida industrial real estate sale 2025",
-  "Brevard County industrial warehouse lease sale",
-  "Orlando industrial logistics sale comp 2025",
-  "Space Coast Florida industrial outdoor storage",
-  "Florida industrial CRE submarket absorption vacancy 2025",
+  "Brevard County Florida industrial real estate 2026",
+  "Space Coast Florida industrial warehouse lease sale 2026",
+  "Melbourne Florida industrial CRE deal transaction 2026",
+  "Titusville Cocoa Palm Bay Rockledge industrial property 2026",
+  "Cape Canaveral Port Canaveral industrial commercial real estate 2026",
 ];
 
-const KEYWORDS = [
-  "tampa", "brevard", "florida industrial", "space coast", "cocoa",
-  "melbourne fl", "titusville", "orlando industrial", "central florida industrial",
-  "logistics florida", "industrial outdoor storage",
+// Must match at least one geographic keyword — topic-only keywords are not sufficient
+const GEO_KEYWORDS = [
+  "brevard", "space coast", "melbourne fl", "melbourne, fl", "titusville",
+  "palm bay", "cocoa fl", "cocoa, fl", "kennedy space center", "cape canaveral",
+  "port canaveral", "rockledge", "viera", "merritt island", "indian harbour beach",
+  "satellite beach", "spacex brevard", "blue origin florida", "l3harris",
+  "northrop grumman brevard", "boeing melbourne", "lockheed brevard",
+];
+
+const TOPIC_KEYWORDS = [
+  "industrial outdoor storage", "service yard", "ios",
   "sale comp", "comparable", "absorption", "vacancy", "lease rate",
-  "cap rate", "industrial cre", "warehouse florida",
+  "cap rate", "industrial cre", "warehouse",
 ];
 
 interface NewsItem {
@@ -85,7 +92,10 @@ interface NewsItem {
 
 function isRelevant(item: NewsItem): boolean {
   const text = `${item.title} ${item.summary ?? ""}`.toLowerCase();
-  return KEYWORDS.some((kw) => text.includes(kw));
+  const hasGeo = GEO_KEYWORDS.some((kw) => text.includes(kw));
+  const hasTopic = TOPIC_KEYWORDS.some((kw) => text.includes(kw));
+  // Topic keywords alone are not enough — must mention Brevard/Space Coast geography
+  return hasGeo;
 }
 
 async function fetchNews(): Promise<NewsItem[]> {
@@ -179,13 +189,13 @@ export async function GET(request: Request) {
       messages: [
         {
           role: "user",
-          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Florida industrial market â€" particularly Tampa, Brevard County, and the Space Coast.
+          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Brevard County / Space Coast industrial market.
 
 Focus on:
-1. Sale comparable transactions â€" what are assets trading at? Cap rates, price/SF, price/acre?
-2. Tenant activity â€" who's leasing, expanding, contracting in Florida industrial markets?
-3. Submarket trends â€" vacancy, absorption, asking rents, any notable market shifts
-4. OM implications â€" what does this week's activity mean for ERP's active Florida deals?
+1. Sale comparable transactions - what are assets trading at? Cap rates, price/SF, price/acre?
+2. Tenant activity - who's leasing, expanding, contracting in Brevard/Space Coast industrial markets?
+3. Submarket trends - vacancy, absorption, asking rents, any notable market shifts
+4. OM implications - what does this week's activity mean for ERP's active Brevard deals?
 
 Articles:
 ${articleList}

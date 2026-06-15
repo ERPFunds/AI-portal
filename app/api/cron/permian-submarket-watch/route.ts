@@ -67,12 +67,17 @@ const APIFY_QUERIES = [
   "West Texas industrial sale comp 2025",
 ];
 
-const KEYWORDS = [
+// Must match at least one geographic keyword — topic-only keywords are not sufficient
+const GEO_KEYWORDS = [
   "permian", "midland", "odessa", "west texas",
+  "permian basin", "permian cre", "midland tx", "midland, tx",
+  "odessa tx", "odessa, tx", "ector county", "andrews texas",
+];
+
+const TOPIC_KEYWORDS = [
   "industrial outdoor storage", "service yard", "ios",
-  "permian basin industrial", "permian cre",
   "sale comp", "comparable", "absorption", "vacancy", "lease rate",
-  "cap rate", "industrial cre", "warehouse texas",
+  "cap rate", "industrial cre", "warehouse",
 ];
 
 interface NewsItem {
@@ -85,7 +90,9 @@ interface NewsItem {
 
 function isRelevant(item: NewsItem): boolean {
   const text = `${item.title} ${item.summary ?? ""}`.toLowerCase();
-  return KEYWORDS.some((kw) => text.includes(kw));
+  const hasGeo = GEO_KEYWORDS.some((kw) => text.includes(kw));
+  // Topic keywords alone are not enough — must mention Permian/West Texas geography
+  return hasGeo;
 }
 
 async function fetchNews(): Promise<NewsItem[]> {
@@ -179,13 +186,13 @@ export async function GET(request: Request) {
       messages: [
         {
           role: "user",
-          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market â€" Midland, Odessa, and surrounding West Texas.
+          content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news focused on the Permian Basin industrial market - Midland, Odessa, and surrounding West Texas.
 
 Focus on:
-1. Sale comparable transactions â€" what are assets trading at? Cap rates, price/SF, price/acre?
-2. Tenant activity â€" who's leasing, expanding, contracting in Permian Basin industrial markets?
-3. Submarket trends â€" vacancy, absorption, asking rents, any notable market shifts
-4. OM implications â€" what does this week's activity mean for ERP's active Permian deals?
+1. Sale comparable transactions - what are assets trading at? Cap rates, price/SF, price/acre?
+2. Tenant activity - who's leasing, expanding, contracting in Permian Basin industrial markets?
+3. Submarket trends - vacancy, absorption, asking rents, any notable market shifts
+4. OM implications - what does this week's activity mean for ERP's active Permian deals?
 
 Articles:
 ${articleList}
