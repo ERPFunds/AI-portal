@@ -5,7 +5,6 @@ import {
   resolveFolderId,
   moveMessage,
   forwardMessage,
-  type InboxMessage,
 } from "@/lib/agents/ir/graph-mailbox";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
 
