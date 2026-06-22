@@ -7,6 +7,7 @@ import {
   forwardMessage,
 } from "@/lib/agents/ir/graph-mailbox";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
+import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
 
@@ -35,15 +36,21 @@ function withinCentralBusinessHours(): boolean {
   return hour >= 8 && hour < 20;
 }
 
-async function postToSalesforceFlow(payload: Record<string, string>): Promise<string> {
-  const url = process.env.PA_SALESFORCE_FLOW_URL;
-  if (!url) return "sf-skip(no PA_SALESFORCE_FLOW_URL)";
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  return res.ok ? "sf-logged" : `sf-fail(${res.status})`;
+async function logToSalesforce(payload: {
+  investorEmail: string;
+  firstName: string;
+  lastName: string;
+  subject: string;
+  snippet: string;
+  receivedDate: string;
+  sourceMailbox: string;
+}): Promise<string> {
+  if (!salesforceConfigured()) return "sf-skip(no SF creds)";
+  try {
+    return await logCorrespondence(payload);
+  } catch (e) {
+    return `sf-fail(${String(e).slice(0, 100)})`;
+  }
 }
 
 async function handleMailbox(
@@ -100,9 +107,9 @@ async function handleMailbox(
       actions.push(`forward-fail(${String(e).slice(0, 60)})`);
     }
 
-    // 2) Salesforce log via the PA HTTP flow
+    // 2) Salesforce: find-or-create the Contact + log a correspondence Task (direct REST)
     actions.push(
-      await postToSalesforceFlow({
+      await logToSalesforce({
         investorEmail: m.fromAddress,
         firstName: verdict.contact.firstName ?? "",
         lastName: verdict.contact.lastName,
