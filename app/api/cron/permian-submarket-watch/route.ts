@@ -197,7 +197,7 @@ Focus on:
 Articles:
 ${articleList}
 
-Write with data density and specificity. Flag any market shifts that could affect OM pricing or demand driver narratives. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
+Write with data density and specificity. Synthesize what the articles tell you and draw market implications from them. If an article is only tangentially related to Permian, extract what IS useful for the market narrative. Do not apologize for limited data, do not add asterisked notes or disclaimers about source quality, do not comment on what the articles did or did not cover. Write a tight, usable brief from what's available and stop. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions.`,
         },
       ],
     });
