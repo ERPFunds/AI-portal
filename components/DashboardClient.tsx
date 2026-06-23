@@ -2501,6 +2501,13 @@ function WorkOrdersView() {
   const dueSoon = enriched.filter(w => w.status === 'due-soon').length
   const hvac = enriched.filter(w => w.category === 'HVAC').length
   const fire = enriched.filter(w => w.category === 'Fire').length
+  const quicklook = enriched.filter(w => w.category === 'Quicklook').length
+
+  const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
+    HVAC:      { bg: '#eff6ff', color: '#2563eb', label: '❄️ HVAC' },
+    Fire:      { bg: '#fff7ed', color: '#ea580c', label: '🔥 Fire' },
+    Quicklook: { bg: '#f0fdfa', color: '#0d9488', label: '🔍 Quicklook' },
+  }
 
   const STAT = {
     overdue:   { label: 'Overdue',   color: '#dc2626', bg: '#fef2f2' },
@@ -2534,7 +2541,7 @@ function WorkOrdersView() {
         {card('Total Orders', enriched.length)}
         {card('Overdue', overdue, '#dc2626')}
         {card('Due in 90 days', dueSoon, '#d97706')}
-        {card('HVAC / Fire', `${hvac} / ${fire}`)}
+        {card('HVAC / Fire / QL', `${hvac} / ${fire} / ${quicklook}`)}
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2543,6 +2550,7 @@ function WorkOrdersView() {
           <option value="all">All Categories</option>
           <option value="HVAC">HVAC ({hvac})</option>
           <option value="Fire">Fire ({fire})</option>
+          <option value="Quicklook">Quicklook ({quicklook})</option>
         </select>
         <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
           <option value="all">All Statuses</option>
@@ -2575,9 +2583,8 @@ function WorkOrdersView() {
                   <td style={{ padding: '9px 12px', color: '#374151', maxWidth: 220 }}>{w.tenant}</td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                      background: w.category === 'HVAC' ? '#eff6ff' : '#fff7ed',
-                      color: w.category === 'HVAC' ? '#2563eb' : '#ea580c' }}>
-                      {w.category === 'HVAC' ? '❄️ HVAC' : '🔥 Fire'}
+                      background: CAT_STYLE[w.category]?.bg ?? '#f3f4f6', color: CAT_STYLE[w.category]?.color ?? '#374151' }}>
+                      {CAT_STYLE[w.category]?.label ?? w.category}
                     </span>
                   </td>
                   <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{w.lastInspection ? fmtDate(w.lastInspection) : '—'}</td>
@@ -2608,7 +2615,7 @@ function WorkOrdersView() {
           <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
           <MField label="Category">
             <select value={draft.category} onChange={e => upd({ category: e.target.value as WorkOrder['category'] })} style={mInput}>
-              <option value="HVAC">HVAC</option><option value="Fire">Fire</option>
+              <option value="HVAC">HVAC</option><option value="Fire">Fire</option><option value="Quicklook">Quicklook</option>
             </select>
           </MField>
           <MField label="Last Inspection"><input type="date" style={mInput} value={draft.lastInspection ?? ''} onChange={e => setLast(e.target.value)} /></MField>

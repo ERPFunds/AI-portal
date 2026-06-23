@@ -2,7 +2,7 @@ export interface WorkOrder {
   id: number
   address: string
   tenant: string
-  category: 'HVAC' | 'Fire'
+  category: 'HVAC' | 'Fire' | 'Quicklook'
   lastInspection: string
   nextDue: string
 }
