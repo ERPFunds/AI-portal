@@ -2191,7 +2191,7 @@ function RentRollView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'WB', ''].map((h, i) => (
+              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'Wash Bay', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
