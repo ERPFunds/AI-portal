@@ -2337,7 +2337,13 @@ function RentRollView() {
                         return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: bg, color }}>{label}</span>
                       })()}
                     </td>
-                    <td style={{ padding: '9px 12px', color: '#9ca3af', fontSize: 11 }}>{isExp ? '▲' : '▼'}</td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      <button onClick={(e) => { e.stopPropagation(); setDraft({ ...p }); setIsNew(false) }}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
+                      <button onClick={(e) => { e.stopPropagation(); deleteRow(p.id) }}
+                        style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 8 }}>🗑</button>
+                      <span style={{ color: '#9ca3af', fontSize: 11 }}>{isExp ? '▲' : '▼'}</span>
+                    </td>
                   </tr>
                   {isExp && (
                     <tr style={{ background: '#f0f9ff', borderBottom: '2px solid #A6C3C9' }}>
