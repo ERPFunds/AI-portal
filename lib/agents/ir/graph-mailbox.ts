@@ -62,6 +62,24 @@ export async function resolveFolderId(mailbox: string, displayName: string): Pro
   return data.value?.[0]?.id ?? null;
 }
 
+/** Resolve a child folder's id by name under a named parent (e.g., "Investor Relations" → "Escalate"). */
+export async function resolveSubfolderId(
+  mailbox: string,
+  parentName: string,
+  childName: string
+): Promise<string | null> {
+  const parentId = await resolveFolderId(mailbox, parentName);
+  if (!parentId) return null;
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${parentId}/childFolders` +
+    `?$filter=${encodeURIComponent(`displayName eq '${childName.replace(/'/g, "''")}'`)}&$select=id,displayName&$top=1`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+  if (!res.ok) throw new Error(`Graph resolve subfolder ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.value?.[0]?.id ?? null;
+}
+
 /** Move a message to another folder within the same mailbox. */
 export async function moveMessage(mailbox: string, messageId: string, destinationFolderId: string): Promise<void> {
   const t = await token();

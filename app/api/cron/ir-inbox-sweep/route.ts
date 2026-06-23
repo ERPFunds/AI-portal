@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { classifyInquiry } from "@/lib/agents/ir/inquiry-classifier";
+import { classifyInvestorEmail } from "@/lib/agents/ir/email-classifier";
 import {
   listInboxMessages,
-  resolveFolderId,
+  resolveSubfolderId,
   moveMessage,
   forwardMessage,
 } from "@/lib/agents/ir/graph-mailbox";
+import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
 
 const TEAM_INBOX = "team@erpfunds.com";
+// Parent folder + the two routing subfolders an investor email lands in (one or the other).
 const IR_FOLDER = "Investor Relations";
+const SUB_ESCALATE = "Escalate"; // high-stakes / needs the fund manager
+const SUB_DRAFTS = "Forwarded Drafts"; // routine — a draft reply is prepared for review
 const TOP_PER_MAILBOX = 25;
 
 // Comma-separated list of mailboxes to sweep, e.g. "mberry@erpfunds.com,wmeyer@erpfunds.com".
@@ -66,8 +71,9 @@ async function handleMailbox(
   // oldest first so the dedup ledger fills in chronological order
   const todo = messages.filter((m) => fresh.has(m.id)).reverse();
 
-  // resolve the IR folder once per mailbox (only needed if we'll move something)
-  let folderId: string | null = null;
+  // resolve the two routing subfolders once per mailbox (lazily; only if we'll move something)
+  let escalateFolderId: string | null | undefined; // undefined = not yet resolved
+  let draftsFolderId: string | null | undefined;
   let investorCount = 0;
 
   for (const m of todo) {
@@ -87,12 +93,24 @@ async function handleMailbox(
     }
 
     investorCount++;
+
+    // Investor email: classify for routing + draft (escalate XOR forwarded-drafts).
+    const triage = await classifyInvestorEmail({
+      from: m.fromAddress,
+      subject: m.subject,
+      body: m.bodyPreview,
+    });
+    const route = triage.isEscalation ? "escalate" : "draft";
+
     if (dryRun) {
-      details.push(`INVESTOR(dry) ${m.fromAddress} (${verdict.contact.firstName ?? ""} ${verdict.contact.lastName}) — ${verdict.reason}`);
+      details.push(
+        `INVESTOR(dry) ${m.fromAddress} (${verdict.contact.firstName ?? ""} ${verdict.contact.lastName}) ` +
+          `→ ${route}${triage.isEscalation ? ` [${triage.escalationReason ?? triage.category}]` : ""} — ${verdict.reason}`
+      );
       continue;
     }
 
-    const actions: string[] = [];
+    const actions: string[] = [route];
 
     // 1) forward to the team hub (best-effort)
     try {
@@ -100,7 +118,7 @@ async function handleMailbox(
         mailbox,
         m.id,
         TEAM_INBOX,
-        `IR auto-triage — investor/broker inquiry received in ${mailbox}. ${verdict.reason}`
+        `IR auto-triage (${route}) — investor/broker inquiry received in ${mailbox}. ${verdict.reason}`
       );
       actions.push("forwarded");
     } catch (e) {
@@ -120,14 +138,36 @@ async function handleMailbox(
       })
     );
 
-    // 3) file into the Investor Relations folder (best-effort; needs Mail.ReadWrite)
+    // 3) routine inquiries: prepare a draft reply in the mailbox's Drafts for review (never auto-sent)
+    if (route === "draft") {
+      try {
+        const d = await saveDraftToOutlook({
+          toEmail: m.fromAddress,
+          mailboxEmail: mailbox,
+          subject: triage.draftSubject || `Re: ${m.subject}`,
+          htmlBody: triage.draftHtml,
+        });
+        actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+      } catch (e) {
+        actions.push(`draft-fail(${String(e).slice(0, 60)})`);
+      }
+    }
+
+    // 4) file into the matching IR subfolder (best-effort; needs Mail.ReadWrite)
     try {
-      if (folderId === null) folderId = await resolveFolderId(mailbox, IR_FOLDER);
-      if (folderId) {
-        await moveMessage(mailbox, m.id, folderId);
+      let destId: string | null;
+      if (route === "escalate") {
+        if (escalateFolderId === undefined) escalateFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_ESCALATE);
+        destId = escalateFolderId;
+      } else {
+        if (draftsFolderId === undefined) draftsFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_DRAFTS);
+        destId = draftsFolderId;
+      }
+      if (destId) {
+        await moveMessage(mailbox, m.id, destId);
         actions.push("filed");
       } else {
-        actions.push("file-skip(no IR folder)");
+        actions.push(`file-skip(no "${route === "escalate" ? SUB_ESCALATE : SUB_DRAFTS}" subfolder)`);
       }
     } catch (e) {
       actions.push(`move-fail(${String(e).slice(0, 60)})`);
