@@ -10,6 +10,7 @@ import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
 import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type MarketDataSource } from '@/lib/data/prompts'
 import { PROPERTIES, ENTITY_ORDER, ENTITY_LABELS } from '@/lib/data/properties'
+import { WORK_ORDERS } from '@/lib/data/workOrders'
 import MarketResearchView from './MarketResearchView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2295,11 +2296,124 @@ function RentRollView() {
 }
 
 function WorkOrdersView() {
+  const [search, setSearch] = React.useState('')
+  const [catFilter, setCatFilter] = React.useState('all')
+  const [statusFilter, setStatusFilter] = React.useState('all')
+
+  const today = new Date()
+  const MS_DAY = 86400000
+
+  // Compute status for each order from nextDue vs today
+  const enriched = WORK_ORDERS.map(w => {
+    const due = new Date(w.nextDue)
+    const days = Math.round((due.getTime() - today.getTime()) / MS_DAY)
+    let status: 'overdue' | 'due-soon' | 'current'
+    if (days < 0) status = 'overdue'
+    else if (days <= 90) status = 'due-soon'
+    else status = 'current'
+    return { ...w, days, status }
+  }).sort((a, b) => a.days - b.days) // most overdue first
+
+  const filtered = enriched.filter(w => {
+    const matchCat = catFilter === 'all' || w.category === catFilter
+    const matchStatus = statusFilter === 'all' || w.status === statusFilter
+    const q = search.toLowerCase()
+    const matchSearch = !q || w.address.toLowerCase().includes(q) || w.tenant.toLowerCase().includes(q)
+    return matchCat && matchStatus && matchSearch
+  })
+
+  const overdue = enriched.filter(w => w.status === 'overdue').length
+  const dueSoon = enriched.filter(w => w.status === 'due-soon').length
+  const hvac = enriched.filter(w => w.category === 'HVAC').length
+  const fire = enriched.filter(w => w.category === 'Fire').length
+
+  const STAT = {
+    overdue:   { label: 'Overdue',   color: '#dc2626', bg: '#fef2f2' },
+    'due-soon':{ label: 'Due Soon',  color: '#d97706', bg: '#fef3c7' },
+    current:   { label: 'Current',   color: '#16a34a', bg: '#f0fdf4' },
+  } as const
+
+  const fmtDate = (s: string) => {
+    const d = new Date(s)
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
+
+  const inputStyle: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, background: '#fff' }
+  const card = (label: string, value: React.ReactNode, color?: string): React.ReactNode => (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '12px 16px', flex: 1 }}>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color ?? '#111827', marginTop: 4 }}>{value}</div>
+    </div>
+  )
+
   return (
     <div>
-      <div className="page-header"><h2>Work Orders</h2><p>Agent-monitored work order queue — SLA breaches, vendor dispatches, and cost tracking from Yardi</p></div>
-      <SourceBar source="Yardi Maintenance" agents="Property Operations · Maintenance &amp; Vendor" synced="Today 9:31 AM (real-time)" link="Open in Yardi ↗" />
-      <EmptyDataView source="Yardi Maintenance" message="Work orders will appear here once Yardi is connected" />
+      <div className="page-header"><h2>Work Orders</h2><p>Cyclical maintenance queue — annual HVAC &amp; fire inspections, sorted by next due date</p></div>
+      <SourceBar source="Industrial Cyclical Maintenance Tracking" agents="Property Operations · Maintenance &amp; Vendor" synced="From maintenance tracker" link="Open tracker ↗" />
+
+      <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
+        {card('Total Orders', enriched.length)}
+        {card('Overdue', overdue, '#dc2626')}
+        {card('Due in 90 days', dueSoon, '#d97706')}
+        {card('HVAC / Fire', `${hvac} / ${fire}`)}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+        <input placeholder="Search address or tenant…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, minWidth: 220 }} />
+        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} style={inputStyle}>
+          <option value="all">All Categories</option>
+          <option value="HVAC">HVAC ({hvac})</option>
+          <option value="Fire">Fire ({fire})</option>
+        </select>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
+          <option value="all">All Statuses</option>
+          <option value="overdue">Overdue ({overdue})</option>
+          <option value="due-soon">Due Soon ({dueSoon})</option>
+          <option value="current">Current</option>
+        </select>
+        {(search || catFilter !== 'all' || statusFilter !== 'all') && (
+          <button onClick={() => { setSearch(''); setCatFilter('all'); setStatusFilter('all') }}
+            style={{ ...inputStyle, cursor: 'pointer', color: '#6b7280' }}>Clear filters</button>
+        )}
+        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>{filtered.length} of {enriched.length}</span>
+      </div>
+
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+              {['Property', 'Tenant', 'Category', 'Last Inspection', 'Next Due', 'Status'].map((h, i) => (
+                <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.map(w => {
+              const s = STAT[w.status]
+              return (
+                <tr key={w.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827' }}>{w.address}</td>
+                  <td style={{ padding: '9px 12px', color: '#374151', maxWidth: 220 }}>{w.tenant}</td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                      background: w.category === 'HVAC' ? '#eff6ff' : '#fff7ed',
+                      color: w.category === 'HVAC' ? '#2563eb' : '#ea580c' }}>
+                      {w.category === 'HVAC' ? '❄️ HVAC' : '🔥 Fire'}
+                    </span>
+                  </td>
+                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtDate(w.lastInspection)}</td>
+                  <td style={{ padding: '9px 12px', color: '#374151', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtDate(w.nextDue)}</td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: s.bg, color: s.color }}>
+                      {s.label}{w.status === 'overdue' ? ` · ${Math.abs(w.days)}d` : w.status === 'due-soon' ? ` · ${w.days}d` : ''}
+                    </span>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
