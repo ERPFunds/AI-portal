@@ -138,19 +138,18 @@ async function handleMailbox(
       })
     );
 
-    // 3) routine inquiries: prepare a draft reply in the mailbox's Drafts for review (never auto-sent)
-    if (route === "draft") {
-      try {
-        const d = await saveDraftToOutlook({
-          toEmail: m.fromAddress,
-          mailboxEmail: mailbox,
-          subject: triage.draftSubject || `Re: ${m.subject}`,
-          htmlBody: triage.draftHtml,
-        });
-        actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
-      } catch (e) {
-        actions.push(`draft-fail(${String(e).slice(0, 60)})`);
-      }
+    // 3) prepare a draft reply in the mailbox's Drafts for review (never auto-sent) — both routes.
+    //    Escalations get a draft too; Meghan/William review & send (or escalate further).
+    try {
+      const d = await saveDraftToOutlook({
+        toEmail: m.fromAddress,
+        mailboxEmail: mailbox,
+        subject: triage.draftSubject || `Re: ${m.subject}`,
+        htmlBody: triage.draftHtml,
+      });
+      actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+    } catch (e) {
+      actions.push(`draft-fail(${String(e).slice(0, 60)})`);
     }
 
     // 4) file into the matching IR subfolder (best-effort; needs Mail.ReadWrite)
