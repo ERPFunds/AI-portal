@@ -9,8 +9,8 @@ import { AGENTS, ACTIVITY_MAP } from '@/lib/data/agents'
 import { INBOX_DATA, INBOX_AGENTS } from '@/lib/data/inbox'
 import { WORKFLOWS, AGENT_ACTIVITY } from '@/lib/data/workflows'
 import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type MarketDataSource } from '@/lib/data/prompts'
-import { PROPERTIES, ENTITY_ORDER, ENTITY_LABELS } from '@/lib/data/properties'
-import { WORK_ORDERS } from '@/lib/data/workOrders'
+import { ENTITY_ORDER, ENTITY_LABELS, type Property } from '@/lib/data/properties'
+import { type WorkOrder } from '@/lib/data/workOrders'
 import MarketResearchView from './MarketResearchView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -2100,6 +2100,55 @@ function BrokerageNewsletterView() {
   )
 }
 
+// Shared browser Supabase client for editable data views (Properties, Work Orders)
+let _editSb: ReturnType<typeof createBrowserClient> | null = null
+function editSb() {
+  if (!_editSb) {
+    _editSb = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+  }
+  return _editSb
+}
+
+// Generic modal shell used by the editable data views
+function EditModal({ title, onClose, onSave, saving, children }: { title: string; onClose: () => void; onSave: () => void; saving: boolean; children: React.ReactNode }) {
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,45,82,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 720, boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0D2D52' }}>{title}</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>{children}</div>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#6b7280', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={onSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving ? .6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// Labeled field wrapper for modal forms
+function MField({ label, span, children }: { label: string; span?: boolean; children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: span ? '1 / -1' : undefined }}>
+      <span style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600 }}>{label}</span>
+      {children}
+    </label>
+  )
+}
+const mInput: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, width: '100%', boxSizing: 'border-box' }
+
+const EMPTY_PROPERTY: Property = {
+  id: 0, entity: 'DST', corridor: '', address: '', tenant: '', built: null, acres: null,
+  total: null, office: null, warehouse: null, type: 'single', cranes: null, layout: '',
+  structure: '', electrical: '', hvac: '', plumbing: '', exterior: '', notes: '',
+  washBay: 'Unknown', leaseExpiry: null,
+}
+
 function RentRollView() {
   const [search, setSearch] = React.useState('')
   const [entityFilter, setEntityFilter] = React.useState('all')
@@ -2107,7 +2156,44 @@ function RentRollView() {
   const [washBayFilter, setWashBayFilter] = React.useState('all')
   const [expanded, setExpanded] = React.useState<number | null>(null)
 
-  const filtered = PROPERTIES.filter(p => {
+  const [rows, setRows] = React.useState<Property[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [draft, setDraft] = React.useState<Property | null>(null) // edit/add modal state
+  const [isNew, setIsNew] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
+
+  async function load() {
+    setLoading(true)
+    const { data, error } = await editSb().from('properties').select('*').order('sort_order', { ascending: true })
+    if (!error && data) setRows(data as Property[])
+    setLoading(false)
+  }
+  React.useEffect(() => { load() }, [])
+
+  async function saveDraft() {
+    if (!draft) return
+    setSaving(true)
+    const { id, ...rest } = draft as any
+    delete rest.sort_order; delete rest.updated_at
+    if (isNew) {
+      const maxOrder = rows.reduce((m, r: any) => Math.max(m, r.sort_order ?? 0), 0)
+      await editSb().from('properties').insert({ ...rest, sort_order: maxOrder + 1 })
+    } else {
+      await editSb().from('properties').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
+    }
+    setSaving(false); setDraft(null); await load()
+  }
+
+  async function deleteRow(id: number) {
+    if (!confirm('Delete this property? This cannot be undone.')) return
+    await editSb().from('properties').delete().eq('id', id)
+    setExpanded(null); await load()
+  }
+
+  const upd = (patch: Partial<Property>) => setDraft(d => d ? { ...d, ...patch } : d)
+  const num = (v: string) => v === '' ? null : Number(v)
+
+  const filtered = rows.filter(p => {
     const matchEntity = entityFilter === 'all' || p.entity === entityFilter
     const matchType = typeFilter === 'all' || p.type === typeFilter
     const matchWashBay = washBayFilter === 'all' || p.washBay === washBayFilter
@@ -2131,15 +2217,21 @@ function RentRollView() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2>🏢 Properties</h2>
-        <p>Full portfolio — {PROPERTIES.length} properties across {ENTITY_ORDER.length} funds</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2>🏢 Properties</h2>
+          <p>Full portfolio — {rows.length} properties across {ENTITY_ORDER.length} funds · <span style={{ color: '#16a34a' }}>editable</span></p>
+        </div>
+        <button onClick={() => { setDraft({ ...EMPTY_PROPERTY }); setIsNew(true) }}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+          + Add property
+        </button>
       </div>
 
       {/* Summary bar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
-          { label: 'Total Properties', value: PROPERTIES.length },
+          { label: 'Total Properties', value: rows.length },
           { label: 'Filtered',         value: filtered.length },
           { label: 'Occupied',         value: filtered.filter(p => p.type !== 'vacant').length + ' / ' + filtered.length },
           { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
@@ -2161,17 +2253,17 @@ function RentRollView() {
         />
         <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
-          <option value="all">All Portfolios ({PROPERTIES.length})</option>
+          <option value="all">All Portfolios ({rows.length})</option>
           {ENTITY_ORDER.map(e => (
-            <option key={e} value={e}>{ENTITY_LABELS[e]} ({PROPERTIES.filter(p => p.entity === e).length})</option>
+            <option key={e} value={e}>{ENTITY_LABELS[e]} ({rows.filter(p => p.entity === e).length})</option>
           ))}
         </select>
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
           <option value="all">All Types</option>
-          <option value="single">Single-Tenant ({PROPERTIES.filter(p => p.type === 'single').length})</option>
-          <option value="multi">Multi-Tenant ({PROPERTIES.filter(p => p.type === 'multi').length})</option>
-          <option value="vacant">Vacant ({PROPERTIES.filter(p => p.type === 'vacant').length})</option>
+          <option value="single">Single-Tenant ({rows.filter(p => p.type === 'single').length})</option>
+          <option value="multi">Multi-Tenant ({rows.filter(p => p.type === 'multi').length})</option>
+          <option value="vacant">Vacant ({rows.filter(p => p.type === 'vacant').length})</option>
         </select>
         <select value={washBayFilter} onChange={e => setWashBayFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
@@ -2279,6 +2371,12 @@ function RentRollView() {
                             ))}
                           </div>
                         </div>
+                        <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid #dbeafe' }}>
+                          <button onClick={(e) => { e.stopPropagation(); setDraft({ ...p }); setIsNew(false) }}
+                            style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✎ Edit</button>
+                          <button onClick={(e) => { e.stopPropagation(); deleteRow(p.id) }}
+                            style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>🗑 Delete</button>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -2287,24 +2385,101 @@ function RentRollView() {
             })}
           </tbody>
         </table>
-        {filtered.length === 0 && (
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading properties…</div>
+        )}
+        {!loading && filtered.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No properties match your filters.</div>
         )}
       </div>
+
+      {draft && (
+        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+          <MField label="Fund / Entity">
+            <select value={draft.entity} onChange={e => upd({ entity: e.target.value })} style={mInput}>
+              {ENTITY_ORDER.map(en => <option key={en} value={en}>{ENTITY_LABELS[en]}</option>)}
+            </select>
+          </MField>
+          <MField label="Corridor"><input style={mInput} value={draft.corridor} onChange={e => upd({ corridor: e.target.value })} /></MField>
+          <MField label="Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
+          <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
+          <MField label="Type">
+            <select value={draft.type} onChange={e => upd({ type: e.target.value as Property['type'] })} style={mInput}>
+              <option value="single">single</option><option value="multi">multi</option><option value="vacant">vacant</option>
+            </select>
+          </MField>
+          <MField label="Wash Bay">
+            <select value={draft.washBay} onChange={e => upd({ washBay: e.target.value as Property['washBay'] })} style={mInput}>
+              <option value="Yes">Yes</option><option value="No">No</option><option value="Unknown">Unknown</option>
+            </select>
+          </MField>
+          <MField label="Lease Expiry"><input type="date" style={mInput} value={draft.leaseExpiry ?? ''} onChange={e => upd({ leaseExpiry: e.target.value || null })} /></MField>
+          <MField label="Year Built"><input type="number" style={mInput} value={draft.built ?? ''} onChange={e => upd({ built: num(e.target.value) })} /></MField>
+          <MField label="Acres"><input type="number" step="0.01" style={mInput} value={draft.acres ?? ''} onChange={e => upd({ acres: num(e.target.value) })} /></MField>
+          <MField label="Total SF"><input type="number" style={mInput} value={draft.total ?? ''} onChange={e => upd({ total: num(e.target.value) })} /></MField>
+          <MField label="Office SF"><input type="number" style={mInput} value={draft.office ?? ''} onChange={e => upd({ office: num(e.target.value) })} /></MField>
+          <MField label="Warehouse SF"><input type="number" style={mInput} value={draft.warehouse ?? ''} onChange={e => upd({ warehouse: num(e.target.value) })} /></MField>
+          <MField label="Cranes" span><input style={mInput} value={draft.cranes ?? ''} onChange={e => upd({ cranes: e.target.value || null })} /></MField>
+          <MField label="Layout" span><input style={mInput} value={draft.layout} onChange={e => upd({ layout: e.target.value })} /></MField>
+          <MField label="Structure" span><input style={mInput} value={draft.structure} onChange={e => upd({ structure: e.target.value })} /></MField>
+          <MField label="Electrical"><input style={mInput} value={draft.electrical} onChange={e => upd({ electrical: e.target.value })} /></MField>
+          <MField label="HVAC"><input style={mInput} value={draft.hvac} onChange={e => upd({ hvac: e.target.value })} /></MField>
+          <MField label="Plumbing"><input style={mInput} value={draft.plumbing} onChange={e => upd({ plumbing: e.target.value })} /></MField>
+          <MField label="Exterior"><input style={mInput} value={draft.exterior} onChange={e => upd({ exterior: e.target.value })} /></MField>
+          <MField label="Notes" span><textarea style={{ ...mInput, minHeight: 60, resize: 'vertical' }} value={draft.notes} onChange={e => upd({ notes: e.target.value })} /></MField>
+        </EditModal>
+      )}
     </div>
   )
 }
+
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', category: 'HVAC', lastInspection: '', nextDue: '' }
 
 function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
   const [catFilter, setCatFilter] = React.useState('all')
   const [statusFilter, setStatusFilter] = React.useState('all')
 
+  const [rows, setRows] = React.useState<WorkOrder[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [draft, setDraft] = React.useState<WorkOrder | null>(null)
+  const [isNew, setIsNew] = React.useState(false)
+  const [saving, setSaving] = React.useState(false)
+
+  async function load() {
+    setLoading(true)
+    const { data, error } = await editSb().from('work_orders').select('*').order('id', { ascending: true })
+    if (!error && data) setRows(data as WorkOrder[])
+    setLoading(false)
+  }
+  React.useEffect(() => { load() }, [])
+
+  async function saveDraft() {
+    if (!draft) return
+    setSaving(true)
+    const { id, ...rest } = draft as any
+    delete rest.updated_at
+    if (isNew) await editSb().from('work_orders').insert({ ...rest })
+    else await editSb().from('work_orders').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
+    setSaving(false); setDraft(null); await load()
+  }
+  async function deleteRow(id: number) {
+    if (!confirm('Delete this work order?')) return
+    await editSb().from('work_orders').delete().eq('id', id); await load()
+  }
+  // Auto-fill nextDue = lastInspection + 1 year when last inspection changes
+  function setLast(v: string) {
+    let next = draft?.nextDue ?? ''
+    if (v) { const d = new Date(v); d.setFullYear(d.getFullYear() + 1); next = d.toISOString().slice(0, 10) }
+    setDraft(d => d ? { ...d, lastInspection: v, nextDue: next } : d)
+  }
+  const upd = (patch: Partial<WorkOrder>) => setDraft(d => d ? { ...d, ...patch } : d)
+
   const today = new Date()
   const MS_DAY = 86400000
 
   // Compute status for each order from nextDue vs today
-  const enriched = WORK_ORDERS.map(w => {
+  const enriched = rows.map(w => {
     const due = new Date(w.nextDue)
     const days = Math.round((due.getTime() - today.getTime()) / MS_DAY)
     let status: 'overdue' | 'due-soon' | 'current'
@@ -2348,7 +2523,11 @@ function WorkOrdersView() {
 
   return (
     <div>
-      <div className="page-header"><h2>Work Orders</h2><p>Cyclical maintenance queue — annual HVAC &amp; fire inspections, sorted by next due date</p></div>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div><h2>Work Orders</h2><p>Cyclical maintenance queue — annual HVAC &amp; fire inspections, sorted by next due date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <button onClick={() => { setDraft({ ...EMPTY_WO }); setIsNew(true) }}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add work order</button>
+      </div>
       <SourceBar source="Industrial Cyclical Maintenance Tracking" agents="Property Operations · Maintenance &amp; Vendor" synced="From maintenance tracker" link="Open tracker ↗" />
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
@@ -2382,7 +2561,7 @@ function WorkOrdersView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Property', 'Tenant', 'Category', 'Last Inspection', 'Next Due', 'Status'].map((h, i) => (
+              {['Property', 'Tenant', 'Category', 'Last Inspection', 'Next Due', 'Status', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -2401,19 +2580,41 @@ function WorkOrdersView() {
                       {w.category === 'HVAC' ? '❄️ HVAC' : '🔥 Fire'}
                     </span>
                   </td>
-                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtDate(w.lastInspection)}</td>
-                  <td style={{ padding: '9px 12px', color: '#374151', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtDate(w.nextDue)}</td>
+                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{w.lastInspection ? fmtDate(w.lastInspection) : '—'}</td>
+                  <td style={{ padding: '9px 12px', color: '#374151', whiteSpace: 'nowrap', fontWeight: 500 }}>{w.nextDue ? fmtDate(w.nextDue) : '—'}</td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: s.bg, color: s.color }}>
                       {s.label}{w.status === 'overdue' ? ` · ${Math.abs(w.days)}d` : w.status === 'due-soon' ? ` · ${w.days}d` : ''}
                     </span>
+                  </td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <button onClick={() => { setDraft({ id: w.id, address: w.address, tenant: w.tenant, category: w.category, lastInspection: w.lastInspection, nextDue: w.nextDue }); setIsNew(false) }}
+                      style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
+                    <button onClick={() => deleteRow(w.id)}
+                      style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>🗑</button>
                   </td>
                 </tr>
               )
             })}
           </tbody>
         </table>
+        {loading && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading work orders…</div>}
+        {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No work orders match your filters.</div>}
       </div>
+
+      {draft && (
+        <EditModal title={isNew ? 'Add work order' : `Edit — ${draft.address || 'work order'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+          <MField label="Property / Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
+          <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
+          <MField label="Category">
+            <select value={draft.category} onChange={e => upd({ category: e.target.value as WorkOrder['category'] })} style={mInput}>
+              <option value="HVAC">HVAC</option><option value="Fire">Fire</option>
+            </select>
+          </MField>
+          <MField label="Last Inspection"><input type="date" style={mInput} value={draft.lastInspection ?? ''} onChange={e => setLast(e.target.value)} /></MField>
+          <MField label="Next Due (auto = +1yr)"><input type="date" style={mInput} value={draft.nextDue ?? ''} onChange={e => upd({ nextDue: e.target.value })} /></MField>
+        </EditModal>
+      )}
     </div>
   )
 }
