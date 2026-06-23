@@ -13,7 +13,6 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { icon: '👥', label: 'LP Directory',        view: 'lp' },
     { section: 'Property' },
-    { icon: '🔬', label: 'Market & Comps',        view: 'market-research' },
     { icon: '🏭', label: 'Acquisition Research', view: 'acquisition' },
     { icon: '🏢', label: 'Properties',           view: 'rentroll' },
     { icon: '🔧', label: 'Work Orders',         view: 'workorders' },
