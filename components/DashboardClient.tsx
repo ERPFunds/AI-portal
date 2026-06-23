@@ -2191,7 +2191,7 @@ function RentRollView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'Wash Bay', ''].map((h, i) => (
+              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'Wash Bay', 'Lease Exp', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -2230,11 +2230,25 @@ function RentRollView() {
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       {p.washBay === 'Yes' ? '✅' : p.washBay === 'No' ? '✗' : '?'}
                     </td>
+                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                      {(() => {
+                        if (!p.leaseExpiry) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
+                        const yr = parseInt(p.leaseExpiry.split('-')[0])
+                        const hasMonth = p.leaseExpiry.includes('-')
+                        const now = new Date()
+                        const expDate = hasMonth ? new Date(p.leaseExpiry) : new Date(yr, 11, 31)
+                        const months = (expDate.getFullYear() - now.getFullYear()) * 12 + (expDate.getMonth() - now.getMonth())
+                        const color = months < 6 ? '#dc2626' : months < 12 ? '#d97706' : '#16a34a'
+                        const bg = months < 6 ? '#fef2f2' : months < 12 ? '#fef3c7' : '#f0fdf4'
+                        const label = hasMonth ? p.leaseExpiry.slice(0, 7) : String(yr)
+                        return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: bg, color }}>{label}</span>
+                      })()}
+                    </td>
                     <td style={{ padding: '9px 12px', color: '#9ca3af', fontSize: 11 }}>{isExp ? '▲' : '▼'}</td>
                   </tr>
                   {isExp && (
                     <tr style={{ background: '#f0f9ff', borderBottom: '2px solid #A6C3C9' }}>
-                      <td colSpan={11} style={{ padding: '14px 20px' }}>
+                      <td colSpan={12} style={{ padding: '14px 20px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, fontSize: 12 }}>
                           <div>
                             <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Building</div>
