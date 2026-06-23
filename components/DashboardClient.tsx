@@ -2102,13 +2102,17 @@ function BrokerageNewsletterView() {
 function RentRollView() {
   const [search, setSearch] = React.useState('')
   const [entityFilter, setEntityFilter] = React.useState('all')
+  const [typeFilter, setTypeFilter] = React.useState('all')
+  const [washBayFilter, setWashBayFilter] = React.useState('all')
   const [expanded, setExpanded] = React.useState<number | null>(null)
 
   const filtered = PROPERTIES.filter(p => {
     const matchEntity = entityFilter === 'all' || p.entity === entityFilter
+    const matchType = typeFilter === 'all' || p.type === typeFilter
+    const matchWashBay = washBayFilter === 'all' || p.washBay === washBayFilter
     const q = search.toLowerCase()
     const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q)
-    return matchEntity && matchSearch
+    return matchEntity && matchType && matchWashBay && matchSearch
   })
 
   const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
@@ -2152,7 +2156,7 @@ function RentRollView() {
           placeholder="Search address, tenant, corridor..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 200, padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, outline: 'none' }}
+          style={{ flex: 1, minWidth: 220, padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, outline: 'none' }}
         />
         <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
@@ -2161,6 +2165,25 @@ function RentRollView() {
             <option key={e} value={e}>{ENTITY_LABELS[e]} ({PROPERTIES.filter(p => p.entity === e).length})</option>
           ))}
         </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="all">All Types</option>
+          <option value="single">Single-Tenant ({PROPERTIES.filter(p => p.type === 'single').length})</option>
+          <option value="multi">Multi-Tenant ({PROPERTIES.filter(p => p.type === 'multi').length})</option>
+          <option value="vacant">Vacant ({PROPERTIES.filter(p => p.type === 'vacant').length})</option>
+        </select>
+        <select value={washBayFilter} onChange={e => setWashBayFilter(e.target.value)}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="all">Any Wash Bay</option>
+          <option value="Yes">Wash Bay: Yes</option>
+          <option value="No">Wash Bay: No</option>
+        </select>
+        {(entityFilter !== 'all' || typeFilter !== 'all' || washBayFilter !== 'all' || search) && (
+          <button onClick={() => { setSearch(''); setEntityFilter('all'); setTypeFilter('all'); setWashBayFilter('all'); }}
+            style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
       </div>
 
       {/* Table */}
