@@ -2438,7 +2438,6 @@ const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', category: 'HVAC', 
 function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
   const [catFilter, setCatFilter] = React.useState('all')
-  const [statusFilter, setStatusFilter] = React.useState('all')
 
   const [rows, setRows] = React.useState<WorkOrder[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2475,30 +2474,16 @@ function WorkOrdersView() {
   }
   const upd = (patch: Partial<WorkOrder>) => setDraft(d => d ? { ...d, ...patch } : d)
 
-  const today = new Date()
-  const MS_DAY = 86400000
-
-  // Compute status for each order from nextDue vs today
-  const enriched = rows.map(w => {
-    const due = new Date(w.nextDue)
-    const days = Math.round((due.getTime() - today.getTime()) / MS_DAY)
-    let status: 'overdue' | 'due-soon' | 'current'
-    if (days < 0) status = 'overdue'
-    else if (days <= 90) status = 'due-soon'
-    else status = 'current'
-    return { ...w, days, status }
-  }).sort((a, b) => a.days - b.days) // most overdue first
+  // Most recent inspection first
+  const enriched = [...rows].sort((a, b) => (b.lastInspection ?? '').localeCompare(a.lastInspection ?? ''))
 
   const filtered = enriched.filter(w => {
     const matchCat = catFilter === 'all' || w.category === catFilter
-    const matchStatus = statusFilter === 'all' || w.status === statusFilter
     const q = search.toLowerCase()
     const matchSearch = !q || w.address.toLowerCase().includes(q) || w.tenant.toLowerCase().includes(q)
-    return matchCat && matchStatus && matchSearch
+    return matchCat && matchSearch
   })
 
-  const overdue = enriched.filter(w => w.status === 'overdue').length
-  const dueSoon = enriched.filter(w => w.status === 'due-soon').length
   const hvac = enriched.filter(w => w.category === 'HVAC').length
   const fire = enriched.filter(w => w.category === 'Fire').length
   const quicklook = enriched.filter(w => w.category === 'Quicklook').length
@@ -2508,12 +2493,6 @@ function WorkOrdersView() {
     Fire:      { bg: '#fff7ed', color: '#ea580c', label: '🔥 Fire' },
     Quicklook: { bg: '#f0fdfa', color: '#0d9488', label: '🔍 Quicklook' },
   }
-
-  const STAT = {
-    overdue:   { label: 'Overdue',   color: '#dc2626', bg: '#fef2f2' },
-    'due-soon':{ label: 'Due Soon',  color: '#d97706', bg: '#fef3c7' },
-    current:   { label: 'Current',   color: '#16a34a', bg: '#f0fdf4' },
-  } as const
 
   const fmtDate = (s: string) => {
     const d = new Date(s)
@@ -2531,7 +2510,7 @@ function WorkOrdersView() {
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><h2>Work Orders</h2><p>Cyclical maintenance queue — annual HVAC &amp; fire inspections, sorted by next due date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <div><h2>Work Orders</h2><p>Cyclical maintenance log — HVAC, fire &amp; Quicklook inspections, most recent first · <span style={{ color: '#16a34a' }}>editable</span></p></div>
         <button onClick={() => { setDraft({ ...EMPTY_WO }); setIsNew(true) }}
           style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add work order</button>
       </div>
@@ -2539,9 +2518,9 @@ function WorkOrdersView() {
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
         {card('Total Orders', enriched.length)}
-        {card('Overdue', overdue, '#dc2626')}
-        {card('Due in 90 days', dueSoon, '#d97706')}
-        {card('HVAC / Fire / QL', `${hvac} / ${fire} / ${quicklook}`)}
+        {card('HVAC', hvac, '#2563eb')}
+        {card('Fire', fire, '#ea580c')}
+        {card('Quicklook', quicklook, '#0d9488')}
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2552,14 +2531,8 @@ function WorkOrdersView() {
           <option value="Fire">Fire ({fire})</option>
           <option value="Quicklook">Quicklook ({quicklook})</option>
         </select>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={inputStyle}>
-          <option value="all">All Statuses</option>
-          <option value="overdue">Overdue ({overdue})</option>
-          <option value="due-soon">Due Soon ({dueSoon})</option>
-          <option value="current">Current</option>
-        </select>
-        {(search || catFilter !== 'all' || statusFilter !== 'all') && (
-          <button onClick={() => { setSearch(''); setCatFilter('all'); setStatusFilter('all') }}
+        {(search || catFilter !== 'all') && (
+          <button onClick={() => { setSearch(''); setCatFilter('all') }}
             style={{ ...inputStyle, cursor: 'pointer', color: '#6b7280' }}>Clear filters</button>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>{filtered.length} of {enriched.length}</span>
@@ -2569,14 +2542,13 @@ function WorkOrdersView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Property', 'Tenant', 'Category', 'Last Inspection', 'Next Due', 'Status', ''].map((h, i) => (
+              {['Property', 'Tenant', 'Category', 'Last Inspection', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map(w => {
-              const s = STAT[w.status]
               return (
                 <tr key={w.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                   <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827' }}>{w.address}</td>
@@ -2588,12 +2560,6 @@ function WorkOrdersView() {
                     </span>
                   </td>
                   <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{w.lastInspection ? fmtDate(w.lastInspection) : '—'}</td>
-                  <td style={{ padding: '9px 12px', color: '#374151', whiteSpace: 'nowrap', fontWeight: 500 }}>{w.nextDue ? fmtDate(w.nextDue) : '—'}</td>
-                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: s.bg, color: s.color }}>
-                      {s.label}{w.status === 'overdue' ? ` · ${Math.abs(w.days)}d` : w.status === 'due-soon' ? ` · ${w.days}d` : ''}
-                    </span>
-                  </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <button onClick={() => { setDraft({ id: w.id, address: w.address, tenant: w.tenant, category: w.category, lastInspection: w.lastInspection, nextDue: w.nextDue }); setIsNew(false) }}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
@@ -2618,8 +2584,7 @@ function WorkOrdersView() {
               <option value="HVAC">HVAC</option><option value="Fire">Fire</option><option value="Quicklook">Quicklook</option>
             </select>
           </MField>
-          <MField label="Last Inspection"><input type="date" style={mInput} value={draft.lastInspection ?? ''} onChange={e => setLast(e.target.value)} /></MField>
-          <MField label="Next Due (auto = +1yr)"><input type="date" style={mInput} value={draft.nextDue ?? ''} onChange={e => upd({ nextDue: e.target.value })} /></MField>
+          <MField label="Last Inspection" span><input type="date" style={mInput} value={draft.lastInspection ?? ''} onChange={e => setLast(e.target.value)} /></MField>
         </EditModal>
       )}
     </div>
