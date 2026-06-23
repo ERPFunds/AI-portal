@@ -2482,8 +2482,10 @@ function WorkOrdersView() {
   }
   const upd = (patch: Partial<WorkOrder>) => setDraft(d => d ? { ...d, ...patch } : d)
 
-  // Most recent inspection first
-  const enriched = [...rows].sort((a, b) => (b.lastInspection ?? '').localeCompare(a.lastInspection ?? ''))
+  // "Needs first inspection" rows first, then most recent inspection
+  const rank = (w: WorkOrder) => (w.flag && !w.lastInspection) ? 0 : w.lastInspection ? 1 : 2
+  const enriched = [...rows].sort((a, b) =>
+    rank(a) - rank(b) || (b.lastInspection ?? '').localeCompare(a.lastInspection ?? ''))
 
   const filtered = enriched.filter(w => {
     const matchCat = catFilter === 'all' || w.category === catFilter
