@@ -2444,6 +2444,7 @@ const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', category: 'HVAC', 
 function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
   const [catFilter, setCatFilter] = React.useState('all')
+  const [flagOnly, setFlagOnly] = React.useState(false)
 
   const [rows, setRows] = React.useState<WorkOrder[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2464,6 +2465,7 @@ function WorkOrdersView() {
     setSaving(true)
     const { id, ...rest } = draft as any
     delete rest.updated_at
+    if (rest.lastInspection) rest.flag = null // logging an inspection clears the "needs first inspection" flag
     if (isNew) await editSb().from('work_orders').insert({ ...rest })
     else await editSb().from('work_orders').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
     setSaving(false); setDraft(null); await load()
@@ -2485,14 +2487,16 @@ function WorkOrdersView() {
 
   const filtered = enriched.filter(w => {
     const matchCat = catFilter === 'all' || w.category === catFilter
+    const matchFlag = !flagOnly || (w.flag && !w.lastInspection)
     const q = search.toLowerCase()
     const matchSearch = !q || w.address.toLowerCase().includes(q) || w.tenant.toLowerCase().includes(q)
-    return matchCat && matchSearch
+    return matchCat && matchFlag && matchSearch
   })
 
   const hvac = enriched.filter(w => w.category === 'HVAC').length
   const fire = enriched.filter(w => w.category === 'Fire').length
   const quicklook = enriched.filter(w => w.category === 'Quicklook').length
+  const needsInspection = enriched.filter(w => w.flag && !w.lastInspection).length
 
   const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
     HVAC:      { bg: '#eff6ff', color: '#2563eb', label: '❄️ HVAC' },
@@ -2527,6 +2531,11 @@ function WorkOrdersView() {
         {card('HVAC', hvac, '#2563eb')}
         {card('Fire', fire, '#ea580c')}
         {card('Quicklook', quicklook, '#0d9488')}
+        <div onClick={() => setFlagOnly(v => !v)} title="Occupied properties with no inspection on record"
+          style={{ background: flagOnly ? '#fffbeb' : '#fff', border: `1px solid ${flagOnly ? '#f59e0b' : '#e5e7eb'}`, borderRadius: 10, padding: '12px 16px', flex: 1, cursor: 'pointer' }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600 }}>🚩 Needs 1st Inspection</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#b45309', marginTop: 4 }}>{needsInspection}</div>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -2537,8 +2546,8 @@ function WorkOrdersView() {
           <option value="Fire">Fire ({fire})</option>
           <option value="Quicklook">Quicklook ({quicklook})</option>
         </select>
-        {(search || catFilter !== 'all') && (
-          <button onClick={() => { setSearch(''); setCatFilter('all') }}
+        {(search || catFilter !== 'all' || flagOnly) && (
+          <button onClick={() => { setSearch(''); setCatFilter('all'); setFlagOnly(false) }}
             style={{ ...inputStyle, cursor: 'pointer', color: '#6b7280' }}>Clear filters</button>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>{filtered.length} of {enriched.length}</span>
@@ -2565,7 +2574,11 @@ function WorkOrdersView() {
                       {CAT_STYLE[w.category]?.label ?? w.category}
                     </span>
                   </td>
-                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{w.lastInspection ? fmtDate(w.lastInspection) : '—'}</td>
+                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>
+                    {w.lastInspection ? fmtDate(w.lastInspection)
+                      : w.flag ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🚩 {w.flag}</span>
+                      : '—'}
+                  </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <button onClick={() => { setDraft({ id: w.id, address: w.address, tenant: w.tenant, category: w.category, lastInspection: w.lastInspection, nextDue: w.nextDue }); setIsNew(false) }}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>

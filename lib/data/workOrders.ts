@@ -5,6 +5,7 @@ export interface WorkOrder {
   category: 'HVAC' | 'Fire' | 'Quicklook'
   lastInspection: string
   nextDue: string
+  flag?: string | null
 }
 
 // Source: Industrial - Cyclical Maintenance Tracking.xlsx (annual HVAC & fire inspections).
