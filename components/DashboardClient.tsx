@@ -2471,7 +2471,7 @@ function WorkOrdersView() {
     setSaving(false); setDraft(null); await load()
   }
   async function deleteRow(id: number) {
-    if (!confirm('Delete this work order?')) return
+    if (!confirm('Delete this inspection?')) return
     await editSb().from('work_orders').delete().eq('id', id); await load()
   }
   // Auto-fill nextDue = lastInspection + 1 year when last inspection changes
@@ -2522,9 +2522,9 @@ function WorkOrdersView() {
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><h2>Work Orders</h2><p>Cyclical maintenance log — HVAC, fire &amp; Quicklook inspections, most recent first · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <div><h2>Inspections</h2><p>Cyclical maintenance log — HVAC, fire &amp; Quicklook inspections, most recent first · <span style={{ color: '#16a34a' }}>editable</span></p></div>
         <button onClick={() => { setDraft({ ...EMPTY_WO }); setIsNew(true) }}
-          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add work order</button>
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add inspection</button>
       </div>
       <SourceBar source="Industrial Cyclical Maintenance Tracking" agents="Property Operations · Maintenance &amp; Vendor" synced="From maintenance tracker" link="Open tracker ↗" />
 
@@ -2597,7 +2597,7 @@ function WorkOrdersView() {
       </div>
 
       {draft && (
-        <EditModal title={isNew ? 'Add work order' : `Edit — ${draft.address || 'work order'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+        <EditModal title={isNew ? 'Add inspection' : `Edit — ${draft.address || 'inspection'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
           <MField label="Property / Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
           <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
           <MField label="Category">
