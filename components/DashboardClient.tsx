@@ -2204,6 +2204,27 @@ function RentRollView() {
 
   const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
 
+  function exportCsv() {
+    const cols: [string, (p: Property) => any][] = [
+      ['Fund', p => ENTITY_LABELS[p.entity] ?? p.entity], ['Address', p => p.address], ['Corridor', p => p.corridor],
+      ['Tenant', p => p.tenant], ['Type', p => p.type], ['Built', p => p.built], ['Total SF', p => p.total],
+      ['Office SF', p => p.office], ['Warehouse SF', p => p.warehouse], ['Acres', p => p.acres],
+      ['Wash Bay', p => p.washBay], ['Lease Expiry', p => p.leaseExpiry], ['Cranes', p => p.cranes],
+      ['Layout', p => p.layout], ['Structure', p => p.structure], ['Electrical', p => p.electrical],
+      ['HVAC', p => p.hvac], ['Plumbing', p => p.plumbing], ['Exterior', p => p.exterior], ['Notes', p => p.notes],
+    ]
+    const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const lines = [cols.map(c => c[0]).join(',')]
+    filtered.forEach(p => lines.push(cols.map(c => esc(c[1](p))).join(',')))
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ERP-Properties-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const EC: Record<string, {bg: string, text: string, border: string}> = {
     DST:        {bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd'},
     II:         {bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0'},
@@ -2222,10 +2243,16 @@ function RentRollView() {
           <h2>🏢 Properties</h2>
           <p>Full portfolio — {rows.length} properties across {ENTITY_ORDER.length} funds · <span style={{ color: '#16a34a' }}>editable</span></p>
         </div>
-        <button onClick={() => { setDraft({ ...EMPTY_PROPERTY }); setIsNew(true) }}
-          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
-          + Add property
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportCsv}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            ⬇ Export to Excel
+          </button>
+          <button onClick={() => { setDraft({ ...EMPTY_PROPERTY }); setIsNew(true) }}
+            style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            + Add property
+          </button>
+        </div>
       </div>
 
       {/* Summary bar */}
