@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { saveUploadedFile } from "@/lib/db";
+import { createClient } from "@/lib/supabase/server";
 
 const anthropic = new Anthropic();
 
@@ -22,16 +22,22 @@ export async function POST(req: NextRequest) {
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    await saveUploadedFile({
-      fileId:     uploaded.id,
-      filename:   file.name,
-      sizeBytes:  file.size,
-      mimeType:   file.type,
-      projectTag: projectTag ?? undefined,
-      category:   category ?? undefined,
-      uploadedBy: uploadedBy ?? undefined,
-      expiresAt,
+    const supabase = await createClient();
+    const { error } = await supabase.from("uploaded_files").insert({
+      file_id:     uploaded.id,
+      filename:    file.name,
+      size_bytes:  file.size,
+      mime_type:   file.type || null,
+      project_tag: projectTag ?? null,
+      category:    category ?? null,
+      uploaded_by: uploadedBy ?? null,
+      expires_at:  expiresAt,
     });
+
+    if (error) {
+      console.error("File metadata save error:", error);
+      return NextResponse.json({ error: "Failed to save file metadata" }, { status: 500 });
+    }
 
     return NextResponse.json({
       fileId:     uploaded.id,
