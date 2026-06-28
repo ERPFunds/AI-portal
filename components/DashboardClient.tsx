@@ -2469,12 +2469,18 @@ function RentRollView() {
   )
 }
 
-const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', category: 'HVAC', lastInspection: '', nextDue: '' }
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null }
+
+const INSP_TYPES: { key: 'quicklook_last' | 'hvac_last' | 'fire_last'; label: string; bg: string; color: string }[] = [
+  { key: 'quicklook_last', label: '🔍 Quicklook', bg: '#f0fdfa', color: '#0d9488' },
+  { key: 'hvac_last',      label: '❄️ HVAC',      bg: '#eff6ff', color: '#2563eb' },
+  { key: 'fire_last',      label: '🔥 Fire',      bg: '#fff7ed', color: '#ea580c' },
+]
 
 function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
-  const [catFilter, setCatFilter] = React.useState('all')
   const [flagOnly, setFlagOnly] = React.useState(false)
+  const [sel, setSel] = React.useState<Record<number, string>>({}) // per-row selected inspection type
 
   const [rows, setRows] = React.useState<WorkOrder[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2484,59 +2490,49 @@ function WorkOrdersView() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await editSb().from('work_orders').select('*').order('id', { ascending: true })
+    const { data, error } = await editSb().from('work_orders').select('*').order('address', { ascending: true })
     if (!error && data) setRows(data as WorkOrder[])
     setLoading(false)
   }
   React.useEffect(() => { load() }, [])
+
+  const anyDate = (w: WorkOrder) => w.quicklook_last || w.hvac_last || w.fire_last
+  const latest = (w: WorkOrder) => [w.quicklook_last, w.hvac_last, w.fire_last].filter(Boolean).sort().slice(-1)[0] ?? ''
 
   async function saveDraft() {
     if (!draft) return
     setSaving(true)
     const { id, ...rest } = draft as any
     delete rest.updated_at
-    if (rest.lastInspection) rest.flag = null // logging an inspection clears the "needs first inspection" flag
+    rest.flag = anyDate(draft) ? null : draft.flag // any inspection on record clears the flag
     if (isNew) await editSb().from('work_orders').insert({ ...rest })
     else await editSb().from('work_orders').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
     setSaving(false); setDraft(null); await load()
   }
   async function deleteRow(id: number) {
-    if (!confirm('Delete this inspection?')) return
+    if (!confirm('Delete this property from the inspections log?')) return
     await editSb().from('work_orders').delete().eq('id', id); await load()
-  }
-  // Auto-fill nextDue = lastInspection + 1 year when last inspection changes
-  function setLast(v: string) {
-    let next = draft?.nextDue ?? ''
-    if (v) { const d = new Date(v); d.setFullYear(d.getFullYear() + 1); next = d.toISOString().slice(0, 10) }
-    setDraft(d => d ? { ...d, lastInspection: v, nextDue: next } : d)
   }
   const upd = (patch: Partial<WorkOrder>) => setDraft(d => d ? { ...d, ...patch } : d)
 
   // "Needs first inspection" rows first, then most recent inspection
-  const rank = (w: WorkOrder) => (w.flag && !w.lastInspection) ? 0 : w.lastInspection ? 1 : 2
-  const enriched = [...rows].sort((a, b) =>
-    rank(a) - rank(b) || (b.lastInspection ?? '').localeCompare(a.lastInspection ?? ''))
+  const rank = (w: WorkOrder) => (w.flag && !anyDate(w)) ? 0 : anyDate(w) ? 1 : 2
+  const enriched = [...rows].sort((a, b) => rank(a) - rank(b) || latest(b).localeCompare(latest(a)))
 
   const filtered = enriched.filter(w => {
-    const matchCat = catFilter === 'all' || w.category === catFilter
-    const matchFlag = !flagOnly || (w.flag && !w.lastInspection)
+    const matchFlag = !flagOnly || (w.flag && !anyDate(w))
     const q = search.toLowerCase()
     const matchSearch = !q || w.address.toLowerCase().includes(q) || w.tenant.toLowerCase().includes(q)
-    return matchCat && matchFlag && matchSearch
+    return matchFlag && matchSearch
   })
 
-  const hvac = enriched.filter(w => w.category === 'HVAC').length
-  const fire = enriched.filter(w => w.category === 'Fire').length
-  const quicklook = enriched.filter(w => w.category === 'Quicklook').length
-  const needsInspection = enriched.filter(w => w.flag && !w.lastInspection).length
+  const hvac = enriched.filter(w => w.hvac_last).length
+  const fire = enriched.filter(w => w.fire_last).length
+  const quicklook = enriched.filter(w => w.quicklook_last).length
+  const needsInspection = enriched.filter(w => w.flag && !anyDate(w)).length
 
-  const CAT_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-    HVAC:      { bg: '#eff6ff', color: '#2563eb', label: '❄️ HVAC' },
-    Fire:      { bg: '#fff7ed', color: '#ea580c', label: '🔥 Fire' },
-    Quicklook: { bg: '#f0fdfa', color: '#0d9488', label: '🔍 Quicklook' },
-  }
-
-  const fmtDate = (s: string) => {
+  const fmtDate = (s?: string | null) => {
+    if (!s) return null
     const d = new Date(s)
     return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
@@ -2552,17 +2548,17 @@ function WorkOrdersView() {
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><h2>Inspections</h2><p>Cyclical maintenance log — HVAC, fire &amp; Quicklook inspections, most recent first · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <div><h2>Inspections</h2><p>One row per property — pick an inspection type to see its last date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
         <button onClick={() => { setDraft({ ...EMPTY_WO }); setIsNew(true) }}
-          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add inspection</button>
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add property</button>
       </div>
       <SourceBar source="Industrial Cyclical Maintenance Tracking" agents="Property Operations · Maintenance &amp; Vendor" synced="From maintenance tracker" link="Open tracker ↗" />
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 16 }}>
-        {card('Total Orders', enriched.length)}
-        {card('HVAC', hvac, '#2563eb')}
-        {card('Fire', fire, '#ea580c')}
-        {card('Quicklook', quicklook, '#0d9488')}
+        {card('Properties', enriched.length)}
+        {card('HVAC on record', hvac, '#2563eb')}
+        {card('Fire on record', fire, '#ea580c')}
+        {card('Quicklook on record', quicklook, '#0d9488')}
         <div onClick={() => setFlagOnly(v => !v)} title="Occupied properties with no inspection on record"
           style={{ background: flagOnly ? '#fffbeb' : '#fff', border: `1px solid ${flagOnly ? '#f59e0b' : '#e5e7eb'}`, borderRadius: 10, padding: '12px 16px', flex: 1, cursor: 'pointer' }}>
           <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600 }}>🚩 Needs 1st Inspection</div>
@@ -2572,14 +2568,8 @@ function WorkOrdersView() {
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
         <input placeholder="Search address or tenant…" value={search} onChange={e => setSearch(e.target.value)} style={{ ...inputStyle, minWidth: 220 }} />
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)} style={inputStyle}>
-          <option value="all">All Categories</option>
-          <option value="HVAC">HVAC ({hvac})</option>
-          <option value="Fire">Fire ({fire})</option>
-          <option value="Quicklook">Quicklook ({quicklook})</option>
-        </select>
-        {(search || catFilter !== 'all' || flagOnly) && (
-          <button onClick={() => { setSearch(''); setCatFilter('all'); setFlagOnly(false) }}
+        {(search || flagOnly) && (
+          <button onClick={() => { setSearch(''); setFlagOnly(false) }}
             style={{ ...inputStyle, cursor: 'pointer', color: '#6b7280' }}>Clear filters</button>
         )}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#9ca3af' }}>{filtered.length} of {enriched.length}</span>
@@ -2589,30 +2579,33 @@ function WorkOrdersView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Property', 'Tenant', 'Category', 'Last Inspection', ''].map((h, i) => (
+              {['Property', 'Tenant', 'Inspection Type', 'Last Done', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map(w => {
+              const selKey = (sel[w.id] ?? 'quicklook_last') as 'quicklook_last' | 'hvac_last' | 'fire_last'
+              const typ = INSP_TYPES.find(t => t.key === selKey)!
+              const dateVal = w[selKey]
               return (
                 <tr key={w.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
                   <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827' }}>{w.address}</td>
                   <td style={{ padding: '9px 12px', color: '#374151', maxWidth: 220 }}>{w.tenant}</td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                      background: CAT_STYLE[w.category]?.bg ?? '#f3f4f6', color: CAT_STYLE[w.category]?.color ?? '#374151' }}>
-                      {CAT_STYLE[w.category]?.label ?? w.category}
-                    </span>
+                    <select value={selKey} onChange={e => setSel(s => ({ ...s, [w.id]: e.target.value }))}
+                      style={{ fontSize: 12, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${typ.color}33`, background: typ.bg, color: typ.color, cursor: 'pointer' }}>
+                      {INSP_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                    </select>
                   </td>
-                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>
-                    {w.lastInspection ? fmtDate(w.lastInspection)
-                      : w.flag ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🚩 {w.flag}</span>
-                      : '—'}
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    {dateVal ? <span style={{ color: '#374151', fontWeight: 500 }}>{fmtDate(dateVal)}</span>
+                      : (w.flag && !anyDate(w)) ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🚩 {w.flag}</span>
+                      : <span style={{ color: '#d1d5db' }}>— not recorded</span>}
                   </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                    <button onClick={() => { setDraft({ id: w.id, address: w.address, tenant: w.tenant, category: w.category, lastInspection: w.lastInspection, nextDue: w.nextDue }); setIsNew(false) }}
+                    <button onClick={() => { setDraft({ ...w }); setIsNew(false) }}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
                     <button onClick={() => deleteRow(w.id)}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>🗑</button>
@@ -2622,20 +2615,17 @@ function WorkOrdersView() {
             })}
           </tbody>
         </table>
-        {loading && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading work orders…</div>}
-        {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No work orders match your filters.</div>}
+        {loading && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading inspections…</div>}
+        {!loading && filtered.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No properties match your filters.</div>}
       </div>
 
       {draft && (
-        <EditModal title={isNew ? 'Add inspection' : `Edit — ${draft.address || 'inspection'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
           <MField label="Property / Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
           <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
-          <MField label="Category">
-            <select value={draft.category} onChange={e => upd({ category: e.target.value as WorkOrder['category'] })} style={mInput}>
-              <option value="HVAC">HVAC</option><option value="Fire">Fire</option><option value="Quicklook">Quicklook</option>
-            </select>
-          </MField>
-          <MField label="Last Inspection" span><input type="date" style={mInput} value={draft.lastInspection ?? ''} onChange={e => setLast(e.target.value)} /></MField>
+          <MField label="🔍 Quicklook — last done"><input type="date" style={mInput} value={draft.quicklook_last ?? ''} onChange={e => upd({ quicklook_last: e.target.value || null })} /></MField>
+          <MField label="❄️ HVAC — last done"><input type="date" style={mInput} value={draft.hvac_last ?? ''} onChange={e => upd({ hvac_last: e.target.value || null })} /></MField>
+          <MField label="🔥 Fire — last done"><input type="date" style={mInput} value={draft.fire_last ?? ''} onChange={e => upd({ fire_last: e.target.value || null })} /></MField>
         </EditModal>
       )}
     </div>
