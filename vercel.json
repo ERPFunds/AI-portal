@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/ir-inbox-sweep",
       "schedule": "*/5 13-23,0-2 * * *"
+    },
+    {
+      "path": "/api/ir-kb-sync",
+      "schedule": "30 13 * * 1"
     }
   ]
 }
