@@ -4368,12 +4368,39 @@ function fmtBytes(n: number | null) {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function UploadedFilesCard() {
+// Caret that rotates when its section is open.
+function Caret({ open }: { open: boolean }) {
+  return (
+    <span style={{ fontSize: 10, color: '#9ca3af', width: 10, flexShrink: 0, display: 'inline-block', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}>▶</span>
+  )
+}
+
+// Groups files by their project_tag ("subfolder"). Named subfolders come first
+// (alphabetical), untagged files last under an empty tag.
+function groupByTag(files: UploadedFileRecord[]): { tag: string; files: UploadedFileRecord[] }[] {
+  const map = new Map<string, UploadedFileRecord[]>()
+  for (const f of files) {
+    const k = f.project_tag && f.project_tag.trim() ? f.project_tag.trim() : ''
+    if (!map.has(k)) map.set(k, [])
+    map.get(k)!.push(f)
+  }
+  const groups = [...map.entries()]
+    .filter(([k]) => k !== '')
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([tag, files]) => ({ tag, files }))
+  const untagged = map.get('')
+  if (untagged) groups.push({ tag: '', files: untagged })
+  return groups
+}
+
+function UploadedFilesCard({ query = '' }: { query?: string }) {
   const [files, setFiles] = useState<UploadedFileRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [tag, setTag] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  const [collapsedTags, setCollapsedTags] = useState<Set<string>>(new Set())
 
   const fetchFiles = async () => {
     try {
@@ -4393,7 +4420,7 @@ function UploadedFilesCard() {
       const fd = new FormData()
       fd.append('file', file)
       fd.append('category', DEAL_DOCUMENTS_CATEGORY)
-      if (tag) fd.append('projectTag', tag)
+      if (tag.trim()) fd.append('projectTag', tag.trim())
       await fetch('/api/files/upload', { method: 'POST', body: fd })
     }
     await fetchFiles()
@@ -4411,9 +4438,17 @@ function UploadedFilesCard() {
     setTimeout(() => setCopied(null), 1500)
   }
 
+  const q = query.trim().toLowerCase()
+  const visible = q ? files.filter(f => f.filename.toLowerCase().includes(q)) : files
+  const expanded = open || (q.length > 0 && visible.length > 0)
+  const groups = groupByTag(visible)
+  const tagOpen = (t: string) => q.length > 0 ? true : !collapsedTags.has(t)
+  const toggleTag = (t: string) => setCollapsedTags(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
+
   return (
-    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start', opacity: q && visible.length === 0 ? 0.5 : 1 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <Caret open={expanded} />
         <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
           📂
         </div>
@@ -4421,56 +4456,79 @@ function UploadedFilesCard() {
           <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>Deal Documents</div>
         </div>
         <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
-          {files.length} file{files.length !== 1 ? 's' : ''}
+          {q ? `${visible.length} match${visible.length !== 1 ? 'es' : ''}` : `${files.length} file${files.length !== 1 ? 's' : ''}`}
         </span>
       </div>
-      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
-        Upload rent rolls, T12s, OMs, or deal PDFs once — reference across OM Writer, Sale Comps, and Deck Builder without re-attaching each time.
-      </div>
 
-      <div style={{ display: 'flex', gap: 6 }}>
-        <input
-          placeholder="Project tag (e.g. Tampa OM)"
-          value={tag}
-          onChange={e => setTag(e.target.value)}
-          style={{ flex: 1, fontSize: 11, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', background: '#fff', color: '#111827' }}
-        />
-        <label style={{ cursor: 'pointer', fontSize: 11, padding: '5px 10px', background: '#0e7490', color: '#fff', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: uploading ? 0.6 : 1 }}>
-          {uploading ? 'Uploading…' : '+ Upload'}
-          <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={e => handleUpload(e.target.files)} disabled={uploading} />
-        </label>
-      </div>
+      {expanded && (
+        <>
+          <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>
+            Upload rent rolls, T12s, OMs, or deal PDFs once — reference across OM Writer, Sale Comps, and Deck Builder without re-attaching each time.
+          </div>
 
-      {loading ? (
-        <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>Loading…</div>
-      ) : files.length === 0 ? (
-        <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>No files uploaded yet</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {files.map(f => (
-            <div key={f.file_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' }}>
-              <span style={{ fontSize: 13, flexShrink: 0 }}>📄</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</div>
-                <div style={{ fontSize: 10, color: '#9ca3af' }}>
-                  {fmtBytes(f.size_bytes)}{f.project_tag ? ` · ${f.project_tag}` : ''}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input
+              placeholder="Subfolder / project tag (e.g. Tampa OM)"
+              value={tag}
+              onChange={e => setTag(e.target.value)}
+              style={{ flex: 1, fontSize: 11, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', background: '#fff', color: '#111827' }}
+            />
+            <label style={{ cursor: 'pointer', fontSize: 11, padding: '5px 10px', background: '#0e7490', color: '#fff', borderRadius: 6, display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, opacity: uploading ? 0.6 : 1 }}>
+              {uploading ? 'Uploading…' : '+ Upload'}
+              <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={e => handleUpload(e.target.files)} disabled={uploading} />
+            </label>
+          </div>
+
+          {loading ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>Loading…</div>
+          ) : files.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>No files uploaded yet</div>
+          ) : visible.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '8px 0' }}>No matches</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {groups.map(g => (
+                <div key={g.tag || '__none__'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {g.tag && (
+                    <div onClick={() => toggleTag(g.tag)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '2px 0' }}>
+                      <Caret open={tagOpen(g.tag)} />
+                      <span style={{ fontSize: 11 }}>📁</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{g.tag}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{g.files.length}</span>
+                    </div>
+                  )}
+                  {(!g.tag || tagOpen(g.tag)) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginLeft: g.tag ? 16 : 0 }}>
+                      {g.files.map(f => (
+                        <div key={f.file_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' }}>
+                          <span style={{ fontSize: 13, flexShrink: 0 }}>📄</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</div>
+                            <div style={{ fontSize: 10, color: '#9ca3af' }}>
+                              {fmtBytes(f.size_bytes)}{f.project_tag ? ` · ${f.project_tag}` : ''}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => copyId(f.file_id)}
+                            title="Copy file_id for agent use"
+                            style={{ fontSize: 10, color: copied === f.file_id ? '#16a34a' : '#0e7490', background: 'none', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}
+                          >
+                            {copied === f.file_id ? 'Copied!' : 'Copy ID'}
+                          </button>
+                          <button
+                            onClick={() => handleDelete(f.file_id)}
+                            title="Delete file"
+                            style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', flexShrink: 0 }}
+                          >✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              </div>
-              <button
-                onClick={() => copyId(f.file_id)}
-                title="Copy file_id for agent use"
-                style={{ fontSize: 10, color: copied === f.file_id ? '#16a34a' : '#0e7490', background: 'none', border: '1px solid #e5e7eb', borderRadius: 4, padding: '2px 7px', cursor: 'pointer', flexShrink: 0 }}
-              >
-                {copied === f.file_id ? 'Copied!' : 'Copy ID'}
-              </button>
-              <button
-                onClick={() => handleDelete(f.file_id)}
-                title="Delete file"
-                style={{ fontSize: 11, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', flexShrink: 0 }}
-              >✕</button>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )
@@ -4490,11 +4548,14 @@ const SOP_CATEGORIES = [
   { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]
 
-function SOPCategoryCard({ cat }: { cat: { icon: string; label: string; desc: string } }) {
+function SOPCategoryCard({ cat, query = '' }: { cat: { icon: string; label: string; desc: string }; query?: string }) {
   const [docs, setDocs] = useState<UploadedFileRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [open, setOpen] = useState(false)
+  const [subfolder, setSubfolder] = useState('')
+  const [collapsedTags, setCollapsedTags] = useState<Set<string>>(new Set())
 
   const fetchDocs = async () => {
     try {
@@ -4514,6 +4575,7 @@ function SOPCategoryCard({ cat }: { cat: { icon: string; label: string; desc: st
       const fd = new FormData()
       fd.append('file', file)
       fd.append('category', cat.label)
+      if (subfolder.trim()) fd.append('projectTag', subfolder.trim())
       await fetch('/api/files/upload', { method: 'POST', body: fd })
     }
     await fetchDocs()
@@ -4525,9 +4587,17 @@ function SOPCategoryCard({ cat }: { cat: { icon: string; label: string; desc: st
     setDocs((d) => d.filter((x) => x.file_id !== fileId))
   }
 
+  const q = query.trim().toLowerCase()
+  const visible = q ? docs.filter(d => d.filename.toLowerCase().includes(q)) : docs
+  const expanded = open || (q.length > 0 && visible.length > 0)
+  const groups = groupByTag(visible)
+  const tagOpen = (t: string) => q.length > 0 ? true : !collapsedTags.has(t)
+  const toggleTag = (t: string) => setCollapsedTags(prev => { const n = new Set(prev); n.has(t) ? n.delete(t) : n.add(t); return n })
+
   return (
-    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start', opacity: q && visible.length === 0 ? 0.5 : 1 }}>
+      <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
+        <Caret open={expanded} />
         <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
           {cat.icon}
         </div>
@@ -4535,61 +4605,105 @@ function SOPCategoryCard({ cat }: { cat: { icon: string; label: string; desc: st
           <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cat.label}</div>
         </div>
         <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
-          {docs.length} doc{docs.length !== 1 ? 's' : ''}
+          {q ? `${visible.length} match${visible.length !== 1 ? 'es' : ''}` : `${docs.length} doc${docs.length !== 1 ? 's' : ''}`}
         </span>
       </div>
-      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{cat.desc}</div>
 
-      {/* Upload zone */}
-      <label
-        className={`upload-zone${dragging ? ' drag-over' : ''}`}
-        style={{ padding: '12px 10px', opacity: uploading ? 0.6 : 1 }}
-        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
-        onDragLeave={() => setDragging(false)}
-        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
-      >
-        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} disabled={uploading} />
-        <span style={{ fontSize: 16 }}>📎</span>
-        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{uploading ? 'Uploading…' : <>Drop SOP or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></>}</div>
-      </label>
+      {expanded && (
+        <>
+          <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{cat.desc}</div>
 
-      {/* Doc list */}
-      {loading ? (
-        <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Loading…</div>
-      ) : docs.length > 0 && (
-        <div className="doc-list">
-          {docs.map((d) => (
-            <div key={d.file_id} className="doc-item">
-              <span style={{ fontSize: 13 }}>📄</span>
-              <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
-              <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
+          {/* Upload zone with optional subfolder */}
+          <input
+            placeholder="Subfolder (optional, e.g. Agent 1)"
+            value={subfolder}
+            onChange={e => setSubfolder(e.target.value)}
+            style={{ fontSize: 11, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', background: '#fff', color: '#111827' }}
+          />
+          <label
+            className={`upload-zone${dragging ? ' drag-over' : ''}`}
+            style={{ padding: '12px 10px', opacity: uploading ? 0.6 : 1 }}
+            onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+          >
+            <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} disabled={uploading} />
+            <span style={{ fontSize: 16 }}>📎</span>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{uploading ? 'Uploading…' : <>Drop SOP{subfolder.trim() ? ` into "${subfolder.trim()}"` : ''} or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></>}</div>
+          </label>
+
+          {/* Doc list grouped by subfolder */}
+          {loading ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Loading…</div>
+          ) : docs.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>No docs yet</div>
+          ) : visible.length === 0 ? (
+            <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>No matches</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {groups.map(g => (
+                <div key={g.tag || '__none__'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {g.tag && (
+                    <div onClick={() => toggleTag(g.tag)} style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', padding: '2px 0' }}>
+                      <Caret open={tagOpen(g.tag)} />
+                      <span style={{ fontSize: 11 }}>📁</span>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#374151' }}>{g.tag}</span>
+                      <span style={{ fontSize: 10, color: '#9ca3af' }}>{g.files.length}</span>
+                    </div>
+                  )}
+                  {(!g.tag || tagOpen(g.tag)) && (
+                    <div className="doc-list" style={{ marginLeft: g.tag ? 16 : 0 }}>
+                      {g.files.map((d) => (
+                        <div key={d.file_id} className="doc-item">
+                          <span style={{ fontSize: 13 }}>📄</span>
+                          <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+                          <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
     </div>
   )
 }
 
 function SOPsView() {
+  const [query, setQuery] = useState('')
   return (
     <div>
       <div className="page-header">
         <h2>SOPs & Agent Guides</h2>
         <p>Instructions for working with agents and managing portal dashboards — the team's reference library for how everything runs</p>
       </div>
-      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>📌</span>
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+      <div style={{ position: 'relative', marginBottom: 16 }}>
+        <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9ca3af' }}>🔍</span>
+        <input
+          placeholder="Search all SOP files by name…"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+          style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '9px 12px 9px 34px', border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none', background: '#fff', color: '#111827' }}
+        />
+        {query && (
+          <button onClick={() => setQuery('')} title="Clear" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
         {/* Claude Training and Assets + Agent Working Guides lead, side by side */}
         {SOP_CATEGORIES.slice(0, 2).map((cat) => (
-          <SOPCategoryCard key={cat.label} cat={cat} />
+          <SOPCategoryCard key={cat.label} cat={cat} query={query} />
         ))}
-        <UploadedFilesCard />
+        <UploadedFilesCard query={query} />
         {SOP_CATEGORIES.slice(2).map((cat) => (
-          <SOPCategoryCard key={cat.label} cat={cat} />
+          <SOPCategoryCard key={cat.label} cat={cat} query={query} />
         ))}
       </div>
     </div>
