@@ -11,6 +11,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const projectTag = formData.get("projectTag") as string | null;
+    const category = formData.get("category") as string | null;
     const uploadedBy = formData.get("uploadedBy") as string | null;
 
     if (!file) {
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
       sizeBytes:  file.size,
       mimeType:   file.type,
       projectTag: projectTag ?? undefined,
+      category:   category ?? undefined,
       uploadedBy: uploadedBy ?? undefined,
       expiresAt,
     });
@@ -37,6 +39,7 @@ export async function POST(req: NextRequest) {
       sizeBytes:  file.size,
       mimeType:   file.type,
       projectTag,
+      category,
       expiresAt,
     });
   } catch (error) {

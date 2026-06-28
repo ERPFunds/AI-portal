@@ -4357,10 +4357,13 @@ interface UploadedFileRecord {
   size_bytes: number | null
   mime_type: string | null
   project_tag: string | null
+  category: string | null
   uploaded_by: string | null
   expires_at: string | null
   created_at: string
 }
+
+const DEAL_DOCUMENTS_CATEGORY = 'Deal Documents'
 
 function fmtBytes(n: number | null) {
   if (!n) return '—'
@@ -4378,7 +4381,7 @@ function UploadedFilesCard() {
 
   const fetchFiles = async () => {
     try {
-      const res = await fetch('/api/files/list')
+      const res = await fetch(`/api/files/list?category=${encodeURIComponent(DEAL_DOCUMENTS_CATEGORY)}`)
       const data = await res.json()
       setFiles(data.files ?? [])
     } catch { setFiles([]) }
@@ -4393,6 +4396,7 @@ function UploadedFilesCard() {
     for (const file of Array.from(fileList)) {
       const fd = new FormData()
       fd.append('file', file)
+      fd.append('category', DEAL_DOCUMENTS_CATEGORY)
       if (tag) fd.append('projectTag', tag)
       await fetch('/api/files/upload', { method: 'POST', body: fd })
     }
@@ -4479,6 +4483,7 @@ function UploadedFilesCard() {
 // ─── SOPs ─────────────────────────────────────────────────────────────────────
 
 const SOP_CATEGORIES = [
+  { icon: '🎓', label: 'Claude Training and Assets',    desc: 'Claude training decks, brand & messaging guidelines, deck/OM build guides, and the skills & commands reference — the team’s AI enablement library' },
   { icon: '🤖', label: 'Agent Working Guides',          desc: 'How to interact with each agent — submitting tasks, reviewing outputs, handling escalations, and adjusting autonomy settings per agent' },
   { icon: '📊', label: 'Dashboard & Portal How-Tos',    desc: 'Step-by-step instructions for updating portal views: rent roll, capital calls, leasing pipeline, work orders, connections, and agent config' },
   { icon: '💰', label: 'Finance Agent SOPs',            desc: 'Invoice approval workflows and GL coding for the Financial Controls agent; month-end close procedures for the Accounting Operations agent' },
@@ -4489,20 +4494,88 @@ const SOP_CATEGORIES = [
   { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]
 
+function SOPCategoryCard({ cat }: { cat: { icon: string; label: string; desc: string } }) {
+  const [docs, setDocs] = useState<UploadedFileRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [dragging, setDragging] = useState(false)
+
+  const fetchDocs = async () => {
+    try {
+      const res = await fetch(`/api/files/list?category=${encodeURIComponent(cat.label)}`)
+      const data = await res.json()
+      setDocs(data.files ?? [])
+    } catch { setDocs([]) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchDocs() }, [])
+
+  const handleFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    setUploading(true)
+    for (const file of Array.from(fileList)) {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('category', cat.label)
+      await fetch('/api/files/upload', { method: 'POST', body: fd })
+    }
+    await fetchDocs()
+    setUploading(false)
+  }
+
+  const removeDoc = async (fileId: string) => {
+    await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
+    setDocs((d) => d.filter((x) => x.file_id !== fileId))
+  }
+
+  return (
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+          {cat.icon}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cat.label}</div>
+        </div>
+        <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
+          {docs.length} doc{docs.length !== 1 ? 's' : ''}
+        </span>
+      </div>
+      <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{cat.desc}</div>
+
+      {/* Upload zone */}
+      <label
+        className={`upload-zone${dragging ? ' drag-over' : ''}`}
+        style={{ padding: '12px 10px', opacity: uploading ? 0.6 : 1 }}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+      >
+        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} disabled={uploading} />
+        <span style={{ fontSize: 16 }}>📎</span>
+        <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>{uploading ? 'Uploading…' : <>Drop SOP or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></>}</div>
+      </label>
+
+      {/* Doc list */}
+      {loading ? (
+        <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Loading…</div>
+      ) : docs.length > 0 && (
+        <div className="doc-list">
+          {docs.map((d) => (
+            <div key={d.file_id} className="doc-item">
+              <span style={{ fontSize: 13 }}>📄</span>
+              <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+              <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SOPsView() {
-  const [docs, setDocs] = useState<Record<string, string[]>>({})
-  const [dragging, setDragging] = useState<string | null>(null)
-
-  function handleFiles(catLabel: string, files: FileList | null) {
-    if (!files) return
-    const names = Array.from(files).map((f) => f.name)
-    setDocs((prev) => ({ ...prev, [catLabel]: [...(prev[catLabel] ?? []), ...names] }))
-  }
-
-  function removeDoc(catLabel: string, name: string) {
-    setDocs((prev) => ({ ...prev, [catLabel]: (prev[catLabel] ?? []).filter((n) => n !== name) }))
-  }
-
   return (
     <div>
       <div className="page-header">
@@ -4515,51 +4588,9 @@ function SOPsView() {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <UploadedFilesCard />
-        {SOP_CATEGORIES.map((cat) => {
-          const catDocs = docs[cat.label] ?? []
-          return (
-            <div key={cat.label} className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
-                  {cat.icon}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{cat.label}</div>
-                </div>
-                <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>
-                  {catDocs.length} doc{catDocs.length !== 1 ? 's' : ''}
-                </span>
-              </div>
-              <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{cat.desc}</div>
-
-              {/* Upload zone */}
-              <label
-                className={`upload-zone${dragging === cat.label ? ' drag-over' : ''}`}
-                style={{ padding: '12px 10px' }}
-                onDragOver={(e) => { e.preventDefault(); setDragging(cat.label) }}
-                onDragLeave={() => setDragging(null)}
-                onDrop={(e) => { e.preventDefault(); setDragging(null); handleFiles(cat.label, e.dataTransfer.files) }}
-              >
-                <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt" style={{ display: 'none' }} onChange={(e) => handleFiles(cat.label, e.target.files)} />
-                <span style={{ fontSize: 16 }}>📎</span>
-                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>Drop SOP or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></div>
-              </label>
-
-              {/* Doc list */}
-              {catDocs.length > 0 && (
-                <div className="doc-list">
-                  {catDocs.map((name) => (
-                    <div key={name} className="doc-item">
-                      <span style={{ fontSize: 13 }}>📄</span>
-                      <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                      <button className="doc-item-remove" onClick={() => removeDoc(cat.label, name)} title="Remove">✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {SOP_CATEGORIES.map((cat) => (
+          <SOPCategoryCard key={cat.label} cat={cat} />
+        ))}
       </div>
     </div>
   )

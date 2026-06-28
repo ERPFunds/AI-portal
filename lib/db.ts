@@ -317,6 +317,7 @@ export interface UploadedFile {
   size_bytes: number | null;
   mime_type: string | null;
   project_tag: string | null;
+  category: string | null;
   uploaded_by: string | null;
   expires_at: string | null;
   created_at: string;
@@ -328,17 +329,19 @@ export async function saveUploadedFile(params: {
   sizeBytes?: number;
   mimeType?: string;
   projectTag?: string;
+  category?: string;
   uploadedBy?: string;
   expiresAt?: string;
 }) {
   await sql`
-    INSERT INTO uploaded_files (file_id, filename, size_bytes, mime_type, project_tag, uploaded_by, expires_at)
+    INSERT INTO uploaded_files (file_id, filename, size_bytes, mime_type, project_tag, category, uploaded_by, expires_at)
     VALUES (
       ${params.fileId},
       ${params.filename},
       ${params.sizeBytes ?? null},
       ${params.mimeType ?? null},
       ${params.projectTag ?? null},
+      ${params.category ?? null},
       ${params.uploadedBy ?? null},
       ${params.expiresAt ?? null}
     )
@@ -346,12 +349,19 @@ export async function saveUploadedFile(params: {
   `;
 }
 
-export async function listUploadedFiles(): Promise<UploadedFile[]> {
-  const { rows } = await sql`
-    SELECT id, file_id, filename, size_bytes, mime_type, project_tag, uploaded_by, expires_at, created_at
-    FROM uploaded_files
-    ORDER BY created_at DESC
-  `;
+export async function listUploadedFiles(category?: string): Promise<UploadedFile[]> {
+  const { rows } = category
+    ? await sql`
+        SELECT id, file_id, filename, size_bytes, mime_type, project_tag, category, uploaded_by, expires_at, created_at
+        FROM uploaded_files
+        WHERE category = ${category}
+        ORDER BY created_at DESC
+      `
+    : await sql`
+        SELECT id, file_id, filename, size_bytes, mime_type, project_tag, category, uploaded_by, expires_at, created_at
+        FROM uploaded_files
+        ORDER BY created_at DESC
+      `;
   return rows as UploadedFile[];
 }
 
