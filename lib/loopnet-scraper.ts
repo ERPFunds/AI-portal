@@ -5,7 +5,7 @@
  * This module provides the DB query helpers used by the weekly cron newsletters.
  */
 
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/sql";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

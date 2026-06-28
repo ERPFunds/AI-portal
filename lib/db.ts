@@ -1,4 +1,4 @@
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/sql";
 import type { FeedItem } from "./rss";
 
 export async function getPreviouslyPublishedUrls(agentName: string): Promise<Set<string>> {
