@@ -11,7 +11,7 @@ const anthropic = new Anthropic();
 
 // SharePoint source folder (site = ERPAgentOutput, default drive) and target KB category.
 const SP_FOLDER = "Investor Relations";
-const KB_CATEGORY = "Investor Relations KB";
+const KB_CATEGORY = "Investor Relations (SharePoint)";
 const SYNC_TAG = "sharepoint-sync"; // uploaded_by marker for sync-managed rows
 const MAX_DEPTH = 3;
 const REFRESH_WINDOW_MS = 8 * 24 * 60 * 60 * 1000; // re-upload if a row expires within 8 days

@@ -2850,6 +2850,7 @@ function AccountingView() {
 const KB_CATEGORIES = [
   { icon: '💰', label: 'Capital KB',              desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['LP Market Intelligence', 'Capital Raising'] },
   { icon: '📊', label: 'Investor Relations KB',   desc: 'LP profiles, fund terms, investor communications, subscription docs',              agents: ['Investor Relations', 'Capital Raising'] },
+  { icon: '🗂️', label: 'Investor Relations (SharePoint)', desc: 'Auto-synced weekly from the Investor Relations SharePoint folder — review and prune manually', agents: ['Investor Relations'] },
   { icon: '🔐', label: 'Finance & Controls KB',   desc: 'Approval thresholds, GL coding rules, invoice policies, audit documentation',       agents: ['Financial Controls', 'Accounting Operations'] },
   { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Brokerage'] },
   { icon: '📈', label: 'Analytics KB',            desc: 'Cap rate benchmarks, valuation models, fund performance data, market reports',      agents: ['Investment Analytics', 'CIO & Chief of Staff'] },
