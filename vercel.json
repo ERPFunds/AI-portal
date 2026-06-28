@@ -35,7 +35,7 @@
     },
     {
       "path": "/api/ir-kb-sync",
-      "schedule": "30 13 * * 1"
+      "schedule": "30 13 * * 0"
     }
   ]
 }

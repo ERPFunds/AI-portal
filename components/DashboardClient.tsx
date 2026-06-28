@@ -4958,6 +4958,7 @@ const BROWSE_ROOT_FOLDERS = [
   { label: 'ERP Funds IV',       icon: '💼', path: 'ERP Funds IV' },
   { label: 'Deal Pipelines',     icon: '🏭', path: 'ERP Deal Pipelines' },
   { label: 'Research',           icon: '🔬', path: 'Research' },
+  { label: 'Investor Relations', icon: '🤝', path: 'Investor Relations' },
   { label: 'Newsletters',        icon: '📰', path: 'Newsletters' },
   { label: 'Write',              icon: '✍️',  path: 'Write' },
 ]
