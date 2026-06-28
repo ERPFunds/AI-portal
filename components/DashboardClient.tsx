@@ -4580,8 +4580,12 @@ function SOPsView() {
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        {/* Claude Training and Assets + Agent Working Guides lead, side by side */}
+        {SOP_CATEGORIES.slice(0, 2).map((cat) => (
+          <SOPCategoryCard key={cat.label} cat={cat} />
+        ))}
         <UploadedFilesCard />
-        {SOP_CATEGORIES.map((cat) => (
+        {SOP_CATEGORIES.slice(2).map((cat) => (
           <SOPCategoryCard key={cat.label} cat={cat} />
         ))}
       </div>
