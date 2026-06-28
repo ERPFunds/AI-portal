@@ -2311,7 +2311,7 @@ function RentRollView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Type', 'Wash Bay', 'Lease Exp', ''].map((h, i) => (
+              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Cranes', 'Type', 'Wash Bay', 'Lease Exp', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -2340,6 +2340,9 @@ function RentRollView() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.office)}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.warehouse)}</td>
+                    <td style={{ padding: '9px 12px', color: p.cranes && p.cranes !== 'None' ? '#374151' : '#d1d5db', maxWidth: 170, fontSize: 12 }}>
+                      {p.cranes ? p.cranes : '—'}
+                    </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                         background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
@@ -2374,11 +2377,11 @@ function RentRollView() {
                   </tr>
                   {isExp && (
                     <tr style={{ background: '#f0f9ff', borderBottom: '2px solid #A6C3C9' }}>
-                      <td colSpan={12} style={{ padding: '14px 20px' }}>
+                      <td colSpan={13} style={{ padding: '14px 20px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, fontSize: 12 }}>
                           <div>
                             <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Building</div>
-                            {[['Layout', p.layout], ['Structure', p.structure], ['Cranes', p.cranes ?? '—']].map(([k, v]) => (
+                            {[['Layout', p.layout], ['Structure', p.structure]].map(([k, v]) => (
                               <div key={k} style={{ marginBottom: 6 }}>
                                 <span style={{ color: '#9ca3af', fontSize: 11 }}>{k}: </span>
                                 <span style={{ color: '#374151' }}>{v}</span>
