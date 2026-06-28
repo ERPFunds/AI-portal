@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
-import { sql } from "@/lib/sql";
+import { createClient } from "@/lib/supabase/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
-import { saveUploadedFile, deleteUploadedFileRecord } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -87,11 +86,13 @@ export async function GET(req: NextRequest) {
   }
 
   // ── Existing KB rows for this category ─────────────────────────────────────────
-  const { rows } = await sql`
-    SELECT file_id, filename, size_bytes, expires_at, uploaded_by
-    FROM uploaded_files WHERE category = ${KB_CATEGORY}
-  `;
-  const kbRows = rows as KbRow[];
+  const supabase = await createClient();
+  const { data: existingData, error: readErr } = await supabase
+    .from("uploaded_files")
+    .select("file_id, filename, size_bytes, expires_at, uploaded_by")
+    .eq("category", KB_CATEGORY);
+  if (readErr) return NextResponse.json({ error: `DB read failed: ${readErr.message}` }, { status: 500 });
+  const kbRows = (existingData ?? []) as KbRow[];
   const syncByName = new Map<string, KbRow>();   // sync-managed rows, keyed by filename
   const manualNames = new Set<string>();          // filenames added manually (not by sync)
   const nameCounts = new Map<string, number>();
@@ -125,21 +126,21 @@ export async function GET(req: NextRequest) {
     const uploaded = await (anthropic.beta as any).files.upload({
       file: await toFile(new Uint8Array(buffer), f.name, { type: f.mimeType ?? "application/octet-stream" }),
     });
-    await saveUploadedFile({
-      fileId: uploaded.id,
+    await supabase.from("uploaded_files").insert({
+      file_id: uploaded.id,
       filename: f.name,
-      sizeBytes: f.size,
-      mimeType: f.mimeType ?? undefined,
+      size_bytes: f.size,
+      mime_type: f.mimeType ?? null,
       category: KB_CATEGORY,
-      uploadedBy: SYNC_TAG,
-      expiresAt: new Date(Date.now() + EXPIRY_MS).toISOString(),
+      uploaded_by: SYNC_TAG,
+      expires_at: new Date(Date.now() + EXPIRY_MS).toISOString(),
     });
     return uploaded.id;
   }
 
   async function deleteRow(fileId: string) {
     try { await (anthropic.beta as any).files.delete(fileId); } catch { /* file may already be gone */ }
-    await deleteUploadedFileRecord(fileId);
+    await supabase.from("uploaded_files").delete().eq("file_id", fileId);
   }
 
   for (const f of files) {
