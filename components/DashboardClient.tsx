@@ -2863,42 +2863,88 @@ const KB_CATEGORIES = [
   { icon: '🧾', label: 'Accounting KB',           desc: 'Chart of accounts, Yardi procedures, month-end close checklist, AR/AP templates',  agents: ['Accounting Operations'] },
 ]
 
+function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: string; agents: string[] } }) {
+  const [docs, setDocs] = useState<UploadedFileRecord[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [dragging, setDragging] = useState(false)
+
+  const fetchDocs = async () => {
+    try {
+      const res = await fetch(`/api/files/list?category=${encodeURIComponent(kb.label)}`)
+      const data = await res.json()
+      setDocs(data.files ?? [])
+    } catch { setDocs([]) }
+    finally { setLoading(false) }
+  }
+
+  useEffect(() => { fetchDocs() }, [])
+
+  const handleFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return
+    setUploading(true)
+    for (const file of Array.from(fileList)) {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('category', kb.label)
+      await fetch('/api/files/upload', { method: 'POST', body: fd })
+    }
+    await fetchDocs()
+    setUploading(false)
+  }
+
+  const removeDoc = async (fileId: string) => {
+    await fetch(`/api/files/${fileId}`, { method: 'DELETE' })
+    setDocs((d) => d.filter((x) => x.file_id !== fileId))
+  }
+
+  return (
+    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{kb.icon}</div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{kb.label}</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{kb.desc}</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+            {kb.agents.map((a) => <span key={a} className="badge badge-blue" style={{ fontSize: 9 }}>{a}</span>)}
+          </div>
+        </div>
+        <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap' }}>{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Upload zone */}
+      <label
+        className={`upload-zone${dragging ? ' drag-over' : ''}`}
+        style={{ padding: '16px 12px', opacity: uploading ? 0.6 : 1 }}
+        onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={(e) => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files) }}
+      >
+        <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(e.target.files)} disabled={uploading} />
+        <span style={{ fontSize: 18 }}>📄</span>
+        <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>{uploading ? 'Uploading…' : <>Drop files here or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></>}</div>
+        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>PDF, Word, Excel, PowerPoint, CSV</div>
+      </label>
+
+      {/* Doc list */}
+      {loading ? (
+        <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Loading…</div>
+      ) : docs.length > 0 && (
+        <div className="doc-list">
+          {docs.map((d) => (
+            <div key={d.file_id} className="doc-item">
+              <span style={{ fontSize: 14 }}>📄</span>
+              <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+              <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function KnowledgeBaseView() {
-  const [docs, setDocs] = useState<Record<string, string[]>>({
-    'Capital KB': [
-      'ERP_Funds_IV_-_Investor_Presentation_(9.24.25_DRAFT).ppt',
-      'ERP_Funds_II__III_Update_-_Investor_Presentation_(March_23_2023).pdf',
-      'ERP_Funds_III_-_Quarterly_Reporting_Package_(3.31.26)_(v4.14.26_DRAFT).xlsx',
-      'ERP_Space_Coast_Opportunity_Overview_(2.17.20).ppt',
-    ],
-    'Investor Relations KB': [
-      'ERP_1031_Industrial_Portfolio_IV_DST_-_PPM_(Compiled).pdf',
-      'ERP_1031_Industrial_Portfolio_IV_DST_-_Executive_Summary_(March_2026).pdf',
-      'ERP_Funds_III_LLC_(Private_Placement_Memorandum).pdf',
-      'ERP_Industrials_VII_-_Transaction_Overview_(3.02.26).pdf',
-      'ERP_Industrials_-_ERP_Controls__Responsibilities_(3.25.26).xlsx',
-      'ERP_Industrials_1788_-_ERP_Controls__Responsibilities_(3.25.26).xlsx',
-      'ERP_Industrials_-_Team_Member_Duties_(12.02.25).xlsx',
-      'ERP_Pipeline__Market_Analysis_(v.10.28.25).xlsx',
-      'ERP_Industrials_-_Job_Descriptions_(3.18.25).docx',
-      'Industrial_-_Improvements__Deferred_Maintenance_(3.25.26).xlsx',
-      'Industrial_-_Weekly_Agenda_(4.13.26).docx',
-      'ERP_MT_-_PCA_Tracker_(9.17.25).xlsx',
-      'ERP_Industrials_VII_-_DD_Tracking_(3.02.26).xls',
-    ],
-  })
-  const [dragging, setDragging] = useState<string | null>(null)
-
-  function handleFiles(kbLabel: string, files: FileList | null) {
-    if (!files) return
-    const names = Array.from(files).map((f) => f.name)
-    setDocs((prev) => ({ ...prev, [kbLabel]: [...(prev[kbLabel] ?? []), ...names] }))
-  }
-
-  function removeDoc(kbLabel: string, name: string) {
-    setDocs((prev) => ({ ...prev, [kbLabel]: (prev[kbLabel] ?? []).filter((n) => n !== name) }))
-  }
-
   return (
     <div>
       <div className="page-header">
@@ -2907,54 +2953,10 @@ function KnowledgeBaseView() {
       </div>
       <div style={{ background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>💡</span>
-        <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word docs, and Excel files are all supported.</span>
+        <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word, Excel, and PowerPoint files are all supported.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-        {KB_CATEGORIES.map((kb) => {
-          const kbDocs = docs[kb.label] ?? []
-          return (
-            <div key={kb.label} className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{kb.icon}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{kb.label}</div>
-                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{kb.desc}</div>
-                  <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
-                    {kb.agents.map((a) => <span key={a} className="badge badge-blue" style={{ fontSize: 9 }}>{a}</span>)}
-                  </div>
-                </div>
-                <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap' }}>{kbDocs.length} doc{kbDocs.length !== 1 ? 's' : ''}</span>
-              </div>
-
-              {/* Upload zone */}
-              <label
-                className={`upload-zone${dragging === kb.label ? ' drag-over' : ''}`}
-                style={{ padding: '16px 12px' }}
-                onDragOver={(e) => { e.preventDefault(); setDragging(kb.label) }}
-                onDragLeave={() => setDragging(null)}
-                onDrop={(e) => { e.preventDefault(); setDragging(null); handleFiles(kb.label, e.dataTransfer.files) }}
-              >
-                <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.csv" style={{ display: 'none' }} onChange={(e) => handleFiles(kb.label, e.target.files)} />
-                <span style={{ fontSize: 18 }}>📄</span>
-                <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Drop files here or <span style={{ color: '#0e7490', textDecoration: 'underline' }}>browse</span></div>
-                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>PDF, Word, Excel, CSV</div>
-              </label>
-
-              {/* Doc list */}
-              {kbDocs.length > 0 && (
-                <div className="doc-list">
-                  {kbDocs.map((name) => (
-                    <div key={name} className="doc-item">
-                      <span style={{ fontSize: 14 }}>📄</span>
-                      <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                      <button className="doc-item-remove" onClick={() => removeDoc(kb.label, name)} title="Remove">✕</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )
-        })}
+        {KB_CATEGORIES.map((kb) => <KBCategoryCard key={kb.label} kb={kb} />)}
       </div>
     </div>
   )
