@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/sql";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { saveUploadedFile, deleteUploadedFileRecord } from "@/lib/db";
 
