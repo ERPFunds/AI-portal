@@ -3017,15 +3017,54 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
 }
 
 function KnowledgeBaseView() {
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<string | null>(null)
+  const [syncOk, setSyncOk] = useState(true)
+
+  async function syncFromSharePoint() {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const res = await fetch('/api/ir-kb-sync', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) { setSyncOk(false); setSyncMsg(data.error || 'Sync failed'); return }
+      const results: any[] = data.results ?? []
+      const summary = results
+        .map((r) => r.error ? `${r.folder}: error` : `${r.category}: +${r.added?.length ?? 0} added, ${r.updated?.length ?? 0} updated`)
+        .join('  ·  ')
+      setSyncOk(true)
+      setSyncMsg(`Synced from SharePoint — ${summary || 'no changes'}. Refreshing…`)
+      setTimeout(() => window.location.reload(), 1500)
+    } catch (e) {
+      setSyncOk(false); setSyncMsg(String(e))
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   return (
     <div>
-      <div className="page-header">
-        <h2>Knowledge Bases</h2>
-        <p>Upload documents to each knowledge base — agents read these when they work</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>Knowledge Bases</h2>
+          <p>Upload documents to each knowledge base — agents read these when they work</p>
+        </div>
+        <button
+          onClick={syncFromSharePoint}
+          disabled={syncing}
+          title="Pull the latest files from the SharePoint folders (Investor Relations, ERP Funds IV) into their knowledge bases"
+          style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 8, cursor: syncing ? 'default' : 'pointer', border: '1px solid #a5f3fc', background: syncing ? '#e0f2fe' : '#f0f9fa', color: '#0e7490', opacity: syncing ? 0.7 : 1 }}
+        >
+          {syncing ? 'Syncing…' : '🔄 Sync from SharePoint'}
+        </button>
       </div>
+      {syncMsg && (
+        <div style={{ fontSize: 12, color: syncOk ? '#0e7490' : '#b91c1c', background: syncOk ? '#f0f9fa' : '#fef2f2', border: `1px solid ${syncOk ? '#a5f3fc' : '#fca5a5'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 14 }}>
+          {syncMsg}
+        </div>
+      )}
       <div style={{ background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 8, padding: '10px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>💡</span>
-        <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word, Excel, and PowerPoint files are all supported.</span>
+        <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word, Excel, and PowerPoint files are all supported. <strong>Sync from SharePoint</strong> pulls the latest from the Investor Relations and ERP Funds IV folders.</span>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
         {KB_CATEGORIES.map((kb) => <KBCategoryCard key={kb.label} kb={kb} />)}
