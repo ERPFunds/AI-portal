@@ -2495,6 +2495,7 @@ function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
   const [flagOnly, setFlagOnly] = React.useState(false)
   const [sel, setSel] = React.useState<Record<number, string>>({}) // per-row selected inspection type
+  const [syncing, setSyncing] = React.useState(false)
 
   const [rows, setRows] = React.useState<WorkOrder[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2559,6 +2560,34 @@ function WorkOrdersView() {
     </div>
   )
 
+  async function syncWithProperties() {
+    setSyncing(true)
+    const { data: props } = await editSb().from('properties').select('address,tenant,type')
+    const list = (props ?? []) as { address: string; tenant: string; type: string }[]
+    const have = new Set(rows.map(r => r.address))
+    let changed = 0, added = 0
+    // Update tenant / vacancy on existing inspection rows
+    for (const w of rows) {
+      const p = list.find(x => x.address === w.address)
+      if (!p) continue
+      const desired = p.type === 'vacant' ? 'Vacant' : p.tenant
+      const patch: any = {}
+      if (desired !== w.tenant) patch.tenant = desired
+      if (p.type === 'vacant' && w.flag) patch.flag = null
+      if (Object.keys(patch).length) { await editSb().from('work_orders').update(patch).eq('id', w.id); changed++ }
+    }
+    // Add any property missing from the inspections log
+    for (const p of list) {
+      if (have.has(p.address)) continue
+      const vacant = p.type === 'vacant'
+      await editSb().from('work_orders').insert({ address: p.address, tenant: vacant ? 'Vacant' : p.tenant, flag: vacant ? null : 'Needs first inspection' })
+      added++
+    }
+    setSyncing(false)
+    await load()
+    alert(`Synced with Properties — ${changed} tenant/vacancy update(s)` + (added ? `, ${added} new propert${added === 1 ? 'y' : 'ies'} added` : '') + '.')
+  }
+
   function exportCsv() {
     const cols: [string, (w: WorkOrder) => any][] = [
       ['Property', w => w.address], ['Tenant', w => w.tenant],
@@ -2582,6 +2611,10 @@ function WorkOrdersView() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><h2>Inspections</h2><p>One row per property — pick an inspection type to see its last date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={syncWithProperties} disabled={syncing} title="Pull current tenant names and vacancies from the Properties tab"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: syncing ? .6 : 1 }}>
+            {syncing ? 'Syncing…' : '⟳ Sync with Properties'}
+          </button>
           <button onClick={exportCsv}
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
             ⬇ Export to Excel
