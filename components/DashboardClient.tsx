@@ -2307,7 +2307,7 @@ function RentRollView() {
       </div>
 
       {/* Table */}
-      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
@@ -2340,7 +2340,7 @@ function RentRollView() {
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.office)}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.warehouse)}</td>
-                    <td style={{ padding: '9px 12px', color: p.cranes && p.cranes !== 'None' ? '#374151' : '#d1d5db', maxWidth: 170, fontSize: 12 }}>
+                    <td title={p.cranes ?? ''} style={{ padding: '9px 12px', color: p.cranes && p.cranes !== 'None' ? '#374151' : '#d1d5db', maxWidth: 150, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {p.cranes ? p.cranes : '—'}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
