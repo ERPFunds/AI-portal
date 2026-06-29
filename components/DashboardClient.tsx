@@ -2559,12 +2559,36 @@ function WorkOrdersView() {
     </div>
   )
 
+  function exportCsv() {
+    const cols: [string, (w: WorkOrder) => any][] = [
+      ['Property', w => w.address], ['Tenant', w => w.tenant],
+      ['Quicklook Last', w => w.quicklook_last], ['HVAC Last', w => w.hvac_last], ['Fire Last', w => w.fire_last],
+      ['Status', w => (w.flag && !anyDate(w)) ? w.flag : ''],
+    ]
+    const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const lines = [cols.map(c => c[0]).join(',')]
+    filtered.forEach(w => lines.push(cols.map(c => esc(c[1](w))).join(',')))
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ERP-Inspections-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div><h2>Inspections</h2><p>One row per property — pick an inspection type to see its last date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={exportCsv}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            ⬇ Export to Excel
+          </button>
         <button onClick={() => { setDraft({ ...EMPTY_WO }); setIsNew(true) }}
           style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add property</button>
+        </div>
       </div>
       <SourceBar source="Industrial Cyclical Maintenance Tracking" agents="Property Operations · Maintenance &amp; Vendor" synced="From maintenance tracker" link="Open tracker ↗" />
 
