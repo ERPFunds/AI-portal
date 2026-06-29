@@ -2369,7 +2369,9 @@ function RentRollView() {
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       {(() => {
-                        if (!p.leaseExpiry) return <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
+                        if (!p.leaseExpiry) return p.units && p.units.length > 0
+                          ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: '#eef2ff', color: '#4f46e5' }}>{p.units.length} units ▾</span>
+                          : <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
                         const yr = parseInt(p.leaseExpiry.split('-')[0])
                         const hasMonth = p.leaseExpiry.includes('-')
                         const now = new Date()
@@ -2421,6 +2423,28 @@ function RentRollView() {
                             ))}
                           </div>
                         </div>
+                        {p.units && p.units.length > 0 && (
+                          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #dbeafe' }}>
+                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Units — Lease Expirations ({p.units.length})</div>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
+                              {p.units.map(u => {
+                                let color = '#9ca3af', bg = '#f3f4f6'
+                                if (u.expiry) {
+                                  const months = (new Date(u.expiry).getFullYear() - new Date().getFullYear()) * 12 + (new Date(u.expiry).getMonth() - new Date().getMonth())
+                                  color = months < 6 ? '#dc2626' : months < 12 ? '#d97706' : '#16a34a'
+                                  bg = months < 6 ? '#fef2f2' : months < 12 ? '#fef3c7' : '#f0fdf4'
+                                }
+                                return (
+                                  <div key={u.unit} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px', fontSize: 12 }}>
+                                    <span style={{ fontWeight: 700, color: '#0D2D52', minWidth: 22 }}>{u.unit}</span>
+                                    <span style={{ flex: 1, color: u.tenant === 'Vacant' ? '#ef4444' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.tenant}>{u.tenant}</span>
+                                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: bg, color, whiteSpace: 'nowrap' }}>{u.expiry ? u.expiry.slice(0, 7) : '—'}</span>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
                         <div style={{ display: 'flex', gap: 8, marginTop: 14, paddingTop: 12, borderTop: '1px solid #dbeafe' }}>
                           <button onClick={(e) => { e.stopPropagation(); setDraft({ ...p }); setIsNew(false) }}
                             style={{ padding: '6px 14px', borderRadius: 7, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 12, fontWeight: 600 }}>✎ Edit</button>

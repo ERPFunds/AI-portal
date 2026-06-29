@@ -20,6 +20,7 @@ export interface Property {
   notes: string
   washBay: 'Yes' | 'No' | 'Unknown'
   leaseExpiry: string | null
+  units?: { unit: string; tenant: string; expiry: string | null }[] | null
 }
 
 export const ENTITY_ORDER = ["DST", "II", "III-191", "III-1788", "III-other", "IV"] as const
