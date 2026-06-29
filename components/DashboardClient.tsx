@@ -2155,6 +2155,7 @@ function RentRollView() {
   const [typeFilter, setTypeFilter] = React.useState('all')
   const [washBayFilter, setWashBayFilter] = React.useState('all')
   const [expanded, setExpanded] = React.useState<number | null>(null)
+  const [sortBy, setSortBy] = React.useState<'expiry' | 'portfolio'>('expiry')
 
   const [rows, setRows] = React.useState<Property[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2200,6 +2201,14 @@ function RentRollView() {
     const q = search.toLowerCase()
     const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q)
     return matchEntity && matchType && matchWashBay && matchSearch
+  })
+
+  // Default ordering: soonest lease expiration first; no-expiry/vacant rows last
+  const display = sortBy === 'portfolio' ? filtered : [...filtered].sort((a, b) => {
+    if (!a.leaseExpiry && !b.leaseExpiry) return 0
+    if (!a.leaseExpiry) return 1
+    if (!b.leaseExpiry) return -1
+    return a.leaseExpiry.localeCompare(b.leaseExpiry)
   })
 
   const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
@@ -2298,6 +2307,11 @@ function RentRollView() {
           <option value="Yes">Wash Bay: Yes</option>
           <option value="No">Wash Bay: No</option>
         </select>
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'expiry' | 'portfolio')}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="expiry">Sort: Lease expiry (soonest)</option>
+          <option value="portfolio">Sort: Portfolio order</option>
+        </select>
         {(entityFilter !== 'all' || typeFilter !== 'all' || washBayFilter !== 'all' || search) && (
           <button onClick={() => { setSearch(''); setEntityFilter('all'); setTypeFilter('all'); setWashBayFilter('all'); }}
             style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
@@ -2317,7 +2331,7 @@ function RentRollView() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map(p => {
+            {display.map(p => {
               const ec = EC[p.entity] ?? EC.DST
               const isExp = expanded === p.id
               return (
