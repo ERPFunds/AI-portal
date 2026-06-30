@@ -2361,18 +2361,40 @@ function RentRollView() {
   const upd = (patch: Partial<Property>) => setDraft(d => d ? { ...d, ...patch } : d)
   const num = (v: string) => v === '' ? null : Number(v)
 
+  const q = search.toLowerCase()
+  // Building-level set (used for the metrics). Multi-tenant buildings always pass the type filter
+  // so their individual units can be type-filtered when the rows are broken out below.
   const filtered = rows.filter(p => {
     const matchEntity = entityFilter === 'all' || p.entity === entityFilter
-    const matchType = typeFilter === 'all' || p.type === typeFilter
+    const isMulti = !!(p.units && p.units.length > 0)
+    const matchType = typeFilter === 'all' || p.type === typeFilter || isMulti
     const matchWashBay = washBayFilter === 'all' || p.washBay === washBayFilter
-    const q = search.toLowerCase()
-    const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q)
+    const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q) || (isMulti && (p.units!).some(u => (u.tenant || '').toLowerCase().includes(q)))
     return matchEntity && matchType && matchWashBay && matchSearch
-  }).sort((a, b) => (b.type === 'vacant' ? 1 : 0) - (a.type === 'vacant' ? 1 : 0)) // vacant first, otherwise keep portfolio order
+  })
 
-  // Default ordering: soonest lease expiration first; no-expiry/vacant rows last
-  const display = sortBy === 'portfolio' ? filtered : [...filtered].sort((a, b) => {
-    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1 // vacant always first
+  // Break multi-tenant buildings into one display row per unit (so vacant/upcoming units show inline)
+  type Row = Property & { _key: string; _unit?: boolean; _unitNo?: string }
+  const flat: Row[] = []
+  filtered.forEach(p => {
+    if (p.units && p.units.length > 0) {
+      p.units.forEach(u => {
+        const utype: Property['type'] = (u.tenant || '').toLowerCase() === 'vacant' ? 'vacant' : 'single'
+        if (typeFilter !== 'all' && typeFilter !== 'multi' && utype !== typeFilter) return
+        if (q && !(`${p.address} unit ${u.unit}`.toLowerCase().includes(q) || (u.tenant || '').toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q))) return
+        flat.push({ ...p, _key: `${p.id}-u${u.unit}`, _unit: true, _unitNo: u.unit,
+          address: `${p.address} — Unit ${u.unit}`, tenant: u.tenant || 'Vacant', type: utype,
+          leaseExpiry: u.expiry ?? null, built: null, total: null, office: null, warehouse: null, cranes: null, units: null })
+      })
+    } else if (typeFilter === 'all' || typeFilter !== 'multi') {
+      flat.push({ ...p, _key: `p${p.id}` })
+    }
+  })
+
+  // Sort: vacant first, then by sort mode
+  const display = [...flat].sort((a, b) => {
+    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1
+    if (sortBy === 'portfolio') return 0
     if (!a.leaseExpiry && !b.leaseExpiry) return 0
     if (!a.leaseExpiry) return 1
     if (!b.leaseExpiry) return -1
@@ -2463,7 +2485,7 @@ function RentRollView() {
           { label: 'Occupied Units',   value: occupiedUnits + ' / ' + totalUnits },
           { label: 'Expiring ≤6 mo',   value: expiring6, color: expiring6 > 0 ? '#dc2626' : '#16a34a' },
           { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
-          { label: 'Filtered',         value: filtered.length },
+          { label: 'Rows Shown',       value: display.length },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
             <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
@@ -2526,21 +2548,22 @@ function RentRollView() {
           <tbody>
             {display.map(p => {
               const ec = EC[p.entity] ?? EC.DST
-              const isExp = expanded === p.id
+              const isUnit = !!(p as any)._unit
+              const isExp = !isUnit && expanded === p.id
               return (
-                <React.Fragment key={p.id}>
+                <React.Fragment key={(p as any)._key}>
                   <tr
-                    style={{ borderBottom: '1px solid #f3f4f6', cursor: 'pointer', background: isExp ? '#f0f9ff' : undefined }}
-                    onClick={() => setExpanded(isExp ? null : p.id)}
-                    onMouseEnter={e => { if (!isExp) e.currentTarget.style.background = '#f8fafc' }}
-                    onMouseLeave={e => { if (!isExp) e.currentTarget.style.background = '' }}
+                    style={{ borderBottom: '1px solid #f3f4f6', cursor: isUnit ? 'default' : 'pointer', background: isExp ? '#f0f9ff' : isUnit ? '#fcfdff' : undefined }}
+                    onClick={() => { if (!isUnit) setExpanded(isExp ? null : p.id) }}
+                    onMouseEnter={e => { if (!isExp && !isUnit) e.currentTarget.style.background = '#f8fafc' }}
+                    onMouseLeave={e => { if (!isExp && !isUnit) e.currentTarget.style.background = isUnit ? '#fcfdff' : '' }}
                   >
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: ec.bg, color: ec.text, border: `1px solid ${ec.border}` }}>
                         {p.entity}
                       </span>
                     </td>
-                    <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827', maxWidth: 200 }}>{p.address}</td>
+                    <td style={{ padding: '9px 12px', fontWeight: isUnit ? 400 : 500, color: isUnit ? '#4b5563' : '#111827', maxWidth: 260 }}>{isUnit ? '↳ ' + p.address : p.address}</td>
                     <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
                     <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>{p.tenant}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
@@ -2577,11 +2600,13 @@ function RentRollView() {
                       })()}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                      {isUnit ? <span style={{ color: '#cbd5e1', fontSize: 10 }}>unit</span> : <>
                       <button onClick={(e) => { e.stopPropagation(); setDraft({ ...p }); setIsNew(false) }}
                         style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
                       <button onClick={(e) => { e.stopPropagation(); deleteRow(p.id) }}
                         style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 8 }}>🗑</button>
                       <span style={{ color: '#9ca3af', fontSize: 11 }}>{isExp ? '▲' : '▼'}</span>
+                      </>}
                     </td>
                   </tr>
                   {isExp && (
@@ -2655,7 +2680,7 @@ function RentRollView() {
         {loading && (
           <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading properties…</div>
         )}
-        {!loading && filtered.length === 0 && (
+        {!loading && display.length === 0 && (
           <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No properties match your filters.</div>
         )}
       </div>
