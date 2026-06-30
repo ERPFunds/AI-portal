@@ -3467,8 +3467,8 @@ function QaReviewView() {
   return (
     <div>
       <div className="page-header">
-        <h2>IR Q&amp;A</h2>
-        <p>Auto-collected from sent investor replies. Approve entries to add them to the IR drafter&apos;s knowledge.</p>
+        <h2>Learned Q&amp;A</h2>
+        <p>Q&amp;A the agent learned from sent investor replies. Approve an entry to add it to the IR drafter&apos;s knowledge.</p>
       </div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {(['pending', 'approved', 'rejected'] as const).map(t => (
