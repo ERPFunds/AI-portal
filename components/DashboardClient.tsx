@@ -2380,6 +2380,18 @@ function RentRollView() {
 
   const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
 
+  // Occupancy by SF: vacant buildings = 0%; multi-tenant = occupied-unit fraction; single occupied = 100%
+  const occFraction = (p: Property) => {
+    if (p.type === 'vacant') return 0
+    if (p.units && p.units.length > 0) {
+      const occ = p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
+      return occ / p.units.length
+    }
+    return 1
+  }
+  const occupiedSF = filtered.reduce((sum, p) => sum + (p.total ?? 0) * occFraction(p), 0)
+  const occupancyPct = totalSF ? Math.round((occupiedSF / totalSF) * 100) : 0
+
   function exportCsv() {
     const cols: [string, (p: Property) => any][] = [
       ['Fund', p => ENTITY_LABELS[p.entity] ?? p.entity], ['Address', p => p.address], ['Corridor', p => p.corridor],
@@ -2432,16 +2444,17 @@ function RentRollView() {
       </div>
 
       {/* Summary bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Properties', value: rows.length },
           { label: 'Filtered',         value: filtered.length },
+          { label: 'Occupancy',        value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
           { label: 'Occupied',         value: filtered.filter(p => p.type !== 'vacant').length + ' / ' + filtered.length },
           { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
             <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{s.value}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: (s as any).color ?? '#111827' }}>{s.value}</div>
           </div>
         ))}
       </div>
