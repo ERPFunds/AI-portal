@@ -2323,6 +2323,7 @@ function RentRollView() {
   const [washBayFilter, setWashBayFilter] = React.useState('all')
   const [expanded, setExpanded] = React.useState<number | null>(null)
   const [sortBy, setSortBy] = React.useState<'expiry' | 'portfolio' | 'building'>('expiry')
+  const [expFilter, setExpFilter] = React.useState<'all' | '6' | '12'>('all')
 
   const [rows, setRows] = React.useState<Property[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2362,6 +2363,11 @@ function RentRollView() {
   const num = (v: string) => v === '' ? null : Number(v)
 
   const q = search.toLowerCase()
+  // Lease-expiry window filter (rows whose lease expires within N months from today)
+  const _today = new Date()
+  const _expCut = expFilter === 'all' ? null : new Date(_today.getFullYear(), _today.getMonth() + parseInt(expFilter), _today.getDate())
+  const passExp = (d?: string | null) => { if (expFilter === 'all') return true; if (!d) return false; const x = new Date(d); return x >= _today && _expCut !== null && x <= _expCut }
+
   // Metric base: scoped by entity / wash bay / search only (NOT the type filter), so toggling
   // the type filter (e.g. Vacant) doesn't distort the portfolio stats.
   const metricBase = rows.filter(p => {
@@ -2380,12 +2386,13 @@ function RentRollView() {
       p.units.forEach(u => {
         const utype: Property['type'] = (u.tenant || '').toLowerCase() === 'vacant' ? 'vacant' : 'single'
         if (typeFilter !== 'all' && typeFilter !== 'multi' && utype !== typeFilter) return
+        if (!passExp(u.expiry)) return
         if (q && !(`${p.address} unit ${u.unit}`.toLowerCase().includes(q) || (u.tenant || '').toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q))) return
         flat.push({ ...p, _key: `${p.id}-u${u.unit}`, _unit: true, _unitNo: u.unit,
           address: `${p.address} — Unit ${u.unit}`, tenant: u.tenant || 'Vacant', type: utype,
           leaseExpiry: u.expiry ?? null, built: p.built, total: u.sf ?? null, office: null, warehouse: null, cranes: null, units: null })
       })
-    } else if (typeFilter === 'all' || p.type === typeFilter) {
+    } else if ((typeFilter === 'all' || p.type === typeFilter) && passExp(p.leaseExpiry)) {
       flat.push({ ...p, _key: `p${p.id}` })
     }
   })
@@ -2543,8 +2550,14 @@ function RentRollView() {
           <option value="building">Sort: Building (group units)</option>
           <option value="portfolio">Sort: Portfolio order</option>
         </select>
-        {(entityFilter !== 'all' || typeFilter !== 'all' || washBayFilter !== 'all' || search) && (
-          <button onClick={() => { setSearch(''); setEntityFilter('all'); setTypeFilter('all'); setWashBayFilter('all'); }}
+        <select value={expFilter} onChange={e => setExpFilter(e.target.value as 'all' | '6' | '12')}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="all">Expiring: Any time</option>
+          <option value="6">Expiring ≤ 6 months</option>
+          <option value="12">Expiring ≤ 12 months</option>
+        </select>
+        {(entityFilter !== 'all' || typeFilter !== 'all' || washBayFilter !== 'all' || expFilter !== 'all' || search) && (
+          <button onClick={() => { setSearch(''); setEntityFilter('all'); setTypeFilter('all'); setWashBayFilter('all'); setExpFilter('all'); }}
             style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
             Clear filters
           </button>
