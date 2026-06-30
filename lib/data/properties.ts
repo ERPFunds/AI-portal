@@ -20,6 +20,7 @@ export interface Property {
   notes: string
   washBay: 'Yes' | 'No' | 'Unknown'
   leaseExpiry: string | null
+  loopnetUrl?: string | null
   units?: { unit: string; tenant: string; expiry: string | null; sf?: number | null }[] | null
 }
 

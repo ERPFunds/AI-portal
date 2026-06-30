@@ -2575,7 +2575,17 @@ function RentRollView() {
                     </td>
                     <td style={{ padding: '9px 12px', fontWeight: isUnit ? 400 : 500, color: isUnit ? '#4b5563' : '#111827', maxWidth: 260 }}>{isUnit ? '↳ ' + p.address : p.address}</td>
                     <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
-                    <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>{p.tenant}</td>
+                    <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>
+                      {p.tenant}
+                      {p.type === 'vacant' && (
+                        <a href={p.loopnetUrl || `https://www.loopnet.com/search/?q=${encodeURIComponent(p.address.replace(/ — Unit.*$/, '') + ', Midland TX')}`}
+                          target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                          style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap' }}
+                          title={p.loopnetUrl ? 'Open LoopNet listing' : 'Search LoopNet for this address'}>
+                          LoopNet ↗
+                        </a>
+                      )}
+                    </td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.office)}</td>
@@ -2716,6 +2726,7 @@ function RentRollView() {
             </select>
           </MField>
           <MField label="Lease Expiry"><input type="date" style={mInput} value={draft.leaseExpiry ?? ''} onChange={e => upd({ leaseExpiry: e.target.value || null })} /></MField>
+          <MField label="LoopNet listing URL" span><input style={mInput} placeholder="https://www.loopnet.com/Listing/..." value={draft.loopnetUrl ?? ''} onChange={e => upd({ loopnetUrl: e.target.value || null })} /></MField>
           <MField label="Year Built"><input type="number" style={mInput} value={draft.built ?? ''} onChange={e => upd({ built: num(e.target.value) })} /></MField>
           <MField label="Acres"><input type="number" step="0.01" style={mInput} value={draft.acres ?? ''} onChange={e => upd({ acres: num(e.target.value) })} /></MField>
           <MField label="Total SF"><input type="number" style={mInput} value={draft.total ?? ''} onChange={e => upd({ total: num(e.target.value) })} /></MField>
