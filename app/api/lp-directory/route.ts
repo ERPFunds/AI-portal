@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, salesforceLpProbe, describeFieldsRaw, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -185,11 +185,11 @@ export async function GET() {
     let sfError: string | null = null;
     if (salesforceConfigured()) {
       try {
-        const { byEmail, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => lp.email));
+        const { byName, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => lp.investor));
         sfFieldMap = fieldMap;
         sfMatched = matched;
         for (const lp of lps) {
-          const sf = byEmail[lp.email.toLowerCase().trim()];
+          const sf = byName[lp.investor.toLowerCase().trim()];
           if (!sf) continue;
           lp.sfCrmId = sf.crmId;
           lp.sfLpType = sf.lpType;
@@ -209,30 +209,6 @@ export async function GET() {
       if (!groups.includes(lp.group)) groups.push(lp.group);
     }
 
-    // TEMP diagnostic — surfaces SF status in Vercel runtime logs (no secrets). Remove after debugging.
-    console.log("[lp-directory-sf]", JSON.stringify({ sfConfigured: salesforceConfigured(), sfMatched, sfFieldMap, sfError, lpCount: lps.length }));
-    // TEMP schema probe — when nothing matched, log the SF Contact field labels + custom objects + a few
-    // sample LP emails so we can see WHERE LP/broker data actually lives. Remove after debugging.
-    if (salesforceConfigured() && sfMatched === 0) {
-      try {
-        const p = await salesforceLpProbe(lps.map((l) => l.investor), lps.map((l) => l.email));
-        // separate short lines so nothing truncates
-        console.log("[lp-sf-probe-counts]", JSON.stringify({ contactEmailMatches: p.contactEmailMatches, accountNameMatches: p.accountNameMatches, sampleAccountNames: p.sampleAccountNames, emailsWithValue: p.emailsWithValue, namesCount: p.namesCount }));
-        console.log("[lp-sf-probe-objs]", JSON.stringify(p.customObjects));
-        console.log("[lp-sf-probe-acct]", JSON.stringify(p.accountCustomFields));
-        console.log("[lp-sf-probe-contact]", JSON.stringify(p.contactCustomFields));
-        try {
-          const fund = await describeFieldsRaw("Fund__c");
-          console.log("[lp-sf-probe-fund]", JSON.stringify(fund.map((f) => `${f.label} (${f.name}) [${f.type}${f.referenceTo.length ? "->" + f.referenceTo.join("/") : ""}]`)));
-        } catch (e) { console.log("[lp-sf-probe-fund] failed", String(e).slice(0, 120)); }
-        try {
-          const acctRefs = (await describeFieldsRaw("Account")).filter((f) => f.type === "reference");
-          console.log("[lp-sf-probe-acctrefs]", JSON.stringify(acctRefs.map((f) => `${f.label} (${f.name})->${f.referenceTo.join("/")}`)));
-        } catch (e) { console.log("[lp-sf-probe-acctrefs] failed", String(e).slice(0, 120)); }
-      } catch (e) {
-        console.log("[lp-sf-probe] failed:", String(e).slice(0, 200));
-      }
-    }
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),

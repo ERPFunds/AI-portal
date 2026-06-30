@@ -202,75 +202,75 @@ function fieldAccessor(
 }
 
 /**
- * Resolve LP financial data from Salesforce Contacts, matched by email.
- * Auto-discovers the LP Type / Capital Called / Distributions fields by label
- * (override via SF_LP_TYPE_FIELD / SF_CALLED_FIELD / SF_DISTRIB_FIELD). Only fills
- * a column when a field is confidently resolved — never guesses numbers.
+ * Resolve LP data from Salesforce ACCOUNTS, matched by the LP entity/company NAME (the
+ * commitment schedule has no emails, and the LP is an Account, not a Contact). Per-investor
+ * Called / Distributions / LP Type are not stored on the Account in this org, so they stay
+ * null unless a matching field is found by label (override via SF_LP_TYPE_FIELD /
+ * SF_CALLED_FIELD / SF_DISTRIB_FIELD). Broker/advisor firm defaults to the Account's Parent
+ * Account (override via SF_BROKER_COMPANY_FIELD); rep via SF_BROKER_CONTACT_FIELD.
  */
 export async function fetchLpSalesforceData(
-  emails: string[]
-): Promise<{ byEmail: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
-  const byEmail: Record<string, LpSfData> = {};
+  names: string[]
+): Promise<{ byName: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
+  const byName: Record<string, LpSfData> = {};
   const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null, brokerCompany: null, brokerContact: null };
-  const clean = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
-  if (clean.length === 0) return { byEmail, fieldMap, matched: 0 };
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  if (clean.length === 0) return { byName, fieldMap, matched: 0 };
 
-  const fields = await describeFields("Contact");
-  fieldMap.lpType = pickField(fields, process.env.SF_LP_TYPE_FIELD,
-    [/^lp\s*type$/i, /investor\s*type/i, /lp\s*class/i, /investor\s*class/i, /share\s*class/i],
-    [/lp_?type/i, /investor_?type/i]);
-  fieldMap.called = pickField(fields, process.env.SF_CALLED_FIELD,
-    [/capital\s*called/i, /called\s*to\s*date/i, /total\s*called/i, /paid[\s-]*in/i, /contribut/i],
-    [/capital_?call/i, /called/i, /paid_?in/i, /contribut/i]);
-  fieldMap.distributions = pickField(fields, process.env.SF_DISTRIB_FIELD,
-    [/distribution/i],
-    [/distrib/i]);
+  const fields = await describeFields("Account");
+  const lpTypeAcc = fieldAccessor(fields, pickField(fields, process.env.SF_LP_TYPE_FIELD,
+    [/^lp\s*type$/i, /investor\s*type/i, /lp\s*class/i], [/lp_?type/i, /investor_?type/i]));
+  const calledName = pickField(fields, process.env.SF_CALLED_FIELD,
+    [/capital\s*called/i, /called\s*to\s*date/i, /total\s*called/i, /paid[\s-]*in/i], [/capital_?call/i, /\bcalled\b/i, /paid_?in/i]);
+  const distribName = pickField(fields, process.env.SF_DISTRIB_FIELD, [/distribution/i], [/distrib/i]);
 
-  // Broker/advisor firm = the Contact's parent Account by default; override with SF_BROKER_COMPANY_FIELD.
+  // Broker/advisor firm = the LP Account's Parent Account by default; override with SF_BROKER_COMPANY_FIELD.
   const companyAcc =
     (process.env.SF_BROKER_COMPANY_FIELD ? fieldAccessor(fields, process.env.SF_BROKER_COMPANY_FIELD) : null) ?? {
-      expr: "Account.Name",
+      expr: "Parent.Name",
       read: (rec: Record<string, unknown>) => {
-        const a = rec.Account as { Name?: unknown } | null | undefined;
-        return a?.Name != null && String(a.Name).trim() ? String(a.Name) : null;
+        const p = rec.Parent as { Name?: unknown } | null | undefined;
+        return p?.Name != null && String(p.Name).trim() ? String(p.Name) : null;
       },
     };
-  // Broker/advisor rep — discovered by label; override with SF_BROKER_CONTACT_FIELD.
-  const brokerContactField = pickField(fields, process.env.SF_BROKER_CONTACT_FIELD,
-    [/financial\s*advisor/i, /^advisor$/i, /selling\s*(rep|agent|advisor)/i, /registered\s*rep/i, /referred\s*by/i, /^broker$/i, /^rep(resentative)?$/i],
-    [/financial_?advisor/i, /^advisor/i, /selling_?(rep|agent)/i, /referr/i, /\brep\b/i]);
-  const contactAcc = fieldAccessor(fields, brokerContactField);
+  const contactAcc = fieldAccessor(fields, pickField(fields, process.env.SF_BROKER_CONTACT_FIELD,
+    [/financial\s*advisor/i, /^advisor$/i, /selling\s*(rep|agent|advisor)/i, /referred\s*by/i], [/financial_?advisor/i, /^advisor/i, /referr/i]));
+
+  fieldMap.lpType = lpTypeAcc ? lpTypeAcc.expr : null;
+  fieldMap.called = calledName;
+  fieldMap.distributions = distribName;
   fieldMap.brokerCompany = companyAcc.expr;
   fieldMap.brokerContact = contactAcc ? contactAcc.expr : null;
 
-  const selectExprs = ["Id", "Email"];
-  for (const fn of [fieldMap.lpType, fieldMap.called, fieldMap.distributions]) if (fn) selectExprs.push(fn);
-  selectExprs.push(companyAcc.expr);
+  const selectExprs = ["Id", "Name", companyAcc.expr];
+  if (lpTypeAcc) selectExprs.push(lpTypeAcc.expr);
+  if (calledName) selectExprs.push(calledName);
+  if (distribName) selectExprs.push(distribName);
   if (contactAcc) selectExprs.push(contactAcc.expr);
   const selectFields = [...new Set(selectExprs)].join(", ");
 
   let matched = 0;
   for (let i = 0; i < clean.length; i += 200) {
-    const inList = clean.slice(i, i + 200).map((e) => `'${soql(e)}'`).join(",");
-    const q = `SELECT ${selectFields} FROM Contact WHERE Email IN (${inList})`;
+    const inList = clean.slice(i, i + 200).map((n) => `'${soql(n)}'`).join(",");
+    const q = `SELECT ${selectFields} FROM Account WHERE Name IN (${inList})`;
     const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
     if (!res.ok) throw new Error(`SF LP query ${res.status}: ${(await res.text()).slice(0, 200)}`);
     const data = await res.json();
     for (const rec of (data.records ?? []) as Record<string, unknown>[]) {
-      const email = String(rec.Email ?? "").toLowerCase().trim();
-      if (!email) continue;
-      byEmail[email] = {
+      const name = String(rec.Name ?? "").toLowerCase().trim();
+      if (!name) continue;
+      byName[name] = {
         crmId: String(rec.Id),
-        lpType: fieldMap.lpType && rec[fieldMap.lpType] != null ? String(rec[fieldMap.lpType]) : null,
-        called: fieldMap.called ? toNum(rec[fieldMap.called]) : null,
-        distributions: fieldMap.distributions ? toNum(rec[fieldMap.distributions]) : null,
+        lpType: lpTypeAcc ? lpTypeAcc.read(rec) : null,
+        called: calledName ? toNum(rec[calledName]) : null,
+        distributions: distribName ? toNum(rec[distribName]) : null,
         brokerCompany: companyAcc.read(rec),
         brokerContact: contactAcc ? contactAcc.read(rec) : null,
       };
       matched++;
     }
   }
-  return { byEmail, fieldMap, matched };
+  return { byName, fieldMap, matched };
 }
 
 /**
