@@ -2381,17 +2381,18 @@ function RentRollView() {
 
   const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
 
-  // Occupancy by SF: vacant buildings = 0%; multi-tenant = occupied-unit fraction; single occupied = 100%
-  const occFraction = (p: Property) => {
-    if (p.type === 'vacant') return 0
+  // Occupancy by UNIT count across the portfolio: multi-tenant counts each unit; single-tenant = 1 unit
+  let totalUnits = 0, occupiedUnits = 0
+  filtered.forEach(p => {
     if (p.units && p.units.length > 0) {
-      const occ = p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
-      return occ / p.units.length
+      totalUnits += p.units.length
+      occupiedUnits += p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
+    } else {
+      totalUnits += 1
+      occupiedUnits += p.type === 'vacant' ? 0 : 1
     }
-    return 1
-  }
-  const occupiedSF = filtered.reduce((sum, p) => sum + (p.total ?? 0) * occFraction(p), 0)
-  const occupancyPct = totalSF ? Math.round((occupiedSF / totalSF) * 100) : 0
+  })
+  const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
   function exportCsv() {
     const cols: [string, (p: Property) => any][] = [
@@ -2450,7 +2451,7 @@ function RentRollView() {
           { label: 'Total Properties', value: rows.length },
           { label: 'Filtered',         value: filtered.length },
           { label: 'Occupancy',        value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
-          { label: 'Occupied',         value: filtered.filter(p => p.type !== 'vacant').length + ' / ' + filtered.length },
+          { label: 'Occupied Units',   value: occupiedUnits + ' / ' + totalUnits },
           { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
