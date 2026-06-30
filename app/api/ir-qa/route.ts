@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { listQa, updateQa, type QaStatus } from "@/lib/agents/ir/qa-store";
+import { regenerateApprovedQaDoc } from "@/lib/agents/ir/approved-qa-doc";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,9 @@ export async function PATCH(req: NextRequest) {
       category: body.category,
       reviewedBy: user.email ?? user.id,
     });
-    return NextResponse.json({ ok: true });
+    // Refresh the auto-generated "Approved Learned Q&A" doc (SOPs page + markdown layer).
+    const doc = await regenerateApprovedQaDoc();
+    return NextResponse.json({ ok: true, approvedDoc: { count: doc.count, ok: doc.ok } });
   } catch (e) {
     return NextResponse.json({ error: String(e) }, { status: 500 });
   }
