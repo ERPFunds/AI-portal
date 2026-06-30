@@ -1725,15 +1725,27 @@ function LpDirectoryView() {
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
 
-  const load = React.useCallback(async () => {
+  const load = React.useCallback(async (manual = false) => {
     setSyncing(true)
+    if (manual) setSaveMsg(null)
     try {
       const res = await fetch('/api/lp-directory')
       const d = await res.json()
-      if (d.error) setError(d.error)
-      else { setError(null); setData(d) }
-    } catch (e) { setError(String(e)) }
-    finally { setLoading(false); setSyncing(false) }
+      if (!res.ok || d.error) {
+        setError(d.error ?? `Sync failed (${res.status})`)
+        if (manual) setSaveMsg({ ok: false, text: `Sync failed: ${d.error ?? res.status}` })
+      } else {
+        setError(null); setData(d)
+        if (manual) {
+          if (d.sfConfigured === false) setSaveMsg({ ok: false, text: 'Salesforce not connected — set SF_TOKEN_URL / SF_CLIENT_ID / SF_CLIENT_SECRET in Vercel (Production) and redeploy.' })
+          else if (d.sfError) setSaveMsg({ ok: false, text: `Salesforce error: ${d.sfError}` })
+          else setSaveMsg({ ok: true, text: `Synced — ${d.sfMatched ?? 0} of ${d.lpCount} LPs matched in Salesforce.` })
+        }
+      }
+    } catch (e) {
+      setError(String(e))
+      if (manual) setSaveMsg({ ok: false, text: `Sync failed: ${String(e)}` })
+    } finally { setLoading(false); setSyncing(false) }
   }, [])
 
   React.useEffect(() => { load() }, [load])
@@ -1810,7 +1822,7 @@ function LpDirectoryView() {
           <p>Limited partner profiles · Fund IV commitment schedule · Capital calls</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <button className="btn btn-ghost" onClick={load} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
+          <button className="btn btn-ghost" onClick={() => load(true)} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
             {syncing ? '↻ Syncing…' : '↻ Sync with Salesforce'}
           </button>
           {data && (
