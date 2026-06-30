@@ -2394,6 +2394,16 @@ function RentRollView() {
   })
   const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
+  // Leases (incl. multi-tenant units) expiring within the next 6 months
+  const now6 = new Date()
+  const horizon6 = new Date(now6.getFullYear(), now6.getMonth() + 6, now6.getDate())
+  const inWindow = (d?: string | null) => { if (!d) return false; const x = new Date(d); return x >= now6 && x <= horizon6 }
+  let expiring6 = 0
+  filtered.forEach(p => {
+    if (p.units && p.units.length > 0) expiring6 += p.units.filter(u => inWindow(u.expiry)).length
+    else if (inWindow(p.leaseExpiry)) expiring6 += 1
+  })
+
   function exportCsv() {
     const cols: [string, (p: Property) => any][] = [
       ['Fund', p => ENTITY_LABELS[p.entity] ?? p.entity], ['Address', p => p.address], ['Corridor', p => p.corridor],
@@ -2446,13 +2456,14 @@ function RentRollView() {
       </div>
 
       {/* Summary bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Properties', value: rows.length },
-          { label: 'Filtered',         value: filtered.length },
           { label: 'Occupancy',        value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
           { label: 'Occupied Units',   value: occupiedUnits + ' / ' + totalUnits },
+          { label: 'Expiring ≤6 mo',   value: expiring6, color: expiring6 > 0 ? '#dc2626' : '#16a34a' },
           { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
+          { label: 'Filtered',         value: filtered.length },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
             <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
