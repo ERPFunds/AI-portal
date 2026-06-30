@@ -44,3 +44,22 @@ export async function getAnthropicFileText(
     return hit?.text ?? "";
   }
 }
+
+/** Download the ORIGINAL bytes of an Anthropic Files object (for attaching to an email). */
+export async function getAnthropicFileBytes(fileId: string): Promise<Buffer | null> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) return null;
+  try {
+    const resp = await fetch(`https://api.anthropic.com/v1/files/${fileId}/content`, {
+      headers: {
+        "x-api-key": key,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "files-api-2025-04-14",
+      },
+    });
+    if (!resp.ok) return null;
+    return Buffer.from(await resp.arrayBuffer());
+  } catch {
+    return null;
+  }
+}

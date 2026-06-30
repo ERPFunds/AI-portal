@@ -23,6 +23,7 @@ export interface EmailClassification {
   escalationReason: string | null;
   lpName: string | null;
   isExistingLp: boolean;
+  isDueDiligence: boolean;
   draftSubject: string;
   draftHtml: string;
   summary: string;
@@ -82,6 +83,7 @@ Return a JSON object with exactly these fields:
   "escalationReason": string or null,
   "lpName": string or null (extracted name),
   "isExistingLp": boolean,
+  "isDueDiligence": boolean (true if the sender is asking due-diligence questions about the fund / requesting fund details or documents to evaluate an investment),
   "draftSubject": string,
   "draftHtml": string (full HTML email ready for Meghan's Outlook drafts),
   "summary": string (one sentence: what this email is and what action was taken)

@@ -10,6 +10,9 @@ import {
   importMimeMessage,
 } from "@/lib/agents/ir/graph-mailbox";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
+import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
+import { saveDraftWithAttachments } from "@/lib/agents/ir/draft-attachments";
+import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
@@ -161,14 +164,34 @@ async function handleMailbox(
 
     // 3) prepare a draft reply in the team hub's Drafts for review (never auto-sent) — both routes.
     //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
+    //    Due-diligence inquiries get a fund-doc-grounded answer (RAG) with the relevant source
+    //    files attached automatically — Meghan reviews and sends.
     try {
-      const d = await saveDraftToOutlook({
-        toEmail: m.fromAddress,
-        mailboxEmail: TEAM_INBOX,
-        subject: triage.draftSubject || `Re: ${m.subject}`,
-        htmlBody: triage.draftHtml,
-      });
-      actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+      if (triage.isDueDiligence) {
+        const fullBody = (await getMessageBodyText(mailbox, m.id)) || m.bodyPreview;
+        const dd = await buildDueDiligenceReply({ from: m.fromAddress, subject: m.subject, body: fullBody });
+        const atts: { filename: string; mimeType: string; bytes: Buffer }[] = [];
+        for (const a of dd.attachments) {
+          const bytes = await getAnthropicFileBytes(a.fileId);
+          if (bytes) atts.push({ filename: a.filename, mimeType: a.mimeType || "application/octet-stream", bytes });
+        }
+        const r = await saveDraftWithAttachments({
+          mailboxEmail: TEAM_INBOX,
+          toEmail: m.fromAddress,
+          subject: dd.draftSubject,
+          htmlBody: dd.draftHtml || triage.draftHtml,
+          attachments: atts,
+        });
+        actions.push(`dd-drafted(${r.attached.length} attached${r.failed.length ? `, ${r.failed.length} failed` : ""})`);
+      } else {
+        const d = await saveDraftToOutlook({
+          toEmail: m.fromAddress,
+          mailboxEmail: TEAM_INBOX,
+          subject: triage.draftSubject || `Re: ${m.subject}`,
+          htmlBody: triage.draftHtml,
+        });
+        actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+      }
     } catch (e) {
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);
     }
