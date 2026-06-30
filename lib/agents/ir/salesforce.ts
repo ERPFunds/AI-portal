@@ -71,6 +71,33 @@ function soql(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+export interface SfFieldInfo {
+  name: string;   // API name, e.g. "Capital_Called__c"
+  label: string;  // human label, e.g. "Capital Called"
+  type: string;   // currency, picklist, double, string, …
+  custom: boolean;
+}
+
+/** Describe an object's fields (used to discover custom LP fields without guessing API names). */
+export async function describeFields(objectName: string): Promise<SfFieldInfo[]> {
+  const res = await sfFetch(`/sobjects/${encodeURIComponent(objectName)}/describe`);
+  if (!res.ok) throw new Error(`SF describe ${objectName} ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return (data.fields ?? []).map((f: { name: string; label: string; type: string; custom: boolean }) => ({
+    name: f.name, label: f.label, type: f.type, custom: !!f.custom,
+  }));
+}
+
+/** List queryable custom objects (e.g. a Commitments/Investments object where fund financials may live). */
+export async function listCustomObjects(): Promise<{ name: string; label: string }[]> {
+  const res = await sfFetch(`/sobjects`);
+  if (!res.ok) throw new Error(`SF list objects ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const data = await res.json();
+  return (data.sobjects ?? [])
+    .filter((s: { custom: boolean; queryable: boolean }) => s.custom && s.queryable)
+    .map((s: { name: string; label: string }) => ({ name: s.name, label: s.label }));
+}
+
 /** Find a Contact Id by exact email match; returns the first match or null. */
 export async function findContactByEmail(email: string): Promise<string | null> {
   const q = `SELECT Id FROM Contact WHERE Email = '${soql(email)}' LIMIT 1`;
