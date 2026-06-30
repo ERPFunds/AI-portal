@@ -98,6 +98,82 @@ export async function listCustomObjects(): Promise<{ name: string; label: string
     .map((s: { name: string; label: string }) => ({ name: s.name, label: s.label }));
 }
 
+export interface LpSfData {
+  crmId: string;
+  lpType: string | null;
+  called: number | null;
+  distributions: number | null;
+}
+export interface LpSfFieldMap {
+  lpType: string | null;
+  called: string | null;
+  distributions: string | null;
+}
+
+/** Pick a field API name: env override first, then by label patterns, then by name patterns. */
+function pickField(fields: SfFieldInfo[], override: string | undefined, labelPats: RegExp[], namePats: RegExp[]): string | null {
+  if (override && fields.some((f) => f.name === override)) return override;
+  for (const re of labelPats) { const f = fields.find((x) => re.test(x.label)); if (f) return f.name; }
+  for (const re of namePats)  { const f = fields.find((x) => re.test(x.name));  if (f) return f.name; }
+  return null;
+}
+
+function toNum(v: unknown): number | null {
+  if (v === null || v === undefined || v === "") return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Resolve LP financial data from Salesforce Contacts, matched by email.
+ * Auto-discovers the LP Type / Capital Called / Distributions fields by label
+ * (override via SF_LP_TYPE_FIELD / SF_CALLED_FIELD / SF_DISTRIB_FIELD). Only fills
+ * a column when a field is confidently resolved — never guesses numbers.
+ */
+export async function fetchLpSalesforceData(
+  emails: string[]
+): Promise<{ byEmail: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
+  const byEmail: Record<string, LpSfData> = {};
+  const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null };
+  const clean = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
+  if (clean.length === 0) return { byEmail, fieldMap, matched: 0 };
+
+  const fields = await describeFields("Contact");
+  fieldMap.lpType = pickField(fields, process.env.SF_LP_TYPE_FIELD,
+    [/^lp\s*type$/i, /investor\s*type/i, /lp\s*class/i, /investor\s*class/i, /share\s*class/i],
+    [/lp_?type/i, /investor_?type/i]);
+  fieldMap.called = pickField(fields, process.env.SF_CALLED_FIELD,
+    [/capital\s*called/i, /called\s*to\s*date/i, /total\s*called/i, /paid[\s-]*in/i, /contribut/i],
+    [/capital_?call/i, /called/i, /paid_?in/i, /contribut/i]);
+  fieldMap.distributions = pickField(fields, process.env.SF_DISTRIB_FIELD,
+    [/distribution/i],
+    [/distrib/i]);
+
+  const extra = [fieldMap.lpType, fieldMap.called, fieldMap.distributions].filter(Boolean) as string[];
+  const selectFields = ["Id", "Email", ...extra].join(", ");
+
+  let matched = 0;
+  for (let i = 0; i < clean.length; i += 200) {
+    const inList = clean.slice(i, i + 200).map((e) => `'${soql(e)}'`).join(",");
+    const q = `SELECT ${selectFields} FROM Contact WHERE Email IN (${inList})`;
+    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error(`SF LP query ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const data = await res.json();
+    for (const rec of (data.records ?? []) as Record<string, unknown>[]) {
+      const email = String(rec.Email ?? "").toLowerCase().trim();
+      if (!email) continue;
+      byEmail[email] = {
+        crmId: String(rec.Id),
+        lpType: fieldMap.lpType && rec[fieldMap.lpType] != null ? String(rec[fieldMap.lpType]) : null,
+        called: fieldMap.called ? toNum(rec[fieldMap.called]) : null,
+        distributions: fieldMap.distributions ? toNum(rec[fieldMap.distributions]) : null,
+      };
+      matched++;
+    }
+  }
+  return { byEmail, fieldMap, matched };
+}
+
 /** Find a Contact Id by exact email match; returns the first match or null. */
 export async function findContactByEmail(email: string): Promise<string | null> {
   const q = `SELECT Id FROM Contact WHERE Email = '${soql(email)}' LIMIT 1`;

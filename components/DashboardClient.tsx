@@ -1722,14 +1722,18 @@ function LpDirectoryView() {
         const visibleLps = !data ? [] : groupView === 'All' ? data.lps : data.lps.filter(lp => lp.group === groupView)
         const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const hardCommits = visibleLps.filter(l => l.commitType === 'Hard Commit' || l.commitType === 'Signed Docs').length
+        const anyCalled = visibleLps.some(lp => lp.sfCalled != null)
+        const anyDistrib = visibleLps.some(lp => lp.sfDistributions != null)
+        const calledToDate = visibleLps.reduce((s, lp) => s + (lp.sfCalled ?? 0), 0)
+        const distributions = visibleLps.reduce((s, lp) => s + (lp.sfDistributions ?? 0), 0)
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? 'Fund IV commitment schedule' : groupView },
               { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
               { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
-              { label: 'Called to Date',  value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
-              { label: 'Distributions',   value: '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
+              { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
+              { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
                 <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>

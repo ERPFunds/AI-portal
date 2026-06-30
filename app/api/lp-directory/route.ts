@@ -4,6 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
+import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -174,6 +175,29 @@ export async function GET() {
       if (match) lp.lastInteraction = { date: match.date, note: match.note, source: "ir" };
     }
 
+    // Enrich with Salesforce (LP Type / Called / Distributions / CRM Id), matched by email.
+    // Non-fatal: any SF failure leaves the columns null, exactly as before.
+    let sfFieldMap: LpSfFieldMap | null = null;
+    let sfMatched = 0;
+    let sfError: string | null = null;
+    if (salesforceConfigured()) {
+      try {
+        const { byEmail, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => lp.email));
+        sfFieldMap = fieldMap;
+        sfMatched = matched;
+        for (const lp of lps) {
+          const sf = byEmail[lp.email.toLowerCase().trim()];
+          if (!sf) continue;
+          lp.sfCrmId = sf.crmId;
+          lp.sfLpType = sf.lpType;
+          lp.sfCalled = sf.called;
+          lp.sfDistributions = sf.distributions;
+        }
+      } catch (e) {
+        sfError = String(e).slice(0, 200);
+      }
+    }
+
     // Collect ordered unique groups (preserves sheet order)
     const groups: string[] = [];
     for (const lp of lps) {
@@ -187,6 +211,10 @@ export async function GET() {
       scheduleName: scheduleInfo.name,
       webUrl: scheduleInfo.webUrl,
       syncedAt: new Date().toISOString(),
+      sfConfigured: salesforceConfigured(),
+      sfMatched,
+      sfFieldMap,
+      sfError,
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
