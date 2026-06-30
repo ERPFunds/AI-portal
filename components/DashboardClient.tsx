@@ -1686,6 +1686,7 @@ interface LpRecord {
   lastInteraction: { date: string; note: string; source: 'ir' | 'sf' } | null;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
   sfBrokerCompany: string | null; sfBrokerContact: string | null;
+  brokerFirm: string; brokerContact: string;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -1711,6 +1712,7 @@ const COMMIT_TYPE_BG: Record<string, string> = {
 interface LpEditState {
   commitment: string; commitType: string; contact: string;
   email: string; phone: string; notes: string; date: string;
+  brokerFirm: string; brokerContact: string;
 }
 const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verbal', 'TBD']
 
@@ -1721,7 +1723,7 @@ function LpDirectoryView() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [editingRow, setEditingRow] = React.useState<string | null>(null)
-  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '' })
+  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '', brokerFirm: '', brokerContact: '' })
   const [saving, setSaving] = React.useState(false)
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
@@ -1753,7 +1755,7 @@ function LpDirectoryView() {
 
   function startEdit(lp: LpRecord) {
     setEditingRow(lp.investor)
-    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date })
+    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact })
     setSaveMsg(null)
   }
   function cancelEdit() { setEditingRow(null); setSaveMsg(null) }
@@ -1921,7 +1923,7 @@ function LpDirectoryView() {
                   {['LP Name', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
-                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions' || h === 'Broker / Advisor') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
                   ))}
@@ -1946,15 +1948,20 @@ function LpDirectoryView() {
                         )}
                       </td>
 
-                      {/* Broker / Advisor — from Salesforce (firm + rep) */}
-                      <td style={{ padding: '11px 14px', maxWidth: 170 }}>
-                        {(lp.sfBrokerCompany || lp.sfBrokerContact) ? (
+                      {/* Broker / Advisor — firm + rep (editable, saved to the schedule) */}
+                      <td style={{ padding: '11px 14px', maxWidth: 180 }}>
+                        {isEditing ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <input value={ev.brokerFirm} onChange={e => setEditValues(v => ({ ...v, brokerFirm: e.target.value }))} placeholder="Broker/advisor firm" style={inputStyle} />
+                            <input value={ev.brokerContact} onChange={e => setEditValues(v => ({ ...v, brokerContact: e.target.value }))} placeholder="Broker/advisor contact" style={inputStyle} />
+                          </div>
+                        ) : (lp.brokerFirm || lp.brokerContact) ? (
                           <>
-                            <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{lp.sfBrokerCompany || '—'}</div>
-                            {lp.sfBrokerContact && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.sfBrokerContact}</div>}
+                            {lp.brokerFirm && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{lp.brokerFirm}</div>}
+                            {lp.brokerContact && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.brokerContact}</div>}
                           </>
                         ) : (
-                          <span style={{ color: '#d1d5db', fontSize: 11 }} title="Connect Salesforce to populate">— <span style={{ fontSize: 9, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>SF</span></span>
+                          <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
                         )}
                       </td>
 

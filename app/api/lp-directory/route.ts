@@ -26,6 +26,8 @@ export interface LpRecord {
   sfCrmId: string | null;
   sfBrokerCompany: string | null;
   sfBrokerContact: string | null;
+  brokerFirm: string;
+  brokerContact: string;
 }
 
 interface LpUpdateBody {
@@ -37,6 +39,8 @@ interface LpUpdateBody {
   phone?: string;
   notes?: string;
   date?: string;
+  brokerFirm?: string;
+  brokerContact?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -52,24 +56,30 @@ function parseDollar(raw: string): number {
   return num;
 }
 
-function parseNotesCell(raw: string): { commitType: string; date: string; notes: string } {
+function parseNotesCell(raw: string): { commitType: string; date: string; brokerFirm: string; brokerContact: string; notes: string } {
   const parts = raw.split("|").map(p => p.trim());
   let commitType = "";
   let date = "";
+  let brokerFirm = "";
+  let brokerContact = "";
   const plainParts: string[] = [];
   for (const part of parts) {
     if (/^type:/i.test(part))  commitType = part.replace(/^type:\s*/i, "").trim();
     else if (/^date:/i.test(part)) date = part.replace(/^date:\s*/i, "").trim();
+    else if (/^broker:/i.test(part)) brokerFirm = part.replace(/^broker:\s*/i, "").trim();
+    else if (/^rep:/i.test(part)) brokerContact = part.replace(/^rep:\s*/i, "").trim();
     else if (part) plainParts.push(part);
   }
-  return { commitType, date, notes: plainParts.join(" · ") };
+  return { commitType, date, brokerFirm, brokerContact, notes: plainParts.join(" · ") };
 }
 
-function packNotesCell(commitType: string, date: string, notes: string): string {
+function packNotesCell(commitType: string, date: string, brokerFirm: string, brokerContact: string, notes: string): string {
   return [
-    commitType ? `Type: ${commitType}` : "",
-    date       ? `Date: ${date}`       : "",
-    notes      || "",
+    commitType    ? `Type: ${commitType}`     : "",
+    date          ? `Date: ${date}`           : "",
+    brokerFirm    ? `Broker: ${brokerFirm}`   : "",
+    brokerContact ? `Rep: ${brokerContact}`   : "",
+    notes         || "",
   ].filter(Boolean).join(" | ");
 }
 
@@ -130,9 +140,6 @@ export async function GET() {
     const allRows = [rawHeaders, ...rawRows];
     const { headerRowIdx, headers, iInvestor, iCommitment, iContact, iEmail, iPhone, iNotes } =
       parseHeaders(allRows);
-    // TEMP: log the commitment-schedule column headers so we can see if broker/advisor + called/
-    // distributions live here (the realistic source, since they're not in Salesforce). Remove after.
-    console.log("[lp-schedule-headers]", JSON.stringify(headers));
 
     const dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
 
@@ -159,7 +166,7 @@ export async function GET() {
         continue;
       }
 
-      const { commitType, date, notes } = parseNotesCell(g(iNotes));
+      const { commitType, date, brokerFirm, brokerContact, notes } = parseNotesCell(g(iNotes));
       lps.push({
         investor: investorName,
         commitment,
@@ -171,6 +178,7 @@ export async function GET() {
         lastInteraction: null,
         sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
         sfBrokerCompany: null, sfBrokerContact: null,
+        brokerFirm, brokerContact,
       });
     }
 
@@ -284,9 +292,11 @@ export async function PATCH(req: NextRequest) {
     if (iNotes >= 0) {
       const current = parseNotesCell(dataValues[rowIdx][iNotes] ?? "");
       currentRow[iNotes] = packNotesCell(
-        body.commitType ?? current.commitType,
-        body.date       ?? current.date,
-        body.notes      ?? current.notes,
+        body.commitType    ?? current.commitType,
+        body.date          ?? current.date,
+        body.brokerFirm    ?? current.brokerFirm,
+        body.brokerContact ?? current.brokerContact,
+        body.notes         ?? current.notes,
       );
     }
 
