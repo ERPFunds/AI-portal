@@ -265,59 +265,71 @@ export async function fetchLpSalesforceData(
   const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
   if (clean.length === 0) return { byName, fieldMap, matched: 0 };
 
+  // Optional financial fields on Account (this org has none → stay null; env override supported).
   const fields = await describeFields("Account");
   const lpTypeAcc = fieldAccessor(fields, pickField(fields, process.env.SF_LP_TYPE_FIELD,
     [/^lp\s*type$/i, /investor\s*type/i, /lp\s*class/i], [/lp_?type/i, /investor_?type/i]));
   const calledName = pickField(fields, process.env.SF_CALLED_FIELD,
     [/capital\s*called/i, /called\s*to\s*date/i, /total\s*called/i, /paid[\s-]*in/i], [/capital_?call/i, /\bcalled\b/i, /paid_?in/i]);
   const distribName = pickField(fields, process.env.SF_DISTRIB_FIELD, [/distribution/i], [/distrib/i]);
-
-  // Broker/advisor firm = the LP Account's Parent Account by default; override with SF_BROKER_COMPANY_FIELD.
-  const companyAcc =
-    (process.env.SF_BROKER_COMPANY_FIELD ? fieldAccessor(fields, process.env.SF_BROKER_COMPANY_FIELD) : null) ?? {
-      expr: "Parent.Name",
-      read: (rec: Record<string, unknown>) => {
-        const p = rec.Parent as { Name?: unknown } | null | undefined;
-        return p?.Name != null && String(p.Name).trim() ? String(p.Name) : null;
-      },
-    };
-  const contactAcc = fieldAccessor(fields, pickField(fields, process.env.SF_BROKER_CONTACT_FIELD,
-    [/financial\s*advisor/i, /^advisor$/i, /selling\s*(rep|agent|advisor)/i, /referred\s*by/i], [/financial_?advisor/i, /^advisor/i, /referr/i]));
-
   fieldMap.lpType = lpTypeAcc ? lpTypeAcc.expr : null;
   fieldMap.called = calledName;
   fieldMap.distributions = distribName;
-  fieldMap.brokerCompany = companyAcc.expr;
-  fieldMap.brokerContact = contactAcc ? contactAcc.expr : null;
+  fieldMap.brokerCompany = "Opportunity.Partner_Advisor/Brokerage/Broker_Dealer__r.Name";
+  fieldMap.brokerContact = "Opportunity.Partner_Advisor_Contact__r.Name";
 
-  const selectExprs = ["Id", "Name", companyAcc.expr];
-  if (lpTypeAcc) selectExprs.push(lpTypeAcc.expr);
-  if (calledName) selectExprs.push(calledName);
-  if (distribName) selectExprs.push(distribName);
-  if (contactAcc) selectExprs.push(contactAcc.expr);
-  const selectFields = [...new Set(selectExprs)].join(", ");
+  const acctSel = ["Id", "Name"];
+  if (lpTypeAcc) acctSel.push(lpTypeAcc.expr);
+  if (calledName) acctSel.push(calledName);
+  if (distribName) acctSel.push(distribName);
 
+  // 1) Match LP entities to Accounts by company name.
+  const idToKey: Record<string, string> = {};
   let matched = 0;
   for (let i = 0; i < clean.length; i += 200) {
     const inList = clean.slice(i, i + 200).map((n) => `'${soql(n)}'`).join(",");
-    const q = `SELECT ${selectFields} FROM Account WHERE Name IN (${inList})`;
+    const q = `SELECT ${[...new Set(acctSel)].join(", ")} FROM Account WHERE Name IN (${inList})`;
     const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
-    if (!res.ok) throw new Error(`SF LP query ${res.status}: ${(await res.text()).slice(0, 200)}`);
-    const data = await res.json();
-    for (const rec of (data.records ?? []) as Record<string, unknown>[]) {
-      const name = String(rec.Name ?? "").toLowerCase().trim();
-      if (!name) continue;
-      byName[name] = {
-        crmId: String(rec.Id),
+    if (!res.ok) throw new Error(`SF LP account query ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    for (const rec of ((await res.json()).records ?? []) as Record<string, unknown>[]) {
+      const key = String(rec.Name ?? "").toLowerCase().trim();
+      if (!key) continue;
+      const id = String(rec.Id);
+      byName[key] = {
+        crmId: id,
         lpType: lpTypeAcc ? lpTypeAcc.read(rec) : null,
         called: calledName ? toNum(rec[calledName]) : null,
         distributions: distribName ? toNum(rec[distribName]) : null,
-        brokerCompany: companyAcc.read(rec),
-        brokerContact: contactAcc ? contactAcc.read(rec) : null,
+        brokerCompany: null,
+        brokerContact: null,
       };
-      matched++;
+      idToKey[id] = key;
     }
   }
+
+  // 2) Pull broker/advisor from each LP's Opportunities (partner lookups), newest first.
+  const rel = (v: unknown): string | null => {
+    const o = v as { Name?: unknown } | null | undefined;
+    return o?.Name != null && String(o.Name).trim() ? String(o.Name) : null;
+  };
+  const ids = Object.keys(idToKey);
+  for (let i = 0; i < ids.length; i += 200) {
+    const inList = ids.slice(i, i + 200).map((id) => `'${id}'`).join(",");
+    const q =
+      `SELECT AccountId, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name ` +
+      `FROM Opportunity WHERE AccountId IN (${inList}) ORDER BY CloseDate DESC NULLS LAST`;
+    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+    if (!res.ok) continue; // broker enrichment is best-effort
+    for (const rec of ((await res.json()).records ?? []) as Record<string, unknown>[]) {
+      const row = byName[idToKey[String(rec.AccountId)] ?? ""];
+      if (!row) continue;
+      const firm = rel(rec.Partner_Advisor__r) || rel(rec.Partner_Brokerage__r) || rel(rec.Partner_Broker_Dealer__r);
+      const contact = rel(rec.Partner_Advisor_Contact__r);
+      if (firm && !row.brokerCompany) row.brokerCompany = firm;
+      if (contact && !row.brokerContact) row.brokerContact = contact;
+    }
+  }
+
   return { byName, fieldMap, matched };
 }
 

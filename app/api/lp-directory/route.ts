@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, salesforceBrokerProbe, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -220,14 +220,6 @@ export async function GET() {
       if (!groups.includes(lp.group)) groups.push(lp.group);
     }
 
-    // TEMP: hunt for the LP↔broker link in Salesforce (Opportunities, related contacts, junction
-    // objects). Read from Vercel runtime logs, then remove.
-    if (salesforceConfigured()) {
-      try {
-        const lines = await salesforceBrokerProbe(lps.map((l) => l.investor));
-        for (const ln of lines) console.log("[lp-broker-probe]", ln);
-      } catch (e) { console.log("[lp-broker-probe] failed", String(e).slice(0, 150)); }
-    }
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),

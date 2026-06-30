@@ -1955,14 +1955,18 @@ function LpDirectoryView() {
                             <input value={ev.brokerFirm} onChange={e => setEditValues(v => ({ ...v, brokerFirm: e.target.value }))} placeholder="Broker/advisor firm" style={inputStyle} />
                             <input value={ev.brokerContact} onChange={e => setEditValues(v => ({ ...v, brokerContact: e.target.value }))} placeholder="Broker/advisor contact" style={inputStyle} />
                           </div>
-                        ) : (lp.brokerFirm || lp.brokerContact) ? (
-                          <>
-                            {lp.brokerFirm && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{lp.brokerFirm}</div>}
-                            {lp.brokerContact && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.brokerContact}</div>}
-                          </>
-                        ) : (
-                          <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
-                        )}
+                        ) : (() => {
+                          const firm = lp.brokerFirm || lp.sfBrokerCompany
+                          const contact = lp.brokerContact || lp.sfBrokerContact
+                          return (firm || contact) ? (
+                            <>
+                              {firm && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{firm}</div>}
+                              {contact && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{contact}</div>}
+                            </>
+                          ) : (
+                            <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                          )
+                        })()}
                       </td>
 
                       {/* Commitment */}
