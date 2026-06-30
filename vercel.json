@@ -36,10 +36,6 @@
     {
       "path": "/api/ir-kb-sync",
       "schedule": "30 13 * * 0"
-    },
-    {
-      "path": "/api/cron/ir-qa-update",
-      "schedule": "0 */2 * * *"
     }
   ]
 }
