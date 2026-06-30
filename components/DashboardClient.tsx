@@ -321,6 +321,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
       />
     ),
     lp: <LpDirectoryView />,
+    'ir-qa': <QaReviewView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
@@ -3102,6 +3103,92 @@ function KnowledgeBaseView() {
 }
 
 // ─── Acquisition Research ─────────────────────────────────────────────────────
+
+// ─── IR Q&A Review (Workflow 5) ─────────────────────────────────────────────────
+
+interface QaItem {
+  id: string; question: string; answer: string; category: string | null;
+  status: string; source_subject: string | null; source_mailbox: string | null;
+  source_sent_at: string | null; created_at: string; reviewed_by: string | null;
+}
+
+function qaBtn(color: string, bg = '#fff', border = '#e5e7eb'): React.CSSProperties {
+  return { fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', color, background: bg, border: `1px solid ${border}` }
+}
+
+function QaReviewView() {
+  const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
+  const [items, setItems] = useState<QaItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [editId, setEditId] = useState<string | null>(null)
+  const [draft, setDraft] = useState({ question: '', answer: '', category: '' })
+
+  const load = async () => {
+    setLoading(true)
+    try { const r = await fetch(`/api/ir-qa?status=${tab}`); const d = await r.json(); setItems(d.items ?? []) }
+    catch { setItems([]) } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function patch(id: string, body: Record<string, unknown>) {
+    setBusy(id)
+    try {
+      await fetch('/api/ir-qa', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...body }) })
+      setEditId(null)
+      await load()
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <h2>IR Q&amp;A</h2>
+        <p>Auto-collected from sent investor replies. Approve entries to add them to the IR drafter&apos;s knowledge.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {(['pending', 'approved', 'rejected'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', textTransform: 'capitalize', border: tab === t ? '1px solid #0ea5e9' : '1px solid #e5e7eb', background: tab === t ? '#f0f9ff' : '#fff', color: tab === t ? '#0369a1' : '#6b7280' }}>{t}</button>
+        ))}
+      </div>
+      {loading ? <div style={{ fontSize: 12, color: '#9ca3af' }}>Loading…</div>
+        : items.length === 0 ? <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0' }}>No {tab} Q&amp;A yet.</div>
+        : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map(it => (
+            <div key={it.id} className="card" style={{ margin: 0 }}>
+              {editId === it.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input value={draft.category} onChange={e => setDraft({ ...draft, category: e.target.value })} placeholder="category" style={{ fontSize: 12, padding: '6px 8px', border: '1px solid #e5e7eb', borderRadius: 6 }} />
+                  <textarea value={draft.question} onChange={e => setDraft({ ...draft, question: e.target.value })} rows={2} style={{ fontSize: 12, padding: '6px 8px', border: '1px solid #e5e7eb', borderRadius: 6 }} />
+                  <textarea value={draft.answer} onChange={e => setDraft({ ...draft, answer: e.target.value })} rows={4} style={{ fontSize: 12, padding: '6px 8px', border: '1px solid #e5e7eb', borderRadius: 6 }} />
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button onClick={() => patch(it.id, { question: draft.question, answer: draft.answer, category: draft.category })} disabled={busy === it.id} style={qaBtn('#fff', '#0ea5e9', '#0ea5e9')}>Save</button>
+                    <button onClick={() => setEditId(null)} style={qaBtn('#6b7280')}>Cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    {it.category && <span className="badge badge-blue" style={{ fontSize: 9 }}>{it.category}</span>}
+                    {it.source_subject && <span style={{ fontSize: 10, color: '#9ca3af' }}>from: {it.source_subject}</span>}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{it.question}</div>
+                  <div style={{ fontSize: 12, color: '#374151', whiteSpace: 'pre-wrap' }}>{it.answer}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    {tab !== 'approved' && <button onClick={() => patch(it.id, { status: 'approved' })} disabled={busy === it.id} style={qaBtn('#166534', '#f0fdf4', '#86efac')}>✓ Approve</button>}
+                    {tab !== 'rejected' && <button onClick={() => patch(it.id, { status: 'rejected' })} disabled={busy === it.id} style={qaBtn('#b91c1c', '#fef2f2', '#fca5a5')}>✕ Reject</button>}
+                    <button onClick={() => { setEditId(it.id); setDraft({ question: it.question, answer: it.answer, category: it.category ?? '' }) }} style={qaBtn('#6b7280')}>Edit</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
 function AcquisitionView() {
   return (
