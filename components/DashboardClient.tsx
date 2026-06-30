@@ -3601,12 +3601,12 @@ const CONNECTIONS_DATA = [
     icon: '📊',
     name: 'Salesforce',
     status: 'connected' as const,
-    meta: 'LP profiles, fund pipeline, leasing prospects, and email logs',
-    sync: 'Synced every 15 min',
+    meta: 'LP profiles, capital calls, distributions · uses Connected App (client-credentials) credentials set in Vercel env',
+    sync: 'Client-credentials OAuth',
     fields: [
-      { label: 'Instance URL', key: 'url',    placeholder: 'https://erpfunds.my.salesforce.com' },
-      { label: 'Client ID',    key: 'client', placeholder: 'Connected App Client ID' },
-      { label: 'Sandbox Mode', key: 'sandbox',placeholder: 'false' },
+      { label: 'Token URL',     key: 'url',    placeholder: 'SF_TOKEN_URL (set in Vercel env)' },
+      { label: 'Client ID',     key: 'client', placeholder: 'SF_CLIENT_ID (set in Vercel env)' },
+      { label: 'Client Secret', key: 'secret', placeholder: 'SF_CLIENT_SECRET (set in Vercel env)' },
     ],
   },
   {
