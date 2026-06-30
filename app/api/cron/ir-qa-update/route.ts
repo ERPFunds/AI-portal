@@ -8,7 +8,9 @@ export const maxDuration = 300;
 
 // Mailboxes whose SENT replies are mined for Q&A (the people who answer investors).
 function qaMailboxes(): string[] {
-  return (process.env.IR_QA_MAILBOXES || "mberry@erpfunds.com")
+  // Sent replies are mined from all three IR senders: Meghan, William, and the team hub
+  // (the agent drafts into team@ and approved replies are sent from there). Override via IR_QA_MAILBOXES.
+  return (process.env.IR_QA_MAILBOXES || "mberry@erpfunds.com,wmeyer@erpfunds.com,team@erpfunds.com")
     .split(",").map((s) => s.trim()).filter(Boolean);
 }
 
