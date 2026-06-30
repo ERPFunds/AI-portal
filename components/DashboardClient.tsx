@@ -1689,6 +1689,10 @@ interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
   groups: string[];
   scheduleName: string; webUrl: string; syncedAt: string;
+  sfConfigured?: boolean;
+  sfMatched?: number;
+  sfFieldMap?: { lpType: string | null; called: string | null; distributions: string | null };
+  sfError?: string | null;
 }
 function fmtUsd(n: number): string {
   if (n === 0) return '—'
@@ -1718,14 +1722,20 @@ function LpDirectoryView() {
   const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '' })
   const [saving, setSaving] = React.useState(false)
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
+  const [syncing, setSyncing] = React.useState(false)
 
-  React.useEffect(() => {
-    fetch('/api/lp-directory')
-      .then(r => r.json())
-      .then(d => { if (d.error) { setError(d.error) } else { setData(d) } })
-      .catch(e => setError(String(e)))
-      .finally(() => setLoading(false))
+  const load = React.useCallback(async () => {
+    setSyncing(true)
+    try {
+      const res = await fetch('/api/lp-directory')
+      const d = await res.json()
+      if (d.error) setError(d.error)
+      else { setError(null); setData(d) }
+    } catch (e) { setError(String(e)) }
+    finally { setLoading(false); setSyncing(false) }
   }, [])
+
+  React.useEffect(() => { load() }, [load])
 
   function startEdit(lp: LpRecord) {
     setEditingRow(lp.investor)
@@ -1793,9 +1803,25 @@ function LpDirectoryView() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2>LP Directory</h2>
-        <p>Limited partner profiles · Fund IV commitment schedule · Capital calls</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>LP Directory</h2>
+          <p>Limited partner profiles · Fund IV commitment schedule · Capital calls</p>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <button className="btn btn-ghost" onClick={load} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
+            {syncing ? '↻ Syncing…' : '↻ Sync with Salesforce'}
+          </button>
+          {data && (
+            <div style={{ fontSize: 10, color: data.sfError ? '#E55A4E' : '#9ca3af', marginTop: 4, maxWidth: 260, marginLeft: 'auto' }}>
+              {data.sfConfigured === false
+                ? 'Salesforce not connected'
+                : data.sfError
+                  ? `SF error: ${data.sfError}`
+                  : `${data.sfMatched ?? 0} of ${data.lpCount} LPs matched in Salesforce`}
+            </div>
+          )}
+        </div>
       </div>
       <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Capital Raising · CIO & Chief of Staff" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
 
