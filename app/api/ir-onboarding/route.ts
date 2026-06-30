@@ -18,6 +18,8 @@ function isAuthorized(req: NextRequest): boolean {
 }
 
 const MEGHAN_EMAIL = "mberry@erpfunds.com";
+// IR drafts are stored in the shared team hub so they surface in the portal Agent Inbox.
+const TEAM_INBOX = "team@erpfunds.com";
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
@@ -39,7 +41,7 @@ export async function POST(req: NextRequest) {
       result.emails.map((email) =>
         saveDraftToOutlook({
           toEmail: MEGHAN_EMAIL,
-          mailboxEmail: MEGHAN_EMAIL,
+          mailboxEmail: TEAM_INBOX,
           subject: `[DRAFT – Day ${email.day}] ${email.subject}`,
           htmlBody: email.htmlBody,
         })

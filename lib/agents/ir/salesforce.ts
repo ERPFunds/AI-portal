@@ -25,6 +25,37 @@ export function salesforceConfigured(): boolean {
   return !!(process.env.SF_TOKEN_URL && process.env.SF_CLIENT_ID && process.env.SF_CLIENT_SECRET);
 }
 
+/**
+ * Read-only connectivity check: verifies the client-credentials token exchange and that the
+ * `api` scope works (via /limits). Writes nothing. Use to confirm creds/Connected App setup.
+ */
+export async function salesforcePing(): Promise<{
+  ok: boolean;
+  configured: boolean;
+  instanceUrl?: string;
+  apiVersion?: string;
+  detail?: string;
+}> {
+  if (!salesforceConfigured()) {
+    return { ok: false, configured: false, detail: "SF_TOKEN_URL / SF_CLIENT_ID / SF_CLIENT_SECRET not all set" };
+  }
+  try {
+    const t = await getToken();
+    const res = await sfFetch(`/limits`);
+    if (!res.ok) {
+      return {
+        ok: false,
+        configured: true,
+        instanceUrl: t.instanceUrl,
+        detail: `GET /limits ${res.status}: ${(await res.text()).slice(0, 300)}`,
+      };
+    }
+    return { ok: true, configured: true, instanceUrl: t.instanceUrl, apiVersion: API_VERSION };
+  } catch (e) {
+    return { ok: false, configured: true, detail: String(e).slice(0, 400) };
+  }
+}
+
 async function getToken(): Promise<SfToken> {
   if (cached && cached.expiresAt > Date.now() + 60_000) return cached;
 
@@ -222,6 +253,44 @@ export async function createTask(p: {
   if (!res.ok) throw new Error(`SF create task ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const data = await res.json();
   return data.id as string;
+}
+
+/**
+ * Log an AI-generated note about the REPLY that was sent to a contact (Workflow #3).
+ * Find-or-create the Contact by recipient email, then log a completed Task whose Description
+ * is the AI note (plus a Next step line when present). Returns a short status string.
+ */
+export async function logReplyNote(p: {
+  contactEmail: string;
+  firstName?: string;
+  lastName?: string;
+  subject: string;
+  note: string;
+  nextStep: string;
+  sentDate: string;
+}): Promise<string> {
+  let contactId = await findContactByEmail(p.contactEmail);
+  let created = false;
+  if (!contactId) {
+    contactId = await createContact({
+      firstName: p.firstName ?? "",
+      lastName: p.lastName || p.contactEmail.split("@")[0] || "Unknown",
+      email: p.contactEmail,
+    });
+    created = true;
+  }
+  const activityDate = (p.sentDate || new Date().toISOString()).slice(0, 10);
+  const hasNext = p.nextStep && p.nextStep.trim().toLowerCase() !== "none";
+  const description =
+    `Reply sent ${p.sentDate}.\nSubject: ${p.subject}\n\n${p.note}` +
+    (hasNext ? `\n\nNext step: ${p.nextStep}` : "");
+  await createTask({
+    whoId: contactId,
+    subject: `Reply: ${p.subject}`.slice(0, 255),
+    description,
+    activityDate,
+  });
+  return created ? "sf-created-contact+reply-note" : "sf-reply-note(existing-contact)";
 }
 
 /**

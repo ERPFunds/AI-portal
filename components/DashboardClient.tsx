@@ -1046,12 +1046,61 @@ function QueueItem({
 
 // ─── Inbox ────────────────────────────────────────────────────────────────────
 
+interface AgentInboxItem {
+  id: string
+  from: string
+  fromName: string | null
+  to: string[]
+  subject: string
+  preview: string
+  receivedISO: string
+  folder: string
+  folderKind: 'ir' | 'escalate' | 'forwarded-drafts' | 'draft'
+  status: 'active-thread' | 'pending' | 'handled' | 'needs-review'
+  isDraft: boolean
+  webLink: string | null
+}
+interface AgentInboxFolder { name: string; kind: AgentInboxItem['folderKind']; count: number }
+interface AgentInboxResponse {
+  mailbox: string
+  folders: AgentInboxFolder[]
+  items: AgentInboxItem[]
+  itemCount: number
+  draftCount: number
+  needsReviewCount: number
+  syncedAt: string
+  error?: string
+  diagnostics?: Record<string, unknown>
+}
+
+const FOLDER_BADGE: Record<AgentInboxItem['folderKind'], string> = {
+  ir: 'badge-blue',
+  escalate: 'badge-red',
+  'forwarded-drafts': 'badge-gold',
+  draft: 'badge-purple',
+}
+const FOLDER_LABEL: Record<AgentInboxItem['folderKind'], string> = {
+  ir: 'Investor Relations',
+  escalate: 'Escalate',
+  'forwarded-drafts': 'Forwarded Draft',
+  draft: 'Draft · needs approval',
+}
+
+function formatInboxTime(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  const now = new Date()
+  const sameDay = d.toDateString() === now.toDateString()
+  if (sameDay) return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  const ms = now.getTime() - d.getTime()
+  const days = Math.floor(ms / 86_400_000)
+  if (days < 7) return d.toLocaleDateString(undefined, { weekday: 'short' })
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 function InboxView({
-  inboxItems, filteredInbox, inboxAgents,
-  inboxAgentFilter, setInboxAgentFilter,
   inboxStatusFilter, setInboxStatusFilter,
   selectedInboxIdx, setSelectedInboxIdx,
-  roleKey,
 }: {
   inboxItems: typeof INBOX_DATA[RoleKey]
   filteredInbox: typeof INBOX_DATA[RoleKey]
@@ -1064,23 +1113,96 @@ function InboxView({
   setSelectedInboxIdx: (v: number) => void
   roleKey: RoleKey
 }) {
-  const selected = filteredInbox[selectedInboxIdx]
+  const [data, setData] = useState<AgentInboxResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [folderFilter, setFolderFilter] = useState('All')
+  const [sendingId, setSendingId] = useState<string | null>(null)
+  const [sendMsg, setSendMsg] = useState<string | null>(null)
+
+  const load = React.useCallback(async () => {
+    setLoading(true)
+    try {
+      const res = await fetch('/api/agent-inbox')
+      const json: AgentInboxResponse = await res.json()
+      if (!res.ok) { setError(json.error || `Sync failed (${res.status})`); setData(json) }
+      else { setError(null); setData(json) }
+    } catch (e) {
+      setError(String(e))
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  React.useEffect(() => {
+    load()
+    const t = setInterval(load, 60_000)
+    return () => clearInterval(t)
+  }, [load])
+
+  async function approveAndSend(item: AgentInboxItem) {
+    if (!item.isDraft) return
+    const to = item.to.join(', ') || 'the recipient'
+    if (!window.confirm(`Send this draft to ${to}?\n\nThis sends the email immediately from ${data?.mailbox ?? 'team@erpfunds.com'} and cannot be undone.`)) return
+    setSendingId(item.id)
+    setSendMsg(null)
+    try {
+      const res = await fetch('/api/agent-inbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'send', id: item.id }),
+      })
+      const json = await res.json()
+      if (!res.ok) { setSendMsg(`Send failed: ${json.error || res.status}`) }
+      else { setSendMsg('Sent ✓'); setSelectedInboxIdx(0); await load() }
+    } catch (e) {
+      setSendMsg(`Send failed: ${String(e)}`)
+    } finally {
+      setSendingId(null)
+    }
+  }
+
+  const items = data?.items ?? []
+  const folders = data?.folders ?? []
+
+  const filtered = items.filter((item) => {
+    if (folderFilter !== 'All' && item.folder !== folderFilter) return false
+    if (inboxStatusFilter === 'pending') return item.status === 'pending'
+    if (inboxStatusFilter === 'handled') return item.status === 'handled'
+    if (inboxStatusFilter === 'review') return item.status === 'needs-review'
+    return true
+  })
+  const selected = filtered[selectedInboxIdx]
+
+  const subtitle = error
+    ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
+    : data
+      ? `${data.itemCount} message${data.itemCount !== 1 ? 's' : ''} · ${data.draftCount} draft${data.draftCount !== 1 ? 's' : ''} awaiting approval · synced from ${data.mailbox}`
+      : 'Syncing Investor Relations mailbox…'
 
   return (
     <div>
-      <div className="page-header">
-        <h2>Agent Inbox</h2>
-        <p>{inboxItems.length > 0 ? `${inboxItems.length} agent communication${inboxItems.length !== 1 ? 's' : ''}` : 'Agent-drafted communications will appear here for your review'}</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2>Agent Inbox</h2>
+          <p>{subtitle}</p>
+        </div>
+        <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
+          {loading ? '↻ Syncing…' : '↻ Sync now'}
+        </button>
       </div>
       <div className="inbox-wrap">
         <div className="inbox-left">
           <div className="inbox-filters">
-            {inboxAgents.length > 0 && (
+            {folders.length > 0 && (
               <div>
-                <div className="filter-label" style={{ marginBottom: 5 }}>Agent</div>
+                <div className="filter-label" style={{ marginBottom: 5 }}>Folder</div>
                 <div className="pill-row">
-                  {inboxAgents.map((a) => (
-                    <div key={a} className={`pill ${inboxAgentFilter === a ? 'active' : ''}`} onClick={() => { setInboxAgentFilter(a); setSelectedInboxIdx(0) }}>{a}</div>
+                  <div className={`pill ${folderFilter === 'All' ? 'active' : ''}`} onClick={() => { setFolderFilter('All'); setSelectedInboxIdx(0) }}>All</div>
+                  {folders.map((f) => (
+                    <div key={f.name} className={`pill ${folderFilter === f.name ? 'active' : ''}`} onClick={() => { setFolderFilter(f.name); setSelectedInboxIdx(0) }}>
+                      {f.name} {f.count > 0 ? `(${f.count})` : ''}
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1095,29 +1217,35 @@ function InboxView({
             </div>
           </div>
           <div className="inbox-list">
-            {filteredInbox.map((item, i) => (
+            {filtered.map((item, i) => (
               <div
-                key={i}
+                key={item.id}
                 className={`inbox-item ${item.status} ${i === selectedInboxIdx ? 'active' : ''}`}
-                onClick={() => setSelectedInboxIdx(i)}
+                onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
               >
                 <div className="inbox-item-header">
-                  <div className="inbox-from">{item.from}</div>
-                  <div className="inbox-time">{item.time}</div>
+                  <div className="inbox-from">{item.fromName || item.from || (item.isDraft ? `To: ${item.to[0] ?? '—'}` : '—')}</div>
+                  <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
                 </div>
-                <div className="inbox-subject">{item.subject}</div>
-                <div className={`inbox-agent-tag badge ${item.agentBadge}`}>{item.agent}</div>
+                <div className="inbox-subject">{item.subject || '(no subject)'}</div>
+                <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
               </div>
             ))}
-            {filteredInbox.length === 0 && inboxItems.length === 0 && (
+            {!loading && filtered.length === 0 && !error && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
                 <div style={{ fontSize: 28 }}>📭</div>
                 <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>All clear</div>
-                <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.5, maxWidth: 200 }}>Agent drafts and communications will show up here once agents are active</div>
+                <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.5, maxWidth: 220 }}>No Investor Relations messages or drafts to review right now</div>
               </div>
             )}
-            {filteredInbox.length === 0 && inboxItems.length > 0 && (
-              <div style={{ padding: 20, color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>No matching items</div>
+            {error && (
+              <div style={{ padding: 20, color: '#9ca3af', fontSize: 12, lineHeight: 1.6 }}>
+                <div style={{ fontWeight: 600, color: '#E55A4E', marginBottom: 6 }}>Couldn’t sync the mailbox</div>
+                <div style={{ marginBottom: 6 }}>{error}</div>
+                {data?.diagnostics?.irFolderFound === false && (
+                  <div>No “{String(data.diagnostics.irFolder)}” folder found in {String(data.diagnostics.mailbox)}. Create it (or set <code>IR_FOLDER_NAME</code>) and re-sync.</div>
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -1126,45 +1254,53 @@ function InboxView({
             <>
               <div className="inbox-thread-header">
                 <div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{selected.subject}</div>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>{selected.from} · {selected.time}</div>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#111827' }}>{selected.subject || '(no subject)'}</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                    {selected.isDraft ? `To: ${selected.to.join(', ') || '—'}` : `${selected.fromName || selected.from}`} · {formatInboxTime(selected.receivedISO)} · {selected.folder}
+                  </div>
                 </div>
-                <span className={`badge ${selected.agentBadge}`}>{selected.agent}</span>
+                <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`}>{FOLDER_LABEL[selected.folderKind]}</span>
               </div>
               <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>From: {selected.from}</div>
-                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6 }}>
-                    {getInboxThreadContent(selected.subject)}
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+                    {selected.isDraft ? `Draft to: ${selected.to.join(', ') || '—'}` : `From: ${selected.from}`}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                    {selected.preview || '(no preview available)'}
                   </div>
                 </div>
               </div>
-              {selected.status !== 'handled' && (
-                <div className="draft-panel">
-                  <div className="draft-label">
-                    <span className={`badge ${selected.agentBadge}`} style={{ fontSize: 10 }}>{selected.agent}</span>
-                    AI Draft Ready — review before sending
-                  </div>
-                  <div className="draft-box">
-                    {getInboxDraftContent(selected.subject, selected.from)}
-                  </div>
-                  <div className="draft-actions">
-                    <button className="btn btn-primary">✓ Approve & Send</button>
-                    <button className="btn btn-ghost">✎ Edit</button>
-                    <button className="btn btn-ghost">↩ Reassign</button>
-                    <button className="btn btn-ghost" style={{ color: '#E55A4E' }}>✕ Decline</button>
-                  </div>
+              <div className="draft-panel">
+                <div className="draft-label">
+                  <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`} style={{ fontSize: 10 }}>{FOLDER_LABEL[selected.folderKind]}</span>
+                  {selected.isDraft ? 'AI draft prepared — review and send in Outlook' : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
                 </div>
-              )}
+                <div className="draft-actions" style={{ alignItems: 'center' }}>
+                  {selected.isDraft && (
+                    <button
+                      className="btn btn-primary"
+                      disabled={sendingId === selected.id}
+                      onClick={() => approveAndSend(selected)}
+                    >
+                      {sendingId === selected.id ? '⏳ Sending…' : '✓ Approve & Send'}
+                    </button>
+                  )}
+                  {selected.webLink && (
+                    <a className={`btn ${selected.isDraft ? 'btn-ghost' : 'btn-primary'}`} href={selected.webLink} target="_blank" rel="noopener noreferrer">↗ Open in Outlook</a>
+                  )}
+                  {sendMsg && (
+                    <span style={{ fontSize: 12, fontWeight: 600, color: sendMsg.startsWith('Sent') ? '#16a34a' : '#E55A4E' }}>{sendMsg}</span>
+                  )}
+                </div>
+              </div>
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 12, padding: 40, color: '#9ca3af' }}>
               <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#f3f4f6', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>✉️</div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>{inboxItems.length > 0 ? 'Select a message to view' : 'No messages yet'}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>{loading ? 'Syncing…' : 'Select a message to view'}</div>
               <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.6, maxWidth: 280 }}>
-                {inboxItems.length > 0
-                  ? 'Click a message on the left to read the thread and review any agent drafts.'
-                  : 'When an agent drafts a communication for your review — an LP update, lease proposal, or payment reminder — it will appear here for your approval before anything is sent.'}
+                Investor Relations messages, escalations, and drafts awaiting approval — synced live from {data?.mailbox ?? 'team@erpfunds.com'}.
               </div>
             </div>
           )}
@@ -1172,32 +1308,6 @@ function InboxView({
       </div>
     </div>
   )
-}
-
-function getInboxThreadContent(subject: string): string {
-  if (subject.includes('Q1 Update') || subject.includes('Halverson')) {
-    return "Hi team,\n\nWe're approaching end of Q1 and our investment committee is asking for an update on Fund IV performance. Could you send over the latest figures including IRR, cash-on-cash, and current occupancy?\n\nBest,\nJames"
-  }
-  if (subject.includes('past-due') || subject.includes('payment plan')) {
-    return "Hello,\n\nWe've been having some cash flow challenges this quarter due to a delayed client payment. We'd like to discuss a structured payment plan for the outstanding balance of $16,400.\n\nThank you for your understanding."
-  }
-  if (subject.includes('Renewal') || subject.includes('renewal')) {
-    return "Dear ERP Industrials Team,\n\nOur lease is coming up for renewal and we'd like to discuss terms for extending our occupancy. We've been happy with the space and hope we can work something out.\n\nBest regards"
-  }
-  if (subject.includes('HVAC') || subject.includes('maintenance')) {
-    return "Hi,\n\nWe're experiencing issues with the HVAC system in Bay 3. The temperature has been inconsistent for the past two days and it's affecting our operations. Please advise on next steps.\n\nThanks"
-  }
-  return "Message content for this thread is available in the full system integration."
-}
-
-function getInboxDraftContent(subject: string, from: string): string {
-  if (subject.includes('Q1 Update') || subject.includes('Halverson')) {
-    return `Dear James,\n\nThank you for reaching out. I'm pleased to share Fund IV's Q1 2026 performance summary:\n\n• IRR (Projected): 14.2% — tracking ahead of our 13% target\n• Cash-on-Cash Return: 8.1% — distributed Q4 2025\n• Portfolio Occupancy: 93.4% across 6 properties\n• Capital Deployed: $48M of $65M target (74%)\n\nOn the acquisition front, we're advancing due diligence on a 185,000 SF distribution hub in Albuquerque, NM.\n\nBest,\nERP Industrials Investor Relations`
-  }
-  if (subject.includes('past-due') || subject.includes('payment plan')) {
-    return `Dear ${from},\n\nThank you for reaching out. We understand business challenges can arise and want to work with you constructively.\n\nWe can offer a structured payment plan for your outstanding balance: 50% ($8,200) due within 7 days, with the remaining balance in equal installments over the following 30 days.\n\nPlease confirm you agree to these terms.\n\nBest regards,\nERP Industrials`
-  }
-  return `Dear ${from},\n\nThank you for your message. I've reviewed your inquiry and will follow up with a detailed response within one business day.\n\nBest regards,\nERP Industrials Team`
 }
 
 // ─── Agent Hub ────────────────────────────────────────────────────────────────
@@ -4769,6 +4879,7 @@ const SOP_CATEGORIES = [
   { icon: '🏢', label: 'Property Operations Agent SOPs',desc: 'Work order submission, vendor dispatch, COI requirements, and escalation handling for the Property Operations agent' },
   { icon: '🔑', label: 'Leasing Agent SOPs',            desc: 'Prospect intake, proposal review, renewal tracking, and lease execution checklist for the Leasing agent' },
   { icon: '👥', label: 'Investor Relations Agent SOPs', desc: 'LP communication standards, capital call procedures, quarterly report cadence, and fund update templates for the IR agent' },
+  { icon: '📨', label: 'Agent 2 — Investor Relations',   desc: 'Investor Relations (Agent 2) reference — the IR Q&A Reference doc (approved response templates, routing contacts, classification + escalation rules) and Agent 2 working guides' },
   { icon: '🏭', label: 'Acquisitions Agent SOPs',       desc: 'Deal screening criteria, underwriting process, due diligence checklist, and IC memo format for the Acquisitions agent' },
   { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]

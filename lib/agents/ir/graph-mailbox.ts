@@ -50,6 +50,99 @@ export async function listInboxMessages(mailbox: string, top = 25): Promise<Inbo
   );
 }
 
+export interface MailFolder {
+  id: string;
+  displayName: string;
+  totalItemCount: number;
+  unreadItemCount: number;
+  childFolderCount: number;
+}
+
+/** Richer message shape used by the Agent Inbox view (adds recipients, webLink, draft flag). */
+export interface MailItem extends InboxMessage {
+  toRecipients: string[];
+  webLink: string | null;
+  isDraft: boolean;
+  lastModifiedDateTime: string | null;
+}
+
+/** List a folder's immediate child folders (id, name, counts). */
+export async function listChildFolders(mailbox: string, parentFolderId: string): Promise<MailFolder[]> {
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${parentFolderId}/childFolders` +
+    `?$select=id,displayName,totalItemCount,unreadItemCount,childFolderCount&$top=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+  if (!res.ok) throw new Error(`Graph child folders ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.value || []).map(
+    (f: {
+      id: string;
+      displayName?: string;
+      totalItemCount?: number;
+      unreadItemCount?: number;
+      childFolderCount?: number;
+    }): MailFolder => ({
+      id: f.id,
+      displayName: f.displayName || "",
+      totalItemCount: f.totalItemCount ?? 0,
+      unreadItemCount: f.unreadItemCount ?? 0,
+      childFolderCount: f.childFolderCount ?? 0,
+    })
+  );
+}
+
+/**
+ * List messages in any folder (by folder id or a well-known name like "drafts"/"inbox").
+ * Returns the richer MailItem shape. `orderBy` defaults to receivedDateTime desc; pass
+ * "lastModifiedDateTime desc" for Drafts (which have no meaningful received date).
+ */
+export async function listFolderMessages(
+  mailbox: string,
+  folderIdOrWellKnown: string,
+  top = 25,
+  orderBy = "receivedDateTime desc"
+): Promise<MailItem[]> {
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folderIdOrWellKnown}/messages` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft` +
+    `&$orderby=${encodeURIComponent(orderBy)}&$top=${top}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
+  });
+  if (!res.ok) throw new Error(`Graph list folder messages ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.value || []).map(
+    (m: {
+      id: string;
+      internetMessageId?: string;
+      subject?: string;
+      bodyPreview?: string;
+      receivedDateTime: string;
+      lastModifiedDateTime?: string;
+      webLink?: string;
+      isDraft?: boolean;
+      from?: { emailAddress?: { address?: string; name?: string } };
+      toRecipients?: { emailAddress?: { address?: string } }[];
+    }): MailItem => ({
+      id: m.id,
+      internetMessageId: m.internetMessageId ?? null,
+      subject: m.subject || "",
+      fromAddress: m.from?.emailAddress?.address || "",
+      fromName: m.from?.emailAddress?.name ?? null,
+      bodyPreview: m.bodyPreview || "",
+      receivedDateTime: m.receivedDateTime,
+      lastModifiedDateTime: m.lastModifiedDateTime ?? null,
+      webLink: m.webLink ?? null,
+      isDraft: m.isDraft ?? false,
+      toRecipients: (m.toRecipients || [])
+        .map((r) => r.emailAddress?.address || "")
+        .filter(Boolean),
+    })
+  );
+}
+
 /** Resolve a mail folder's id by display name (e.g., "Investor Relations"). Returns null if not found. */
 export async function resolveFolderId(mailbox: string, displayName: string): Promise<string | null> {
   const t = await token();
@@ -80,8 +173,16 @@ export async function resolveSubfolderId(
   return data.value?.[0]?.id ?? null;
 }
 
-/** Move a message to another folder within the same mailbox. */
-export async function moveMessage(mailbox: string, messageId: string, destinationFolderId: string): Promise<void> {
+/**
+ * Move a message to another folder within the same mailbox.
+ * A move creates a new message resource in the destination — returns its new id
+ * (needed to then PATCH read state / read the filed copy).
+ */
+export async function moveMessage(
+  mailbox: string,
+  messageId: string,
+  destinationFolderId: string
+): Promise<string> {
   const t = await token();
   const res = await fetch(
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}/move`,
@@ -92,6 +193,88 @@ export async function moveMessage(mailbox: string, messageId: string, destinatio
     }
   );
   if (!res.ok) throw new Error(`Graph move ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.id as string;
+}
+
+/** Set a message's read/unread state (isRead=false keeps it bold/unread in Outlook). */
+export async function setMessageRead(mailbox: string, messageId: string, isRead: boolean): Promise<void> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ isRead }),
+    }
+  );
+  if (!res.ok) throw new Error(`Graph set read ${res.status}: ${await res.text()}`);
+}
+
+/** Fetch a message's raw MIME (RFC822), base64-encoded — for copying it into another mailbox. */
+export async function getMessageMime(mailbox: string, messageId: string): Promise<string> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}/$value`,
+    { headers: { Authorization: `Bearer ${t}` } }
+  );
+  if (!res.ok) throw new Error(`Graph get mime ${res.status}: ${await res.text()}`);
+  return Buffer.from(await res.arrayBuffer()).toString("base64");
+}
+
+/**
+ * Import a base64-encoded MIME message into a folder (by id) in any mailbox — a faithful copy
+ * that preserves the original sender, recipients, and received date. Returns the new message id.
+ */
+export async function importMimeMessage(
+  destMailbox: string,
+  destFolderId: string,
+  base64Mime: string
+): Promise<string> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(destMailbox)}/mailFolders/${destFolderId}/messages`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "text/plain" },
+      body: base64Mime,
+    }
+  );
+  if (!res.ok) throw new Error(`Graph import mime ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return data.id as string;
+}
+
+/** Read a single message's subject, recipients, and text body (e.g. a draft before sending). */
+export async function getMessageBody(
+  mailbox: string,
+  messageId: string
+): Promise<{ subject: string; to: string[]; bodyText: string }> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}` +
+      `?$select=subject,toRecipients,body`,
+    { headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' } }
+  );
+  if (!res.ok) throw new Error(`Graph get message ${res.status}: ${await res.text()}`);
+  const m = await res.json();
+  return {
+    subject: m.subject || "",
+    to: (m.toRecipients || [])
+      .map((r: { emailAddress?: { address?: string } }) => r.emailAddress?.address || "")
+      .filter(Boolean),
+    bodyText: m.body?.content || "",
+  };
+}
+
+/** Send an existing draft message (by id) from the mailbox. Irreversible — sends the email. */
+export async function sendDraftMessage(mailbox: string, messageId: string): Promise<void> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}/send`,
+    { method: "POST", headers: { Authorization: `Bearer ${t}` } }
+  );
+  if (!res.ok) throw new Error(`Graph send draft ${res.status}: ${await res.text()}`);
 }
 
 /** Forward a message to a recipient, with an optional comment, sent as the mailbox. */

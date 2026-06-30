@@ -33,7 +33,8 @@ function decodeAttachment(att: Attachment): string {
   }
 }
 
-const MEGHAN_EMAIL = "mberry@erpfunds.com";
+// IR drafts are stored in the shared team hub so they surface in the portal Agent Inbox.
+const TEAM_INBOX = "team@erpfunds.com";
 
 export async function POST(req: NextRequest) {
   if (!isAuthorized(req)) {
@@ -59,7 +60,7 @@ export async function POST(req: NextRequest) {
         if (!classification.isEscalation) {
           draftResult = await saveDraftToOutlook({
             toEmail: from,
-            mailboxEmail: MEGHAN_EMAIL,
+            mailboxEmail: TEAM_INBOX,
             subject: classification.draftSubject,
             htmlBody: classification.draftHtml,
           });

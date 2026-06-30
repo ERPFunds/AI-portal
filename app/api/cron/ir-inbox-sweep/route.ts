@@ -5,7 +5,9 @@ import {
   listInboxMessages,
   resolveSubfolderId,
   moveMessage,
-  forwardMessage,
+  setMessageRead,
+  getMessageMime,
+  importMimeMessage,
 } from "@/lib/agents/ir/graph-mailbox";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
@@ -74,6 +76,9 @@ async function handleMailbox(
   // resolve the two routing subfolders once per mailbox (lazily; only if we'll move something)
   let escalateFolderId: string | null | undefined; // undefined = not yet resolved
   let draftsFolderId: string | null | undefined;
+  // same two subfolders in the shared team hub, where we drop a triaged COPY
+  let teamEscalateFolderId: string | null | undefined;
+  let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
 
   for (const m of todo) {
@@ -111,18 +116,34 @@ async function handleMailbox(
     }
 
     const actions: string[] = [route];
+    const subName = route === "escalate" ? SUB_ESCALATE : SUB_DRAFTS;
 
-    // 1) forward to the team hub (best-effort)
+    // 1) drop a triaged COPY into the team hub's matching IR subfolder (Escalate XOR Forwarded
+    //    Drafts), kept unread, so it surfaces in the portal Agent Inbox. The original stays in
+    //    the source mailbox's IR subfolder (step 4) — i.e. a copy lives in BOTH places.
     try {
-      await forwardMessage(
-        mailbox,
-        m.id,
-        TEAM_INBOX,
-        `IR auto-triage (${route}) — investor/broker inquiry received in ${mailbox}. ${verdict.reason}`
-      );
-      actions.push("forwarded");
+      let teamDestId: string | null;
+      if (route === "escalate") {
+        if (teamEscalateFolderId === undefined) teamEscalateFolderId = await resolveSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
+        teamDestId = teamEscalateFolderId;
+      } else {
+        if (teamDraftsFolderId === undefined) teamDraftsFolderId = await resolveSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_DRAFTS);
+        teamDestId = teamDraftsFolderId;
+      }
+      if (teamDestId) {
+        const mime = await getMessageMime(mailbox, m.id);
+        const copyId = await importMimeMessage(TEAM_INBOX, teamDestId, mime);
+        try {
+          await setMessageRead(TEAM_INBOX, copyId, false);
+          actions.push("team-copied-unread");
+        } catch (e) {
+          actions.push(`team-copied(unread-fail:${String(e).slice(0, 40)})`);
+        }
+      } else {
+        actions.push(`team-copy-skip(no "${subName}" subfolder in ${TEAM_INBOX})`);
+      }
     } catch (e) {
-      actions.push(`forward-fail(${String(e).slice(0, 60)})`);
+      actions.push(`team-copy-fail(${String(e).slice(0, 60)})`);
     }
 
     // 2) Salesforce: find-or-create the Contact + log a correspondence Task (direct REST)
@@ -138,12 +159,12 @@ async function handleMailbox(
       })
     );
 
-    // 3) prepare a draft reply in the mailbox's Drafts for review (never auto-sent) — both routes.
-    //    Escalations get a draft too; Meghan/William review & send (or escalate further).
+    // 3) prepare a draft reply in the team hub's Drafts for review (never auto-sent) — both routes.
+    //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
     try {
       const d = await saveDraftToOutlook({
         toEmail: m.fromAddress,
-        mailboxEmail: mailbox,
+        mailboxEmail: TEAM_INBOX,
         subject: triage.draftSubject || `Re: ${m.subject}`,
         htmlBody: triage.draftHtml,
       });
@@ -152,7 +173,9 @@ async function handleMailbox(
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);
     }
 
-    // 4) file into the matching IR subfolder (best-effort; needs Mail.ReadWrite)
+    // 4) file into exactly ONE IR subfolder — Escalate XOR Forwarded Drafts (best-effort;
+    //    needs Mail.ReadWrite). Per Meghan: filed emails must stay UNREAD so she can find
+    //    them and not miss any, so we mark the moved copy unread after filing.
     try {
       let destId: string | null;
       if (route === "escalate") {
@@ -163,8 +186,14 @@ async function handleMailbox(
         destId = draftsFolderId;
       }
       if (destId) {
-        await moveMessage(mailbox, m.id, destId);
-        actions.push("filed");
+        const movedId = await moveMessage(mailbox, m.id, destId);
+        // keep it unread in the destination folder
+        try {
+          await setMessageRead(mailbox, movedId, false);
+          actions.push("filed-unread");
+        } catch (e) {
+          actions.push(`filed(unread-fail:${String(e).slice(0, 40)})`);
+        }
       } else {
         actions.push(`file-skip(no "${route === "escalate" ? SUB_ESCALATE : SUB_DRAFTS}" subfolder)`);
       }
