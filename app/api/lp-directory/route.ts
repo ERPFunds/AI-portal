@@ -196,7 +196,7 @@ export async function GET() {
     let sfError: string | null = null;
     if (salesforceConfigured()) {
       try {
-        const { byName, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => lp.investor));
+        const { byName, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => ({ investor: lp.investor, contact: lp.contact })));
         sfFieldMap = fieldMap;
         sfMatched = matched;
         for (const lp of lps) {

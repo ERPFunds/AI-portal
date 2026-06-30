@@ -258,11 +258,11 @@ export async function salesforceBrokerProbe(names: string[]): Promise<string[]> 
  * Account (override via SF_BROKER_COMPANY_FIELD); rep via SF_BROKER_CONTACT_FIELD.
  */
 export async function fetchLpSalesforceData(
-  names: string[]
+  lps: { investor: string; contact: string }[]
 ): Promise<{ byName: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
   const byName: Record<string, LpSfData> = {};
   const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null, brokerCompany: null, brokerContact: null };
-  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  const clean = [...new Set(lps.map((l) => l.investor.trim()).filter(Boolean))];
   if (clean.length === 0) return { byName, fieldMap, matched: 0 };
 
   // Optional financial fields on Account (this org has none → stay null; env override supported).
@@ -275,8 +275,8 @@ export async function fetchLpSalesforceData(
   fieldMap.lpType = lpTypeAcc ? lpTypeAcc.expr : null;
   fieldMap.called = calledName;
   fieldMap.distributions = distribName;
-  fieldMap.brokerCompany = "Opportunity.Partner_Advisor/Brokerage/Broker_Dealer__r.Name";
-  fieldMap.brokerContact = "Opportunity.Partner_Advisor_Contact__r.Name";
+  fieldMap.brokerCompany = "Contact[primaryContact].Account.Name";
+  fieldMap.brokerContact = "Contact[primaryContact].Name";
 
   const acctSel = ["Id", "Name"];
   if (lpTypeAcc) acctSel.push(lpTypeAcc.expr);
@@ -312,57 +312,31 @@ export async function fetchLpSalesforceData(
     const o = v as { Name?: unknown } | null | undefined;
     return o?.Name != null && String(o.Name).trim() ? String(o.Name) : null;
   };
-  const ids = Object.keys(idToKey);
 
-  // 2a) Opportunities → the primary ContactId per LP (newest first) + partner-field fallback.
-  const acctToContactId: Record<string, string> = {};
-  const contactIds = new Set<string>();
-  for (let i = 0; i < ids.length; i += 200) {
-    const inList = ids.slice(i, i + 200).map((id) => `'${id}'`).join(",");
-    const q =
-      `SELECT AccountId, ContactId, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name ` +
-      `FROM Opportunity WHERE AccountId IN (${inList}) ORDER BY CloseDate DESC NULLS LAST`;
-    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
-    if (!res.ok) { console.log("[lp-opp-debug] opp query failed", res.status, (await res.text()).slice(0, 200)); continue; }
-    const oppData = await res.json();
-    console.log("[lp-opp-debug] opp batch", (oppData.records ?? []).length, JSON.stringify((oppData.records ?? []).slice(0, 2)));
-    for (const rec of ((oppData.records ?? []) as Record<string, unknown>[])) {
-      const accId = String(rec.AccountId);
-      const row = byName[idToKey[accId] ?? ""];
-      if (!row) continue;
-      const firm = rel(rec.Partner_Advisor__r) || rel(rec.Partner_Brokerage__r) || rel(rec.Partner_Broker_Dealer__r);
-      const pcontact = rel(rec.Partner_Advisor_Contact__r);
-      if (firm && !row.brokerCompany) row.brokerCompany = firm;
-      if (pcontact && !row.brokerContact) row.brokerContact = pcontact;
-      const cid = rec.ContactId ? String(rec.ContactId) : "";
-      if (cid && !acctToContactId[accId]) { acctToContactId[accId] = cid; contactIds.add(cid); }
-    }
-  }
-
-  // 2b) Resolve those Contacts → name + their Account (the broker/advisor firm).
-  const contactInfo: Record<string, { name: string | null; firm: string | null }> = {};
-  const cids = [...contactIds];
-  for (let i = 0; i < cids.length; i += 200) {
-    const inList = cids.slice(i, i + 200).map((id) => `'${id}'`).join(",");
-    const res = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name, Account.Name FROM Contact WHERE Id IN (${inList})`)}`);
-    if (!res.ok) { console.log("[lp-opp-debug] contact query failed", res.status, (await res.text()).slice(0, 200)); continue; }
+  // 2) Broker/advisor: each LP's primary contact (from the schedule) is a Salesforce Contact whose
+  //    Account is the broker/advisor firm. Match Contacts by name, then map back to each LP row.
+  const contactNames = [...new Set(lps.map((l) => (l.contact || "").trim()).filter(Boolean))];
+  const contactByName: Record<string, { name: string; firm: string | null; type: string | null }> = {};
+  for (let i = 0; i < contactNames.length; i += 200) {
+    const inList = contactNames.slice(i, i + 200).map((n) => `'${soql(n)}'`).join(",");
+    const res = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name, Account.Name, Account.Type FROM Contact WHERE Name IN (${inList})`)}`);
+    if (!res.ok) { console.log("[lp-contact-debug] query failed", res.status, (await res.text()).slice(0, 200)); continue; }
     const cData = await res.json();
-    console.log("[lp-opp-debug] contact batch", (cData.records ?? []).length, JSON.stringify((cData.records ?? []).slice(0, 3)));
+    console.log("[lp-contact-debug] batch", (cData.records ?? []).length, "of", contactNames.length, "names; sample", JSON.stringify((cData.records ?? []).slice(0, 5)));
     for (const c of ((cData.records ?? []) as Record<string, unknown>[])) {
-      contactInfo[String(c.Id)] = {
-        name: c.Name != null && String(c.Name).trim() ? String(c.Name) : null,
-        firm: rel(c.Account),
-      };
+      const key = String(c.Name ?? "").toLowerCase().trim();
+      if (!key || contactByName[key]) continue;
+      const acc = c.Account as { Name?: unknown; Type?: unknown } | null | undefined;
+      contactByName[key] = { name: String(c.Name), firm: rel(c.Account), type: acc?.Type != null ? String(acc.Type) : null };
     }
   }
-
-  // 2c) Apply contact-derived broker (firm = contact's Account; contact = the person).
-  for (const [accId, cid] of Object.entries(acctToContactId)) {
-    const row = byName[idToKey[accId] ?? ""];
+  for (const l of lps) {
+    const row = byName[l.investor.toLowerCase().trim()];
     if (!row) continue;
-    const ci = contactInfo[cid];
-    if (ci?.firm && !row.brokerCompany) row.brokerCompany = ci.firm;
-    if (ci?.name && !row.brokerContact) row.brokerContact = ci.name;
+    const ci = contactByName[(l.contact || "").toLowerCase().trim()];
+    if (!ci) continue;
+    if (ci.firm && !row.brokerCompany) row.brokerCompany = ci.firm;
+    if (ci.name && !row.brokerContact) row.brokerContact = ci.name;
   }
 
   return { byName, fieldMap, matched };
