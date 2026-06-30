@@ -2575,15 +2575,13 @@ function RentRollView() {
                     <td style={{ padding: '9px 12px', fontWeight: isUnit ? 400 : 500, color: isUnit ? '#4b5563' : '#111827', maxWidth: 260 }}>{isUnit ? '↳ ' + p.address : p.address}</td>
                     <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
                     <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>
-                      {p.tenant}
-                      {p.type === 'vacant' && (
-                        <a href={p.loopnetUrl || `https://www.loopnet.com/search/?q=${encodeURIComponent(p.address.replace(/ — Unit.*$/, '') + ', Midland TX')}`}
-                          target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                          style={{ marginLeft: 8, fontSize: 10, fontWeight: 700, color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap' }}
-                          title={p.loopnetUrl ? 'Open LoopNet listing' : 'Search LoopNet for this address'}>
-                          LoopNet ↗
-                        </a>
-                      )}
+                      {p.type === 'vacant'
+                        ? (p.loopnetUrl
+                            ? <a href={p.loopnetUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
+                                style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap' }} title="Open LoopNet listing">🔗 LoopNet ↗</a>
+                            : <span onClick={(e) => { e.stopPropagation(); if (!isUnit) { setDraft({ ...p }); setIsNew(false) } }}
+                                style={{ fontSize: 11, color: '#9ca3af', cursor: isUnit ? 'default' : 'pointer', fontStyle: 'italic' }}>+ add LoopNet link</span>)
+                        : p.tenant}
                     </td>
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
