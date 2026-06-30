@@ -40,6 +40,10 @@
     {
       "path": "/api/cron/ir-qa-update",
       "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/doc-extract",
+      "schedule": "15 */6 * * *"
     }
   ]
 }

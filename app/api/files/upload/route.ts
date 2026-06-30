@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
 
 const anthropic = new Anthropic();
 
@@ -37,6 +38,14 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error("File metadata save error:", error);
       return NextResponse.json({ error: "Failed to save file metadata" }, { status: 500 });
+    }
+
+    // Workflow 7: extract the document to text/markdown and store it (best-effort; never fails the upload).
+    try {
+      const bytes = Buffer.from(await file.arrayBuffer());
+      await extractAndStoreMarkdown({ fileId: uploaded.id, filename: file.name, mimeType: file.type || null, category: category ?? undefined, bytes });
+    } catch (e) {
+      console.error("Markdown extraction (WF7) failed:", e);
     }
 
     return NextResponse.json({

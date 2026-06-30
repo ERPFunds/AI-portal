@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { getAnthropicFileText } from "@/lib/agents/ir/file-text";
+import { getDocText } from "@/lib/agents/ir/markdown-store";
 import { getGraphToken } from "@/lib/agents/graph-token";
 
 const client = new Anthropic();
@@ -46,7 +46,7 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
   const avail: { file_id: string; filename: string; mime_type: string | null }[] = [];
   for (const d of docs) {
     avail.push({ file_id: d.file_id, filename: d.filename, mime_type: d.mime_type });
-    const text = await getAnthropicFileText(d.file_id, d.filename, d.mime_type);
+    const text = await getDocText({ fileId: d.file_id, filename: d.filename, mimeType: d.mime_type, category: d.category });
     if (text) sections.push(`<document source="${d.filename}">\n${text}\n</document>`);
   }
   const fileList = avail.map((a) => `- ${a.filename}`).join("\n");

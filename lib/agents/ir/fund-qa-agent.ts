@@ -1,6 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { getAnthropicFileText } from "@/lib/agents/ir/file-text";
+import { getDocText } from "@/lib/agents/ir/markdown-store";
 
 const client = new Anthropic();
 
@@ -28,7 +28,7 @@ export async function answerFundQuestion(question: string): Promise<FundQaResult
   const sections: string[] = [];
   const used: string[] = [];
   for (const d of docs) {
-    const text = await getAnthropicFileText(d.file_id, d.filename, d.mime_type);
+    const text = await getDocText({ fileId: d.file_id, filename: d.filename, mimeType: d.mime_type, category: d.category });
     if (!text) continue;
     used.push(d.filename);
     sections.push(`<document source="${d.filename}" library="${d.category}">\n${text}\n</document>`);
