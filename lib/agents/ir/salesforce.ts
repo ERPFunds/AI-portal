@@ -134,11 +134,15 @@ export interface LpSfData {
   lpType: string | null;
   called: number | null;
   distributions: number | null;
+  brokerCompany: string | null;
+  brokerContact: string | null;
 }
 export interface LpSfFieldMap {
   lpType: string | null;
   called: string | null;
   distributions: string | null;
+  brokerCompany: string | null; // SOQL select expr used (e.g. "Account.Name" or a custom field)
+  brokerContact: string | null;
 }
 
 /** Pick a field API name: env override first, then by label patterns, then by name patterns. */
@@ -155,6 +159,31 @@ function toNum(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+// Resolve a picked Contact field name into a SOQL select expr + a record reader.
+// Reference fields (lookups) select the related record's Name (e.g. "Advisor__r.Name").
+function fieldAccessor(
+  fields: SfFieldInfo[],
+  picked: string | null
+): { expr: string; read: (rec: Record<string, unknown>) => string | null } | null {
+  if (!picked) return null;
+  const f = fields.find((x) => x.name === picked);
+  if (!f) return null;
+  if (f.type === "reference") {
+    const rel = f.name.endsWith("__c") ? f.name.replace(/__c$/, "__r") : f.name.replace(/Id$/, "");
+    return {
+      expr: `${rel}.Name`,
+      read: (rec) => {
+        const obj = rec[rel] as { Name?: unknown } | null | undefined;
+        return obj?.Name != null && String(obj.Name).trim() ? String(obj.Name) : null;
+      },
+    };
+  }
+  return {
+    expr: f.name,
+    read: (rec) => (rec[f.name] != null && String(rec[f.name]).trim() ? String(rec[f.name]) : null),
+  };
+}
+
 /**
  * Resolve LP financial data from Salesforce Contacts, matched by email.
  * Auto-discovers the LP Type / Capital Called / Distributions fields by label
@@ -165,7 +194,7 @@ export async function fetchLpSalesforceData(
   emails: string[]
 ): Promise<{ byEmail: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
   const byEmail: Record<string, LpSfData> = {};
-  const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null };
+  const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null, brokerCompany: null, brokerContact: null };
   const clean = [...new Set(emails.map((e) => e.trim()).filter(Boolean))];
   if (clean.length === 0) return { byEmail, fieldMap, matched: 0 };
 
@@ -180,8 +209,28 @@ export async function fetchLpSalesforceData(
     [/distribution/i],
     [/distrib/i]);
 
-  const extra = [fieldMap.lpType, fieldMap.called, fieldMap.distributions].filter(Boolean) as string[];
-  const selectFields = ["Id", "Email", ...extra].join(", ");
+  // Broker/advisor firm = the Contact's parent Account by default; override with SF_BROKER_COMPANY_FIELD.
+  const companyAcc =
+    (process.env.SF_BROKER_COMPANY_FIELD ? fieldAccessor(fields, process.env.SF_BROKER_COMPANY_FIELD) : null) ?? {
+      expr: "Account.Name",
+      read: (rec: Record<string, unknown>) => {
+        const a = rec.Account as { Name?: unknown } | null | undefined;
+        return a?.Name != null && String(a.Name).trim() ? String(a.Name) : null;
+      },
+    };
+  // Broker/advisor rep — discovered by label; override with SF_BROKER_CONTACT_FIELD.
+  const brokerContactField = pickField(fields, process.env.SF_BROKER_CONTACT_FIELD,
+    [/financial\s*advisor/i, /^advisor$/i, /selling\s*(rep|agent|advisor)/i, /registered\s*rep/i, /referred\s*by/i, /^broker$/i, /^rep(resentative)?$/i],
+    [/financial_?advisor/i, /^advisor/i, /selling_?(rep|agent)/i, /referr/i, /\brep\b/i]);
+  const contactAcc = fieldAccessor(fields, brokerContactField);
+  fieldMap.brokerCompany = companyAcc.expr;
+  fieldMap.brokerContact = contactAcc ? contactAcc.expr : null;
+
+  const selectExprs = ["Id", "Email"];
+  for (const fn of [fieldMap.lpType, fieldMap.called, fieldMap.distributions]) if (fn) selectExprs.push(fn);
+  selectExprs.push(companyAcc.expr);
+  if (contactAcc) selectExprs.push(contactAcc.expr);
+  const selectFields = [...new Set(selectExprs)].join(", ");
 
   let matched = 0;
   for (let i = 0; i < clean.length; i += 200) {
@@ -198,6 +247,8 @@ export async function fetchLpSalesforceData(
         lpType: fieldMap.lpType && rec[fieldMap.lpType] != null ? String(rec[fieldMap.lpType]) : null,
         called: fieldMap.called ? toNum(rec[fieldMap.called]) : null,
         distributions: fieldMap.distributions ? toNum(rec[fieldMap.distributions]) : null,
+        brokerCompany: companyAcc.read(rec),
+        brokerContact: contactAcc ? contactAcc.read(rec) : null,
       };
       matched++;
     }

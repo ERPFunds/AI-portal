@@ -1685,6 +1685,7 @@ interface LpRecord {
   group: string;
   lastInteraction: { date: string; note: string; source: 'ir' | 'sf' } | null;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
+  sfBrokerCompany: string | null; sfBrokerContact: string | null;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -1917,10 +1918,10 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
-                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions' || h === 'Broker / Advisor') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
                   ))}
@@ -1942,6 +1943,18 @@ function LpDirectoryView() {
                           </div>
                         ) : (
                           (lp.contact || lp.email) && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>{lp.contact}{lp.email ? ` · ${lp.email}` : ''}</div>
+                        )}
+                      </td>
+
+                      {/* Broker / Advisor — from Salesforce (firm + rep) */}
+                      <td style={{ padding: '11px 14px', maxWidth: 170 }}>
+                        {(lp.sfBrokerCompany || lp.sfBrokerContact) ? (
+                          <>
+                            <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{lp.sfBrokerCompany || '—'}</div>
+                            {lp.sfBrokerContact && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.sfBrokerContact}</div>}
+                          </>
+                        ) : (
+                          <span style={{ color: '#d1d5db', fontSize: 11 }} title="Connect Salesforce to populate">— <span style={{ fontSize: 9, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>SF</span></span>
                         )}
                       </td>
 
