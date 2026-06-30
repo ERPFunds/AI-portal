@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, describeFields, listCustomObjects, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -211,6 +211,19 @@ export async function GET() {
 
     // TEMP diagnostic — surfaces SF status in Vercel runtime logs (no secrets). Remove after debugging.
     console.log("[lp-directory-sf]", JSON.stringify({ sfConfigured: salesforceConfigured(), sfMatched, sfFieldMap, sfError, lpCount: lps.length }));
+    // TEMP schema probe — when nothing matched, log the SF Contact field labels + custom objects + a few
+    // sample LP emails so we can see WHERE LP/broker data actually lives. Remove after debugging.
+    if (salesforceConfigured() && sfMatched === 0) {
+      try {
+        const cFields = await describeFields("Contact");
+        const objs = await listCustomObjects();
+        console.log("[lp-sf-probe] contactFieldLabels=", JSON.stringify(cFields.map((f) => f.label)));
+        console.log("[lp-sf-probe] customObjects=", JSON.stringify(objs.map((o) => `${o.label} (${o.name})`)));
+        console.log("[lp-sf-probe] lpEmailsWithValue=", lps.filter((l) => l.email).length, "samples=", JSON.stringify(lps.map((l) => l.email).filter(Boolean).slice(0, 3)));
+      } catch (e) {
+        console.log("[lp-sf-probe] failed:", String(e).slice(0, 200));
+      }
+    }
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
