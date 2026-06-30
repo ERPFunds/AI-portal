@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -2362,21 +2362,20 @@ function RentRollView() {
   const num = (v: string) => v === '' ? null : Number(v)
 
   const q = search.toLowerCase()
-  // Building-level set (used for the metrics). Multi-tenant buildings always pass the type filter
-  // so their individual units can be type-filtered when the rows are broken out below.
-  const filtered = rows.filter(p => {
+  // Metric base: scoped by entity / wash bay / search only (NOT the type filter), so toggling
+  // the type filter (e.g. Vacant) doesn't distort the portfolio stats.
+  const metricBase = rows.filter(p => {
     const matchEntity = entityFilter === 'all' || p.entity === entityFilter
     const isMulti = !!(p.units && p.units.length > 0)
-    const matchType = typeFilter === 'all' || p.type === typeFilter || isMulti
     const matchWashBay = washBayFilter === 'all' || p.washBay === washBayFilter
     const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q) || (isMulti && (p.units!).some(u => (u.tenant || '').toLowerCase().includes(q)))
-    return matchEntity && matchType && matchWashBay && matchSearch
+    return matchEntity && matchWashBay && matchSearch
   })
 
-  // Break multi-tenant buildings into one display row per unit (so vacant/upcoming units show inline)
+  // Table rows: break multi-tenant buildings into one row per unit, then apply the type filter per row
   type Row = Property & { _key: string; _unit?: boolean; _unitNo?: string }
   const flat: Row[] = []
-  filtered.forEach(p => {
+  metricBase.forEach(p => {
     if (p.units && p.units.length > 0) {
       p.units.forEach(u => {
         const utype: Property['type'] = (u.tenant || '').toLowerCase() === 'vacant' ? 'vacant' : 'single'
@@ -2386,7 +2385,7 @@ function RentRollView() {
           address: `${p.address} — Unit ${u.unit}`, tenant: u.tenant || 'Vacant', type: utype,
           leaseExpiry: u.expiry ?? null, built: p.built, total: u.sf ?? null, office: null, warehouse: null, cranes: null, units: null })
       })
-    } else if (typeFilter === 'all' || typeFilter !== 'multi') {
+    } else if (typeFilter === 'all' || p.type === typeFilter) {
       flat.push({ ...p, _key: `p${p.id}` })
     }
   })
@@ -2404,7 +2403,7 @@ function RentRollView() {
   // WALE — SF-weighted average years of lease term remaining (multi-tenant units weighted by building SF / unit count)
   const yrsLeft = (d: string) => (new Date(d).getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000)
   let waleNum = 0, waleDen = 0
-  filtered.forEach(p => {
+  metricBase.forEach(p => {
     if (p.units && p.units.length > 0) {
       p.units.forEach(u => { if (u.expiry) { const w = u.sf ?? 0; waleNum += w * yrsLeft(u.expiry); waleDen += w } })
     } else if (p.type !== 'vacant' && p.leaseExpiry) {
@@ -2416,7 +2415,7 @@ function RentRollView() {
 
   // Occupancy by UNIT count across the portfolio: multi-tenant counts each unit; single-tenant = 1 unit
   let totalUnits = 0, occupiedUnits = 0
-  filtered.forEach(p => {
+  metricBase.forEach(p => {
     if (p.units && p.units.length > 0) {
       totalUnits += p.units.length
       occupiedUnits += p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
@@ -2432,7 +2431,7 @@ function RentRollView() {
   const horizon6 = new Date(now6.getFullYear(), now6.getMonth() + 6, now6.getDate())
   const inWindow = (d?: string | null) => { if (!d) return false; const x = new Date(d); return x >= now6 && x <= horizon6 }
   let expiring6 = 0
-  filtered.forEach(p => {
+  metricBase.forEach(p => {
     if (p.units && p.units.length > 0) expiring6 += p.units.filter(u => inWindow(u.expiry)).length
     else if (inWindow(p.leaseExpiry)) expiring6 += 1
   })
@@ -2448,7 +2447,7 @@ function RentRollView() {
     ]
     const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
     const lines = [cols.map(c => c[0]).join(',')]
-    filtered.forEach(p => lines.push(cols.map(c => esc(c[1](p))).join(',')))
+    display.forEach(p => lines.push(cols.map(c => esc(c[1](p))).join(',')))
     const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
