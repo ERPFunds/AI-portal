@@ -2372,6 +2372,7 @@ function RentRollView() {
 
   // Default ordering: soonest lease expiration first; no-expiry/vacant rows last
   const display = sortBy === 'portfolio' ? filtered : [...filtered].sort((a, b) => {
+    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1 // vacant always first
     if (!a.leaseExpiry && !b.leaseExpiry) return 0
     if (!a.leaseExpiry) return 1
     if (!b.leaseExpiry) return -1
