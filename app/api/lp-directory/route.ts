@@ -209,6 +209,8 @@ export async function GET() {
       if (!groups.includes(lp.group)) groups.push(lp.group);
     }
 
+    // TEMP diagnostic — surfaces SF status in Vercel runtime logs (no secrets). Remove after debugging.
+    console.log("[lp-directory-sf]", JSON.stringify({ sfConfigured: salesforceConfigured(), sfMatched, sfFieldMap, sfError, lpCount: lps.length }));
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
