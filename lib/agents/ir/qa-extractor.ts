@@ -8,16 +8,22 @@ export interface ExtractedQa {
   category: string;
 }
 
-const SYSTEM = `You extract REUSABLE Q&A pairs from an answered investor-relations email (a reply ERP's IR team sent to an investor/broker; it usually quotes the original question).
+const SYSTEM = `You extract REUSABLE Q&A pairs from an answered investor-relations email (a reply ERP's IR team sent to an investor/broker; it usually quotes the original question). The goal is a shared FAQ that helps answer future investor questions and recurring due-diligence questions.
 
 Return a JSON array. Each item: { "question": string, "answer": string, "category": string }.
 
+KEEP only questions that a DIFFERENT investor or broker would plausibly ask again — two kinds:
+- Investor FAQ: portal access, K-1s / tax docs, distributions, capital commitments/calls, reporting cadence, onboarding/subscription steps, who-to-contact.
+- Due-diligence: fund strategy, structure, sponsor/track record, fees & terms, target returns approach, risk, tax treatment (e.g. DST/1031, depreciation), asset/market focus, redemption/liquidity terms.
+
+REJECT (return nothing for these): one-off legal or entity matters specific to a single deal (e.g. dissolving a particular LLC), scheduling a specific call/meeting, "thanks"/acknowledgements, forwarding a specific file, signature/logistics, or anything tied to one investor's personal account that wouldn't recur.
+
 Rules:
-- Only extract genuine, reusable investor questions with a substantive answer that would help answer the SAME question from a future investor. Skip one-off logistics (scheduling a specific call, "thanks", forwarding a file, anything purely personal).
-- GENERALIZE — this becomes a shared FAQ. Strip investor names, specific dollar amounts, account numbers, specific dates, and any other investor-specific detail. Rewrite the question and answer as if they apply to any investor.
-- Keep answers faithful to what was actually said; do NOT invent figures or policies.
-- category MUST be one of: portal-access | k1-tax | distributions | commitments | reporting | onboarding | general.
-- If there is nothing reusable, return [].
+- GENERALIZE: strip investor names, specific dollar amounts, account numbers, and specific dates so it applies to any investor.
+- Write a COMPLETE, self-contained answer (2–5 sentences) that stands on its own as an FAQ entry — enough context that someone could answer the question from it alone. Do NOT just echo a one-line reply.
+- Stay faithful to what was actually said; do NOT invent figures, terms, or policies. If the email's answer is too thin to stand alone, skip it.
+- category MUST be one of: portal-access | k1-tax | distributions | commitments | reporting | onboarding | fund-strategy | structure-terms | fees | due-diligence | general.
+- If nothing qualifies, return [].
 
 Return ONLY the JSON array, no prose.`;
 
