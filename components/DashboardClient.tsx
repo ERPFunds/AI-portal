@@ -2384,7 +2384,7 @@ function RentRollView() {
         if (q && !(`${p.address} unit ${u.unit}`.toLowerCase().includes(q) || (u.tenant || '').toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q))) return
         flat.push({ ...p, _key: `${p.id}-u${u.unit}`, _unit: true, _unitNo: u.unit,
           address: `${p.address} — Unit ${u.unit}`, tenant: u.tenant || 'Vacant', type: utype,
-          leaseExpiry: u.expiry ?? null, built: null, total: null, office: null, warehouse: null, cranes: null, units: null })
+          leaseExpiry: u.expiry ?? null, built: p.built, total: u.sf ?? null, office: null, warehouse: null, cranes: null, units: null })
       })
     } else if (typeFilter === 'all' || typeFilter !== 'multi') {
       flat.push({ ...p, _key: `p${p.id}` })
@@ -2406,8 +2406,7 @@ function RentRollView() {
   let waleNum = 0, waleDen = 0
   filtered.forEach(p => {
     if (p.units && p.units.length > 0) {
-      const perUnitSF = (p.total ?? 0) / p.units.length
-      p.units.forEach(u => { if (u.expiry) { waleNum += perUnitSF * yrsLeft(u.expiry); waleDen += perUnitSF } })
+      p.units.forEach(u => { if (u.expiry) { const w = u.sf ?? 0; waleNum += w * yrsLeft(u.expiry); waleDen += w } })
     } else if (p.type !== 'vacant' && p.leaseExpiry) {
       const w = p.total ?? 0
       waleNum += w * yrsLeft(p.leaseExpiry); waleDen += w
