@@ -2401,7 +2401,19 @@ function RentRollView() {
     return a.leaseExpiry.localeCompare(b.leaseExpiry)
   })
 
-  const totalSF = filtered.reduce((sum, p) => sum + (p.total ?? 0), 0)
+  // WALE — SF-weighted average years of lease term remaining (multi-tenant units weighted by building SF / unit count)
+  const yrsLeft = (d: string) => (new Date(d).getTime() - Date.now()) / (365.25 * 24 * 3600 * 1000)
+  let waleNum = 0, waleDen = 0
+  filtered.forEach(p => {
+    if (p.units && p.units.length > 0) {
+      const perUnitSF = (p.total ?? 0) / p.units.length
+      p.units.forEach(u => { if (u.expiry) { waleNum += perUnitSF * yrsLeft(u.expiry); waleDen += perUnitSF } })
+    } else if (p.type !== 'vacant' && p.leaseExpiry) {
+      const w = p.total ?? 0
+      waleNum += w * yrsLeft(p.leaseExpiry); waleDen += w
+    }
+  })
+  const wale = waleDen ? waleNum / waleDen : 0
 
   // Occupancy by UNIT count across the portfolio: multi-tenant counts each unit; single-tenant = 1 unit
   let totalUnits = 0, occupiedUnits = 0
@@ -2478,14 +2490,13 @@ function RentRollView() {
       </div>
 
       {/* Summary bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Properties', value: rows.length },
           { label: 'Occupancy',        value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
           { label: 'Occupied Units',   value: occupiedUnits + ' / ' + totalUnits },
           { label: 'Expiring ≤6 mo',   value: expiring6, color: expiring6 > 0 ? '#dc2626' : '#16a34a' },
-          { label: 'Total SF',         value: (totalSF / 1000).toFixed(0) + 'k SF' },
-          { label: 'Rows Shown',       value: display.length },
+          { label: 'WALE',             value: wale.toFixed(1) + ' yrs' },
         ].map(s => (
           <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
             <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
