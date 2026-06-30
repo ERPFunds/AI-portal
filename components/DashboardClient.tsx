@@ -2815,12 +2815,16 @@ function RentRollView() {
   )
 }
 
-const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null }
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, backflow_last: null, elevator_last: null, crane_last: null }
 
-const INSP_TYPES: { key: 'quicklook_last' | 'hvac_last' | 'fire_last'; label: string; bg: string; color: string }[] = [
+type InspKey = 'quicklook_last' | 'hvac_last' | 'fire_last' | 'backflow_last' | 'elevator_last' | 'crane_last'
+const INSP_TYPES: { key: InspKey; label: string; bg: string; color: string; craneOnly?: boolean }[] = [
   { key: 'quicklook_last', label: '🔍 Quicklook', bg: '#f0fdfa', color: '#0d9488' },
   { key: 'hvac_last',      label: '❄️ HVAC',      bg: '#eff6ff', color: '#2563eb' },
   { key: 'fire_last',      label: '🔥 Fire',      bg: '#fff7ed', color: '#ea580c' },
+  { key: 'backflow_last',  label: '🚰 Backflow',  bg: '#eff6ff', color: '#0369a1' },
+  { key: 'elevator_last',  label: '🛗 Elevator',  bg: '#faf5ff', color: '#7e22ce' },
+  { key: 'crane_last',     label: '🏗️ Crane',     bg: '#fffbeb', color: '#b45309', craneOnly: true },
 ]
 
 function WorkOrdersView() {
@@ -2843,8 +2847,8 @@ function WorkOrdersView() {
   }
   React.useEffect(() => { load() }, [])
 
-  const anyDate = (w: WorkOrder) => w.quicklook_last || w.hvac_last || w.fire_last
-  const latest = (w: WorkOrder) => [w.quicklook_last, w.hvac_last, w.fire_last].filter(Boolean).sort().slice(-1)[0] ?? ''
+  const anyDate = (w: WorkOrder) => w.quicklook_last || w.hvac_last || w.fire_last || w.backflow_last || w.elevator_last || w.crane_last
+  const latest = (w: WorkOrder) => [w.quicklook_last, w.hvac_last, w.fire_last, w.backflow_last, w.elevator_last, w.crane_last].filter(Boolean).sort().slice(-1)[0] ?? ''
 
   async function saveDraft() {
     if (!draft) return
@@ -2989,7 +2993,8 @@ function WorkOrdersView() {
           </thead>
           <tbody>
             {filtered.map(w => {
-              const selKey = (sel[w.id] ?? 'quicklook_last') as 'quicklook_last' | 'hvac_last' | 'fire_last'
+              const opts = INSP_TYPES.filter(t => !t.craneOnly || w.has_crane)
+              const selKey = (sel[w.id] ?? 'quicklook_last') as InspKey
               const typ = INSP_TYPES.find(t => t.key === selKey)!
               const dateVal = w[selKey]
               return (
@@ -2999,7 +3004,7 @@ function WorkOrdersView() {
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
                     <select value={selKey} onChange={e => setSel(s => ({ ...s, [w.id]: e.target.value }))}
                       style={{ fontSize: 12, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${typ.color}33`, background: typ.bg, color: typ.color, cursor: 'pointer' }}>
-                      {INSP_TYPES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                      {opts.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
                     </select>
                   </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
@@ -3029,6 +3034,11 @@ function WorkOrdersView() {
           <MField label="🔍 Quicklook — last done"><input type="date" style={mInput} value={draft.quicklook_last ?? ''} onChange={e => upd({ quicklook_last: e.target.value || null })} /></MField>
           <MField label="❄️ HVAC — last done"><input type="date" style={mInput} value={draft.hvac_last ?? ''} onChange={e => upd({ hvac_last: e.target.value || null })} /></MField>
           <MField label="🔥 Fire — last done"><input type="date" style={mInput} value={draft.fire_last ?? ''} onChange={e => upd({ fire_last: e.target.value || null })} /></MField>
+          <MField label="🚰 Backflow — last done"><input type="date" style={mInput} value={draft.backflow_last ?? ''} onChange={e => upd({ backflow_last: e.target.value || null })} /></MField>
+          <MField label="🛗 Elevator — last done"><input type="date" style={mInput} value={draft.elevator_last ?? ''} onChange={e => upd({ elevator_last: e.target.value || null })} /></MField>
+          {draft.has_crane && (
+            <MField label="🏗️ Crane — last done"><input type="date" style={mInput} value={draft.crane_last ?? ''} onChange={e => upd({ crane_last: e.target.value || null })} /></MField>
+          )}
         </EditModal>
       )}
     </div>
