@@ -265,15 +265,17 @@ export async function salesforceLpProbe(
   names: string[],
   emails: string[]
 ): Promise<{
-  contactFields: string[];
-  accountFields: string[];
+  contactCustomFields: string[];
+  accountCustomFields: string[];
   customObjects: string[];
   contactEmailMatches: number;
   accountNameMatches: number;
   sampleAccountNames: string[];
+  emailsWithValue: number;
+  namesCount: number;
 }> {
-  const contactFields = (await describeFields("Contact")).map((f) => f.label);
-  const accountFields = (await describeFields("Account")).map((f) => f.label);
+  const contactCustomFields = (await describeFields("Contact")).filter((f) => f.custom).map((f) => `${f.label} (${f.name})`);
+  const accountCustomFields = (await describeFields("Account")).filter((f) => f.custom).map((f) => `${f.label} (${f.name})`);
   const customObjects = (await listCustomObjects()).map((o) => `${o.label} (${o.name})`);
 
   const cleanEmails = [...new Set(emails.map((e) => e.trim()).filter(Boolean))].slice(0, 200);
@@ -297,7 +299,11 @@ export async function salesforceLpProbe(
     }
   }
 
-  return { contactFields, accountFields, customObjects, contactEmailMatches, accountNameMatches, sampleAccountNames };
+  return {
+    contactCustomFields, accountCustomFields, customObjects,
+    contactEmailMatches, accountNameMatches, sampleAccountNames,
+    emailsWithValue: cleanEmails.length, namesCount: cleanNames.length,
+  };
 }
 
 /** Find a Contact Id by exact email match; returns the first match or null. */

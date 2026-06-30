@@ -215,8 +215,12 @@ export async function GET() {
     // sample LP emails so we can see WHERE LP/broker data actually lives. Remove after debugging.
     if (salesforceConfigured() && sfMatched === 0) {
       try {
-        const probe = await salesforceLpProbe(lps.map((l) => l.investor), lps.map((l) => l.email));
-        console.log("[lp-sf-probe]", JSON.stringify(probe));
+        const p = await salesforceLpProbe(lps.map((l) => l.investor), lps.map((l) => l.email));
+        // separate short lines so nothing truncates
+        console.log("[lp-sf-probe-counts]", JSON.stringify({ contactEmailMatches: p.contactEmailMatches, accountNameMatches: p.accountNameMatches, sampleAccountNames: p.sampleAccountNames, emailsWithValue: p.emailsWithValue, namesCount: p.namesCount }));
+        console.log("[lp-sf-probe-objs]", JSON.stringify(p.customObjects));
+        console.log("[lp-sf-probe-acct]", JSON.stringify(p.accountCustomFields));
+        console.log("[lp-sf-probe-contact]", JSON.stringify(p.contactCustomFields));
       } catch (e) {
         console.log("[lp-sf-probe] failed:", String(e).slice(0, 200));
       }
