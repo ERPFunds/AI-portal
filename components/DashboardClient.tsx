@@ -2324,6 +2324,21 @@ function RentRollView() {
   const [expanded, setExpanded] = React.useState<number | null>(null)
   const [sortBy, setSortBy] = React.useState<'expiry' | 'portfolio' | 'building'>('expiry')
   const [expFilter, setExpFilter] = React.useState<'all' | '6' | '12'>('all')
+  const [unitDraft, setUnitDraft] = React.useState<{ propId: number; building: string; unit: string; tenant: string; expiry: string; sf: string } | null>(null)
+  const [unitSaving, setUnitSaving] = React.useState(false)
+  const [loopnetSyncing, setLoopnetSyncing] = React.useState(false)
+
+  async function refreshLoopnet() {
+    setLoopnetSyncing(true)
+    try {
+      const res = await fetch('/api/loopnet-sync', { method: 'POST' })
+      const d = await res.json()
+      if (d.ok) { alert(`LoopNet refresh complete — ${d.updatedCount} link(s) updated.`); await load() }
+      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — try again later.')
+      else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
+    } catch (e) { alert('LoopNet refresh error: ' + e) }
+    setLoopnetSyncing(false)
+  }
 
   const [rows, setRows] = React.useState<Property[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2361,6 +2376,18 @@ function RentRollView() {
 
   const upd = (patch: Partial<Property>) => setDraft(d => d ? { ...d, ...patch } : d)
   const num = (v: string) => v === '' ? null : Number(v)
+
+  async function saveUnit() {
+    if (!unitDraft) return
+    setUnitSaving(true)
+    const { data } = await editSb().from('properties').select('units').eq('id', unitDraft.propId).single()
+    const units = ((data?.units as any[]) ?? []).map(u =>
+      String(u.unit) === String(unitDraft.unit)
+        ? { ...u, tenant: unitDraft.tenant || 'Vacant', expiry: unitDraft.expiry || null, sf: unitDraft.sf ? Number(unitDraft.sf) : null }
+        : u)
+    await editSb().from('properties').update({ units, updated_at: new Date().toISOString() }).eq('id', unitDraft.propId)
+    setUnitSaving(false); setUnitDraft(null); await load()
+  }
 
   const q = search.toLowerCase()
   // Lease-expiry window filter (rows whose lease expires within N months from today)
@@ -2439,6 +2466,16 @@ function RentRollView() {
   })
   const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
+  // Type-filter counts at the UNIT level (multi-tenant counts each unit; single building = 1)
+  let cntSingle = 0, cntMulti = 0, cntVacant = 0
+  rows.forEach(p => {
+    if (p.units && p.units.length > 0) {
+      cntMulti += p.units.length
+      p.units.forEach(u => ((u.tenant || '').toLowerCase() === 'vacant' ? cntVacant++ : cntSingle++))
+    } else if (p.type === 'vacant') cntVacant++
+    else cntSingle++
+  })
+
   // Leases (incl. multi-tenant units) expiring within the next 6 months
   const now6 = new Date()
   const horizon6 = new Date(now6.getFullYear(), now6.getMonth() + 6, now6.getDate())
@@ -2489,6 +2526,10 @@ function RentRollView() {
           <p>Full portfolio — {rows.length} properties across {ENTITY_ORDER.length} funds · <span style={{ color: '#16a34a' }}>editable</span></p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={refreshLoopnet} disabled={loopnetSyncing} title="Refresh vacancy LoopNet links from ERP's company page"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: loopnetSyncing ? .6 : 1 }}>
+            {loopnetSyncing ? 'Refreshing…' : '🔗 Refresh LoopNet'}
+          </button>
           <button onClick={exportCsv}
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
             ⬇ Export to Excel
@@ -2534,9 +2575,9 @@ function RentRollView() {
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
           <option value="all">All Types</option>
-          <option value="single">Single-Tenant ({rows.filter(p => p.type === 'single').length})</option>
-          <option value="multi">Multi-Tenant ({rows.filter(p => p.type === 'multi').length})</option>
-          <option value="vacant">Vacant ({rows.filter(p => p.type === 'vacant').length})</option>
+          <option value="single">Single-Tenant ({cntSingle})</option>
+          <option value="multi">Multi-Tenant ({cntMulti})</option>
+          <option value="vacant">Vacant ({cntVacant})</option>
         </select>
         <select value={washBayFilter} onChange={e => setWashBayFilter(e.target.value)}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
@@ -2637,7 +2678,10 @@ function RentRollView() {
                       })()}
                     </td>
                     <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      {isUnit ? <span style={{ color: '#cbd5e1', fontSize: 10 }}>unit</span> : <>
+                      {isUnit ? (
+                        <button onClick={(e) => { e.stopPropagation(); setUnitDraft({ propId: p.id, building: p.address.replace(/ — Unit.*$/, ''), unit: (p as any)._unitNo, tenant: p.tenant === 'Vacant' ? '' : p.tenant, expiry: p.leaseExpiry ?? '', sf: p.total != null ? String(p.total) : '' }) }}
+                          style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>✎</button>
+                      ) : <>
                       <button onClick={(e) => { e.stopPropagation(); setDraft({ ...p }); setIsNew(false) }}
                         style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
                       <button onClick={(e) => { e.stopPropagation(); deleteRow(p.id) }}
@@ -2757,6 +2801,14 @@ function RentRollView() {
           <MField label="Plumbing"><input style={mInput} value={draft.plumbing} onChange={e => upd({ plumbing: e.target.value })} /></MField>
           <MField label="Exterior"><input style={mInput} value={draft.exterior} onChange={e => upd({ exterior: e.target.value })} /></MField>
           <MField label="Notes" span><textarea style={{ ...mInput, minHeight: 60, resize: 'vertical' }} value={draft.notes} onChange={e => upd({ notes: e.target.value })} /></MField>
+        </EditModal>
+      )}
+
+      {unitDraft && (
+        <EditModal title={`Edit unit — ${unitDraft.building} · Unit ${unitDraft.unit}`} onClose={() => setUnitDraft(null)} onSave={saveUnit} saving={unitSaving}>
+          <MField label="Tenant (blank = Vacant)" span><input style={mInput} value={unitDraft.tenant} onChange={e => setUnitDraft(d => d ? { ...d, tenant: e.target.value } : d)} /></MField>
+          <MField label="Lease Expiry"><input type="date" style={mInput} value={unitDraft.expiry} onChange={e => setUnitDraft(d => d ? { ...d, expiry: e.target.value } : d)} /></MField>
+          <MField label="Unit SF"><input type="number" style={mInput} value={unitDraft.sf} onChange={e => setUnitDraft(d => d ? { ...d, sf: e.target.value } : d)} /></MField>
         </EditModal>
       )}
     </div>
