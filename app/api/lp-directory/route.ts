@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, describeFields, listCustomObjects, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, salesforceLpProbe, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -215,11 +215,8 @@ export async function GET() {
     // sample LP emails so we can see WHERE LP/broker data actually lives. Remove after debugging.
     if (salesforceConfigured() && sfMatched === 0) {
       try {
-        const cFields = await describeFields("Contact");
-        const objs = await listCustomObjects();
-        console.log("[lp-sf-probe] contactFieldLabels=", JSON.stringify(cFields.map((f) => f.label)));
-        console.log("[lp-sf-probe] customObjects=", JSON.stringify(objs.map((o) => `${o.label} (${o.name})`)));
-        console.log("[lp-sf-probe] lpEmailsWithValue=", lps.filter((l) => l.email).length, "samples=", JSON.stringify(lps.map((l) => l.email).filter(Boolean).slice(0, 3)));
+        const probe = await salesforceLpProbe(lps.map((l) => l.investor), lps.map((l) => l.email));
+        console.log("[lp-sf-probe]", JSON.stringify(probe));
       } catch (e) {
         console.log("[lp-sf-probe] failed:", String(e).slice(0, 200));
       }

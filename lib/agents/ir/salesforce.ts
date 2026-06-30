@@ -256,6 +256,50 @@ export async function fetchLpSalesforceData(
   return { byEmail, fieldMap, matched };
 }
 
+/**
+ * Diagnostic probe: given the LP company names + emails from the schedule, report how the data
+ * lines up with Salesforce — Contact email matches vs Account NAME matches — plus the available
+ * Contact/Account field labels and custom objects. Used to find the right join + fields.
+ */
+export async function salesforceLpProbe(
+  names: string[],
+  emails: string[]
+): Promise<{
+  contactFields: string[];
+  accountFields: string[];
+  customObjects: string[];
+  contactEmailMatches: number;
+  accountNameMatches: number;
+  sampleAccountNames: string[];
+}> {
+  const contactFields = (await describeFields("Contact")).map((f) => f.label);
+  const accountFields = (await describeFields("Account")).map((f) => f.label);
+  const customObjects = (await listCustomObjects()).map((o) => `${o.label} (${o.name})`);
+
+  const cleanEmails = [...new Set(emails.map((e) => e.trim()).filter(Boolean))].slice(0, 200);
+  let contactEmailMatches = 0;
+  if (cleanEmails.length) {
+    const inList = cleanEmails.map((e) => `'${soql(e)}'`).join(",");
+    const r = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id FROM Contact WHERE Email IN (${inList})`)}`);
+    if (r.ok) contactEmailMatches = (await r.json()).totalSize ?? 0;
+  }
+
+  const cleanNames = [...new Set(names.map((n) => n.trim()).filter(Boolean))].slice(0, 200);
+  let accountNameMatches = 0;
+  const sampleAccountNames: string[] = [];
+  if (cleanNames.length) {
+    const inList = cleanNames.map((n) => `'${soql(n)}'`).join(",");
+    const r = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name FROM Account WHERE Name IN (${inList})`)}`);
+    if (r.ok) {
+      const d = await r.json();
+      accountNameMatches = d.totalSize ?? 0;
+      for (const rec of (d.records ?? []).slice(0, 5)) sampleAccountNames.push(String((rec as { Name?: unknown }).Name ?? ""));
+    }
+  }
+
+  return { contactFields, accountFields, customObjects, contactEmailMatches, accountNameMatches, sampleAccountNames };
+}
+
 /** Find a Contact Id by exact email match; returns the first match or null. */
 export async function findContactByEmail(email: string): Promise<string | null> {
   const q = `SELECT Id FROM Contact WHERE Email = '${soql(email)}' LIMIT 1`;
