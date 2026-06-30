@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, salesforceLpProbe, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, salesforceLpProbe, describeFieldsRaw, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
 
 export const dynamic = "force-dynamic";
 
@@ -221,6 +221,14 @@ export async function GET() {
         console.log("[lp-sf-probe-objs]", JSON.stringify(p.customObjects));
         console.log("[lp-sf-probe-acct]", JSON.stringify(p.accountCustomFields));
         console.log("[lp-sf-probe-contact]", JSON.stringify(p.contactCustomFields));
+        try {
+          const fund = await describeFieldsRaw("Fund__c");
+          console.log("[lp-sf-probe-fund]", JSON.stringify(fund.map((f) => `${f.label} (${f.name}) [${f.type}${f.referenceTo.length ? "->" + f.referenceTo.join("/") : ""}]`)));
+        } catch (e) { console.log("[lp-sf-probe-fund] failed", String(e).slice(0, 120)); }
+        try {
+          const acctRefs = (await describeFieldsRaw("Account")).filter((f) => f.type === "reference");
+          console.log("[lp-sf-probe-acctrefs]", JSON.stringify(acctRefs.map((f) => `${f.label} (${f.name})->${f.referenceTo.join("/")}`)));
+        } catch (e) { console.log("[lp-sf-probe-acctrefs] failed", String(e).slice(0, 120)); }
       } catch (e) {
         console.log("[lp-sf-probe] failed:", String(e).slice(0, 200));
       }

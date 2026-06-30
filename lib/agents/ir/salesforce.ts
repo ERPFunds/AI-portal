@@ -119,6 +119,23 @@ export async function describeFields(objectName: string): Promise<SfFieldInfo[]>
   }));
 }
 
+/** Describe an object's fields including reference targets — for mapping relationships (lookups). */
+export async function describeFieldsRaw(
+  objectName: string
+): Promise<{ name: string; label: string; type: string; referenceTo: string[] }[]> {
+  const res = await sfFetch(`/sobjects/${encodeURIComponent(objectName)}/describe`);
+  if (!res.ok) throw new Error(`SF describe ${objectName} ${res.status}: ${(await res.text()).slice(0, 150)}`);
+  const data = await res.json();
+  return (data.fields ?? []).map(
+    (f: { name: string; label: string; type: string; referenceTo?: string[] }) => ({
+      name: f.name,
+      label: f.label,
+      type: f.type,
+      referenceTo: f.referenceTo ?? [],
+    })
+  );
+}
+
 /** List queryable custom objects (e.g. a Commitments/Investments object where fund financials may live). */
 export async function listCustomObjects(): Promise<{ name: string; label: string }[]> {
   const res = await sfFetch(`/sobjects`);
