@@ -220,6 +220,11 @@ export async function GET() {
       if (!groups.includes(lp.group)) groups.push(lp.group);
     }
 
+    console.log("[lp-broker-result]", JSON.stringify({
+      sfMatched, sfError,
+      withBroker: lps.filter((l) => l.sfBrokerCompany || l.sfBrokerContact).length,
+      samples: lps.filter((l) => l.sfBrokerCompany || l.sfBrokerContact).slice(0, 5).map((l) => ({ n: l.investor, f: l.sfBrokerCompany, c: l.sfBrokerContact })),
+    }));
     return NextResponse.json({
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),

@@ -319,8 +319,10 @@ export async function fetchLpSalesforceData(
       `SELECT AccountId, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name ` +
       `FROM Opportunity WHERE AccountId IN (${inList}) ORDER BY CloseDate DESC NULLS LAST`;
     const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
-    if (!res.ok) continue; // broker enrichment is best-effort
-    for (const rec of ((await res.json()).records ?? []) as Record<string, unknown>[]) {
+    if (!res.ok) { console.log("[lp-opp-debug] query failed", res.status, (await res.text()).slice(0, 200)); continue; } // best-effort
+    const oppData = await res.json();
+    console.log("[lp-opp-debug] batch", (oppData.records ?? []).length, "sample", JSON.stringify((oppData.records ?? []).slice(0, 3)));
+    for (const rec of ((oppData.records ?? []) as Record<string, unknown>[])) {
       const row = byName[idToKey[String(rec.AccountId)] ?? ""];
       if (!row) continue;
       const firm = rel(rec.Partner_Advisor__r) || rel(rec.Partner_Brokerage__r) || rel(rec.Partner_Broker_Dealer__r);
