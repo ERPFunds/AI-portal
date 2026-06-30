@@ -202,6 +202,54 @@ function fieldAccessor(
 }
 
 /**
+ * Deep diagnostic: hunt for where an LP's broker/advisor is recorded in Salesforce —
+ * relationship objects, Opportunity lookups, and the LP Account's related Contacts/Opportunities.
+ * Returns compact log lines.
+ */
+export async function salesforceBrokerProbe(names: string[]): Promise<string[]> {
+  const lines: string[] = [];
+  const take = (recs: unknown, f: (r: Record<string, unknown>) => string, n = 10): string[] =>
+    Array.isArray(recs) ? recs.slice(0, n).map((r) => f(r as Record<string, unknown>)) : [];
+
+  try {
+    const r = await sfFetch(`/sobjects`);
+    if (r.ok) {
+      const objs = ((await r.json()).sobjects ?? []) as { name: string; queryable: boolean }[];
+      lines.push("relObjects=" + JSON.stringify(objs.filter((s) => s.queryable && /oppor|invest|commit|deal|relationship|broker|advisor|placement|subscription|referr|holding/i.test(s.name)).map((s) => s.name)));
+    }
+  } catch (e) { lines.push("objectsErr=" + String(e).slice(0, 100)); }
+
+  try {
+    const opp = await describeFieldsRaw("Opportunity");
+    lines.push("oppFields=" + JSON.stringify(opp.filter((f) => f.referenceTo.length || /broker|advisor|referr|\brep\b|firm|partner|source|dealer/i.test(f.label)).map((f) => `${f.label} (${f.name})${f.referenceTo.length ? "->" + f.referenceTo.join("/") : ""}`)));
+  } catch (e) { lines.push("oppErr=" + String(e).slice(0, 100)); }
+
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))].slice(0, 200);
+  if (clean.length) {
+    const inList = clean.map((n) => `'${soql(n)}'`).join(",");
+    const accRes = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name FROM Account WHERE Name IN (${inList}) LIMIT 5`)}`);
+    if (accRes.ok) {
+      const accs = ((await accRes.json()).records ?? []) as Record<string, unknown>[];
+      lines.push("sampleAccts=" + JSON.stringify(accs.map((a) => a.Name)));
+      const ids = accs.map((a) => `'${String(a.Id)}'`).join(",");
+      if (ids) {
+        try {
+          const c = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Name, Title, Account.Name FROM Contact WHERE AccountId IN (${ids})`)}`);
+          if (c.ok) lines.push("relatedContacts=" + JSON.stringify(take((await c.json()).records, (r) => `${String(r.Name)}${r.Title ? " / " + String(r.Title) : ""}`)));
+          else lines.push("contactsQ=" + c.status);
+        } catch (e) { lines.push("contactsErr=" + String(e).slice(0, 100)); }
+        try {
+          const o = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name, StageName FROM Opportunity WHERE AccountId IN (${ids})`)}`);
+          if (o.ok) { const od = await o.json(); lines.push(`relatedOpps(${od.totalSize ?? 0})=` + JSON.stringify(take(od.records, (r) => String(r.Name)))); }
+          else lines.push("oppQ=" + o.status);
+        } catch (e) { lines.push("oppsErr=" + String(e).slice(0, 100)); }
+      }
+    }
+  }
+  return lines;
+}
+
+/**
  * Resolve LP data from Salesforce ACCOUNTS, matched by the LP entity/company NAME (the
  * commitment schedule has no emails, and the LP is an Account, not a Contact). Per-investor
  * Called / Distributions / LP Type are not stored on the Account in this org, so they stay
