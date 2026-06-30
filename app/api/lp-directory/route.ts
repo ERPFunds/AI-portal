@@ -130,6 +130,9 @@ export async function GET() {
     const allRows = [rawHeaders, ...rawRows];
     const { headerRowIdx, headers, iInvestor, iCommitment, iContact, iEmail, iPhone, iNotes } =
       parseHeaders(allRows);
+    // TEMP: log the commitment-schedule column headers so we can see if broker/advisor + called/
+    // distributions live here (the realistic source, since they're not in Salesforce). Remove after.
+    console.log("[lp-schedule-headers]", JSON.stringify(headers));
 
     const dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
 
