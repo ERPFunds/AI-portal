@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getApprovedQaForPrompt } from "@/lib/agents/ir/qa-store";
 
 const client = new Anthropic();
 
@@ -45,13 +46,20 @@ export async function classifyInvestorEmail(params: {
   subject: string;
   body: string;
 }): Promise<EmailClassification> {
+  // Approved Q&A (Workflow 5) augments the base FAQ so the drafter improves as entries are approved.
+  let faqContext = FAQ_CONTEXT;
+  try {
+    const approved = await getApprovedQaForPrompt();
+    if (approved) faqContext = `${FAQ_CONTEXT}\n\nApproved investor Q&A (reviewed by the IR team — prefer these when relevant):\n${approved}`;
+  } catch { /* fall back to base FAQ if the Q&A store is unavailable */ }
+
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1500,
     system: [{ type: "text" as const, text: `You are the IR agent for ERP Industrials, a private equity real estate firm focused on industrial assets in the Permian Basin and other markets.
 You classify inbound investor emails and draft responses for Meghan Berry's review.
 
-${FAQ_CONTEXT}
+${faqContext}
 
 Rules:
 - Identify repeat/FAQ questions vs. items needing escalation to Meghan
