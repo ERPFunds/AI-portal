@@ -304,29 +304,37 @@ export async function fetchLpSalesforceData(
         brokerContact: null,
       };
       idToKey[id] = key;
+      matched++;
     }
   }
 
-  // 2) Pull broker/advisor from each LP's Opportunities (partner lookups), newest first.
-  const rel = (v: unknown): string | null => {
-    const o = v as { Name?: unknown } | null | undefined;
-    return o?.Name != null && String(o.Name).trim() ? String(o.Name) : null;
-  };
+  // 2) Pull broker/advisor from each LP's Opportunities. The partner lookups are blank in this org;
+  //    the link runs through the Opportunity's Contact, whose Account is the broker/advisor firm.
   const ids = Object.keys(idToKey);
   for (let i = 0; i < ids.length; i += 200) {
     const inList = ids.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     const q =
-      `SELECT AccountId, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name ` +
+      `SELECT AccountId, Contact.Name, Contact.Account.Name, ` +
+      `Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name ` +
       `FROM Opportunity WHERE AccountId IN (${inList}) ORDER BY CloseDate DESC NULLS LAST`;
     const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
     if (!res.ok) { console.log("[lp-opp-debug] query failed", res.status, (await res.text()).slice(0, 200)); continue; } // best-effort
     const oppData = await res.json();
     console.log("[lp-opp-debug] batch", (oppData.records ?? []).length, "sample", JSON.stringify((oppData.records ?? []).slice(0, 3)));
+    const rel = (v: unknown): string | null => {
+      const o = v as { Name?: unknown } | null | undefined;
+      return o?.Name != null && String(o.Name).trim() ? String(o.Name) : null;
+    };
     for (const rec of ((oppData.records ?? []) as Record<string, unknown>[])) {
       const row = byName[idToKey[String(rec.AccountId)] ?? ""];
       if (!row) continue;
-      const firm = rel(rec.Partner_Advisor__r) || rel(rec.Partner_Brokerage__r) || rel(rec.Partner_Broker_Dealer__r);
-      const contact = rel(rec.Partner_Advisor_Contact__r);
+      const contactObj = rec.Contact as { Name?: unknown; Account?: { Name?: unknown } } | null | undefined;
+      const firm =
+        (contactObj?.Account?.Name != null && String(contactObj.Account.Name).trim() ? String(contactObj.Account.Name) : null) ||
+        rel(rec.Partner_Advisor__r) || rel(rec.Partner_Brokerage__r) || rel(rec.Partner_Broker_Dealer__r);
+      const contact =
+        (contactObj?.Name != null && String(contactObj.Name).trim() ? String(contactObj.Name) : null) ||
+        rel(rec.Partner_Advisor_Contact__r);
       if (firm && !row.brokerCompany) row.brokerCompany = firm;
       if (contact && !row.brokerContact) row.brokerContact = contact;
     }
