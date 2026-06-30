@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getIrQaReferenceText } from "@/lib/agents/ir/qa-reference";
+import { getApprovedQaForPrompt } from "@/lib/agents/ir/qa-store";
 
 const client = new Anthropic();
 
@@ -53,6 +54,11 @@ export async function classifyInvestorEmail(params: {
     const ref = await getIrQaReferenceText();
     if (ref) faqContext = `${FAQ_CONTEXT}\n\n=== IR Q&A Reference (authoritative — follow this when answering investor questions) ===\n${ref}`;
   } catch { /* fall back to base FAQ if the reference doc is unavailable */ }
+  // Plus any Q&A the IR team has approved on the review page (Workflow 5).
+  try {
+    const approved = await getApprovedQaForPrompt();
+    if (approved) faqContext += `\n\n=== Recently approved Q&A (reviewed by the IR team) ===\n${approved}`;
+  } catch { /* non-fatal */ }
 
   const msg = await client.messages.create({
     model: "claude-opus-4-7",

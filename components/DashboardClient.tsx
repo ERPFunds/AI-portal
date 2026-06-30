@@ -322,6 +322,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     ),
     lp: <LpDirectoryView />,
     'ir-qa': <QaReviewView />,
+    'fund-qa': <FundQaView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
@@ -3322,6 +3323,51 @@ function QaReviewView() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Fund Q&A Agent (Workflow 6) ────────────────────────────────────────────────
+
+function FundQaView() {
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [thread, setThread] = useState<{ q: string; a: string; count: number }[]>([])
+  const [err, setErr] = useState<string | null>(null)
+
+  async function ask() {
+    const question = q.trim()
+    if (!question || loading) return
+    setLoading(true); setErr(null)
+    try {
+      const res = await fetch('/api/fund-qa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) })
+      const d = await res.json()
+      if (!res.ok) { setErr(d.error || 'Request failed'); return }
+      setThread(t => [{ q: question, a: d.answer ?? '', count: d.docCount ?? 0 }, ...t])
+      setQ('')
+    } catch (e) { setErr(String(e)) } finally { setLoading(false) }
+  }
+
+  return (
+    <div>
+      <div className="page-header">
+        <h2>Fund Q&amp;A</h2>
+        <p>Ask about the fund — answered only from the Investor Relations &amp; Capital documents, with sources cited inline.</p>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') ask() }} placeholder="e.g. What is the minimum investment and target hold period for Fund IV?" style={{ flex: 1, fontSize: 13, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8 }} />
+        <button onClick={ask} disabled={loading || !q.trim()} style={{ fontSize: 13, fontWeight: 600, padding: '10px 18px', borderRadius: 8, border: '1px solid #0ea5e9', background: loading ? '#e0f2fe' : '#0ea5e9', color: loading ? '#0369a1' : '#fff', cursor: loading || !q.trim() ? 'default' : 'pointer' }}>{loading ? 'Thinking…' : 'Ask'}</button>
+      </div>
+      {err && <div style={{ fontSize: 12, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 14 }}>{err}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {thread.map((it, i) => (
+          <div key={i} className="card" style={{ margin: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{it.q}</div>
+            <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{it.a}</div>
+            {it.count > 0 && <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #f3f4f6', fontSize: 10, color: '#9ca3af' }}>Answered from {it.count} fund document{it.count !== 1 ? 's' : ''} · sources cited inline</div>}
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
