@@ -2368,7 +2368,7 @@ function RentRollView() {
     const q = search.toLowerCase()
     const matchSearch = !q || p.address.toLowerCase().includes(q) || p.tenant.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q)
     return matchEntity && matchType && matchWashBay && matchSearch
-  })
+  }).sort((a, b) => (b.type === 'vacant' ? 1 : 0) - (a.type === 'vacant' ? 1 : 0)) // vacant first, otherwise keep portfolio order
 
   // Default ordering: soonest lease expiration first; no-expiry/vacant rows last
   const display = sortBy === 'portfolio' ? filtered : [...filtered].sort((a, b) => {
