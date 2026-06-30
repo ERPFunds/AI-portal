@@ -2322,7 +2322,7 @@ function RentRollView() {
   const [typeFilter, setTypeFilter] = React.useState('all')
   const [washBayFilter, setWashBayFilter] = React.useState('all')
   const [expanded, setExpanded] = React.useState<number | null>(null)
-  const [sortBy, setSortBy] = React.useState<'expiry' | 'portfolio'>('expiry')
+  const [sortBy, setSortBy] = React.useState<'expiry' | 'portfolio' | 'building'>('expiry')
 
   const [rows, setRows] = React.useState<Property[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -2390,9 +2390,15 @@ function RentRollView() {
     }
   })
 
-  // Sort: vacant first, then by sort mode
+  // Sort
   const display = [...flat].sort((a, b) => {
-    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1
+    if (sortBy === 'building') {
+      // group by building (portfolio order), units kept together and ordered by unit number
+      const so = ((a as any).sort_order ?? 0) - ((b as any).sort_order ?? 0)
+      if (so !== 0) return so
+      return (parseInt((a as any)._unitNo || '0') - parseInt((b as any)._unitNo || '0'))
+    }
+    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1 // vacant first
     if (sortBy === 'portfolio') return 0
     if (!a.leaseExpiry && !b.leaseExpiry) return 0
     if (!a.leaseExpiry) return 1
@@ -2531,9 +2537,10 @@ function RentRollView() {
           <option value="Yes">Wash Bay: Yes</option>
           <option value="No">Wash Bay: No</option>
         </select>
-        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'expiry' | 'portfolio')}
+        <select value={sortBy} onChange={e => setSortBy(e.target.value as 'expiry' | 'portfolio' | 'building')}
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
           <option value="expiry">Sort: Lease expiry (soonest)</option>
+          <option value="building">Sort: Building (group units)</option>
           <option value="portfolio">Sort: Portfolio order</option>
         </select>
         {(entityFilter !== 'all' || typeFilter !== 'all' || washBayFilter !== 'all' || search) && (
