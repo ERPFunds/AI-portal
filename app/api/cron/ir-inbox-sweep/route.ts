@@ -11,6 +11,7 @@ import {
 } from "@/lib/agents/ir/graph-mailbox";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
+import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
 import { saveDraftWithAttachments } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
 import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
@@ -85,7 +86,21 @@ async function handleMailbox(
   let investorCount = 0;
 
   for (const m of todo) {
-    const verdict = await classifyInquiry({ from: m.fromAddress, subject: m.subject, body: m.bodyPreview });
+    // Unwrap forwarded IR emails (e.g. forwarded into team@) so we classify the ORIGINAL
+    // investor + their message, not the internal person who forwarded it.
+    let fromAddr = m.fromAddress;
+    let bodyText = m.bodyPreview;
+    {
+      const uw = unwrapForward({ subject: m.subject, body: m.bodyPreview, from: m.fromAddress });
+      if (uw.isForward) {
+        const full = await getMessageBodyText(mailbox, m.id);
+        const uw2 = unwrapForward({ subject: m.subject, body: full || m.bodyPreview, from: m.fromAddress });
+        fromAddr = uw2.originalFrom;
+        bodyText = uw2.content || m.bodyPreview;
+      }
+    }
+
+    const verdict = await classifyInquiry({ from: fromAddr, subject: m.subject, body: bodyText });
     if (!verdict.isInvestorInquiry) {
       if (!dryRun) {
         await markMessageProcessed({
@@ -96,7 +111,7 @@ async function handleMailbox(
           action: "ignored",
         });
       }
-      details.push(`IGNORE ${m.fromAddress} — ${verdict.reason}`);
+      details.push(`IGNORE ${fromAddr} — ${verdict.reason}`);
       continue;
     }
 
@@ -104,15 +119,15 @@ async function handleMailbox(
 
     // Investor email: classify for routing + draft (escalate XOR forwarded-drafts).
     const triage = await classifyInvestorEmail({
-      from: m.fromAddress,
+      from: fromAddr,
       subject: m.subject,
-      body: m.bodyPreview,
+      body: bodyText,
     });
     const route = triage.isEscalation ? "escalate" : "draft";
 
     if (dryRun) {
       details.push(
-        `INVESTOR(dry) ${m.fromAddress} (${verdict.contact.firstName ?? ""} ${verdict.contact.lastName}) ` +
+        `INVESTOR(dry) ${fromAddr} (${verdict.contact.firstName ?? ""} ${verdict.contact.lastName}) ` +
           `→ ${route}${triage.isEscalation ? ` [${triage.escalationReason ?? triage.category}]` : ""} — ${verdict.reason}`
       );
       continue;
@@ -124,7 +139,10 @@ async function handleMailbox(
     // 1) drop a triaged COPY into the team hub's matching IR subfolder (Escalate XOR Forwarded
     //    Drafts), kept unread, so it surfaces in the portal Agent Inbox. The original stays in
     //    the source mailbox's IR subfolder (step 4) — i.e. a copy lives in BOTH places.
-    try {
+    if (mailbox === TEAM_INBOX) {
+      // Source IS the team hub (e.g. a forwarded email) — step 4 already files it here; no copy needed.
+      actions.push("team-copy-skip(source=team hub)");
+    } else try {
       let teamDestId: string | null;
       if (route === "escalate") {
         if (teamEscalateFolderId === undefined) teamEscalateFolderId = await resolveSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
@@ -152,11 +170,11 @@ async function handleMailbox(
     // 2) Salesforce: find-or-create the Contact + log a correspondence Task (direct REST)
     actions.push(
       await logToSalesforce({
-        investorEmail: m.fromAddress,
+        investorEmail: fromAddr,
         firstName: verdict.contact.firstName ?? "",
         lastName: verdict.contact.lastName,
         subject: m.subject,
-        snippet: m.bodyPreview.slice(0, 500),
+        snippet: bodyText.slice(0, 500),
         receivedDate: m.receivedDateTime,
         sourceMailbox: mailbox,
       })
@@ -168,8 +186,8 @@ async function handleMailbox(
     //    files attached automatically — Meghan reviews and sends.
     try {
       if (triage.isDueDiligence) {
-        const fullBody = (await getMessageBodyText(mailbox, m.id)) || m.bodyPreview;
-        const dd = await buildDueDiligenceReply({ from: m.fromAddress, subject: m.subject, body: fullBody });
+        const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
+        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody });
         const atts: { filename: string; mimeType: string; bytes: Buffer }[] = [];
         for (const a of dd.attachments) {
           const bytes = await getAnthropicFileBytes(a.fileId);
@@ -177,7 +195,7 @@ async function handleMailbox(
         }
         const r = await saveDraftWithAttachments({
           mailboxEmail: TEAM_INBOX,
-          toEmail: m.fromAddress,
+          toEmail: fromAddr,
           subject: dd.draftSubject,
           htmlBody: dd.draftHtml || triage.draftHtml,
           attachments: atts,
@@ -185,7 +203,7 @@ async function handleMailbox(
         actions.push(`dd-drafted(${r.attached.length} attached${r.failed.length ? `, ${r.failed.length} failed` : ""})`);
       } else {
         const d = await saveDraftToOutlook({
-          toEmail: m.fromAddress,
+          toEmail: fromAddr,
           mailboxEmail: TEAM_INBOX,
           subject: triage.draftSubject || `Re: ${m.subject}`,
           htmlBody: triage.draftHtml,
