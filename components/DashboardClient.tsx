@@ -3400,6 +3400,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
+  const [open, setOpen] = useState(false)
 
   const fetchDocs = async () => {
     try {
@@ -3442,7 +3443,11 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
         transform: hover ? 'translateY(-1px)' : 'none',
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+      <div
+        onClick={() => setOpen((o) => !o)}
+        style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
+        title={open ? 'Collapse' : 'Expand'}
+      >
         <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{kb.icon}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>{kb.label}</div>
@@ -3451,9 +3456,13 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
             {kb.agents.map((a) => <span key={a} className="badge badge-blue" style={{ fontSize: 9 }}>{a}</span>)}
           </div>
         </div>
-        <span style={{ fontSize: 11, fontWeight: 600, color: docs.length ? '#0e7490' : '#9ca3af', background: docs.length ? '#ecfeff' : '#f3f4f6', border: `1px solid ${docs.length ? '#a5f3fc' : '#e5e7eb'}`, borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: docs.length ? '#0e7490' : '#9ca3af', background: docs.length ? '#ecfeff' : '#f3f4f6', border: `1px solid ${docs.length ? '#a5f3fc' : '#e5e7eb'}`, borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap' }}>{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
+          <span style={{ fontSize: 11, color: '#9ca3af', transform: open ? 'rotate(90deg)' : 'none', transition: 'transform .15s ease' }}>▸</span>
+        </div>
       </div>
 
+      {open && <>
       {/* Upload zone */}
       <label
         className={`upload-zone${dragging ? ' drag-over' : ''}`}
@@ -3484,6 +3493,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
       ) : (
         <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', padding: '2px 0 4px' }}>No documents yet</div>
       )}
+      </>}
     </div>
   )
 }
