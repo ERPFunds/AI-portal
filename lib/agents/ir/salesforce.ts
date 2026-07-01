@@ -151,8 +151,10 @@ export interface LpSfData {
   lpType: string | null;
   called: number | null;
   distributions: number | null;
-  brokerCompany: string | null;
-  brokerContact: string | null;
+  brokerCompany: string | null;   // LP primary contact's firm (from the contact->Account resolution)
+  brokerContact: string | null;   // LP primary contact's name
+  advisorFirm: string | null;     // real broker/advisor firm (from the LP's Opportunity partner fields)
+  advisorContact: string | null;  // broker/advisor rep
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -302,6 +304,8 @@ export async function fetchLpSalesforceData(
         distributions: distribName ? toNum(rec[distribName]) : null,
         brokerCompany: null,
         brokerContact: null,
+        advisorFirm: null,
+        advisorContact: null,
       };
       idToKey[id] = key;
       matched++;
@@ -312,6 +316,28 @@ export async function fetchLpSalesforceData(
     const o = v as { Name?: unknown } | null | undefined;
     return o?.Name != null && String(o.Name).trim() ? String(o.Name) : null;
   };
+
+  // 1b) LP Type + real broker/advisor from each LP's Opportunity (Account = the LP; the Partner_*
+  //     lookups point to the broker/advisor Account; Type = the Investment Type e.g. "DST").
+  const accIds = Object.keys(idToKey);
+  for (let i = 0; i < accIds.length; i += 200) {
+    const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
+    try {
+      const oq = `SELECT AccountId, Type, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
+      const ores = await sfFetch(`/query?q=${encodeURIComponent(oq)}`);
+      if (!ores.ok) { console.log("[lp-opp] query", ores.status, (await ores.text()).slice(0, 150)); continue; }
+      for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
+        const row = byName[idToKey[String(o.AccountId)] ?? ""];
+        if (!row) continue;
+        if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
+        const firm = rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r) || rel(o.Partner_Broker_Dealer__r);
+        const repName = rel(o.Partner_Advisor_Contact__r);
+        if (firm && !row.advisorFirm) row.advisorFirm = firm;
+        if (repName && !row.advisorContact) row.advisorContact = repName;
+      }
+    } catch (e) { console.log("[lp-opp] err", String(e).slice(0, 120)); }
+  }
+  if (!fieldMap.lpType) fieldMap.lpType = "Opportunity.Type";
 
   // 2) Broker/advisor: each LP's primary contact (from the schedule) is a Salesforce Contact whose
   //    Account is the broker/advisor firm. Match Contacts by name, then map back to each LP row.

@@ -26,6 +26,8 @@ export interface LpRecord {
   sfCrmId: string | null;
   sfBrokerCompany: string | null;
   sfBrokerContact: string | null;
+  sfAdvisorFirm: string | null;
+  sfAdvisorContact: string | null;
   brokerFirm: string;
   brokerContact: string;
 }
@@ -178,6 +180,7 @@ export async function GET() {
         lastInteraction: null,
         sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
         sfBrokerCompany: null, sfBrokerContact: null,
+        sfAdvisorFirm: null, sfAdvisorContact: null,
         brokerFirm, brokerContact,
       });
     }
@@ -208,6 +211,8 @@ export async function GET() {
           lp.sfDistributions = sf.distributions;
           lp.sfBrokerCompany = sf.brokerCompany;
           lp.sfBrokerContact = sf.brokerContact;
+          lp.sfAdvisorFirm = sf.advisorFirm;
+          lp.sfAdvisorContact = sf.advisorContact;
         }
       } catch (e) {
         sfError = String(e).slice(0, 200);

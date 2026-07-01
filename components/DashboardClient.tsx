@@ -1685,6 +1685,7 @@ interface LpRecord {
   lastInteraction: { date: string; note: string; source: 'ir' | 'sf' } | null;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
   sfBrokerCompany: string | null; sfBrokerContact: string | null;
+  sfAdvisorFirm: string | null; sfAdvisorContact: string | null;
   brokerFirm: string; brokerContact: string;
 }
 interface LpDirectoryData {
@@ -1919,7 +1920,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
                       {(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
@@ -1947,16 +1948,32 @@ function LpDirectoryView() {
                         )}
                       </td>
 
-                      {/* Broker / Advisor — firm + rep (editable, saved to the schedule) */}
+                      {/* LP Primary Contact — the LP's own contact + firm, from Salesforce (read-only) */}
+                      <td style={{ padding: '11px 14px', maxWidth: 180 }}>
+                        {(() => {
+                          const contact = lp.sfBrokerContact
+                          const firm = lp.sfBrokerCompany
+                          return (firm || contact) ? (
+                            <>
+                              {contact && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{contact}</div>}
+                              {firm && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{firm}</div>}
+                            </>
+                          ) : (
+                            <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
+                          )
+                        })()}
+                      </td>
+
+                      {/* Broker / Advisor — real broker from the LP's Salesforce Opportunity; editable override saved to the schedule */}
                       <td style={{ padding: '11px 14px', maxWidth: 180 }}>
                         {isEditing ? (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                             <input value={ev.brokerFirm} onChange={e => setEditValues(v => ({ ...v, brokerFirm: e.target.value }))} placeholder="Broker/advisor firm" style={inputStyle} />
-                            <input value={ev.brokerContact} onChange={e => setEditValues(v => ({ ...v, brokerContact: e.target.value }))} placeholder="Broker/advisor contact" style={inputStyle} />
+                            <input value={ev.brokerContact} onChange={e => setEditValues(v => ({ ...v, brokerContact: e.target.value }))} placeholder="Broker/advisor rep" style={inputStyle} />
                           </div>
                         ) : (() => {
-                          const firm = lp.brokerFirm || lp.sfBrokerCompany
-                          const contact = lp.brokerContact || lp.sfBrokerContact
+                          const firm = lp.brokerFirm || lp.sfAdvisorFirm
+                          const contact = lp.brokerContact || lp.sfAdvisorContact
                           return (firm || contact) ? (
                             <>
                               {firm && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{firm}</div>}
