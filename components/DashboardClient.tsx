@@ -322,7 +322,6 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     ),
     lp: <LpDirectoryView />,
     'ir-qa': <QaReviewView />,
-    'fund-qa': <FundQaView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
@@ -2081,13 +2080,25 @@ function LpDirectoryView() {
 }
 
 // ─── Brokerage Newsletter Creator ────────────────────────────────────────────
-const BROKERAGE_TEMPLATES = [
+type NewsletterTemplate = {
+  id: string
+  name: string
+  audience: string
+  frequency: string
+  description: string
+  group: string
+  grounded?: boolean   // when true, drafts are pulled from the fund-document KB
+  sections: { title: string; hint: string }[]
+}
+
+const NEWSLETTER_TEMPLATES: NewsletterTemplate[] = [
   {
     id: 'availability-blast',
     name: 'Availability Blast',
     audience: 'Broker Network',
     frequency: 'As needed',
     description: 'Available space blast to active brokers — new listings, lease terms, contact',
+    group: 'Brokerage',
     sections: [
       { title: 'Subject Line Hook',       hint: 'Punchy 1-liner brokers will open (e.g. "New ±24,000 SF IOS Available — Midland, TX")' },
       { title: 'Property Highlights',     hint: 'Address, size, clear height, dock doors, yard depth, power, zoning, asking rent NNN' },
@@ -2102,6 +2113,7 @@ const BROKERAGE_TEMPLATES = [
     audience: 'Broker Network + Tenants',
     frequency: 'Per listing',
     description: 'Featured property deep-dive for a single asset — ideal for larger or strategic availabilities',
+    group: 'Brokerage',
     sections: [
       { title: 'Property Overview',       hint: 'Asset name, address, submarket, total SF, year built / renovated' },
       { title: 'Space Details',           hint: 'Office SF, warehouse SF, clear height, dock-high doors, drive-in doors, sprinkler, power' },
@@ -2117,6 +2129,7 @@ const BROKERAGE_TEMPLATES = [
     audience: 'Broker Network',
     frequency: 'Quarterly',
     description: 'Portfolio-level update for the broker network — leasing activity, new availabilities, market color',
+    group: 'Brokerage',
     sections: [
       { title: 'Quarter in Review',       hint: '2–3 sentences: leases signed, SF absorbed, notable deals this quarter' },
       { title: 'Current Availabilities',  hint: 'Table or bullets: property, SF, asking rent, available date — Permian and Brevard' },
@@ -2131,6 +2144,7 @@ const BROKERAGE_TEMPLATES = [
     audience: 'Prospects + Tenants',
     frequency: 'Per listing',
     description: 'Clean single-property announcement for direct prospect outreach and CoStar/LoopNet syndication copy',
+    group: 'Brokerage',
     sections: [
       { title: 'Headline',                hint: 'e.g. "±18,500 SF Industrial / IOS Available — Palm Bay, FL"' },
       { title: 'Property Summary',        hint: '3–4 sentences: what it is, where it is, what makes it special' },
@@ -2139,17 +2153,50 @@ const BROKERAGE_TEMPLATES = [
       { title: 'Next Steps',              hint: 'Tour contact, OM availability, deadline or urgency if applicable' },
     ],
   },
+  {
+    id: 'fund-iv-announcement',
+    name: 'Fund IV Announcement',
+    audience: 'Investors + Prospects',
+    frequency: 'As needed',
+    description: 'Investor email announcing Fund IV — drafted from the Investor Relations & Capital fund documents, with sources cited',
+    group: 'Fund IV / Investor',
+    grounded: true,
+    sections: [
+      { title: 'Subject Line',        hint: 'Compelling open for an investor announcement (e.g. "Now Open: ERP Industrial Portfolio IV")' },
+      { title: 'Opening',             hint: '1–2 sentences: what is being announced and why it matters to investors' },
+      { title: 'Fund IV Highlights',  hint: 'Key terms pulled from the docs — strategy, target raise, structure, minimum, hold period' },
+      { title: 'The Opportunity',     hint: 'The investment thesis / market rationale as stated in the fund materials' },
+      { title: 'Next Steps',          hint: 'How to learn more or commit — contact, data room, deadline (placeholders where not in docs)' },
+    ],
+  },
+  {
+    id: 'fund-iv-investor-update',
+    name: 'Fund IV Investor Update',
+    audience: 'Current LPs',
+    frequency: 'Quarterly',
+    description: 'Update to existing LPs on Fund IV — grounded in the latest fund updates, schedules, and capital materials',
+    group: 'Fund IV / Investor',
+    grounded: true,
+    sections: [
+      { title: 'Subject Line',        hint: 'e.g. "ERP Fund IV — Q[X] Investor Update"' },
+      { title: 'Portfolio Update',    hint: 'Recent acquisitions, leasing, or performance as reported in the fund documents' },
+      { title: 'Capital & Commitments', hint: 'Raise progress, commitments, or capital call status if present in the docs' },
+      { title: 'Looking Ahead',       hint: 'Pipeline and upcoming milestones drawn from the materials' },
+      { title: 'Contact',             hint: 'IR contact for questions (use [CONTACT] if not specified in docs)' },
+    ],
+  },
 ]
 
 function BrokerageNewsletterView() {
-  const [selectedId, setSelectedId] = React.useState(BROKERAGE_TEMPLATES[0].id)
+  const [selectedId, setSelectedId] = React.useState(NEWSLETTER_TEMPLATES[0].id)
   const [tab, setTab] = React.useState<'edit' | 'preview'>('edit')
   const [subject, setSubject] = React.useState('')
   const [sections, setSections] = React.useState<Record<string, string>>({})
   const [generating, setGenerating] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+  const [genError, setGenError] = React.useState<string | null>(null)
 
-  const tpl = BROKERAGE_TEMPLATES.find(p => p.id === selectedId) ?? BROKERAGE_TEMPLATES[0]
+  const tpl = NEWSLETTER_TEMPLATES.find(p => p.id === selectedId) ?? NEWSLETTER_TEMPLATES[0]
 
   React.useEffect(() => {
     setSubject(`${tpl.name} — ${new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}`)
@@ -2163,22 +2210,38 @@ function BrokerageNewsletterView() {
 
   async function handleGenerate() {
     setGenerating(true)
-    const prompt = `Write a ${tpl.name} for ERP Funds, an industrial CRE firm with properties in the Permian Basin (Midland-Odessa TX) and Brevard County FL. Audience: ${tpl.audience}. Format with clear section headings matching exactly: ${tpl.sections.map(s => s.title).join(', ')}. Tone: direct, professional, broker-friendly. Use placeholder values like [ADDRESS], [SF], [RATE] where specifics are needed.`
+    setGenError(null)
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
-      })
-      if (!res.ok) throw new Error()
-      const reader = res.body?.getReader()
-      if (!reader) throw new Error()
       let raw = ''
-      const decoder = new TextDecoder()
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        raw += decoder.decode(value, { stream: true })
+      if (tpl.grounded) {
+        // Fund IV / investor templates: draft from the fund-document knowledge base, with sources cited.
+        const res = await fetch('/api/fund-newsletter', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            instruction: `Draft a "${tpl.name}" email for ERP Industrials' Fund IV. Audience: ${tpl.audience}. Use these exact section headings, in order: ${tpl.sections.map(s => s.title).join(', ')}.`,
+            sectionTitles: tpl.sections.map(s => s.title),
+          }),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Draft failed')
+        raw = data.draft ?? ''
+      } else {
+        const prompt = `Write a ${tpl.name} for ERP Funds, an industrial CRE firm with properties in the Permian Basin (Midland-Odessa TX) and Brevard County FL. Audience: ${tpl.audience}. Format with clear section headings matching exactly: ${tpl.sections.map(s => s.title).join(', ')}. Tone: direct, professional, broker-friendly. Use placeholder values like [ADDRESS], [SF], [RATE] where specifics are needed.`
+        const res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ messages: [{ role: 'user', content: prompt }] }),
+        })
+        if (!res.ok) throw new Error('Generation failed')
+        const reader = res.body?.getReader()
+        if (!reader) throw new Error('Generation failed')
+        const decoder = new TextDecoder()
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          raw += decoder.decode(value, { stream: true })
+        }
       }
       const newSecs: Record<string, string> = {}
       tpl.sections.forEach((sec, i) => {
@@ -2189,7 +2252,7 @@ function BrokerageNewsletterView() {
       })
       if (Object.values(newSecs).some(v => v)) setSections(newSecs)
       else setSections({ [tpl.sections[0].title]: raw, ...Object.fromEntries(tpl.sections.slice(1).map(s => [s.title, ''])) })
-    } catch { /* silent */ }
+    } catch (e) { setGenError(e instanceof Error ? e.message : 'Generation failed') }
     finally { setGenerating(false) }
   }
 
@@ -2212,22 +2275,31 @@ function BrokerageNewsletterView() {
   return (
     <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
       <div style={{ width: 210, flexShrink: 0, borderRight: '1px solid #e5e7eb', overflowY: 'auto', padding: '20px 10px' }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10, paddingLeft: 8 }}>Brokerage Templates</div>
-        {BROKERAGE_TEMPLATES.map(p => (
-          <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
-            width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', marginBottom: 3,
-            background: selectedId === p.id ? '#f0f7f8' : 'transparent',
-            borderLeft: selectedId === p.id ? `3px solid ${TEAL}` : '3px solid transparent',
-            cursor: 'pointer',
-          }}>
-            <div style={{ fontSize: 12, fontWeight: selectedId === p.id ? 700 : 500, color: selectedId === p.id ? NAVY : '#374151' }}>{p.name}</div>
-            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{p.audience}</div>
-          </button>
+        {[...new Set(NEWSLETTER_TEMPLATES.map(p => p.group))].map((group, gi) => (
+          <div key={group} style={{ marginTop: gi === 0 ? 0 : 14 }}>
+            <div style={{ fontSize: 10, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 10, paddingLeft: 8 }}>{group}</div>
+            {NEWSLETTER_TEMPLATES.filter(p => p.group === group).map(p => (
+              <button key={p.id} onClick={() => setSelectedId(p.id)} style={{
+                width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, border: 'none', marginBottom: 3,
+                background: selectedId === p.id ? '#f0f7f8' : 'transparent',
+                borderLeft: selectedId === p.id ? `3px solid ${TEAL}` : '3px solid transparent',
+                cursor: 'pointer',
+              }}>
+                <div style={{ fontSize: 12, fontWeight: selectedId === p.id ? 700 : 500, color: selectedId === p.id ? NAVY : '#374151' }}>{p.name}{p.grounded ? ' 🔎' : ''}</div>
+                <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{p.audience}</div>
+              </button>
+            ))}
+          </div>
         ))}
         <div style={{ margin: '16px 8px 10px', height: 1, background: '#e5e7eb' }} />
         <div style={{ padding: '2px 8px' }}>
           <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 6 }}>About</div>
           <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.5 }}>{tpl.description}</div>
+          {tpl.grounded && (
+            <div style={{ fontSize: 10, color: '#0e7490', background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 6, padding: '6px 8px', marginTop: 8, lineHeight: 1.45 }}>
+              🔎 Generate Draft pulls from the Investor Relations &amp; Capital fund documents, with sources cited inline.
+            </div>
+          )}
         </div>
       </div>
 
@@ -2251,6 +2323,9 @@ function BrokerageNewsletterView() {
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+          {genError && (
+            <div style={{ fontSize: 12, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 16 }}>{genError}</div>
+          )}
           {tab === 'edit' ? (
             <div>
               <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.8px', marginBottom: 16 }}>
@@ -3510,51 +3585,6 @@ function QaReviewView() {
           ))}
         </div>
       )}
-    </div>
-  )
-}
-
-// ─── Fund Q&A Agent (Workflow 6) ────────────────────────────────────────────────
-
-function FundQaView() {
-  const [q, setQ] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [thread, setThread] = useState<{ q: string; a: string; count: number }[]>([])
-  const [err, setErr] = useState<string | null>(null)
-
-  async function ask() {
-    const question = q.trim()
-    if (!question || loading) return
-    setLoading(true); setErr(null)
-    try {
-      const res = await fetch('/api/fund-qa', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question }) })
-      const d = await res.json()
-      if (!res.ok) { setErr(d.error || 'Request failed'); return }
-      setThread(t => [{ q: question, a: d.answer ?? '', count: d.docCount ?? 0 }, ...t])
-      setQ('')
-    } catch (e) { setErr(String(e)) } finally { setLoading(false) }
-  }
-
-  return (
-    <div>
-      <div className="page-header">
-        <h2>Fund Q&amp;A</h2>
-        <p>Ask about the fund — answered only from the Investor Relations &amp; Capital documents, with sources cited inline.</p>
-      </div>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') ask() }} placeholder="e.g. What is the minimum investment and target hold period for Fund IV?" style={{ flex: 1, fontSize: 13, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 8 }} />
-        <button onClick={ask} disabled={loading || !q.trim()} style={{ fontSize: 13, fontWeight: 600, padding: '10px 18px', borderRadius: 8, border: '1px solid #0ea5e9', background: loading ? '#e0f2fe' : '#0ea5e9', color: loading ? '#0369a1' : '#fff', cursor: loading || !q.trim() ? 'default' : 'pointer' }}>{loading ? 'Thinking…' : 'Ask'}</button>
-      </div>
-      {err && <div style={{ fontSize: 12, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 14 }}>{err}</div>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {thread.map((it, i) => (
-          <div key={i} className="card" style={{ margin: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginBottom: 8 }}>{it.q}</div>
-            <div style={{ fontSize: 13, color: '#374151', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{it.a}</div>
-            {it.count > 0 && <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #f3f4f6', fontSize: 10, color: '#9ca3af' }}>Answered from {it.count} fund document{it.count !== 1 ? 's' : ''} · sources cited inline</div>}
-          </div>
-        ))}
-      </div>
     </div>
   )
 }
