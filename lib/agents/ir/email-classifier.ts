@@ -47,7 +47,9 @@ export async function classifyInvestorEmail(params: {
   from: string;
   subject: string;
   body: string;
+  signAs?: string;
 }): Promise<EmailClassification> {
+  const signer = params.signAs || "Meghan Berry";
   // Reference the team-maintained IR Q&A doc (SOP section) on every draft, so replies
   // follow the current approved answers. Non-fatal if the doc is unavailable.
   let faqContext = FAQ_CONTEXT;
@@ -65,17 +67,18 @@ export async function classifyInvestorEmail(params: {
     model: "claude-opus-4-7",
     max_tokens: 1500,
     system: [{ type: "text" as const, text: `You are the IR agent for ERP Industrials, a private equity real estate firm focused on industrial assets in the Permian Basin and other markets.
-You classify inbound investor emails and draft responses for Meghan Berry's review.
+You classify inbound investor emails and draft responses for the IR team's review.
 
 ${faqContext}
 
 Rules:
-- Identify repeat/FAQ questions vs. items needing escalation to Meghan
-- Draft responses in a warm, professional tone as if from Meghan's office
+- Identify repeat/FAQ questions vs. items needing escalation to a human
+- Draft responses in a warm, professional tone as if from ${signer}'s office
 - NEVER include specific financial figures you don't have — redirect to portal or support contact
-- All drafts are saved for Meghan's review — she approves before sending. Never auto-send.
+- All drafts are saved for review — the IR team approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
-- Sign off as "Meghan Berry" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under her name)
+- Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
+- If you cannot answer substantively from the Q&A reference or approved answers — i.e., the best you could do is a filler acknowledgment, a "thanks, noted", or an "I'm flagging this for review" message — then set isEscalation=true and return an EMPTY string for draftHtml. Only write a draft when you can give a genuinely useful, substantive reply. NEVER write placeholder or acknowledgment-only drafts.
 
 Return a JSON object with exactly these fields:
 {

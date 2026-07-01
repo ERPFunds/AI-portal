@@ -88,6 +88,8 @@ async function handleMailbox(
   let teamEscalateFolderId: string | null | undefined;
   let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
+  // Draft/sign-off owner = whose mailbox this is (William signs William's, Meghan signs the rest).
+  const signer = mailbox.toLowerCase().includes("wmeyer") ? "William Meyer" : "Meghan Berry";
 
   for (const m of todo) {
     // Unwrap forwarded IR emails (e.g. forwarded into team@) so we classify the ORIGINAL
@@ -126,6 +128,7 @@ async function handleMailbox(
       from: fromAddr,
       subject: m.subject,
       body: bodyText,
+      signAs: signer,
     });
     const route = triage.isEscalation ? "escalate" : "draft";
 
@@ -184,11 +187,13 @@ async function handleMailbox(
       })
     );
 
-    // 3) prepare a draft reply in the team hub's Drafts for review (never auto-sent) — both routes.
+    // 3) prepare a draft reply ONLY for the routine (Forwarded Drafts) route. Escalations get NO
+    //    draft — if the AI can't answer substantively it escalates, and the human handles it from
+    //    the Escalate folder (no filler "thanks, flagging this for review" replies).
     //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
-    //    Due-diligence inquiries get a fund-doc-grounded answer (RAG) with the relevant source
-    //    files attached automatically — Meghan reviews and sends.
-    try {
+    if (route !== "draft") {
+      actions.push("escalate-no-draft");
+    } else try {
       if (triage.isDueDiligence) {
         const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
         const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody });
