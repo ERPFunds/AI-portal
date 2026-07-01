@@ -82,12 +82,23 @@ function toItem(
   };
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // On-demand full body for one message (the list only carries the short bodyPreview).
+  const messageId = req.nextUrl.searchParams.get("message");
+  if (messageId) {
+    try {
+      const m = await getMessageBody(TEAM_MAILBOX, messageId);
+      return NextResponse.json({ id: messageId, subject: m.subject, to: m.to, body: m.bodyText });
+    } catch (err) {
+      return NextResponse.json({ error: String(err) }, { status: 500 });
+    }
+  }
 
   const diagnostics: Record<string, unknown> = { mailbox: TEAM_MAILBOX, irFolder: IR_FOLDER };
 

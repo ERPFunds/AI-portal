@@ -1119,6 +1119,8 @@ function InboxView({
   const [folderFilter, setFolderFilter] = useState('All')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendMsg, setSendMsg] = useState<string | null>(null)
+  const [bodyCache, setBodyCache] = useState<Record<string, string>>({})
+  const [bodyLoading, setBodyLoading] = useState(false)
   const [backfilling, setBackfilling] = useState(false)
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null)
 
@@ -1197,6 +1199,20 @@ function InboxView({
     return true
   })
   const selected = filtered[selectedInboxIdx]
+
+  // Fetch the full message body on open (the list only carries a short preview).
+  React.useEffect(() => {
+    const id = selected?.id
+    if (!id || bodyCache[id] !== undefined) return
+    let cancelled = false
+    setBodyLoading(true)
+    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [id]: d.body })) })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setBodyLoading(false) })
+    return () => { cancelled = true }
+  }, [selected?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
   const subtitle = error
     ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
@@ -1304,7 +1320,7 @@ function InboxView({
                     {selected.isDraft ? `Draft to: ${selected.to.join(', ') || '—'}` : `From: ${selected.from}`}
                   </div>
                   <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                    {selected.preview || '(no preview available)'}
+                    {bodyCache[selected.id] ?? (bodyLoading ? 'Loading…' : (selected.preview || '(no preview available)'))}
                   </div>
                 </div>
               </div>
