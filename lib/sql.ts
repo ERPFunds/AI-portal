@@ -16,7 +16,7 @@ let pool: Pool | null = null;
 
 function getPool(): Pool {
   if (pool) return pool;
-  const connectionString =
+  let connectionString =
     process.env.SUPABASE_DB_URL ||
     process.env.POSTGRES_URL ||
     process.env.POSTGRES_URL_NON_POOLING ||
@@ -26,12 +26,23 @@ function getPool(): Pool {
       "No database connection string configured. Set SUPABASE_DB_URL to the Supabase Postgres connection string."
     );
   }
+  // Drop any sslmode/ssl query params so our explicit `ssl` config below governs. Newer `pg`
+  // treats sslmode=require/verify-ca as verify-full, which validates the chain and fails with
+  // "self-signed certificate in certificate chain" against Supabase's pooler cert.
+  try {
+    const u = new URL(connectionString);
+    u.searchParams.delete("sslmode");
+    u.searchParams.delete("ssl");
+    connectionString = u.toString();
+  } catch {
+    connectionString = connectionString.replace(/([?&])sslmode=[^&]*/gi, "$1").replace(/[?&]$/, "");
+  }
   pool = new Pool({
     connectionString,
     max: 3,
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 10_000,
-    // Supabase requires TLS; its pooler cert is not in the default CA bundle.
+    // Supabase requires TLS; its pooler cert is not in the default CA bundle, so don't verify it.
     ssl: { rejectUnauthorized: false },
   });
   return pool;
