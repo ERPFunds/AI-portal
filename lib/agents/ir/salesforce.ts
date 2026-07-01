@@ -102,6 +102,24 @@ function soql(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
 }
 
+// Entity/trust name noise words stripped before name matching, so what remains is person names.
+const NAME_STOP = new Set([
+  "the", "and", "of", "for", "trust", "trustee", "trustees", "family", "revocable", "irrevocable",
+  "living", "dated", "created", "estate", "llc", "lp", "llp", "inc", "co", "company", "corp",
+  "partnership", "partners", "fund", "properties", "property", "associates", "holdings", "group",
+  "investments", "investment", "capital", "ii", "iii", "iv", "jr", "sr", "dds", "md", "phd", "esq",
+  "january", "february", "march", "april", "may", "june", "july", "august", "september", "october",
+  "november", "december", "revocable",
+]);
+
+/** Significant name tokens (surnames / first names) from an entity or person name, for matching. */
+function personTokens(s: string): Set<string> {
+  return new Set(
+    (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/)
+      .filter((w) => w.length >= 3 && !/^\d+$/.test(w) && !NAME_STOP.has(w))
+  );
+}
+
 export interface SfFieldInfo {
   name: string;   // API name, e.g. "Capital_Called__c"
   label: string;  // human label, e.g. "Capital Called"
@@ -325,7 +343,6 @@ export async function fetchLpSalesforceData(
   //     lookups point to the broker/advisor Account; Type = the Investment Type e.g. "DST").
   const accIds = Object.keys(idToKey);
   let oppCount = 0, oppWithPartner = 0;
-  const oppRawSamples: unknown[] = [];
   for (let i = 0; i < accIds.length; i += 200) {
     const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     try {
@@ -335,7 +352,6 @@ export async function fetchLpSalesforceData(
       for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
         oppCount++;
         if (o.Partner_Advisor__r || o.Partner_Brokerage__r || o.Partner_Broker_Dealer__r || o.Partner_Advisor_Contact__r) oppWithPartner++;
-        if (oppRawSamples.length < 4) oppRawSamples.push({ acct: idToKey[String(o.AccountId)], type: o.Type, adv: o.Partner_Advisor__r, brk: o.Partner_Brokerage__r, bd: o.Partner_Broker_Dealer__r });
         const row = byName[idToKey[String(o.AccountId)] ?? ""];
         if (!row) continue;
         if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
@@ -348,24 +364,58 @@ export async function fetchLpSalesforceData(
       }
     } catch (e) { console.log("[lp-opp] err", String(e).slice(0, 120)); }
   }
-  // TEMP global probe: which Account.Names actually carry a Partner_Broker_Dealer? Reveals the
-  // real spelling so we can see why they miss the schedule name-match.
+  // 1c) Cross-product broker match. Brokers live on the DST/1031 book — a DIFFERENT set of accounts
+  //     than the Fund IV schedule (e.g. "The Weisenseel Family Trust" => Concorde). Fetch that book
+  //     and match each Fund IV LP to it by PERSON-NAME tokens (surnames/first names), conservatively
+  //     so common surnames (Brown, Davis) don't cross-attribute.
+  const brokerBook: { toks: Set<string>; firm: string; rep: string | null; repEmail: string | null; acct: string }[] = [];
   try {
-    const gq = `SELECT Account.Name, Partner_Broker_Dealer__r.Name FROM Opportunity WHERE Partner_Broker_Dealer__c != null ORDER BY CreatedDate DESC LIMIT 25`;
-    const gres = await sfFetch(`/query?q=${encodeURIComponent(gq)}`);
-    if (gres.ok) {
-      const recs = ((await gres.json()).records ?? []) as Record<string, unknown>[];
-      console.log("[lp-bd-global]", JSON.stringify({
-        total: recs.length,
-        samples: recs.slice(0, 20).map((r) => `${rel(r.Account) ?? "?"} => ${rel(r.Partner_Broker_Dealer__r) ?? "?"}`),
-      }));
-    } else { console.log("[lp-bd-global] query", gres.status, (await gres.text()).slice(0, 150)); }
-  } catch (e) { console.log("[lp-bd-global] err", String(e).slice(0, 120)); }
-  console.log("[lp-opp-result]", JSON.stringify({
-    matchedAccts: accIds.length,
-    oppCount, oppWithPartner, oppRawSamples,
-    withAdvisor: Object.values(byName).filter((r) => r.advisorFirm).length,
-    advisorSamples: Object.values(byName).filter((r) => r.advisorFirm).slice(0, 5).map((r) => `${r.advisorFirm} / ${r.advisorContact ?? ""}`),
+    let path: string | null = `/query?q=${encodeURIComponent(
+      "SELECT Account.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE Partner_Broker_Dealer__c != null OR Partner_Advisor__c != null OR Partner_Brokerage__c != null"
+    )}`;
+    let guard = 0;
+    while (path && guard++ < 25) {
+      const br: Response = await sfFetch(path);
+      if (!br.ok) { console.log("[lp-broker-book] query", br.status, (await br.text()).slice(0, 150)); break; }
+      const j = await br.json();
+      for (const o of ((j.records ?? []) as Record<string, unknown>[])) {
+        const acct = rel(o.Account);
+        const firm = rel(o.Partner_Broker_Dealer__r) || rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r);
+        if (!acct || !firm) continue;
+        const repRec = o.Partner_Advisor_Contact__r as { Email?: unknown } | null;
+        brokerBook.push({
+          toks: personTokens(acct), firm, rep: rel(o.Partner_Advisor_Contact__r),
+          repEmail: repRec?.Email != null && String(repRec.Email).trim() ? String(repRec.Email) : null, acct,
+        });
+      }
+      path = j.done === false && j.nextRecordsUrl ? String(j.nextRecordsUrl).replace(/^.*\/services\/data\/v[\d.]+/, "") : null;
+    }
+  } catch (e) { console.log("[lp-broker-book] err", String(e).slice(0, 120)); }
+
+  const matchLog: string[] = [];
+  for (const l of lps) {
+    const row = byName[l.investor.toLowerCase().trim()];
+    if (!row || row.advisorFirm) continue; // keep any direct-Opportunity match
+    const lpToks = personTokens(`${l.investor} ${l.contact || ""}`);
+    if (lpToks.size === 0) continue;
+    let best: { entry: typeof brokerBook[number]; shared: number; maxLen: number } | null = null;
+    for (const b of brokerBook) {
+      let shared = 0, maxLen = 0;
+      for (const t of lpToks) if (b.toks.has(t)) { shared++; if (t.length > maxLen) maxLen = t.length; }
+      // Confident match: 2+ shared name tokens, OR a single rare (long) surname.
+      const ok = shared >= 2 || (shared === 1 && maxLen >= 6);
+      if (ok && (!best || shared > best.shared || (shared === best.shared && maxLen > best.maxLen))) best = { entry: b, shared, maxLen };
+    }
+    if (best) {
+      row.advisorFirm = best.entry.firm;
+      if (best.entry.rep && !row.advisorContact) row.advisorContact = best.entry.rep;
+      if (best.entry.repEmail && !row.advisorEmail) row.advisorEmail = best.entry.repEmail;
+      if (matchLog.length < 12) matchLog.push(`${l.investor} => ${best.entry.firm} [${best.entry.acct}] (${best.shared}tok)`);
+    }
+  }
+  console.log("[lp-broker-match]", JSON.stringify({
+    matchedAccts: accIds.length, oppCount, oppWithPartner, brokerBook: brokerBook.length,
+    withAdvisor: Object.values(byName).filter((r) => r.advisorFirm).length, samples: matchLog,
   }));
   if (!fieldMap.lpType) fieldMap.lpType = "Opportunity.Type";
 
