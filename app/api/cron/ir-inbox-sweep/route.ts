@@ -106,6 +106,21 @@ async function handleMailbox(
       }
     }
 
+    // Skip DocuSign automated notifications outright — never pulled into the IR inbox.
+    if (/docusign/i.test(fromAddr) || /docusign/i.test(m.fromAddress)) {
+      if (!dryRun) {
+        await markMessageProcessed({
+          mailbox,
+          messageId: m.id,
+          internetMessageId: m.internetMessageId,
+          isInvestor: false,
+          action: "ignored-docusign",
+        });
+      }
+      details.push(`IGNORE ${fromAddr || m.fromAddress} — DocuSign notification`);
+      continue;
+    }
+
     const verdict = await classifyInquiry({ from: fromAddr, subject: m.subject, body: bodyText });
     if (!verdict.isInvestorInquiry) {
       if (!dryRun) {
