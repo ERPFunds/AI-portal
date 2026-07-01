@@ -5,6 +5,7 @@ import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
 import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { getInteractionsByEmail } from "@/lib/agents/ir/mailbox-interactions";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +20,7 @@ export interface LpRecord {
   date: string;
   notes: string;
   group: string;
-  lastInteraction: { date: string; note: string; source: "ir" | "sf" } | null;
+  lastInteraction: { date: string; note: string; source: "ir" | "sf" | "email" } | null;
   sfLpType: string | null;
   sfCalled: number | null;
   sfDistributions: number | null;
@@ -221,6 +222,7 @@ export async function GET() {
     let sfFieldMap: LpSfFieldMap | null = null;
     let sfMatched = 0;
     let sfError: string | null = null;
+    const lpEmails = new Map<LpRecord, string[]>();
     if (salesforceConfigured()) {
       try {
         const { byName, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => ({ investor: lp.investor, contact: lp.contact })));
@@ -237,11 +239,33 @@ export async function GET() {
           lp.sfBrokerContact = sf.brokerContact;
           lp.sfAdvisorFirm = sf.advisorFirm;
           lp.sfAdvisorContact = sf.advisorContact;
+          const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
+            .map((e) => (e || "").toLowerCase().trim())
+            .filter(Boolean);
+          if (emails.length) lpEmails.set(lp, Array.from(new Set(emails)));
         }
       } catch (e) {
         sfError = String(e).slice(0, 200);
       }
     }
+
+    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team)
+    // with the LP's contact or broker rep. Overrides the IR-log source when newer.
+    try {
+      const interByEmail = await getInteractionsByEmail();
+      for (const lp of lps) {
+        const emails = lpEmails.get(lp) ?? [lp.email?.toLowerCase().trim()].filter(Boolean) as string[];
+        let best: import("@/lib/agents/ir/mailbox-interactions").Interaction | null = null;
+        for (const e of emails) {
+          const it = interByEmail[e];
+          if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) best = it;
+        }
+        if (best && (!lp.lastInteraction || new Date(best.date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
+          const dir = best.direction === "sent" ? "Sent" : "Received";
+          lp.lastInteraction = { date: best.date, note: `${dir} · ${best.subject || "(no subject)"} (${best.mailbox})`, source: "email" };
+        }
+      }
+    } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }
 
     // Collect ordered unique groups (preserves sheet order)
     const groups: string[] = [];

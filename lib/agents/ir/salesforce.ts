@@ -155,6 +155,8 @@ export interface LpSfData {
   brokerContact: string | null;   // LP primary contact's name
   advisorFirm: string | null;     // real broker/advisor firm (from the LP's Opportunity partner fields)
   advisorContact: string | null;  // broker/advisor rep
+  contactEmail: string | null;    // LP primary contact's email (for last-interaction matching)
+  advisorEmail: string | null;    // broker/advisor rep's email
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -306,6 +308,8 @@ export async function fetchLpSalesforceData(
         brokerContact: null,
         advisorFirm: null,
         advisorContact: null,
+        contactEmail: null,
+        advisorEmail: null,
       };
       idToKey[id] = key;
       matched++;
@@ -323,7 +327,7 @@ export async function fetchLpSalesforceData(
   for (let i = 0; i < accIds.length; i += 200) {
     const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     try {
-      const oq = `SELECT AccountId, Type, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
+      const oq = `SELECT AccountId, Type, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
       const ores = await sfFetch(`/query?q=${encodeURIComponent(oq)}`);
       if (!ores.ok) { console.log("[lp-opp] query", ores.status, (await ores.text()).slice(0, 150)); continue; }
       for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
@@ -332,8 +336,10 @@ export async function fetchLpSalesforceData(
         if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
         const firm = rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r) || rel(o.Partner_Broker_Dealer__r);
         const repName = rel(o.Partner_Advisor_Contact__r);
+        const repEmail = (o.Partner_Advisor_Contact__r as { Email?: unknown } | null)?.Email;
         if (firm && !row.advisorFirm) row.advisorFirm = firm;
         if (repName && !row.advisorContact) row.advisorContact = repName;
+        if (repEmail != null && String(repEmail).trim() && !row.advisorEmail) row.advisorEmail = String(repEmail);
       }
     } catch (e) { console.log("[lp-opp] err", String(e).slice(0, 120)); }
   }
@@ -347,10 +353,10 @@ export async function fetchLpSalesforceData(
   // 2) Broker/advisor: each LP's primary contact (from the schedule) is a Salesforce Contact whose
   //    Account is the broker/advisor firm. Match Contacts by name, then map back to each LP row.
   const contactNames = [...new Set(lps.map((l) => (l.contact || "").trim()).filter(Boolean))];
-  const contactByName: Record<string, { name: string; firm: string | null; type: string | null }> = {};
+  const contactByName: Record<string, { name: string; firm: string | null; type: string | null; email: string | null }> = {};
   for (let i = 0; i < contactNames.length; i += 200) {
     const inList = contactNames.slice(i, i + 200).map((n) => `'${soql(n)}'`).join(",");
-    const res = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name, Account.Name, Account.Type FROM Contact WHERE Name IN (${inList})`)}`);
+    const res = await sfFetch(`/query?q=${encodeURIComponent(`SELECT Id, Name, Email, Account.Name, Account.Type FROM Contact WHERE Name IN (${inList})`)}`);
     if (!res.ok) { console.log("[lp-contact-debug] query failed", res.status, (await res.text()).slice(0, 200)); continue; }
     const cData = await res.json();
     console.log("[lp-contact-debug] batch", (cData.records ?? []).length, "of", contactNames.length, "names; sample", JSON.stringify((cData.records ?? []).slice(0, 5)));
@@ -358,7 +364,7 @@ export async function fetchLpSalesforceData(
       const key = String(c.Name ?? "").toLowerCase().trim();
       if (!key || contactByName[key]) continue;
       const acc = c.Account as { Name?: unknown; Type?: unknown } | null | undefined;
-      contactByName[key] = { name: String(c.Name), firm: rel(c.Account), type: acc?.Type != null ? String(acc.Type) : null };
+      contactByName[key] = { name: String(c.Name), firm: rel(c.Account), type: acc?.Type != null ? String(acc.Type) : null, email: c.Email != null && String(c.Email).trim() ? String(c.Email) : null };
     }
   }
   // Route the primary contact by its Account TYPE: if the contact belongs to a
@@ -373,9 +379,11 @@ export async function fetchLpSalesforceData(
     if (BROKER_ACCT_TYPE.test(ci.type || "")) {
       if (ci.firm && !row.advisorFirm) row.advisorFirm = ci.firm;
       if (ci.name && !row.advisorContact) row.advisorContact = ci.name;
+      if (ci.email && !row.advisorEmail) row.advisorEmail = ci.email;
     } else {
       if (ci.firm && !row.brokerCompany) row.brokerCompany = ci.firm;
       if (ci.name && !row.brokerContact) row.brokerContact = ci.name;
+      if (ci.email && !row.contactEmail) row.contactEmail = ci.email;
     }
   }
 

@@ -1682,7 +1682,7 @@ interface LpRecord {
   investor: string; commitment: string; commitmentUsd: number; commitType: string;
   contact: string; email: string; phone: string; date: string; notes: string;
   group: string;
-  lastInteraction: { date: string; note: string; source: 'ir' | 'sf' } | null;
+  lastInteraction: { date: string; note: string; source: 'ir' | 'sf' | 'email' } | null;
   sfLpType: string | null; sfCalled: number | null; sfDistributions: number | null; sfCrmId: string | null;
   sfBrokerCompany: string | null; sfBrokerContact: string | null;
   sfAdvisorFirm: string | null; sfAdvisorContact: string | null;
@@ -2008,7 +2008,7 @@ function LpDirectoryView() {
                               <span style={{ fontSize: 10, color: '#9ca3af' }}>
                                 {new Date(lp.lastInteraction.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
-                              <span style={{ fontSize: 9, fontWeight: 700, background: lp.lastInteraction.source === 'ir' ? '#eff6ff' : '#f0fdf4', color: lp.lastInteraction.source === 'ir' ? '#3b82f6' : '#16a34a', borderRadius: 3, padding: '1px 4px' }}>
+                              <span style={{ fontSize: 9, fontWeight: 700, background: lp.lastInteraction.source === 'ir' ? '#eff6ff' : lp.lastInteraction.source === 'email' ? '#f5f3ff' : '#f0fdf4', color: lp.lastInteraction.source === 'ir' ? '#3b82f6' : lp.lastInteraction.source === 'email' ? '#7c3aed' : '#16a34a', borderRadius: 3, padding: '1px 4px' }}>
                                 {lp.lastInteraction.source.toUpperCase()}
                               </span>
                             </div>
