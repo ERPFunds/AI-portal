@@ -77,6 +77,10 @@ export async function GET() {
       .map((f: { label: string; name: string; type: string }) => `${f.label} (${f.name}) [${f.type}]`);
     const oppSample = await q("SELECT Id, Name, Amount, StageName, CloseDate, Account.Name FROM Opportunity ORDER BY CreatedDate DESC LIMIT 5");
 
+    // 6) Are the Opportunity partner (broker/advisor) fields actually populated? Count + real samples.
+    const oppPartnerCounts = await q("SELECT COUNT(Id) total, COUNT(Partner_Advisor__c) advisor, COUNT(Partner_Brokerage__c) brokerage, COUNT(Partner_Broker_Dealer__c) brokerDealer, COUNT(Partner_Advisor_Contact__c) advisorContact, COUNT(Type) investmentType FROM Opportunity");
+    const oppWithPartner = await q("SELECT Name, Type, Amount, Account.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name FROM Opportunity WHERE Partner_Advisor__c != null OR Partner_Brokerage__c != null OR Partner_Broker_Dealer__c != null ORDER BY CreatedDate DESC LIMIT 8");
+
     return NextResponse.json({
       accountTypeValues: typeValues,
       accountLookupFields: accountLookups, // watch for a Broker/Advisor lookup here
@@ -86,6 +90,8 @@ export async function GET() {
       opportunityCustomFields: oppCustomFields,               // does Called/Distributions/LP Type live here?
       opportunityMoneyOrTypeFields: oppMoneyOrTypeFields,     // currency/number/type-ish fields to map
       opportunitySample: oppSample.records ?? oppSample,
+      opportunityPartnerCounts: oppPartnerCounts.records ?? oppPartnerCounts, // how many opps have broker fields filled
+      opportunitiesWithPartner: oppWithPartner.records ?? oppWithPartner,     // real broker/advisor values, if any
     });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
