@@ -402,8 +402,9 @@ export async function fetchLpSalesforceData(
     for (const b of brokerBook) {
       let shared = 0, maxLen = 0;
       for (const t of lpToks) if (b.toks.has(t)) { shared++; if (t.length > maxLen) maxLen = t.length; }
-      // Confident match: 2+ shared name tokens, OR a single rare (long) surname.
-      const ok = shared >= 2 || (shared === 1 && maxLen >= 6);
+      // Confident match ONLY on a full person: 2+ shared name tokens (a single shared first name
+      // or surname is NOT enough — that cross-attributed unrelated investors/brokers).
+      const ok = shared >= 2 && maxLen >= 4;
       if (ok && (!best || shared > best.shared || (shared === best.shared && maxLen > best.maxLen))) best = { entry: b, shared, maxLen };
     }
     if (best) {
