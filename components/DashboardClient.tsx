@@ -5191,7 +5191,6 @@ const SOP_CATEGORIES = [
   { icon: '🏢', label: 'Property Operations Agent SOPs',desc: 'Work order submission, vendor dispatch, COI requirements, and escalation handling for the Property Operations agent' },
   { icon: '🔑', label: 'Leasing Agent SOPs',            desc: 'Prospect intake, proposal review, renewal tracking, and lease execution checklist for the Leasing agent' },
   { icon: '👥', label: 'Investor Relations Agent SOPs', desc: 'LP communication standards, capital call procedures, quarterly report cadence, and fund update templates for the IR agent' },
-  { icon: '📨', label: 'Agent 2 — Investor Relations',   desc: 'Investor Relations (Agent 2) reference — the IR Q&A Reference doc (approved response templates, routing contacts, classification + escalation rules) and Agent 2 working guides' },
   { icon: '🏭', label: 'Acquisitions Agent SOPs',       desc: 'Deal screening criteria, underwriting process, due diligence checklist, and IC memo format for the Acquisitions agent' },
   { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]
