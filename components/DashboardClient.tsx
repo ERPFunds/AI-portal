@@ -1925,10 +1925,9 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
-                      {h === 'LP Type' && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
                       {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
@@ -2036,7 +2035,6 @@ function LpDirectoryView() {
                       </td>
 
                       {/* Salesforce columns */}
-                      {sfCell(lp.sfLpType)}
                       {sfCell(lp.sfCalled, fmtUsd, 'Yardi')}
                       {sfCell(lp.sfDistributions, fmtUsd, 'Yardi')}
 
