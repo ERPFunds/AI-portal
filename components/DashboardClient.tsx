@@ -1098,6 +1098,18 @@ function formatInboxTime(iso: string): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
 }
 
+// Strip Re:/Fw: prefixes for subject matching.
+const stripReSubj = (s: string) => (s || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim().toLowerCase()
+// Which IR owner an email belongs to = which mailbox the investor wrote to.
+type IrOwner = 'Meghan' | 'William'
+function irOwnerOf(to: string[]): IrOwner | null {
+  const s = (to || []).map((a) => a.toLowerCase())
+  if (s.some((a) => a.includes('mberry@'))) return 'Meghan'
+  if (s.some((a) => a.includes('wmeyer@'))) return 'William'
+  return null
+}
+const OWNER_SEND_FROM: Record<IrOwner, string> = { Meghan: 'mberry@erpfunds.com', William: 'wmeyer@erpfunds.com' }
+
 function InboxView({
   inboxStatusFilter, setInboxStatusFilter,
   selectedInboxIdx, setSelectedInboxIdx,
@@ -1117,13 +1129,13 @@ function InboxView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [folderFilter, setFolderFilter] = useState('All')
+  const [ownerFilter, setOwnerFilter] = useState<'All' | IrOwner>('All')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendMsg, setSendMsg] = useState<string | null>(null)
   const [bodyCache, setBodyCache] = useState<Record<string, string>>({})
   const [bodyLoading, setBodyLoading] = useState(false)
   const [draftEdit, setDraftEdit] = useState('')
   const [draftEditId, setDraftEditId] = useState<string | null>(null)
-  const SEND_FROM = 'mberry@erpfunds.com'
   const [backfilling, setBackfilling] = useState(false)
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null)
 
@@ -1172,15 +1184,16 @@ function InboxView({
   async function approveAndSend(item: AgentInboxItem) {
     if (!item.isDraft) return
     const to = item.to.join(', ') || 'the recipient'
+    const from = OWNER_SEND_FROM[ownerFor(item) ?? 'Meghan']  // default to Meghan if owner unknown
     if (!(draftEdit && draftEdit.trim())) { setSendMsg('Draft is empty — nothing to send'); return }
-    if (!window.confirm(`Send to ${to} from ${SEND_FROM}?\n\nThis sends the email immediately and cannot be undone.`)) return
+    if (!window.confirm(`Send to ${to} from ${from}?\n\nThis sends the email immediately and cannot be undone.`)) return
     setSendingId(item.id)
     setSendMsg(null)
     try {
       const res = await fetch('/api/agent-inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', id: item.id, body: draftEdit, from: SEND_FROM }),
+        body: JSON.stringify({ action: 'send', id: item.id, body: draftEdit, from }),
       })
       const json = await res.json()
       if (!res.ok) { setSendMsg(`Send failed: ${json.error || res.status}`) }
@@ -1195,8 +1208,18 @@ function InboxView({
   const items = data?.items ?? []
   const folders = data?.folders ?? []
 
+  // Owner of an item = which mailbox the investor wrote to. For a draft (whose recipient is the
+  // investor), fall back to the matched original inbound message's recipients.
+  const ownerFor = (item: AgentInboxItem): IrOwner | null => {
+    if (!item.isDraft) return irOwnerOf(item.to)
+    const orig = items.find((o) => !o.isDraft && o.from && item.to.some((a) => a.toLowerCase() === o.from.toLowerCase()) && stripReSubj(o.subject) === stripReSubj(item.subject))
+    return orig ? irOwnerOf(orig.to) : null
+  }
+  const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
+
   const filtered = items.filter((item) => {
     if (folderFilter !== 'All' && item.folder !== folderFilter) return false
+    if (ownerFilter !== 'All' && ownerFor(item) !== ownerFilter) return false
     if (inboxStatusFilter === 'pending') return item.status === 'pending'
     if (inboxStatusFilter === 'handled') return item.status === 'handled'
     if (inboxStatusFilter === 'review') return item.status === 'needs-review'
@@ -1228,10 +1251,10 @@ function InboxView({
 
   // For a draft, find the original inbound message it replies to (same recipient, matching subject
   // once Re:/Fw: prefixes are stripped) among the already-loaded IR items.
-  const stripRe = (s: string) => (s || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim().toLowerCase()
   const original = selected?.isDraft
-    ? items.find((it) => !it.isDraft && it.from && selected.to.some((a) => a.toLowerCase() === it.from.toLowerCase()) && stripRe(it.subject) === stripRe(selected.subject))
+    ? items.find((it) => !it.isDraft && it.from && selected.to.some((a) => a.toLowerCase() === it.from.toLowerCase()) && stripReSubj(it.subject) === stripReSubj(selected.subject))
     : undefined
+  const selectedOwner = selected ? ownerFor(selected) : null
 
   // Fetch the original's full body too, so it shows in full above the reply.
   React.useEffect(() => {
@@ -1278,6 +1301,16 @@ function InboxView({
       <div className="inbox-wrap">
         <div className="inbox-left">
           <div className="inbox-filters">
+            <div>
+              <div className="filter-label" style={{ marginBottom: 5 }}>Inbox</div>
+              <div className="pill-row">
+                {(['All', 'Meghan', 'William'] as const).map((o) => (
+                  <div key={o} className={`pill ${ownerFilter === o ? 'active' : ''}`} onClick={() => { setOwnerFilter(o); setSelectedInboxIdx(0) }}>
+                    {o === 'All' ? 'All' : o === 'Meghan' ? `Meghan (${ownerCount('Meghan')})` : `William (${ownerCount('William')})`}
+                  </div>
+                ))}
+              </div>
+            </div>
             {folders.length > 0 && (
               <div>
                 <div className="filter-label" style={{ marginBottom: 5 }}>Folder</div>
@@ -1312,7 +1345,10 @@ function InboxView({
                   <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
                 </div>
                 <div className="inbox-subject">{item.subject || '(no subject)'}</div>
-                <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
+                  {ownerFor(item) && <span className="badge" style={{ fontSize: 9, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{ownerFor(item)}</span>}
+                </div>
               </div>
             ))}
             {!loading && filtered.length === 0 && !error && (
@@ -1359,7 +1395,7 @@ function InboxView({
                 )}
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${SEND_FROM}` : `From: ${selected.from}`}
+                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : `From: ${selected.from}`}
                   </div>
                   {selected.isDraft ? (
                     bodyLoading && bodyCache[selected.id] === undefined ? (
@@ -1382,7 +1418,7 @@ function InboxView({
               <div className="draft-panel">
                 <div className="draft-label">
                   <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`} style={{ fontSize: 10 }}>{FOLDER_LABEL[selected.folderKind]}</span>
-                  {selected.isDraft ? `Review & edit the reply above, then send from ${SEND_FROM}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
+                  {selected.isDraft ? `Review & edit the reply above, then send from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
                 </div>
                 <div className="draft-actions" style={{ alignItems: 'center' }}>
                   {selected.isDraft && (
