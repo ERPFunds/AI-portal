@@ -185,6 +185,30 @@ export async function GET() {
       });
     }
 
+    // Merge duplicate LP rows (same investor name — e.g. a trust listed twice) into one,
+    // summing their commitments; fill blanks from the duplicate.
+    {
+      const byInvestor = new Map<string, LpRecord>();
+      for (const lp of lps) {
+        const key = lp.investor.toLowerCase().trim();
+        const ex = byInvestor.get(key);
+        if (!ex) { byInvestor.set(key, lp); continue; }
+        ex.commitmentUsd += lp.commitmentUsd;
+        ex.commitment = ex.commitmentUsd > 0 ? `$${Math.round(ex.commitmentUsd).toLocaleString("en-US")}` : (ex.commitment || lp.commitment);
+        ex.contact = ex.contact || lp.contact;
+        ex.email = ex.email || lp.email;
+        ex.phone = ex.phone || lp.phone;
+        ex.commitType = ex.commitType || lp.commitType;
+        ex.date = ex.date || lp.date;
+        ex.brokerFirm = ex.brokerFirm || lp.brokerFirm;
+        ex.brokerContact = ex.brokerContact || lp.brokerContact;
+        ex.notes = ex.notes || lp.notes;
+      }
+      const merged = [...byInvestor.values()];
+      lps.length = 0;
+      lps.push(...merged);
+    }
+
     // Enrich with last interaction from IR agent logs (non-fatal if DB unavailable)
     const interactions = await getLpLastInteractions().catch(() => ({} as Record<string, import("@/lib/db").LpLastInteraction>));
     for (const lp of lps) {
