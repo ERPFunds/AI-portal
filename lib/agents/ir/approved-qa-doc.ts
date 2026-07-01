@@ -5,9 +5,10 @@ const anthropic = new Anthropic();
 
 // Auto-generated, always-current doc of APPROVED Learned Q&A. Lives on the SOPs page
 // (a live file) AND in the document_markdown layer. Regenerated whenever an entry is
-// approved/edited/rejected. Kept in a SEPARATE category from the curated IR Q&A Reference
-// doc so it never collides with the drafter's reference-doc picker.
-const DOC_CATEGORY = process.env.LEARNED_QA_DOC_CATEGORY || "Investor Relations Agent SOPs";
+// approved/edited/rejected. Filed under the "Agent Working Guides" SOP folder, in an
+// "Agent 2 — Investor Relations" subfolder (project_tag), alongside the other agent guides.
+const DOC_CATEGORY = process.env.LEARNED_QA_DOC_CATEGORY || "Agent Working Guides";
+const DOC_SUBFOLDER = process.env.LEARNED_QA_DOC_SUBFOLDER || "Agent 2 — Investor Relations";
 const DOC_NAME = "Approved Learned Q&A (auto-generated).md";
 
 function buildMarkdown(rows: { question: string; answer: string; category: string | null }[]): string {
@@ -43,11 +44,11 @@ export async function regenerateApprovedQaDoc(): Promise<{ ok: boolean; count: n
     const md = buildMarkdown(rows);
 
     // Remove the prior auto-generated doc (Anthropic file + uploaded_files + markdown rows).
+    // Match by filename only so a prior copy under an old category is also cleaned up.
     const { data: prior } = await supabase
       .from("uploaded_files")
       .select("file_id")
-      .eq("filename", DOC_NAME)
-      .eq("category", DOC_CATEGORY);
+      .eq("filename", DOC_NAME);
     for (const p of (prior ?? []) as { file_id: string }[]) {
       try { await (anthropic.beta as any).files.delete(p.file_id); } catch { /* may be gone */ }
       await supabase.from("uploaded_files").delete().eq("file_id", p.file_id);
@@ -64,6 +65,7 @@ export async function regenerateApprovedQaDoc(): Promise<{ ok: boolean; count: n
       size_bytes: md.length,
       mime_type: "text/markdown",
       category: DOC_CATEGORY,
+      project_tag: DOC_SUBFOLDER,
       uploaded_by: "learned-qa-auto",
       expires_at: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
     });
