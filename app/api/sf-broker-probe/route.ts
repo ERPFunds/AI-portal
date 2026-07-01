@@ -61,12 +61,31 @@ export async function GET() {
     // 4) Is AccountContactRelation available (a common LP<->broker link)?
     const acr = await q("SELECT Id, Account.Name, Contact.Name, Roles FROM AccountContactRelation LIMIT 5");
 
+    // 5) Opportunity fields — the likely home of per-LP Called / Distributions / LP Type / commitment.
+    const oppDescRes = await fetch(`${instance}/services/data/${API}/sobjects/Opportunity/describe`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const oppDesc = oppDescRes.ok ? await oppDescRes.json() : { fields: [] };
+    const oppCustomFields = (oppDesc.fields ?? [])
+      .filter((f: { custom: boolean }) => f.custom)
+      .map((f: { label: string; name: string; type: string }) => `${f.label} (${f.name}) [${f.type}]`);
+    const oppMoneyOrTypeFields = (oppDesc.fields ?? [])
+      .filter((f: { type: string; name: string; label: string }) =>
+        ["currency", "double", "percent"].includes(f.type) ||
+        /call|distrib|paid|contribut|commit|type|class|amount/i.test(f.label) ||
+        /call|distrib|paid|contribut|commit|type|class/i.test(f.name))
+      .map((f: { label: string; name: string; type: string }) => `${f.label} (${f.name}) [${f.type}]`);
+    const oppSample = await q("SELECT Id, Name, Amount, StageName, CloseDate, Account.Name FROM Opportunity ORDER BY CreatedDate DESC LIMIT 5");
+
     return NextResponse.json({
       accountTypeValues: typeValues,
       accountLookupFields: accountLookups, // watch for a Broker/Advisor lookup here
       typeCounts: typeCounts.records ?? typeCounts,
       brokerAccountsSample: brokers.records ?? brokers,
       accountContactRelationSample: acr.records ?? acr,
+      opportunityCustomFields: oppCustomFields,               // does Called/Distributions/LP Type live here?
+      opportunityMoneyOrTypeFields: oppMoneyOrTypeFields,     // currency/number/type-ish fields to map
+      opportunitySample: oppSample.records ?? oppSample,
     });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
