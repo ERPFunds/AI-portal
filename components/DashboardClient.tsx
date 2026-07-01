@@ -3371,8 +3371,7 @@ function AccountingView() {
 
 const KB_CATEGORIES = [
   { icon: '💰', label: 'Capital KB',              desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['LP Market Intelligence', 'Capital Raising'] },
-  { icon: '📊', label: 'Investor Relations KB',   desc: 'LP profiles, fund terms, investor communications, subscription docs',              agents: ['Investor Relations', 'Capital Raising'] },
-  { icon: '🗂️', label: 'Investor Relations (SharePoint)', desc: 'Auto-synced weekly from the Investor Relations SharePoint folder — review and prune manually', agents: ['Investor Relations'] },
+  { icon: '📊', label: 'Investor Relations (SharePoint)', desc: 'LP profiles, fund terms, investor communications, subscription docs — auto-synced weekly from the Investor Relations SharePoint folder', agents: ['Investor Relations', 'Capital Raising'] },
   { icon: '🔐', label: 'Finance & Controls KB',   desc: 'Approval thresholds, GL coding rules, invoice policies, audit documentation',       agents: ['Financial Controls', 'Accounting Operations'] },
   { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Brokerage'] },
   { icon: '📈', label: 'Analytics KB',            desc: 'Cap rate benchmarks, valuation models, fund performance data, market reports',      agents: ['Investment Analytics', 'CIO & Chief of Staff'] },
@@ -3391,6 +3390,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
   const [dragging, setDragging] = useState(false)
+  const [hover, setHover] = useState(false)
 
   const fetchDocs = async () => {
     try {
@@ -3422,17 +3422,27 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
   }
 
   return (
-    <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-        <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>{kb.icon}</div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{kb.label}</div>
-          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, lineHeight: 1.4 }}>{kb.desc}</div>
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 6 }}>
+    <div
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', flexDirection: 'column', gap: 12,
+        background: '#fff', border: `1px solid ${hover ? '#cbd5e1' : '#e5e7eb'}`, borderRadius: 12, padding: 16,
+        transition: 'box-shadow .15s ease, border-color .15s ease, transform .15s ease',
+        boxShadow: hover ? '0 6px 18px rgba(15,23,42,.09)' : '0 1px 2px rgba(15,23,42,.04)',
+        transform: hover ? 'translateY(-1px)' : 'none',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>{kb.icon}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#111827' }}>{kb.label}</div>
+          <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3, lineHeight: 1.45 }}>{kb.desc}</div>
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 8 }}>
             {kb.agents.map((a) => <span key={a} className="badge badge-blue" style={{ fontSize: 9 }}>{a}</span>)}
           </div>
         </div>
-        <span style={{ fontSize: 11, color: '#9ca3af', background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', whiteSpace: 'nowrap' }}>{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
+        <span style={{ fontSize: 11, fontWeight: 600, color: docs.length ? '#0e7490' : '#9ca3af', background: docs.length ? '#ecfeff' : '#f3f4f6', border: `1px solid ${docs.length ? '#a5f3fc' : '#e5e7eb'}`, borderRadius: 999, padding: '2px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>{docs.length} doc{docs.length !== 1 ? 's' : ''}</span>
       </div>
 
       {/* Upload zone */}
@@ -3452,7 +3462,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
       {/* Doc list */}
       {loading ? (
         <div style={{ fontSize: 11, color: '#9ca3af', padding: '4px 0' }}>Loading…</div>
-      ) : docs.length > 0 && (
+      ) : docs.length > 0 ? (
         <div className="doc-list">
           {docs.map((d) => (
             <div key={d.file_id} className="doc-item">
@@ -3462,6 +3472,8 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
             </div>
           ))}
         </div>
+      ) : (
+        <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center', padding: '2px 0 4px' }}>No documents yet</div>
       )}
     </div>
   )
@@ -3517,7 +3529,7 @@ function KnowledgeBaseView() {
         <span style={{ fontSize: 13 }}>💡</span>
         <span style={{ fontSize: 12, color: '#0e7490' }}>Documents uploaded here are indexed and made available to the agents listed. PDFs, Word, Excel, and PowerPoint files are all supported. <strong>Sync from SharePoint</strong> pulls the latest from the Investor Relations and ERP Funds IV folders.</span>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
         {KB_CATEGORIES.map((kb) => <KBCategoryCard key={kb.label} kb={kb} />)}
       </div>
     </div>
@@ -5187,12 +5199,7 @@ const SOP_CATEGORIES = [
   { icon: '🎓', label: 'Claude Training and Assets',    desc: 'Claude training decks, brand & messaging guidelines, deck/OM build guides, and the skills & commands reference — the team’s AI enablement library' },
   { icon: '🤖', label: 'Agent Working Guides',          desc: 'How to interact with each agent — submitting tasks, reviewing outputs, handling escalations, and adjusting autonomy settings per agent' },
   { icon: '📊', label: 'Dashboard & Portal How-Tos',    desc: 'Step-by-step instructions for updating portal views: rent roll, capital calls, leasing pipeline, work orders, connections, and agent config' },
-  { icon: '💰', label: 'Finance Agent SOPs',            desc: 'Invoice approval workflows and GL coding for the Financial Controls agent; month-end close procedures for the Accounting Operations agent' },
-  { icon: '🏢', label: 'Property Operations Agent SOPs',desc: 'Work order submission, vendor dispatch, COI requirements, and escalation handling for the Property Operations agent' },
   { icon: '🔑', label: 'Leasing Agent SOPs',            desc: 'Prospect intake, proposal review, renewal tracking, and lease execution checklist for the Leasing agent' },
-  { icon: '👥', label: 'Investor Relations Agent SOPs', desc: 'LP communication standards, capital call procedures, quarterly report cadence, and fund update templates for the IR agent' },
-  { icon: '🏭', label: 'Acquisitions Agent SOPs',       desc: 'Deal screening criteria, underwriting process, due diligence checklist, and IC memo format for the Acquisitions agent' },
-  { icon: '👤', label: 'People & HR SOPs',              desc: 'Onboarding checklist, benefits enrollment, expense reimbursement, and PTO policy for the People Ops agent' },
 ]
 
 function SOPCategoryCard({ cat, query = '' }: { cat: { icon: string; label: string; desc: string }; query?: string }) {
