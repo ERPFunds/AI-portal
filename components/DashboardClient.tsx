@@ -1717,7 +1717,7 @@ interface LpEditState {
 const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verbal', 'TBD']
 
 function LpDirectoryView() {
-  const [tab, setTab] = React.useState<'lps' | 'calls'>('lps')
+  const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
@@ -1903,15 +1903,6 @@ function LpDirectoryView() {
         )
       })()}
 
-      {/* Section tabs — LP Profiles / Capital Calls */}
-      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
-        {(['lps', 'calls'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: tab === t ? 700 : 500, color: tab === t ? '#111827' : '#9ca3af', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #111827' : '2px solid transparent', padding: '8px 16px', cursor: 'pointer', marginBottom: -1 }}>
-            {t === 'lps' ? 'LP Profiles' : 'Capital Calls'}
-          </button>
-        ))}
-      </div>
-
       {tab === 'lps' && (
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
           {loading && <div style={{ padding: 24, color: '#9ca3af', fontSize: 13 }}>Loading commitment schedule…</div>}
@@ -2079,23 +2070,6 @@ function LpDirectoryView() {
         </div>
       )}
 
-      {tab === 'calls' && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-            <thead>
-              <tr style={{ background: '#f8fafc' }}>
-                {['Call Date', 'Fund', 'Call #', '% Called', 'Amount', 'Due Date', 'Status'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td colSpan={7} style={{ padding: '24px 14px', color: '#9ca3af', fontSize: 12, textAlign: 'center' }}>No capital calls recorded — connect Yardi to populate live call history</td></tr>
-            </tbody>
-          </table>
-          <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Capital call history will sync from Yardi when connected</div>
-        </div>
-      )}
     </div>
   )
 }
