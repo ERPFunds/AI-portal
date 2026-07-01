@@ -1226,6 +1226,25 @@ function InboxView({
     }
   }, [selected?.id, selected?.isDraft, bodyCache, draftEditId])
 
+  // For a draft, find the original inbound message it replies to (same recipient, matching subject
+  // once Re:/Fw: prefixes are stripped) among the already-loaded IR items.
+  const stripRe = (s: string) => (s || '').replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, '').trim().toLowerCase()
+  const original = selected?.isDraft
+    ? items.find((it) => !it.isDraft && it.from && selected.to.some((a) => a.toLowerCase() === it.from.toLowerCase()) && stripRe(it.subject) === stripRe(selected.subject))
+    : undefined
+
+  // Fetch the original's full body too, so it shows in full above the reply.
+  React.useEffect(() => {
+    const id = original?.id
+    if (!id || bodyCache[id] !== undefined) return
+    let cancelled = false
+    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [id]: d.body })) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [original?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+
   const subtitle = error
     ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
     : data
@@ -1327,9 +1346,20 @@ function InboxView({
                 <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`}>{FOLDER_LABEL[selected.folderKind]}</span>
               </div>
               <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
+                {/* For a draft, show the original message it's replying to (when we can match it). */}
+                {selected.isDraft && original && (
+                  <div style={{ background: '#fff', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>↩ Replying to</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{original.subject || '(no subject)'}</div>
+                    <div style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 8px' }}>{original.fromName || original.from} · {formatInboxTime(original.receivedISO)}</div>
+                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.55, whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto', borderTop: '1px solid #f3f4f6', paddingTop: 8 }}>
+                      {bodyCache[original.id] ?? (original.preview || '(loading…)')}
+                    </div>
+                  </div>
+                )}
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-                    {selected.isDraft ? `Draft to: ${selected.to.join(', ') || '—'} · sends from ${SEND_FROM}` : `From: ${selected.from}`}
+                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${SEND_FROM}` : `From: ${selected.from}`}
                   </div>
                   {selected.isDraft ? (
                     bodyLoading && bodyCache[selected.id] === undefined ? (
