@@ -5,10 +5,10 @@ const PAGE = 100;              // messages per Graph page
 const MAX_PAGES = 30;          // safety cap => up to 3,000 msgs per folder in the window
 const TTL_MS = 15 * 60_000;
 
-// How many months of history to scan (default 7). Override with IR_INTERACTION_MONTHS.
+// How many months of history to scan (default 9). Override with IR_INTERACTION_MONTHS.
 function monthsBack(): number {
-  const n = parseInt(process.env.IR_INTERACTION_MONTHS || "7", 10);
-  return Number.isFinite(n) && n > 0 ? n : 7;
+  const n = parseInt(process.env.IR_INTERACTION_MONTHS || "9", 10);
+  return Number.isFinite(n) && n > 0 ? n : 9;
 }
 
 // Mailboxes whose inbox + sent are scanned for LP/broker interactions.
