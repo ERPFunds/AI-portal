@@ -266,14 +266,17 @@ export async function GET(req: NextRequest) {
   const mailboxOverride = params.get("mailbox")?.trim();
 
   if (!force && process.env.IR_SWEEP_ENABLED !== "true") {
+    console.log("[ir-sweep] skipped: IR_SWEEP_ENABLED is not 'true'");
     return NextResponse.json({ skipped: "IR_SWEEP_ENABLED is not 'true'" });
   }
   if (!force && !withinCentralBusinessHours()) {
+    console.log("[ir-sweep] skipped: outside 8am-8pm CT");
     return NextResponse.json({ skipped: "outside 8am-8pm CT" });
   }
 
   const mailboxes = mailboxOverride ? [mailboxOverride] : sweepMailboxes();
   if (mailboxes.length === 0) {
+    console.log("[ir-sweep] skipped: no mailboxes configured (set IR_SWEEP_MAILBOXES)");
     return NextResponse.json({ skipped: "no mailboxes configured (set IR_SWEEP_MAILBOXES)" });
   }
 
@@ -285,5 +288,8 @@ export async function GET(req: NextRequest) {
       results.push({ mailbox, error: String(e) });
     }
   }
+  console.log("[ir-sweep] ran", JSON.stringify(results.map((r) => "scanned" in r
+    ? { mailbox: r.mailbox, scanned: r.scanned, fresh: r.fresh, investor: r.investor, sample: r.details.slice(0, 4) }
+    : r)));
   return NextResponse.json({ ok: true, dryRun, ranAt: new Date().toISOString(), results });
 }
