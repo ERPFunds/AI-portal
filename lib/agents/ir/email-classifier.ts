@@ -75,6 +75,7 @@ Rules:
 - NEVER include specific financial figures you don't have — redirect to portal or support contact
 - All drafts are saved for Meghan's review — she approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
+- Sign off as "Meghan Berry" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under her name)
 
 Return a JSON object with exactly these fields:
 {

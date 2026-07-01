@@ -7,7 +7,10 @@ import { parseOfficeAsync } from "officeparser";
  * so replies always follow the current approved answers. Override the source
  * category with IR_QA_DOC_CATEGORY.
  */
-const QA_DOC_CATEGORY = process.env.IR_QA_DOC_CATEGORY || "Agent 2 — Investor Relations";
+// Match the Q&A reference by its distinctive FILENAME rather than a fixed folder — the doc lives
+// under "Agent Working Guides → Agent 2 - Investor Relations" and may be re-foldered. Override the
+// pattern with IR_QA_DOC_FILENAME_LIKE if the doc is renamed.
+const QA_DOC_FILENAME_LIKE = process.env.IR_QA_DOC_FILENAME_LIKE || "%Q%A Reference%";
 const TTL_MS = 10 * 60_000;
 const MAX_CHARS = 12000;
 
@@ -18,7 +21,7 @@ export async function getIrQaReferenceText(): Promise<string> {
   const { data } = await supabase
     .from("uploaded_files")
     .select("file_id, filename, mime_type, created_at")
-    .eq("category", QA_DOC_CATEGORY)
+    .ilike("filename", QA_DOC_FILENAME_LIKE)
     .order("created_at", { ascending: false });
   const rows = (data ?? []) as { file_id: string; filename: string; mime_type: string | null }[];
   if (rows.length === 0) return cache?.text ?? "";
