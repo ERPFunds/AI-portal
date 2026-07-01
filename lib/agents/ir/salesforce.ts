@@ -356,13 +356,22 @@ export async function fetchLpSalesforceData(
       contactByName[key] = { name: String(c.Name), firm: rel(c.Account), type: acc?.Type != null ? String(acc.Type) : null };
     }
   }
+  // Route the primary contact by its Account TYPE: if the contact belongs to a
+  // Broker/Advisor/Brokerage/Broker-Dealer account, it's the real broker → Broker/Advisor
+  // column. Otherwise (Investor etc.) it's the LP's own person → LP Primary Contact.
+  const BROKER_ACCT_TYPE = /broker|advisor|dealer|brokerage/i;
   for (const l of lps) {
     const row = byName[l.investor.toLowerCase().trim()];
     if (!row) continue;
     const ci = contactByName[(l.contact || "").toLowerCase().trim()];
     if (!ci) continue;
-    if (ci.firm && !row.brokerCompany) row.brokerCompany = ci.firm;
-    if (ci.name && !row.brokerContact) row.brokerContact = ci.name;
+    if (BROKER_ACCT_TYPE.test(ci.type || "")) {
+      if (ci.firm && !row.advisorFirm) row.advisorFirm = ci.firm;
+      if (ci.name && !row.advisorContact) row.advisorContact = ci.name;
+    } else {
+      if (ci.firm && !row.brokerCompany) row.brokerCompany = ci.firm;
+      if (ci.name && !row.brokerContact) row.brokerContact = ci.name;
+    }
   }
 
   return { byName, fieldMap, matched };
