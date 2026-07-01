@@ -1119,6 +1119,8 @@ function InboxView({
   const [folderFilter, setFolderFilter] = useState('All')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendMsg, setSendMsg] = useState<string | null>(null)
+  const [backfilling, setBackfilling] = useState(false)
+  const [backfillMsg, setBackfillMsg] = useState<string | null>(null)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -1139,6 +1141,28 @@ function InboxView({
     const t = setInterval(load, 60_000)
     return () => clearInterval(t)
   }, [load])
+
+  async function backfill(dryRun: boolean) {
+    if (!dryRun && !window.confirm('Import the last month of investor emails from mberry@ and wmeyer@ into team@’s Investor Relations folders? This files real emails (kept unread) and prepares drafts.')) return
+    setBackfilling(true); setBackfillMsg(null)
+    try {
+      const res = await fetch('/api/agent-inbox/backfill', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ months: 1, dryRun }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { setBackfillMsg('Backfill failed: ' + (j.error || res.status)); return }
+      if (j.skipped) { setBackfillMsg('Sweep skipped: ' + j.skipped); return }
+      const results: Array<{ mailbox: string; scanned?: number; investor?: number; error?: string }> = j.results ?? []
+      const summ = results.map((r) => r.error ? `${r.mailbox}: error` : `${r.mailbox}: ${r.investor ?? 0} investor / ${r.scanned ?? 0} scanned`).join('  ·  ')
+      setBackfillMsg((dryRun ? 'Preview (nothing filed) — ' : 'Imported — ') + (summ || 'no messages found'))
+      if (!dryRun) load()
+    } catch (e) {
+      setBackfillMsg('Backfill failed: ' + String(e))
+    } finally {
+      setBackfilling(false)
+    }
+  }
 
   async function approveAndSend(item: AgentInboxItem) {
     if (!item.isDraft) return
@@ -1187,10 +1211,23 @@ function InboxView({
           <h2>Agent Inbox</h2>
           <p>{subtitle}</p>
         </div>
-        <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
-          {loading ? '↻ Syncing…' : '↻ Sync now'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={() => backfill(true)} disabled={backfilling} title="Preview what the last month of investor emails from mberry@ and wmeyer@ would triage — files nothing" style={{ whiteSpace: 'nowrap' }}>
+            {backfilling ? '⏳ Working…' : '👁 Preview import (1mo)'}
+          </button>
+          <button className="btn btn-ghost" onClick={() => backfill(false)} disabled={backfilling} title="Triage the last month of investor emails from mberry@ and wmeyer@ into team@'s IR folders" style={{ whiteSpace: 'nowrap' }}>
+            {backfilling ? '⏳ Working…' : '⇩ Import last month'}
+          </button>
+          <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
+            {loading ? '↻ Syncing…' : '↻ Sync now'}
+          </button>
+        </div>
       </div>
+      {backfillMsg && (
+        <div style={{ fontSize: 12, color: backfillMsg.startsWith('Imported') || backfillMsg.startsWith('Preview') ? '#0e7490' : '#b91c1c', background: backfillMsg.startsWith('Backfill failed') || backfillMsg.startsWith('Sweep skipped') ? '#fef2f2' : '#f0f9fa', border: `1px solid ${backfillMsg.startsWith('Backfill failed') || backfillMsg.startsWith('Sweep skipped') ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
+          {backfillMsg}
+        </div>
+      )}
       <div className="inbox-wrap">
         <div className="inbox-left">
           <div className="inbox-filters">

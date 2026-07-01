@@ -143,6 +143,48 @@ export async function listFolderMessages(
   );
 }
 
+/**
+ * List Inbox messages received on/after `sinceIso`, paginating up to `max` (newest first).
+ * Used by the on-demand backfill to catch up historical investor emails past the live cap.
+ */
+export async function listInboxMessagesSince(mailbox: string, sinceIso: string, max = 250): Promise<InboxMessage[]> {
+  const t = await token();
+  const out: InboxMessage[] = [];
+  let url: string | null =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/inbox/messages` +
+    `?$select=id,internetMessageId,subject,from,bodyPreview,receivedDateTime` +
+    `&$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}` +
+    `&$orderby=receivedDateTime desc&$top=50`;
+  while (url && out.length < max) {
+    const res: Response = await fetch(url, {
+      headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
+    });
+    if (!res.ok) throw new Error(`Graph list inbox since ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    for (const m of (data.value || []) as {
+      id: string;
+      internetMessageId?: string;
+      subject?: string;
+      bodyPreview?: string;
+      receivedDateTime: string;
+      from?: { emailAddress?: { address?: string; name?: string } };
+    }[]) {
+      out.push({
+        id: m.id,
+        internetMessageId: m.internetMessageId ?? null,
+        subject: m.subject || "",
+        fromAddress: m.from?.emailAddress?.address || "",
+        fromName: m.from?.emailAddress?.name ?? null,
+        bodyPreview: m.bodyPreview || "",
+        receivedDateTime: m.receivedDateTime,
+      });
+      if (out.length >= max) break;
+    }
+    url = data["@odata.nextLink"] || null;
+  }
+  return out;
+}
+
 /** Resolve a mail folder's id by display name (e.g., "Investor Relations"). Returns null if not found. */
 export async function resolveFolderId(mailbox: string, displayName: string): Promise<string | null> {
   const t = await token();

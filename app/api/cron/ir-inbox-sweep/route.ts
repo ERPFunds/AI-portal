@@ -3,6 +3,7 @@ import { classifyInquiry } from "@/lib/agents/ir/inquiry-classifier";
 import { classifyInvestorEmail } from "@/lib/agents/ir/email-classifier";
 import {
   listInboxMessages,
+  listInboxMessagesSince,
   resolveSubfolderId,
   moveMessage,
   setMessageRead,
@@ -66,10 +67,13 @@ async function logToSalesforce(payload: {
 
 async function handleMailbox(
   mailbox: string,
-  dryRun: boolean
+  dryRun: boolean,
+  opts?: { sinceIso?: string; max?: number }
 ): Promise<{ mailbox: string; scanned: number; fresh: number; investor: number; details: string[] }> {
   const details: string[] = [];
-  const messages = await listInboxMessages(mailbox, TOP_PER_MAILBOX);
+  const messages = opts?.sinceIso
+    ? await listInboxMessagesSince(mailbox, opts.sinceIso, opts.max ?? 250)
+    : await listInboxMessages(mailbox, TOP_PER_MAILBOX);
   const fresh = await filterUnprocessedMessageIds(
     mailbox,
     messages.map((m) => m.id)
@@ -263,7 +267,16 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const force = params.get("force") === "1"; // bypass enabled-flag + hours gate for manual testing
   const dryRun = params.get("dryRun") === "1"; // classify + report only, no move/forward/log/mark
-  const mailboxOverride = params.get("mailbox")?.trim();
+  const mailboxOverride = params.get("mailbox")?.trim(); // one or comma-separated
+  // Historical catch-up: scan the Inbox back this many months (paginated past the live cap).
+  const sinceMonths = Math.min(Number(params.get("sinceMonths")) || 0, 24);
+  const max = Math.min(Math.max(Number(params.get("max")) || 60, 1), 300);
+  let opts: { sinceIso: string; max: number } | undefined;
+  if (sinceMonths > 0) {
+    const since = new Date();
+    since.setMonth(since.getMonth() - sinceMonths);
+    opts = { sinceIso: since.toISOString().split(".")[0] + "Z", max };
+  }
 
   if (!force && process.env.IR_SWEEP_ENABLED !== "true") {
     console.log("[ir-sweep] skipped: IR_SWEEP_ENABLED is not 'true'");
@@ -274,7 +287,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: "outside 8am-8pm CT" });
   }
 
-  const mailboxes = mailboxOverride ? [mailboxOverride] : sweepMailboxes();
+  const mailboxes = mailboxOverride
+    ? mailboxOverride.split(",").map((s) => s.trim()).filter(Boolean)
+    : sweepMailboxes();
   if (mailboxes.length === 0) {
     console.log("[ir-sweep] skipped: no mailboxes configured (set IR_SWEEP_MAILBOXES)");
     return NextResponse.json({ skipped: "no mailboxes configured (set IR_SWEEP_MAILBOXES)" });
@@ -283,7 +298,7 @@ export async function GET(req: NextRequest) {
   const results = [];
   for (const mailbox of mailboxes) {
     try {
-      results.push(await handleMailbox(mailbox, dryRun));
+      results.push(await handleMailbox(mailbox, dryRun, opts));
     } catch (e) {
       results.push({ mailbox, error: String(e) });
     }
