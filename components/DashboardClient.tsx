@@ -1806,11 +1806,16 @@ function LpDirectoryView() {
   const badge = (s: string) => (
     <span style={{ fontSize: 10, fontWeight: 600, color: COMMIT_TYPE_COLOR[s] ?? '#6b7280', background: COMMIT_TYPE_BG[s] ?? '#f3f4f6', border: `1px solid ${COMMIT_TYPE_COLOR[s] ?? '#e5e7eb'}22`, borderRadius: 5, padding: '2px 7px' }}>{s || 'TBD'}</span>
   )
-  const sfCell = (val: string | number | null, fmt?: (v: number) => string) => (
-    <td style={{ padding: '11px 14px', color: '#d1d5db', fontSize: 11 }}>
-      {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title="Connect Salesforce to populate">— <span style={{ fontSize: 9, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>SF</span></span>}
-    </td>
-  )
+  const sfCell = (val: string | number | null, fmt?: (v: number) => string, source: 'SF' | 'Yardi' = 'SF') => {
+    const badge = source === 'Yardi'
+      ? { bg: '#fef3c7', color: '#92400e', title: 'Yardi (manual for now — API expected fall)' }
+      : { bg: '#f3f4f6', color: '#9ca3af', title: 'From Salesforce' }
+    return (
+      <td style={{ padding: '11px 14px', color: '#d1d5db', fontSize: 11 }}>
+        {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title={badge.title}>— <span style={{ fontSize: 9, background: badge.bg, color: badge.color, borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>{source}</span></span>}
+      </td>
+    )
+  }
   const inputStyle: React.CSSProperties = { fontSize: 12, border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 7px', width: '100%', outline: 'none', background: '#fafafa' }
 
   const syncedLabel = data
@@ -1885,8 +1890,8 @@ function LpDirectoryView() {
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? 'Fund IV commitment schedule' : groupView },
               { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
               { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
-              { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
-              { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Salesforce <span style={{ background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span></span> as unknown as string },
+              { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
+              { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
                 <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
@@ -1923,7 +1928,8 @@ function LpDirectoryView() {
                   {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Status', 'Contact', 'Last Interaction', 'LP Type', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
-                      {(h === 'LP Type' || h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {h === 'LP Type' && <span style={{ marginLeft: 4, background: '#f3f4f6', color: '#9ca3af', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>SF</span>}
+                      {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
                   ))}
@@ -2031,8 +2037,8 @@ function LpDirectoryView() {
 
                       {/* Salesforce columns */}
                       {sfCell(lp.sfLpType)}
-                      {sfCell(lp.sfCalled, fmtUsd)}
-                      {sfCell(lp.sfDistributions, fmtUsd)}
+                      {sfCell(lp.sfCalled, fmtUsd, 'Yardi')}
+                      {sfCell(lp.sfDistributions, fmtUsd, 'Yardi')}
 
                       {/* Notes */}
                       <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11, maxWidth: 200 }}>
