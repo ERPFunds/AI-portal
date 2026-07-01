@@ -5,7 +5,7 @@ import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
 import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
-import { getInteractionsByEmail } from "@/lib/agents/ir/mailbox-interactions";
+import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 
 export const dynamic = "force-dynamic";
 
@@ -249,20 +249,27 @@ export async function GET() {
       }
     }
 
-    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team)
-    // with the LP's contact or broker rep. Overrides the IR-log source when newer.
+    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team) with the LP's
+    // contact or broker rep. SF Contact.Email is empty for these LPs, so we ALSO match by the
+    // primary-contact name and company name against the sender/recipient display names.
+    // Overrides the IR-log source when newer.
     try {
-      const interByEmail = await getInteractionsByEmail();
+      const { byEmail, byName } = await getInteractions();
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
       for (const lp of lps) {
-        const emails = lpEmails.get(lp) ?? [lp.email?.toLowerCase().trim()].filter(Boolean) as string[];
+        const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
+        const names = [lp.contact, lp.investor, lp.sfBrokerContact, lp.sfAdvisorContact]
+          .map((n) => norm(n || "")).filter((n) => n.length >= 4);
         let best: import("@/lib/agents/ir/mailbox-interactions").Interaction | null = null;
-        for (const e of emails) {
-          const it = interByEmail[e];
+        const consider = (it: import("@/lib/agents/ir/mailbox-interactions").Interaction | undefined) => {
           if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) best = it;
-        }
-        if (best && (!lp.lastInteraction || new Date(best.date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
-          const dir = best.direction === "sent" ? "Sent" : "Received";
-          lp.lastInteraction = { date: best.date, note: `${dir} · ${best.subject || "(no subject)"} (${best.mailbox})`, source: "email" };
+        };
+        for (const e of emails) consider(byEmail[e]);
+        for (const n of new Set(names)) consider(byName[n]);
+        if (best && (!lp.lastInteraction || new Date((best as import("@/lib/agents/ir/mailbox-interactions").Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
+          const b = best as import("@/lib/agents/ir/mailbox-interactions").Interaction;
+          const dir = b.direction === "sent" ? "Sent" : "Received";
+          lp.lastInteraction = { date: b.date, note: `${dir} · ${b.subject || "(no subject)"} (${b.mailbox})`, source: "email" };
         }
       }
     } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }

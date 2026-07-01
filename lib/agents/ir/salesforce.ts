@@ -348,6 +348,19 @@ export async function fetchLpSalesforceData(
       }
     } catch (e) { console.log("[lp-opp] err", String(e).slice(0, 120)); }
   }
+  // TEMP global probe: which Account.Names actually carry a Partner_Broker_Dealer? Reveals the
+  // real spelling so we can see why they miss the schedule name-match.
+  try {
+    const gq = `SELECT Account.Name, Partner_Broker_Dealer__r.Name FROM Opportunity WHERE Partner_Broker_Dealer__c != null ORDER BY CreatedDate DESC LIMIT 25`;
+    const gres = await sfFetch(`/query?q=${encodeURIComponent(gq)}`);
+    if (gres.ok) {
+      const recs = ((await gres.json()).records ?? []) as Record<string, unknown>[];
+      console.log("[lp-bd-global]", JSON.stringify({
+        total: recs.length,
+        samples: recs.slice(0, 20).map((r) => `${rel(r.Account) ?? "?"} => ${rel(r.Partner_Broker_Dealer__r) ?? "?"}`),
+      }));
+    } else { console.log("[lp-bd-global] query", gres.status, (await gres.text()).slice(0, 150)); }
+  } catch (e) { console.log("[lp-bd-global] err", String(e).slice(0, 120)); }
   console.log("[lp-opp-result]", JSON.stringify({
     matchedAccts: accIds.length,
     oppCount, oppWithPartner, oppRawSamples,

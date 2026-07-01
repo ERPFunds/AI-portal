@@ -17,17 +17,34 @@ export interface Interaction {
   direction: "sent" | "received";
 }
 
-let cache: { at: number; map: Record<string, Interaction> } | null = null;
+export interface InteractionMaps {
+  /** counterparty email(lowercased) -> most-recent interaction */
+  byEmail: Record<string, Interaction>;
+  /** counterparty display name(lowercased, normalized) -> most-recent interaction */
+  byName: Record<string, Interaction>;
+}
 
-async function scan(): Promise<Record<string, Interaction>> {
+let cache: { at: number; maps: InteractionMaps } | null = null;
+
+// Normalize a display name for matching: lowercase, strip punctuation, collapse spaces.
+function normName(s: string | undefined): string {
+  return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+async function scan(): Promise<InteractionMaps> {
   const t = await getGraphToken();
-  if (!t) return {};
-  const map: Record<string, Interaction> = {};
-  const put = (email: string | undefined, it: Interaction) => {
-    const k = (email || "").toLowerCase().trim();
-    if (!k) return;
-    const ex = map[k];
-    if (!ex || new Date(it.date).getTime() > new Date(ex.date).getTime()) map[k] = it;
+  if (!t) return { byEmail: {}, byName: {} };
+  const byEmail: Record<string, Interaction> = {};
+  const byName: Record<string, Interaction> = {};
+  const putInto = (map: Record<string, Interaction>, key: string, it: Interaction) => {
+    if (!key) return;
+    const ex = map[key];
+    if (!ex || new Date(it.date).getTime() > new Date(ex.date).getTime()) map[key] = it;
+  };
+  const put = (addr: { address?: string; name?: string } | undefined, it: Interaction) => {
+    if (!addr) return;
+    putInto(byEmail, (addr.address || "").toLowerCase().trim(), it);
+    putInto(byName, normName(addr.name), it);
   };
 
   for (const mb of mailboxes()) {
@@ -36,7 +53,7 @@ async function scan(): Promise<Record<string, Interaction>> {
       const url = `${GRAPH}/users/${encodeURIComponent(mb)}/mailFolders/inbox/messages?$select=from,subject,receivedDateTime&$orderby=receivedDateTime desc&$top=${TOP}`;
       const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
       if (r.ok) for (const m of ((await r.json()).value ?? []) as any[]) {
-        put(m.from?.emailAddress?.address, { date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received" });
+        put(m.from?.emailAddress, { date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received" });
       }
     } catch { /* skip */ }
     // Sent — the counterparties are the recipients.
@@ -44,17 +61,22 @@ async function scan(): Promise<Record<string, Interaction>> {
       const url = `${GRAPH}/users/${encodeURIComponent(mb)}/mailFolders/sentitems/messages?$select=toRecipients,subject,sentDateTime&$orderby=sentDateTime desc&$top=${TOP}`;
       const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
       if (r.ok) for (const m of ((await r.json()).value ?? []) as any[]) {
-        for (const rc of (m.toRecipients ?? [])) put(rc.emailAddress?.address, { date: m.sentDateTime, subject: m.subject || "", mailbox: mb, direction: "sent" });
+        for (const rc of (m.toRecipients ?? [])) put(rc.emailAddress, { date: m.sentDateTime, subject: m.subject || "", mailbox: mb, direction: "sent" });
       }
     } catch { /* skip */ }
   }
-  return map;
+  return { byEmail, byName };
 }
 
-/** email(lowercased) -> most-recent interaction across the IR mailboxes. Cached 15 min. */
+/** Most-recent interaction across the IR mailboxes, keyed by email AND by display name. Cached 15 min. */
+export async function getInteractions(): Promise<InteractionMaps> {
+  if (cache && Date.now() - cache.at < TTL_MS) return cache.maps;
+  const maps = await scan();
+  cache = { at: Date.now(), maps };
+  return maps;
+}
+
+/** Back-compat: email(lowercased) -> most-recent interaction. */
 export async function getInteractionsByEmail(): Promise<Record<string, Interaction>> {
-  if (cache && Date.now() - cache.at < TTL_MS) return cache.map;
-  const map = await scan();
-  cache = { at: Date.now(), map };
-  return map;
+  return (await getInteractions()).byEmail;
 }
