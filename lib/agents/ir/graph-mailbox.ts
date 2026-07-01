@@ -287,15 +287,15 @@ export async function importMimeMessage(
   return data.id as string;
 }
 
-/** Read a single message's subject, recipients, and text body (e.g. a draft before sending). */
+/** Read a single message's subject, recipients, text body, and conversation id. */
 export async function getMessageBody(
   mailbox: string,
   messageId: string
-): Promise<{ subject: string; to: string[]; bodyText: string }> {
+): Promise<{ subject: string; to: string[]; bodyText: string; conversationId: string | null; from: string; fromName: string | null; receivedDateTime: string | null }> {
   const t = await token();
   const res = await fetch(
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}` +
-      `?$select=subject,toRecipients,body`,
+      `?$select=subject,toRecipients,body,conversationId,from,receivedDateTime`,
     { headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' } }
   );
   if (!res.ok) throw new Error(`Graph get message ${res.status}: ${await res.text()}`);
@@ -306,7 +306,48 @@ export async function getMessageBody(
       .map((r: { emailAddress?: { address?: string } }) => r.emailAddress?.address || "")
       .filter(Boolean),
     bodyText: m.body?.content || "",
+    conversationId: m.conversationId ?? null,
+    from: m.from?.emailAddress?.address || "",
+    fromName: m.from?.emailAddress?.name ?? null,
+    receivedDateTime: m.receivedDateTime ?? null,
   };
+}
+
+/**
+ * List messages in a conversation across the whole mailbox (all folders). No server-side
+ * $orderby (combining it with a conversationId filter is rejected by Graph) — sort client-side.
+ */
+export async function listConversationMessages(
+  mailbox: string,
+  conversationId: string,
+  top = 25
+): Promise<{ id: string; from: string; fromName: string | null; subject: string; receivedDateTime: string; isDraft: boolean }[]> {
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
+    `?$filter=${encodeURIComponent(`conversationId eq '${conversationId.replace(/'/g, "''")}'`)}` +
+    `&$select=id,subject,from,receivedDateTime,isDraft&$top=${top}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
+  });
+  if (!res.ok) throw new Error(`Graph list conversation ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.value || []).map(
+    (m: {
+      id: string;
+      subject?: string;
+      receivedDateTime: string;
+      isDraft?: boolean;
+      from?: { emailAddress?: { address?: string; name?: string } };
+    }) => ({
+      id: m.id,
+      from: m.from?.emailAddress?.address || "",
+      fromName: m.from?.emailAddress?.name ?? null,
+      subject: m.subject || "",
+      receivedDateTime: m.receivedDateTime,
+      isDraft: m.isDraft ?? false,
+    })
+  );
 }
 
 /** Send an existing draft message (by id) from the mailbox. Irreversible — sends the email. */

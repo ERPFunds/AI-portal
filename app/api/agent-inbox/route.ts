@@ -5,6 +5,7 @@ import {
   listChildFolders,
   listFolderMessages,
   getMessageBody,
+  listConversationMessages,
   sendMailAs,
   deleteMessage,
   type MailItem,
@@ -101,6 +102,42 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ id: messageId, subject: m.subject, to: m.to, body: m.bodyText });
     } catch (err) {
       return NextResponse.json({ error: String(err) }, { status: 500 });
+    }
+  }
+
+  // The original inbound email a draft is replying to — found via the conversation, not
+  // by fragile subject/recipient matching. Returns the most recent inbound message in the
+  // same conversation (searches the team hub, then the send-as mailbox as a fallback).
+  const originalOf = req.nextUrl.searchParams.get("original");
+  if (originalOf) {
+    try {
+      const draft = await getMessageBody(TEAM_MAILBOX, originalOf);
+      if (!draft.conversationId) return NextResponse.json({ original: null });
+      const mine = new Set([TEAM_MAILBOX, SEND_AS_MAILBOX].map((a) => a.toLowerCase()));
+      const pickFrom = async (mailbox: string) => {
+        const msgs = await listConversationMessages(mailbox, draft.conversationId!);
+        const candidates = msgs
+          .filter((m) => m.id !== originalOf && !m.isDraft && m.from)
+          .sort((a, b) => new Date(b.receivedDateTime).getTime() - new Date(a.receivedDateTime).getTime());
+        // Prefer an inbound message (from someone other than us); fall back to any non-draft.
+        return candidates.find((m) => !mine.has(m.from.toLowerCase())) || candidates[0] || null;
+      };
+      let hit = await pickFrom(TEAM_MAILBOX);
+      let hostMailbox = TEAM_MAILBOX;
+      if (!hit && SEND_AS_MAILBOX.toLowerCase() !== TEAM_MAILBOX.toLowerCase()) {
+        hit = await pickFrom(SEND_AS_MAILBOX);
+        hostMailbox = SEND_AS_MAILBOX;
+      }
+      if (!hit) return NextResponse.json({ original: null });
+      const full = await getMessageBody(hostMailbox, hit.id);
+      return NextResponse.json({
+        original: {
+          id: hit.id, subject: hit.subject, from: hit.from, fromName: hit.fromName,
+          receivedISO: hit.receivedDateTime, body: full.bodyText,
+        },
+      });
+    } catch (err) {
+      return NextResponse.json({ error: String(err), original: null }, { status: 200 });
     }
   }
 

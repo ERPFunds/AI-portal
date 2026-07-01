@@ -1134,6 +1134,7 @@ function InboxView({
   const [sendMsg, setSendMsg] = useState<string | null>(null)
   const [bodyCache, setBodyCache] = useState<Record<string, string>>({})
   const [bodyLoading, setBodyLoading] = useState(false)
+  const [originalCache, setOriginalCache] = useState<Record<string, { subject: string; from: string; fromName: string | null; receivedISO: string; body: string } | null>>({})
   const [draftEdit, setDraftEdit] = useState('')
   const [draftEditId, setDraftEditId] = useState<string | null>(null)
   const [backfilling, setBackfilling] = useState(false)
@@ -1257,22 +1258,22 @@ function InboxView({
     }
   }, [selected?.id, selected?.isDraft, bodyCache, draftEditId])
 
-  // For a draft, find the original inbound message it replies to (same recipient, matching subject
-  // once Re:/Fw: prefixes are stripped) among the already-loaded IR items.
-  const original = selected?.isDraft ? findOriginalFor(selected) : undefined
   const selectedOwner = selected ? ownerFor(selected) : null
 
-  // Fetch the original's full body too, so it shows in full above the reply.
+  // For a draft, load the original inbound email it's replying to — resolved on the server via the
+  // conversation (robust), not by matching subject/recipient against the loaded list.
   React.useEffect(() => {
-    const id = original?.id
-    if (!id || bodyCache[id] !== undefined) return
+    const id = selected?.id
+    if (!selected?.isDraft || !id || originalCache[id] !== undefined) return
     let cancelled = false
-    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}`)
+    fetch(`/api/agent-inbox?original=${encodeURIComponent(id)}`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [id]: d.body })) })
-      .catch(() => {})
+      .then((d) => { if (!cancelled) setOriginalCache((c) => ({ ...c, [id]: d?.original ?? null })) })
+      .catch(() => { if (!cancelled) setOriginalCache((c) => ({ ...c, [id]: null })) })
     return () => { cancelled = true }
-  }, [original?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id, selected?.isDraft])  // eslint-disable-line react-hooks/exhaustive-deps
+  const original = selected?.isDraft ? originalCache[selected.id] ?? null : null
+  const originalPending = Boolean(selected?.isDraft && selected.id && originalCache[selected.id] === undefined)
 
   const subtitle = error
     ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
@@ -1388,14 +1389,17 @@ function InboxView({
                 <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`}>{FOLDER_LABEL[selected.folderKind]}</span>
               </div>
               <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
-                {/* For a draft, show the original message it's replying to (when we can match it). */}
+                {/* For a draft, show the original email it's replying to (resolved via the conversation). */}
+                {selected.isDraft && originalPending && (
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 12 }}>Finding the email being replied to…</div>
+                )}
                 {selected.isDraft && original && (
                   <div style={{ background: '#fff', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
                     <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>↩ Replying to</div>
                     <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{original.subject || '(no subject)'}</div>
                     <div style={{ fontSize: 11, color: '#9ca3af', margin: '2px 0 8px' }}>{original.fromName || original.from} · {formatInboxTime(original.receivedISO)}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.55, whiteSpace: 'pre-wrap', maxHeight: 220, overflowY: 'auto', borderTop: '1px solid #f3f4f6', paddingTop: 8 }}>
-                      {bodyCache[original.id] ?? (original.preview || '(loading…)')}
+                    <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.55, whiteSpace: 'pre-wrap', maxHeight: 260, overflowY: 'auto', borderTop: '1px solid #f3f4f6', paddingTop: 8 }}>
+                      {original.body || '(no body)'}
                     </div>
                   </div>
                 )}
