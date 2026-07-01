@@ -1953,7 +1953,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Status', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
                       {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
@@ -2023,15 +2023,6 @@ function LpDirectoryView() {
                         {isEditing
                           ? <input value={ev.commitment} onChange={e => setEditValues(v => ({ ...v, commitment: e.target.value }))} placeholder="$1M" style={{ ...inputStyle, width: 80 }} />
                           : lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : lp.commitment || '—'}
-                      </td>
-
-                      {/* Status / commitType */}
-                      <td style={{ padding: '11px 14px' }}>
-                        {isEditing
-                          ? <select value={ev.commitType} onChange={e => setEditValues(v => ({ ...v, commitType: e.target.value }))} style={{ ...inputStyle, width: 'auto' }}>
-                              {COMMIT_TYPE_OPTIONS.map(o => <option key={o}>{o}</option>)}
-                            </select>
-                          : badge(lp.commitType)}
                       </td>
 
                       {/* Last Interaction — from IR agent logs or Salesforce */}
