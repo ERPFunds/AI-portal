@@ -146,6 +146,13 @@ export async function GET() {
 
     const dataRows = allRows.slice(headerRowIdx + 1).filter(r => r.some(c => c.trim()));
 
+    // TEMP: dump the spreadsheet's real columns + a couple sample rows to see whether a
+    // status/closed column exists that we could read instead of the hand-entered Notes Type.
+    console.log("[lp-xls-cols]", JSON.stringify({
+      headers: rawHeaders,
+      sampleRows: dataRows.filter(r => (r[iInvestor] ?? "").trim() && (r[iCommitment] ?? "").trim()).slice(0, 3),
+    }).slice(0, 1500));
+
     // Walk rows — section-header rows (non-empty investor name, empty commitment +
     // contact + email + phone) become group labels for the LPs that follow them.
     let currentGroup = "All";
