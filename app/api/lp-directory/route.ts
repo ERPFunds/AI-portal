@@ -256,32 +256,38 @@ export async function GET() {
       }
     }
 
-    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team) with the LP's
-    // contact or broker rep. SF Contact.Email is empty for these LPs, so we ALSO match by the
-    // primary-contact name and company name against the sender/recipient display names.
-    // Overrides the IR-log source when newer.
+    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team) with the LP.
+    // SF Contact.Email is empty for these LPs, so we match by the LP's REAL primary-contact name
+    // (the schedule contact + the SF primary contact) against the sender/recipient display names.
+    // We deliberately do NOT match on the entity/trust name or the fuzzy broker rep — those
+    // cross-attributed unrelated people (e.g. a shared first name). Overrides IR-log when newer.
+    type Interaction = import("@/lib/agents/ir/mailbox-interactions").Interaction;
     try {
       const { byEmail, byName } = await getInteractions();
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
+      const laLog: string[] = [];
       for (const lp of lps) {
         const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
-        const names = [lp.contact, lp.investor, lp.sfBrokerContact, lp.sfAdvisorContact]
-          .map((n) => norm(n || "")).filter((n) => n.length >= 4);
-        let best: import("@/lib/agents/ir/mailbox-interactions").Interaction | null = null;
-        const consider = (it: import("@/lib/agents/ir/mailbox-interactions").Interaction | undefined) => {
-          if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) best = it;
+        const names = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter(isFullName);
+        let best: Interaction | null = null;
+        let via = "";
+        const consider = (it: Interaction | undefined, tag: string) => {
+          if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) { best = it; via = tag; }
         };
-        for (const e of emails) consider(byEmail[e]);
-        for (const n of new Set(names)) consider(byName[n]);
-        if (best && (!lp.lastInteraction || new Date((best as import("@/lib/agents/ir/mailbox-interactions").Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
-          const b = best as import("@/lib/agents/ir/mailbox-interactions").Interaction;
+        for (const e of emails) consider(byEmail[e], "email");
+        for (const n of new Set(names)) consider(byName[n], n);
+        if (best && (!lp.lastInteraction || new Date((best as Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
+          const b = best as Interaction;
           const dir = b.direction === "sent" ? "Sent to" : "From";
           const who = b.counterparty ? ` ${b.counterparty}` : "";
           const subj = b.subject ? ` · ${b.subject}` : "";
           const prev = b.preview ? ` — ${b.preview.slice(0, 140)}` : "";
           lp.lastInteraction = { date: b.date, note: `${dir}${who}${subj}${prev} (${b.mailbox})`, source: "email" };
+          if (laLog.length < 15) laLog.push(`${lp.investor} <=[${via}]= ${b.direction} ${b.counterparty}`);
         }
       }
+      console.log("[lp-lastint]", JSON.stringify({ samples: laLog }).slice(0, 1800));
     } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }
 
     // Collect ordered unique groups (preserves sheet order)
