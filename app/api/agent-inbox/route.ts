@@ -41,6 +41,17 @@ export interface AgentInboxItem {
   status: ItemStatus;
   isDraft: boolean;
   webLink: string | null;
+  conversationId: string | null;
+  owner: "Meghan" | "William" | null; // which IR lead's thread this belongs to
+  originalReceivedISO: string | null;  // when the inbound email this draft replies to arrived
+}
+
+// Which IR lead a message belongs to, from its recipients (the mailbox the investor wrote to).
+function ownerOf(addrs: string[]): "Meghan" | "William" | null {
+  const s = addrs.map((a) => a.toLowerCase());
+  if (s.some((a) => a.includes("mberry@"))) return "Meghan";
+  if (s.some((a) => a.includes("wmeyer@"))) return "William";
+  return null;
 }
 
 export interface AgentInboxFolder {
@@ -84,6 +95,9 @@ function toItem(
     status: isDraft ? "needs-review" : statusForFolder(kind),
     isDraft,
     webLink: m.webLink,
+    conversationId: m.conversationId,
+    owner: isDraft ? null : ownerOf(m.toRecipients),
+    originalReceivedISO: isDraft ? null : m.receivedDateTime,
   };
 }
 
@@ -178,6 +192,26 @@ export async function GET(req: NextRequest) {
     );
     drafts.forEach((m) => items.push(toItem(m, "Drafts (awaiting approval)", "draft")));
     folders.push({ name: "Drafts (awaiting approval)", kind: "draft", count: drafts.length });
+
+    // Attribute each draft to an IR lead (Meghan/William) + surface when the email it replies to
+    // arrived, by matching the draft's conversation to the inbound message in the synced folders.
+    const inboundByConversation = new Map<string, AgentInboxItem>();
+    for (const it of items) {
+      if (it.isDraft || !it.conversationId) continue;
+      const prev = inboundByConversation.get(it.conversationId);
+      // Prefer the message that tells us the owner; otherwise keep the most recent.
+      if (!prev || (!prev.owner && it.owner) ||
+          (Boolean(prev.owner) === Boolean(it.owner) && (it.receivedISO || "") > (prev.receivedISO || "")))
+        inboundByConversation.set(it.conversationId, it);
+    }
+    for (const it of items) {
+      if (!it.isDraft || !it.conversationId) continue;
+      const inbound = inboundByConversation.get(it.conversationId);
+      if (inbound) {
+        it.owner = inbound.owner;
+        it.originalReceivedISO = inbound.receivedISO;
+      }
+    }
 
     return NextResponse.json({
       mailbox: TEAM_MAILBOX,

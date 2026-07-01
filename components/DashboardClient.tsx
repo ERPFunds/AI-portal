@@ -1059,6 +1059,9 @@ interface AgentInboxItem {
   status: 'active-thread' | 'pending' | 'handled' | 'needs-review'
   isDraft: boolean
   webLink: string | null
+  conversationId?: string | null
+  owner?: 'Meghan' | 'William' | null
+  originalReceivedISO?: string | null
 }
 interface AgentInboxFolder { name: string; kind: AgentInboxItem['folderKind']; count: number }
 interface AgentInboxResponse {
@@ -1220,10 +1223,14 @@ function InboxView({
     return cands.find((it) => stripReSubj(it.subject) === stripReSubj(draft.subject)) ?? cands[0]
   }
   const ownerFor = (item: AgentInboxItem): IrOwner | null => {
+    if (item.owner) return item.owner            // server-attributed (via conversation) — reliable
     if (!item.isDraft) return irOwnerOf(item.to)
     const orig = findOriginalFor(item)
     return orig ? irOwnerOf(orig.to) : null
   }
+  // When did the email this item replies to arrive? (server value first, else matched inbound)
+  const arrivedISO = (item: AgentInboxItem): string | null =>
+    item.originalReceivedISO || (item.isDraft ? findOriginalFor(item)?.receivedISO ?? null : item.receivedISO)
   const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
 
   const filtered = items.filter((item) => {
@@ -1341,23 +1348,37 @@ function InboxView({
             </div>
           </div>
           <div className="inbox-list">
-            {filtered.map((item, i) => (
-              <div
-                key={item.id}
-                className={`inbox-item ${item.status} ${i === selectedInboxIdx ? 'active' : ''}`}
-                onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
-              >
-                <div className="inbox-item-header">
-                  <div className="inbox-from">{item.fromName || item.from || (item.isDraft ? `To: ${item.to[0] ?? '—'}` : '—')}</div>
-                  <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
+            {(['Meghan', 'William', null] as const).map((grp) => {
+              const rows = filtered.map((item, i) => ({ item, i })).filter(({ item }) => (ownerFor(item) ?? null) === grp)
+              if (rows.length === 0) return null
+              const arrived = (item: AgentInboxItem) => arrivedISO(item)
+              return (
+                <div key={grp ?? 'unassigned'}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: grp ? '#4338ca' : '#9ca3af', padding: '10px 12px 4px', background: '#f9fafb', borderBottom: '1px solid #eef2ff', position: 'sticky', top: 0, zIndex: 1 }}>
+                    {grp ?? 'Unassigned'} · {rows.length}
+                  </div>
+                  {rows.map(({ item, i }) => (
+                    <div
+                      key={item.id}
+                      className={`inbox-item ${item.status} ${i === selectedInboxIdx ? 'active' : ''}`}
+                      onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
+                    >
+                      <div className="inbox-item-header">
+                        <div className="inbox-from">{item.fromName || item.from || (item.isDraft ? `To: ${item.to[0] ?? '—'}` : '—')}</div>
+                        <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
+                      </div>
+                      <div className="inbox-subject">{item.subject || '(no subject)'}</div>
+                      {item.isDraft && arrived(item) && (
+                        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>✉ Email arrived {formatInboxTime(arrived(item)!)}</div>
+                      )}
+                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
+                        <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="inbox-subject">{item.subject || '(no subject)'}</div>
-                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
-                  {ownerFor(item) && <span className="badge" style={{ fontSize: 9, background: '#eef2ff', color: '#4338ca', border: '1px solid #c7d2fe' }}>{ownerFor(item)}</span>}
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {!loading && filtered.length === 0 && !error && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
                 <div style={{ fontSize: 28 }}>📭</div>

@@ -64,6 +64,7 @@ export interface MailItem extends InboxMessage {
   webLink: string | null;
   isDraft: boolean;
   lastModifiedDateTime: string | null;
+  conversationId: string | null;
 }
 
 /** List a folder's immediate child folders (id, name, counts). */
@@ -106,7 +107,7 @@ export async function listFolderMessages(
   const t = await token();
   const url =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folderIdOrWellKnown}/messages` +
-    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft,conversationId` +
     `&$orderby=${encodeURIComponent(orderBy)}&$top=${top}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
@@ -123,6 +124,7 @@ export async function listFolderMessages(
       lastModifiedDateTime?: string;
       webLink?: string;
       isDraft?: boolean;
+      conversationId?: string;
       from?: { emailAddress?: { address?: string; name?: string } };
       toRecipients?: { emailAddress?: { address?: string } }[];
     }): MailItem => ({
@@ -136,6 +138,7 @@ export async function listFolderMessages(
       lastModifiedDateTime: m.lastModifiedDateTime ?? null,
       webLink: m.webLink ?? null,
       isDraft: m.isDraft ?? false,
+      conversationId: m.conversationId ?? null,
       toRecipients: (m.toRecipients || [])
         .map((r) => r.emailAddress?.address || "")
         .filter(Boolean),
