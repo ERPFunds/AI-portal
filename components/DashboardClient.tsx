@@ -1210,9 +1210,17 @@ function InboxView({
 
   // Owner of an item = which mailbox the investor wrote to. For a draft (whose recipient is the
   // investor), fall back to the matched original inbound message's recipients.
+  // Match a draft to the inbound message it replies to — keyed on the investor's address (the AI
+  // often rewords the subject), preferring an exact subject match, else the most recent from them.
+  const findOriginalFor = (draft: AgentInboxItem): AgentInboxItem | undefined => {
+    const cands = items
+      .filter((it) => !it.isDraft && it.from && draft.to.some((a) => a.toLowerCase() === it.from.toLowerCase()))
+      .sort((a, b) => (b.receivedISO || '').localeCompare(a.receivedISO || ''))
+    return cands.find((it) => stripReSubj(it.subject) === stripReSubj(draft.subject)) ?? cands[0]
+  }
   const ownerFor = (item: AgentInboxItem): IrOwner | null => {
     if (!item.isDraft) return irOwnerOf(item.to)
-    const orig = items.find((o) => !o.isDraft && o.from && item.to.some((a) => a.toLowerCase() === o.from.toLowerCase()) && stripReSubj(o.subject) === stripReSubj(item.subject))
+    const orig = findOriginalFor(item)
     return orig ? irOwnerOf(orig.to) : null
   }
   const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
@@ -1251,9 +1259,7 @@ function InboxView({
 
   // For a draft, find the original inbound message it replies to (same recipient, matching subject
   // once Re:/Fw: prefixes are stripped) among the already-loaded IR items.
-  const original = selected?.isDraft
-    ? items.find((it) => !it.isDraft && it.from && selected.to.some((a) => a.toLowerCase() === it.from.toLowerCase()) && stripReSubj(it.subject) === stripReSubj(selected.subject))
-    : undefined
+  const original = selected?.isDraft ? findOriginalFor(selected) : undefined
   const selectedOwner = selected ? ownerFor(selected) : null
 
   // Fetch the original's full body too, so it shows in full above the reply.
