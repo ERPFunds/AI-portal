@@ -6,9 +6,9 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   all: [
     { section: 'Command' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
     { icon: '🤖', label: 'Agent Hub',         view: 'agents' },
     { section: 'Investor' },
+    { icon: '📥', label: 'IR Inbox',            view: 'inbox' },
     { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { icon: '👥', label: 'LP Directory',        view: 'lp' },
@@ -31,8 +31,8 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   executive: [
     { section: 'Overview' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',       view: 'inbox' },
     { section: 'Investor' },
+    { icon: '📥', label: 'IR Inbox',             view: 'inbox' },
     { icon: '🔬', label: 'Market & Comps',       view: 'market-research' },
     { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
@@ -43,7 +43,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   property: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Leasing' },
     { icon: '🔑', label: 'Leasing',  view: 'leasing' },
     { icon: '🏢', label: 'Properties',          view: 'rentroll' },
@@ -58,7 +58,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   finance: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Finance' },
     { icon: '🔐', label: 'Financial Controls', view: 'fincontrols' },
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
@@ -69,7 +69,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   ops: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Operations' },
     { icon: '🔧', label: 'Inspections',        view: 'workorders' },
     { icon: '🔑', label: 'Vendor Contracts',   view: 'vendors' },
@@ -80,7 +80,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   leasing: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Leasing' },
     { icon: '🔑', label: 'Leasing',  view: 'leasing' },
     { icon: '🏢', label: 'Properties',          view: 'rentroll' },
@@ -91,7 +91,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   accounting: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Finance' },
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
     { section: 'Docs' },
@@ -101,8 +101,8 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   pippi: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
     { section: 'Investor' },
+    { icon: '📥', label: 'IR Inbox',           view: 'inbox' },
     { icon: '👥', label: 'LP Directory',       view: 'lp' },
     { icon: '💬', label: 'Learned Q&A',             view: 'ir-qa' },
     { section: 'Property' },
@@ -115,7 +115,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   kasandra: [
     { section: 'Overview' },
     { icon: '⚡', label: 'Dashboard',          view: 'dashboard' },
-    { icon: '📥', label: 'Agent Inbox',        view: 'inbox' },
+    { icon: '📥', label: 'IR Inbox',        view: 'inbox' },
     { section: 'Finance' },
     { icon: '🧾', label: 'Accounting',         view: 'accounting' },
     { section: 'Docs' },
