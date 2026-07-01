@@ -324,6 +324,8 @@ export async function fetchLpSalesforceData(
   // 1b) LP Type + real broker/advisor from each LP's Opportunity (Account = the LP; the Partner_*
   //     lookups point to the broker/advisor Account; Type = the Investment Type e.g. "DST").
   const accIds = Object.keys(idToKey);
+  let oppCount = 0, oppWithPartner = 0;
+  const oppRawSamples: unknown[] = [];
   for (let i = 0; i < accIds.length; i += 200) {
     const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     try {
@@ -331,6 +333,9 @@ export async function fetchLpSalesforceData(
       const ores = await sfFetch(`/query?q=${encodeURIComponent(oq)}`);
       if (!ores.ok) { console.log("[lp-opp] query", ores.status, (await ores.text()).slice(0, 150)); continue; }
       for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
+        oppCount++;
+        if (o.Partner_Advisor__r || o.Partner_Brokerage__r || o.Partner_Broker_Dealer__r || o.Partner_Advisor_Contact__r) oppWithPartner++;
+        if (oppRawSamples.length < 4) oppRawSamples.push({ acct: idToKey[String(o.AccountId)], type: o.Type, adv: o.Partner_Advisor__r, brk: o.Partner_Brokerage__r, bd: o.Partner_Broker_Dealer__r });
         const row = byName[idToKey[String(o.AccountId)] ?? ""];
         if (!row) continue;
         if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
@@ -345,6 +350,7 @@ export async function fetchLpSalesforceData(
   }
   console.log("[lp-opp-result]", JSON.stringify({
     matchedAccts: accIds.length,
+    oppCount, oppWithPartner, oppRawSamples,
     withAdvisor: Object.values(byName).filter((r) => r.advisorFirm).length,
     advisorSamples: Object.values(byName).filter((r) => r.advisorFirm).slice(0, 5).map((r) => `${r.advisorFirm} / ${r.advisorContact ?? ""}`),
   }));
