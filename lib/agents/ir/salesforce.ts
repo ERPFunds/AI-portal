@@ -337,6 +337,11 @@ export async function fetchLpSalesforceData(
       }
     } catch (e) { console.log("[lp-opp] err", String(e).slice(0, 120)); }
   }
+  console.log("[lp-opp-result]", JSON.stringify({
+    matchedAccts: accIds.length,
+    withAdvisor: Object.values(byName).filter((r) => r.advisorFirm).length,
+    advisorSamples: Object.values(byName).filter((r) => r.advisorFirm).slice(0, 5).map((r) => `${r.advisorFirm} / ${r.advisorContact ?? ""}`),
+  }));
   if (!fieldMap.lpType) fieldMap.lpType = "Opportunity.Type";
 
   // 2) Broker/advisor: each LP's primary contact (from the schedule) is a Salesforce Contact whose
