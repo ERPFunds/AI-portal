@@ -319,6 +319,37 @@ export async function sendDraftMessage(mailbox: string, messageId: string): Prom
   if (!res.ok) throw new Error(`Graph send draft ${res.status}: ${await res.text()}`);
 }
 
+/** Send a NEW message as `mailbox` (e.g. mberry@) — used to reply from a person's own address. */
+export async function sendMailAs(
+  mailbox: string,
+  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML" }
+): Promise<void> {
+  const t = await token();
+  const res = await fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/sendMail`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      message: {
+        subject: p.subject,
+        body: { contentType: p.contentType ?? "Text", content: p.content },
+        toRecipients: p.to.map((a) => ({ emailAddress: { address: a } })),
+      },
+      saveToSentItems: true,
+    }),
+  });
+  if (!res.ok) throw new Error(`Graph sendMail ${res.status}: ${await res.text()}`);
+}
+
+/** Delete a message (moves it to Deleted Items). */
+export async function deleteMessage(mailbox: string, messageId: string): Promise<void> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${t}` } }
+  );
+  if (!res.ok) throw new Error(`Graph delete ${res.status}: ${await res.text()}`);
+}
+
 /** Forward a message to a recipient, with an optional comment, sent as the mailbox. */
 export async function forwardMessage(
   mailbox: string,

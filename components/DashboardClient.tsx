@@ -1121,6 +1121,9 @@ function InboxView({
   const [sendMsg, setSendMsg] = useState<string | null>(null)
   const [bodyCache, setBodyCache] = useState<Record<string, string>>({})
   const [bodyLoading, setBodyLoading] = useState(false)
+  const [draftEdit, setDraftEdit] = useState('')
+  const [draftEditId, setDraftEditId] = useState<string | null>(null)
+  const SEND_FROM = 'mberry@erpfunds.com'
   const [backfilling, setBackfilling] = useState(false)
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null)
 
@@ -1169,14 +1172,15 @@ function InboxView({
   async function approveAndSend(item: AgentInboxItem) {
     if (!item.isDraft) return
     const to = item.to.join(', ') || 'the recipient'
-    if (!window.confirm(`Send this draft to ${to}?\n\nThis sends the email immediately from ${data?.mailbox ?? 'team@erpfunds.com'} and cannot be undone.`)) return
+    if (!(draftEdit && draftEdit.trim())) { setSendMsg('Draft is empty — nothing to send'); return }
+    if (!window.confirm(`Send to ${to} from ${SEND_FROM}?\n\nThis sends the email immediately and cannot be undone.`)) return
     setSendingId(item.id)
     setSendMsg(null)
     try {
       const res = await fetch('/api/agent-inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', id: item.id }),
+        body: JSON.stringify({ action: 'send', id: item.id, body: draftEdit, from: SEND_FROM }),
       })
       const json = await res.json()
       if (!res.ok) { setSendMsg(`Send failed: ${json.error || res.status}`) }
@@ -1213,6 +1217,14 @@ function InboxView({
       .finally(() => { if (!cancelled) setBodyLoading(false) })
     return () => { cancelled = true }
   }, [selected?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Seed the editable draft box once the full body loads for a newly-opened draft.
+  React.useEffect(() => {
+    const id = selected?.id
+    if (selected?.isDraft && id && bodyCache[id] !== undefined && draftEditId !== id) {
+      setDraftEdit(bodyCache[id]); setDraftEditId(id)
+    }
+  }, [selected?.id, selected?.isDraft, bodyCache, draftEditId])
 
   const subtitle = error
     ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
@@ -1317,17 +1329,30 @@ function InboxView({
               <div style={{ flex: 1, padding: 20, overflowY: 'auto' }}>
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-                    {selected.isDraft ? `Draft to: ${selected.to.join(', ') || '—'}` : `From: ${selected.from}`}
+                    {selected.isDraft ? `Draft to: ${selected.to.join(', ') || '—'} · sends from ${SEND_FROM}` : `From: ${selected.from}`}
                   </div>
-                  <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                    {bodyCache[selected.id] ?? (bodyLoading ? 'Loading…' : (selected.preview || '(no preview available)'))}
-                  </div>
+                  {selected.isDraft ? (
+                    bodyLoading && bodyCache[selected.id] === undefined ? (
+                      <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading draft…</div>
+                    ) : (
+                      <textarea
+                        value={draftEdit}
+                        onChange={(e) => setDraftEdit(e.target.value)}
+                        spellCheck
+                        style={{ width: '100%', minHeight: 260, fontSize: 13, lineHeight: 1.6, color: '#111827', border: '1px solid #d1d5db', borderRadius: 6, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
+                      />
+                    )
+                  ) : (
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {bodyCache[selected.id] ?? (bodyLoading ? 'Loading…' : (selected.preview || '(no preview available)'))}
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="draft-panel">
                 <div className="draft-label">
                   <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`} style={{ fontSize: 10 }}>{FOLDER_LABEL[selected.folderKind]}</span>
-                  {selected.isDraft ? 'AI draft prepared — review and send in Outlook' : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
+                  {selected.isDraft ? `Review & edit the reply above, then send from ${SEND_FROM}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
                 </div>
                 <div className="draft-actions" style={{ alignItems: 'center' }}>
                   {selected.isDraft && (

@@ -5,7 +5,8 @@ import {
   listChildFolders,
   listFolderMessages,
   getMessageBody,
-  sendDraftMessage,
+  sendMailAs,
+  deleteMessage,
   type MailItem,
 } from "@/lib/agents/ir/graph-mailbox";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
@@ -16,6 +17,9 @@ export const maxDuration = 60;
 
 // Shared mailbox the IR (Agent 2) traffic lands in. Overridable via env.
 const TEAM_MAILBOX = process.env.IR_TEAM_MAILBOX || "team@erpfunds.com";
+// Replies are sent AS this mailbox (the IR lead's own address), even though triage/drafting
+// happens in the team hub. Overridable via env.
+const SEND_AS_MAILBOX = process.env.IR_SEND_AS_MAILBOX || "mberry@erpfunds.com";
 // Top-level folder whose subtree we mirror into the Agent Inbox.
 const IR_FOLDER = process.env.IR_FOLDER_NAME || "Investor Relations";
 const PER_FOLDER = 30; // messages to pull per folder
@@ -164,7 +168,7 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { action?: string; id?: string };
+  let body: { action?: string; id?: string; body?: string; from?: string };
   try {
     body = await req.json();
   } catch {
@@ -176,29 +180,31 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Read the reply content BEFORE sending (it leaves Drafts once sent).
-    let detail: { subject: string; to: string[]; bodyText: string } | null = null;
-    try {
-      detail = await getMessageBody(TEAM_MAILBOX, body.id);
-    } catch {
-      detail = null;
+    // Read the draft's recipients/subject/body. The reply is SENT AS a person's own mailbox
+    // (default mberry@) — not from the team hub where it was triaged/drafted — so it comes from
+    // Meghan. We compose a fresh message (edited text wins over the draft body), then remove the
+    // now-obsolete team@ draft.
+    const detail = await getMessageBody(TEAM_MAILBOX, body.id);
+    if (!detail.to.length) {
+      return NextResponse.json({ error: "Draft has no recipient" }, { status: 400 });
     }
+    const sendFrom = body.from || SEND_AS_MAILBOX;
+    const content = typeof body.body === "string" && body.body.trim() ? body.body : detail.bodyText;
 
-    await sendDraftMessage(TEAM_MAILBOX, body.id);
+    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text" });
+    // Clean up the draft that lived in the team hub (best-effort).
+    try { await deleteMessage(TEAM_MAILBOX, body.id); } catch { /* leave it if delete fails */ }
 
-    // Workflow #3: AI-driven note from what was sent, logged to the Salesforce contact(s).
+    // Workflow #3: AI-driven note from what was actually sent, logged to the Salesforce contact(s).
     let note = "note-skip(no SF creds)";
-    if (detail && salesforceConfigured()) {
+    if (salesforceConfigured()) {
       try {
-        const { note: noteText, nextStep } = await composeContactNote({
-          subject: detail.subject,
-          sentReply: detail.bodyText,
-        });
+        const { note: noteText, nextStep } = await composeContactNote({ subject: detail.subject, sentReply: content });
         const recipients = detail.to.filter((a) => !a.toLowerCase().endsWith("@erpfunds.com"));
         const sentDate = new Date().toISOString();
         const results = await Promise.all(
           recipients.map((to) =>
-            logReplyNote({ contactEmail: to, subject: detail!.subject, note: noteText, nextStep, sentDate })
+            logReplyNote({ contactEmail: to, subject: detail.subject, note: noteText, nextStep, sentDate })
               .catch((e) => `sf-fail(${String(e).slice(0, 60)})`)
           )
         );
@@ -208,7 +214,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    return NextResponse.json({ ok: true, sent: body.id, sentBy: user.email ?? null, note });
+    return NextResponse.json({ ok: true, sent: body.id, sentFrom: sendFrom, note });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
