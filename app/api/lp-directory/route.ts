@@ -275,8 +275,11 @@ export async function GET() {
         for (const n of new Set(names)) consider(byName[n]);
         if (best && (!lp.lastInteraction || new Date((best as import("@/lib/agents/ir/mailbox-interactions").Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
           const b = best as import("@/lib/agents/ir/mailbox-interactions").Interaction;
-          const dir = b.direction === "sent" ? "Sent" : "Received";
-          lp.lastInteraction = { date: b.date, note: `${dir} · ${b.subject || "(no subject)"} (${b.mailbox})`, source: "email" };
+          const dir = b.direction === "sent" ? "Sent to" : "From";
+          const who = b.counterparty ? ` ${b.counterparty}` : "";
+          const subj = b.subject ? ` · ${b.subject}` : "";
+          const prev = b.preview ? ` — ${b.preview.slice(0, 140)}` : "";
+          lp.lastInteraction = { date: b.date, note: `${dir}${who}${subj}${prev} (${b.mailbox})`, source: "email" };
         }
       }
     } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }

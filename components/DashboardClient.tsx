@@ -2035,11 +2035,11 @@ function LpDirectoryView() {
                       </td>
 
                       {/* Last Interaction — from IR agent logs or Salesforce */}
-                      <td style={{ padding: '11px 14px', fontSize: 11, maxWidth: 200 }}>
+                      <td style={{ padding: '11px 14px', fontSize: 11, maxWidth: 280 }}>
                         {lp.lastInteraction ? (
                           <div>
-                            <div style={{ color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={lp.lastInteraction.note}>
-                              {lp.lastInteraction.note.slice(0, 60)}{lp.lastInteraction.note.length > 60 ? '…' : ''}
+                            <div style={{ color: '#111827', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', lineHeight: 1.35 }} title={lp.lastInteraction.note}>
+                              {lp.lastInteraction.note}
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 3 }}>
                               <span style={{ fontSize: 10, color: '#9ca3af' }}>

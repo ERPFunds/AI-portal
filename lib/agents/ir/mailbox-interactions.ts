@@ -1,8 +1,15 @@
 import { getGraphToken } from "@/lib/agents/graph-token";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
-const TOP = 250; // recent messages per folder per mailbox
+const PAGE = 100;              // messages per Graph page
+const MAX_PAGES = 30;          // safety cap => up to 3,000 msgs per folder in the window
 const TTL_MS = 15 * 60_000;
+
+// How many months of history to scan (default 7). Override with IR_INTERACTION_MONTHS.
+function monthsBack(): number {
+  const n = parseInt(process.env.IR_INTERACTION_MONTHS || "7", 10);
+  return Number.isFinite(n) && n > 0 ? n : 7;
+}
 
 // Mailboxes whose inbox + sent are scanned for LP/broker interactions.
 function mailboxes(): string[] {
@@ -15,6 +22,8 @@ export interface Interaction {
   subject: string;
   mailbox: string;
   direction: "sent" | "received";
+  counterparty: string;   // display name (or email) of the LP/broker on the other side
+  preview: string;        // short body snippet for context
 }
 
 export interface InteractionMaps {
@@ -29,6 +38,38 @@ let cache: { at: number; maps: InteractionMaps } | null = null;
 // Normalize a display name for matching: lowercase, strip punctuation, collapse spaces.
 function normName(s: string | undefined): string {
   return (s || "").toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// A readable counterparty label from a Graph emailAddress object.
+function label(addr: { name?: string; address?: string } | undefined): string {
+  const name = (addr?.name || "").trim();
+  const email = (addr?.address || "").trim();
+  if (name && !/^[\w.+-]+@[\w.-]+$/.test(name)) return name; // real name, not just the email echoed
+  return email || name;
+}
+
+// Fetch every message in the window for one folder, following @odata.nextLink.
+async function fetchFolder(
+  token: string, mailbox: string, folder: "inbox" | "sentitems", dateField: string, sinceIso: string,
+): Promise<any[]> {
+  const select = folder === "inbox"
+    ? "from,subject,bodyPreview,receivedDateTime"
+    : "toRecipients,subject,bodyPreview,sentDateTime";
+  let url: string | null =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folder}/messages` +
+    `?$select=${select}&$filter=${encodeURIComponent(`${dateField} ge ${sinceIso}`)}` +
+    `&$orderby=${encodeURIComponent(`${dateField} desc`)}&$top=${PAGE}`;
+  const out: any[] = [];
+  for (let page = 0; url && page < MAX_PAGES; page++) {
+    const r: Response = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.body-content-type="text"' },
+    });
+    if (!r.ok) break;
+    const j = await r.json();
+    for (const m of (j.value ?? [])) out.push(m);
+    url = j["@odata.nextLink"] ?? null;
+  }
+  return out;
 }
 
 async function scan(): Promise<InteractionMaps> {
@@ -47,21 +88,31 @@ async function scan(): Promise<InteractionMaps> {
     putInto(byName, normName(addr.name), it);
   };
 
+  const since = new Date();
+  since.setMonth(since.getMonth() - monthsBack());
+  const sinceIso = since.toISOString();
+
   for (const mb of mailboxes()) {
     // Inbox — the counterparty is the sender.
     try {
-      const url = `${GRAPH}/users/${encodeURIComponent(mb)}/mailFolders/inbox/messages?$select=from,subject,receivedDateTime&$orderby=receivedDateTime desc&$top=${TOP}`;
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
-      if (r.ok) for (const m of ((await r.json()).value ?? []) as any[]) {
-        put(m.from?.emailAddress, { date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received" });
+      for (const m of await fetchFolder(t, mb, "inbox", "receivedDateTime", sinceIso)) {
+        const from = m.from?.emailAddress;
+        put(from, {
+          date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received",
+          counterparty: label(from), preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
+        });
       }
     } catch { /* skip */ }
     // Sent — the counterparties are the recipients.
     try {
-      const url = `${GRAPH}/users/${encodeURIComponent(mb)}/mailFolders/sentitems/messages?$select=toRecipients,subject,sentDateTime&$orderby=sentDateTime desc&$top=${TOP}`;
-      const r = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
-      if (r.ok) for (const m of ((await r.json()).value ?? []) as any[]) {
-        for (const rc of (m.toRecipients ?? [])) put(rc.emailAddress, { date: m.sentDateTime, subject: m.subject || "", mailbox: mb, direction: "sent" });
+      for (const m of await fetchFolder(t, mb, "sentitems", "sentDateTime", sinceIso)) {
+        for (const rc of (m.toRecipients ?? [])) {
+          const to = rc.emailAddress;
+          put(to, {
+            date: m.sentDateTime, subject: m.subject || "", mailbox: mb, direction: "sent",
+            counterparty: label(to), preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
+          });
+        }
       }
     } catch { /* skip */ }
   }
