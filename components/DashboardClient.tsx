@@ -328,6 +328,8 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'ir-qa': <QaReviewView />,
     drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
+    'acquisition-checklist': <AcquisitionChecklistView />,
+    'signing-queue': <SigningQueueView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
     fundperf: <StubView title="Fund Performance" icon="📈" desc="Detailed fund-level IRR, cash-on-cash, and waterfall analysis" />,
@@ -2211,11 +2213,19 @@ function LpDirectoryView() {
         const anyDistrib = visibleLps.some(lp => lp.sfDistributions != null)
         const calledToDate = visibleLps.reduce((s, lp) => s + (lp.sfCalled ?? 0), 0)
         const distributions = visibleLps.reduce((s, lp) => s + (lp.sfDistributions ?? 0), 0)
+        // Fund-level commitment totals — computed across ALL LPs, independent of the active filter.
+        const allLps = data ? data.lps : []
+        const fundIvLps = allLps.filter(lp => lp.group !== DST_GROUP)
+        const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
+        const fundIvCommitted = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
+        const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
               { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
+              { label: 'Fund IV Committed', value: loading ? '…' : data ? fmtUsd(fundIvCommitted) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
+              { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
               { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
               { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
               { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
@@ -3948,6 +3958,205 @@ function AcquisitionView() {
   )
 }
 
+// Small banner marking a not-yet-built roadmap workflow rendered as a UI mockup
+function RoadmapPreviewBanner({ agent, workflow }: { agent: string; workflow: string }) {
+  return (
+    <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '9px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ fontSize: 13 }}>🧪</span>
+      <span style={{ fontSize: 12, color: '#4338ca' }}>
+        <strong>Preview mockup</strong> — {agent} · {workflow}. Layout only, populated with sample data; not yet wired to live systems.
+      </span>
+    </div>
+  )
+}
+
+// Status pill used by the roadmap mockups
+function StatusPill({ label, tone }: { label: string; tone: 'green' | 'yellow' | 'red' | 'blue' | 'gray' }) {
+  const tones: Record<string, { bg: string; fg: string; bd: string }> = {
+    green:  { bg: '#ecfdf5', fg: '#047857', bd: '#a7f3d0' },
+    yellow: { bg: '#fffbeb', fg: '#b45309', bd: '#fde68a' },
+    red:    { bg: '#fef2f2', fg: '#b91c1c', bd: '#fecaca' },
+    blue:   { bg: '#eff6ff', fg: '#1d4ed8', bd: '#bfdbfe' },
+    gray:   { bg: '#f3f4f6', fg: '#6b7280', bd: '#e5e7eb' },
+  }
+  const t = tones[tone]
+  return <span style={{ fontSize: 11, fontWeight: 600, color: t.fg, background: t.bg, border: `1px solid ${t.bd}`, borderRadius: 999, padding: '2px 10px', whiteSpace: 'nowrap' }}>{label}</span>
+}
+
+// ─── Admin · Signing Queue (Agent 3 · WF9) ──────────────────────────────────────
+
+type SignItem = { doc: string; type: string; from: string; received: string; status: 'Awaiting signature' | 'In DocuSign' | 'Signed' | 'Declined' }
+
+const SIGNING_QUEUE: SignItem[] = [
+  { doc: 'Lease Synopsis — 4820 Kermit Hwy, Odessa',       type: 'Lease synopsis',   from: 'Brennan Walsh (Leasing)',    received: 'Today 9:14 AM',    status: 'Awaiting signature' },
+  { doc: 'AP Batch #2026-118 — 14 vendor invoices',         type: 'Payment approval', from: 'Accounting',                 received: 'Today 8:02 AM',    status: 'Awaiting signature' },
+  { doc: 'Fund IV — Capital Call Notice (Series C)',        type: 'Fund document',    from: 'Sylvia Chen (IR)',           received: 'Yesterday 4:37 PM', status: 'In DocuSign' },
+  { doc: 'Lease Synopsis — 1201 Cidco Rd, Cocoa',           type: 'Lease synopsis',   from: 'Brennan Walsh (Leasing)',    received: 'Yesterday 2:10 PM', status: 'In DocuSign' },
+  { doc: 'DST-1031 Subscription — Investor #4471',          type: 'Fund document',    from: 'Sylvia Chen (IR)',           received: 'Jul 1, 11:20 AM',  status: 'Signed' },
+  { doc: 'AP Batch #2026-117 — 9 vendor invoices',          type: 'Payment approval', from: 'Accounting',                 received: 'Jun 30, 3:45 PM',  status: 'Signed' },
+  { doc: 'Vendor MSA — Permian Facility Services',          type: 'Contract',         from: 'Operations',                 received: 'Jun 30, 10:02 AM', status: 'Declined' },
+]
+
+const statusTone: Record<SignItem['status'], 'green' | 'yellow' | 'blue' | 'red'> = {
+  'Awaiting signature': 'yellow', 'In DocuSign': 'blue', 'Signed': 'green', 'Declined': 'red',
+}
+
+function SigningQueueView() {
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }
+  const td: React.CSSProperties = { padding: '11px 14px', fontSize: 12, color: '#374151', borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' }
+  const pending = SIGNING_QUEUE.filter(i => i.status === 'Awaiting signature').length
+  const inFlight = SIGNING_QUEUE.filter(i => i.status === 'In DocuSign').length
+  const signedWeek = SIGNING_QUEUE.filter(i => i.status === 'Signed').length
+  const cards: { label: string; value: string | number }[] = [
+    { label: 'Awaiting your signature', value: pending },
+    { label: 'Out for signature (DocuSign)', value: inFlight },
+    { label: 'Signed this week', value: signedWeek },
+    { label: 'Avg turnaround', value: '3.2 hrs' },
+  ]
+  return (
+    <div>
+      <div className="page-header"><h2>✍️ Signing Queue</h2><p>Everything staged for Meghan's signature in one place — lease synopses, payment-batch approvals, and fund documents auto-detected from her inbox and prepared in DocuSign</p></div>
+      <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF9 · Document Signing Queue" />
+      <SourceBar source="Outlook (Meghan's inbox) · DocuSign" agents="Executive Assistant Agent" synced="Live — polling every 5 min" link="Open in DocuSign ↗" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, margin: '16px 0' }}>
+        {cards.map(c => (
+          <div key={c.label} className="card" style={{ margin: 0, padding: '14px 16px' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D2D52' }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {['Document', 'Type', 'From', 'Received', 'Status', ''].map((h, i) => <th key={i} style={th}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {SIGNING_QUEUE.map((item, i) => {
+              const actionable = item.status === 'Awaiting signature' || item.status === 'In DocuSign'
+              return (
+                <tr key={i}>
+                  <td style={{ ...td, fontWeight: 600, color: '#111827' }}>📄 {item.doc}</td>
+                  <td style={td}>{item.type}</td>
+                  <td style={td}>{item.from}</td>
+                  <td style={{ ...td, color: '#9ca3af' }}>{item.received}</td>
+                  <td style={td}><StatusPill label={item.status} tone={statusTone[item.status]} /></td>
+                  <td style={{ ...td, textAlign: 'right' }}>
+                    {actionable
+                      ? <button style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: '#0D2D52', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}>{item.status === 'In DocuSign' ? 'Open envelope' : 'Review & sign'}</button>
+                      : <span style={{ fontSize: 11, color: '#9ca3af' }}>—</span>}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// ─── Property · Acquisition Checklist Tracker (Agent 3 · WF2) ────────────────────
+
+type ChecklistTask = { task: string; owner: string; due: string; status: 'Done' | 'In progress' | 'Not started' | 'Overdue' }
+type ChecklistPhase = { phase: string; tasks: ChecklistTask[] }
+
+const ACQUISITION_CHECKLIST: ChecklistPhase[] = [
+  { phase: 'Due Diligence', tasks: [
+    { task: 'Order Phase I environmental report',       owner: 'Diana Reyes (Acquisitions)', due: 'Jun 24', status: 'Done' },
+    { task: 'Property condition assessment',            owner: 'Ops · third-party',          due: 'Jun 28', status: 'Done' },
+    { task: 'Review estoppels & SNDAs',                 owner: 'Legal',                      due: 'Jul 5',  status: 'In progress' },
+    { task: 'Confirm zoning & entitlements',            owner: 'Diana Reyes (Acquisitions)', due: 'Jul 6',  status: 'In progress' },
+  ]},
+  { phase: 'Financing', tasks: [
+    { task: 'Submit loan application to lender',        owner: 'Kasandra Ford (Finance)',    due: 'Jun 30', status: 'Done' },
+    { task: 'Lock rate & receive term sheet',           owner: 'Kasandra Ford (Finance)',    due: 'Jul 3',  status: 'Overdue' },
+    { task: 'Order appraisal',                          owner: 'Lender',                     due: 'Jul 8',  status: 'Not started' },
+  ]},
+  { phase: 'Legal', tasks: [
+    { task: 'Negotiate & execute PSA amendments',       owner: 'Legal',                      due: 'Jul 4',  status: 'In progress' },
+    { task: 'Form acquisition entity (SPE)',            owner: 'Legal',                      due: 'Jul 7',  status: 'Not started' },
+    { task: 'Title commitment review',                  owner: 'Legal · Title co.',          due: 'Jul 9',  status: 'Not started' },
+  ]},
+  { phase: 'Closing', tasks: [
+    { task: 'Fund capital call for equity',             owner: 'Sylvia Chen (IR)',           due: 'Jul 12', status: 'Not started' },
+    { task: 'Final walkthrough',                        owner: 'Diana Reyes (Acquisitions)', due: 'Jul 14', status: 'Not started' },
+    { task: 'Wire funds & record deed',                 owner: 'Kasandra Ford (Finance)',    due: 'Jul 15', status: 'Not started' },
+  ]},
+]
+
+const checklistTone: Record<ChecklistTask['status'], 'green' | 'yellow' | 'gray' | 'red'> = {
+  'Done': 'green', 'In progress': 'yellow', 'Not started': 'gray', 'Overdue': 'red',
+}
+
+function AcquisitionChecklistView() {
+  const all = ACQUISITION_CHECKLIST.flatMap(p => p.tasks)
+  const done = all.filter(t => t.status === 'Done').length
+  const overdue = all.filter(t => t.status === 'Overdue').length
+  const pct = Math.round((done / all.length) * 100)
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '8px 14px' }
+  const td: React.CSSProperties = { padding: '10px 14px', fontSize: 12, color: '#374151', borderTop: '1px solid #f3f4f6', verticalAlign: 'middle' }
+
+  return (
+    <div>
+      <div className="page-header"><h2>📋 Acquisition Checklist</h2><p>Triggered when a deal goes under contract — the acquisition checklist becomes a live workflow with owners, deadlines, and status tracking, auto-assigning each phase and sending reminders</p></div>
+      <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF2 · Acquisition Checklist Automator" />
+      <SourceBar source="Acquisition checklist (XLS) · Salesforce · Portal tasks" agents="Executive Assistant Agent · Acquisition Research" synced="Triggered — LOI accepted Jun 22" link="Open in Salesforce ↗" />
+
+      {/* Deal header + progress */}
+      <div className="card" style={{ margin: '16px 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af' }}>Active deal</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2D52', marginTop: 3 }}>4820 Kermit Hwy — Odessa, TX</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>Permian Basin · $14.2M · Target close Jul 15, 2026</div>
+        </div>
+        <div style={{ minWidth: 200 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginBottom: 5 }}>
+            <span>{done} of {all.length} tasks complete</span>
+            <span style={{ fontWeight: 700, color: '#0D2D52' }}>{pct}%</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 999, background: '#eef2f7', overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: '#0D2D52', borderRadius: 999 }} />
+          </div>
+          {overdue > 0 && <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 6 }}>⚠ {overdue} task{overdue > 1 ? 's' : ''} overdue</div>}
+        </div>
+      </div>
+
+      {/* Phases */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {ACQUISITION_CHECKLIST.map(phase => {
+          const pdone = phase.tasks.filter(t => t.status === 'Done').length
+          return (
+            <div key={phase.phase} className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid #f3f4f6', background: '#f9fafb' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52' }}>{phase.phase}</span>
+                <span style={{ fontSize: 11, color: '#9ca3af' }}>{pdone}/{phase.tasks.length}</span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>{['Task', 'Owner', 'Due', 'Status'].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {phase.tasks.map((t, i) => (
+                    <tr key={i}>
+                      <td style={{ ...td, fontWeight: 600, color: '#111827', width: '44%' }}>{t.task}</td>
+                      <td style={td}>{t.owner}</td>
+                      <td style={{ ...td, color: t.status === 'Overdue' ? '#b91c1c' : '#6b7280', whiteSpace: 'nowrap' }}>{t.due}</td>
+                      <td style={td}><StatusPill label={t.status} tone={checklistTone[t.status]} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 function SettingsView({
@@ -5516,7 +5725,7 @@ const SOP_CATEGORIES = [
   { icon: '🔑', label: 'Leasing Agent SOPs',            desc: 'Prospect intake, proposal review, renewal tracking, and lease execution checklist for the Leasing agent' },
 ]
 
-function SOPCategoryCard({ cat, query = '' }: { cat: { icon: string; label: string; desc: string }; query?: string }) {
+function SOPCategoryCard({ cat, query = '', reloadKey = 0 }: { cat: { icon: string; label: string; desc: string }; query?: string; reloadKey?: number }) {
   const [docs, setDocs] = useState<UploadedFileRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -5534,7 +5743,7 @@ function SOPCategoryCard({ cat, query = '' }: { cat: { icon: string; label: stri
     finally { setLoading(false) }
   }
 
-  useEffect(() => { fetchDocs() }, [])
+  useEffect(() => { fetchDocs() }, [reloadKey])
 
   const handleFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return
@@ -5640,13 +5849,125 @@ function SOPCategoryCard({ cat, query = '' }: { cat: { icon: string; label: stri
   )
 }
 
+function slugifyFilename(title: string) {
+  const base = title.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60)
+  return `${base || 'sop'}.md`
+}
+
+// Agent 3 · WF1 — SOP Generator: turn a workflow description into a clean written SOP
+function SopGeneratorModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [description, setDescription] = useState('')
+  const [title, setTitle] = useState('')
+  const [category, setCategory] = useState(SOP_CATEGORIES[1].label) // Agent Working Guides
+  const [markdown, setMarkdown] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const generate = async () => {
+    if (!description.trim()) return
+    setGenerating(true); setError('')
+    try {
+      const res = await fetch('/api/sops/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description, title }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Generation failed')
+      setMarkdown(data.markdown ?? '')
+    } catch (e) { setError(e instanceof Error ? e.message : 'Generation failed') }
+    finally { setGenerating(false) }
+  }
+
+  const save = async () => {
+    if (!markdown.trim()) return
+    setSaving(true); setError('')
+    try {
+      const headingMatch = markdown.match(/^#\s+(.+)$/m)
+      const name = slugifyFilename(title || headingMatch?.[1] || 'sop')
+      const file = new File([markdown], name, { type: 'text/markdown' })
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('category', category)
+      const res = await fetch('/api/files/upload', { method: 'POST', body: fd })
+      if (!res.ok) throw new Error('Save failed')
+      onSaved()
+      onClose()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Save failed'); setSaving(false) }
+  }
+
+  const busy = generating || saving
+
+  return (
+    <div onClick={busy ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,45,82,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 720, boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#0D2D52' }}>✨ Generate SOP</h3>
+          <button onClick={onClose} disabled={busy} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
+        </div>
+        <div style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div style={{ fontSize: 12, color: '#6b7280', lineHeight: 1.5 }}>
+            Describe a recurring workflow or paste rough process notes. Claude drafts a clean, step-by-step SOP a team member can follow independently — review it, then save it into a category below.
+          </div>
+          <MField label="Workflow description / process notes" span>
+            <textarea
+              value={description}
+              onChange={e => setDescription(e.target.value)}
+              placeholder="e.g. How we onboard a new LP after a signed subscription agreement — collect KYC docs, set up the Salesforce record, add to the reporting distribution list…"
+              rows={5}
+              style={{ ...mInput, resize: 'vertical', fontFamily: 'inherit' }}
+            />
+          </MField>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+            <MField label="Title (optional)">
+              <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Auto-named if left blank" style={mInput} />
+            </MField>
+            <MField label="Save to category">
+              <select value={category} onChange={e => setCategory(e.target.value)} style={mInput}>
+                {SOP_CATEGORIES.map(c => <option key={c.label} value={c.label}>{c.label}</option>)}
+              </select>
+            </MField>
+          </div>
+
+          {markdown && (
+            <MField label="Generated SOP (editable)" span>
+              <textarea
+                value={markdown}
+                onChange={e => setMarkdown(e.target.value)}
+                rows={16}
+                style={{ ...mInput, resize: 'vertical', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, lineHeight: 1.5 }}
+              />
+            </MField>
+          )}
+
+          {error && <div style={{ fontSize: 12, color: '#b91c1c' }}>{error}</div>}
+        </div>
+        <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+          <button onClick={onClose} disabled={busy} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#6b7280', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
+          <button onClick={generate} disabled={busy || !description.trim()} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0e7490', background: '#fff', color: '#0e7490', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: busy || !description.trim() ? .5 : 1 }}>{generating ? 'Generating…' : markdown ? 'Regenerate' : 'Generate'}</button>
+          {markdown && (
+            <button onClick={save} disabled={busy} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: busy ? .6 : 1 }}>{saving ? 'Saving…' : 'Save to SOPs'}</button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SOPsView() {
   const [query, setQuery] = useState('')
+  const [genOpen, setGenOpen] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   return (
     <div>
-      <div className="page-header">
-        <h2>SOPs & Agent Guides</h2>
-        <p>Instructions for working with agents and managing portal dashboards — the team's reference library for how everything runs</p>
+      {genOpen && <SopGeneratorModal onClose={() => setGenOpen(false)} onSaved={() => setReloadKey(k => k + 1)} />}
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>SOPs & Agent Guides</h2>
+          <p>Instructions for working with agents and managing portal dashboards — the team's reference library for how everything runs</p>
+        </div>
+        <button onClick={() => setGenOpen(true)} style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>✨ Generate SOP</button>
       </div>
       <div style={{ background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '10px 16px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
         <span style={{ fontSize: 13 }}>📌</span>
@@ -5667,11 +5988,11 @@ function SOPsView() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
         {/* Claude Training and Assets + Agent Working Guides lead, side by side */}
         {SOP_CATEGORIES.slice(0, 2).map((cat) => (
-          <SOPCategoryCard key={cat.label} cat={cat} query={query} />
+          <SOPCategoryCard key={cat.label} cat={cat} query={query} reloadKey={reloadKey} />
         ))}
         <UploadedFilesCard query={query} />
         {SOP_CATEGORIES.slice(2).map((cat) => (
-          <SOPCategoryCard key={cat.label} cat={cat} query={query} />
+          <SOPCategoryCard key={cat.label} cat={cat} query={query} reloadKey={reloadKey} />
         ))}
       </div>
     </div>
