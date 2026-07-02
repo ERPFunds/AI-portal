@@ -4,6 +4,7 @@ import {
   resolveFolderId,
   listChildFolders,
   listFolderMessages,
+  listFolderMessagesSince,
   getMessageBody,
   listConversationMessages,
   sendMailAs,
@@ -24,7 +25,7 @@ const SEND_AS_MAILBOX = process.env.IR_SEND_AS_MAILBOX || "mberry@erpfunds.com";
 // Top-level folder whose subtree we mirror into the Agent Inbox.
 const IR_FOLDER = process.env.IR_FOLDER_NAME || "Investor Relations";
 const PER_FOLDER = 30; // messages to pull per folder
-const DRAFTS_TOP = 30;
+const DRAFTS_TOP = 250; // max drafts across the rolling window (see IR_DRAFTS_MONTHS)
 
 type ItemStatus = "active-thread" | "pending" | "handled" | "needs-review";
 
@@ -183,12 +184,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // 2) Drafts awaiting approval (drafts have no received date — order by last modified).
-    const drafts = await listFolderMessages(
+    // 2) Drafts awaiting approval — show a rolling window (default 3 months) rather than just the
+    //    newest page, so older prepared replies stay reviewable. Ordered by last modified, paginated.
+    const draftMonths = Math.min(Math.max(Number(process.env.IR_DRAFTS_MONTHS) || 3, 1), 24);
+    const draftsSince = new Date();
+    draftsSince.setMonth(draftsSince.getMonth() - draftMonths);
+    const drafts = await listFolderMessagesSince(
       TEAM_MAILBOX,
       "drafts",
-      DRAFTS_TOP,
-      "lastModifiedDateTime desc"
+      draftsSince.toISOString().split(".")[0] + "Z",
+      "lastModifiedDateTime",
+      DRAFTS_TOP
     );
     drafts.forEach((m) => items.push(toItem(m, "Drafts (awaiting approval)", "draft")));
     folders.push({ name: "Drafts (awaiting approval)", kind: "draft", count: drafts.length });
