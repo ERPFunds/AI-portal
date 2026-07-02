@@ -184,6 +184,27 @@ export interface LpSfFieldMap {
   brokerContact: string | null;
 }
 
+/** A DST/1031 investor pulled from the Salesforce broker book (not in the Fund IV schedule). */
+export interface DstInvestor {
+  investor: string;
+  commitment: string;
+  commitmentUsd: number;
+  advisorFirm: string | null;
+  advisorContact: string | null;
+  advisorEmail: string | null;
+  stage: string | null;
+  crmId: string | null;
+}
+
+/** Custodian-wrapped IRA accounts read like "STRATA Trust Company Custodian FBO (Jane Doe) IRA
+ *  (# 12345)" — surface the underlying investor name when we can and drop trailing account #s. */
+function cleanDstName(raw: string): string {
+  const fbo = raw.match(/\bFBO\b[:\s]*\(?\s*([A-Za-z][A-Za-z.'\-& ]+?)\s*\)?\s*(?:\b(?:IRA|Roth|SEP|SIMPLE|401k?|traditional|inherited|custodian|beneficiary)\b|\(#|$)/i);
+  let name = fbo ? fbo[1] : raw;
+  name = name.replace(/\s*\(#[^)]*\)/g, "").replace(/\s+/g, " ").trim();
+  return name || raw.trim();
+}
+
 /** Pick a field API name: env override first, then by label patterns, then by name patterns. */
 function pickField(fields: SfFieldInfo[], override: string | undefined, labelPats: RegExp[], namePats: RegExp[]): string | null {
   if (override && fields.some((f) => f.name === override)) return override;
@@ -281,11 +302,11 @@ export async function salesforceBrokerProbe(names: string[]): Promise<string[]> 
  */
 export async function fetchLpSalesforceData(
   lps: { investor: string; contact: string }[]
-): Promise<{ byName: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number }> {
+): Promise<{ byName: Record<string, LpSfData>; fieldMap: LpSfFieldMap; matched: number; dstInvestors: DstInvestor[] }> {
   const byName: Record<string, LpSfData> = {};
   const fieldMap: LpSfFieldMap = { lpType: null, called: null, distributions: null, brokerCompany: null, brokerContact: null };
   const clean = [...new Set(lps.map((l) => l.investor.trim()).filter(Boolean))];
-  if (clean.length === 0) return { byName, fieldMap, matched: 0 };
+  if (clean.length === 0) return { byName, fieldMap, matched: 0, dstInvestors: [] };
 
   // Optional financial fields on Account (this org has none → stay null; env override supported).
   const fields = await describeFields("Account");
@@ -368,10 +389,13 @@ export async function fetchLpSalesforceData(
   //     than the Fund IV schedule (e.g. "The Weisenseel Family Trust" => Concorde). Fetch that book
   //     and match each Fund IV LP to it by PERSON-NAME tokens (surnames/first names), conservatively
   //     so common surnames (Brown, Davis) don't cross-attribute.
+  const scheduleSet = new Set(clean.map((n) => n.toLowerCase().trim()));
+  // DST/1031 investors: broker-book accounts that aren't Fund IV schedule LPs, keyed by account.
+  const dstByAcct = new Map<string, { name: string; id: string | null; firm: string; rep: string | null; repEmail: string | null; amountUsd: number; stage: string | null }>();
   const brokerBook: { toks: Set<string>; firm: string; rep: string | null; repEmail: string | null; acct: string }[] = [];
   try {
     let path: string | null = `/query?q=${encodeURIComponent(
-      "SELECT Account.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE Partner_Broker_Dealer__c != null OR Partner_Advisor__c != null OR Partner_Brokerage__c != null"
+      "SELECT Account.Id, Account.Name, Amount, StageName, Partner_Broker_Dealer__r.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE Partner_Broker_Dealer__c != null OR Partner_Advisor__c != null OR Partner_Brokerage__c != null"
     )}`;
     let guard = 0;
     while (path && guard++ < 25) {
@@ -383,10 +407,19 @@ export async function fetchLpSalesforceData(
         const firm = rel(o.Partner_Broker_Dealer__r) || rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r);
         if (!acct || !firm) continue;
         const repRec = o.Partner_Advisor_Contact__r as { Email?: unknown } | null;
-        brokerBook.push({
-          toks: personTokens(acct), firm, rep: rel(o.Partner_Advisor_Contact__r),
-          repEmail: repRec?.Email != null && String(repRec.Email).trim() ? String(repRec.Email) : null, acct,
-        });
+        const rep = rel(o.Partner_Advisor_Contact__r);
+        const repEmail = repRec?.Email != null && String(repRec.Email).trim() ? String(repRec.Email) : null;
+        brokerBook.push({ toks: personTokens(acct), firm, rep, repEmail, acct });
+        // Surface as a DST/1031 investor row when it isn't already a Fund IV schedule LP.
+        const key = acct.toLowerCase().trim();
+        if (!scheduleSet.has(key)) {
+          const acctObj = o.Account as { Id?: unknown } | null;
+          const amt = toNum(o.Amount) ?? 0;
+          const stage = o.StageName != null && String(o.StageName).trim() ? String(o.StageName) : null;
+          const ex = dstByAcct.get(key);
+          if (!ex) dstByAcct.set(key, { name: acct, id: acctObj?.Id != null ? String(acctObj.Id) : null, firm, rep, repEmail, amountUsd: amt, stage });
+          else { ex.amountUsd += amt; if (!ex.rep) ex.rep = rep; if (!ex.repEmail) ex.repEmail = repEmail; if (!ex.stage) ex.stage = stage; }
+        }
       }
       path = j.done === false && j.nextRecordsUrl ? String(j.nextRecordsUrl).replace(/^.*\/services\/data\/v[\d.]+/, "") : null;
     }
@@ -457,7 +490,22 @@ export async function fetchLpSalesforceData(
     }
   }
 
-  return { byName, fieldMap, matched };
+  const dstInvestors: DstInvestor[] = [...dstByAcct.values()].map((d) => ({
+    investor: cleanDstName(d.name),
+    commitmentUsd: d.amountUsd,
+    commitment: d.amountUsd > 0 ? `$${Math.round(d.amountUsd).toLocaleString("en-US")}` : "",
+    advisorFirm: d.firm,
+    advisorContact: d.rep,
+    advisorEmail: d.repEmail,
+    stage: d.stage,
+    crmId: d.id,
+  }));
+  console.log("[lp-dst]", JSON.stringify({
+    count: dstInvestors.length,
+    sample: dstInvestors.slice(0, 8).map((d) => ({ n: d.investor, f: d.advisorFirm, amt: d.commitmentUsd, st: d.stage })),
+  }));
+
+  return { byName, fieldMap, matched, dstInvestors };
 }
 
 /**

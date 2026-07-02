@@ -1887,6 +1887,7 @@ interface LpRecord {
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
+  dstCount?: number;
   groups: string[];
   scheduleName: string; webUrl: string; syncedAt: string;
   sfConfigured?: boolean;
@@ -1942,7 +1943,7 @@ function LpDirectoryView() {
           if (d.refreshError) setSaveMsg({ ok: false, text: `Sync timed out — showing last saved data. (${d.refreshError})` })
           else if (d.sfConfigured === false) setSaveMsg({ ok: false, text: 'Salesforce not connected — set SF_TOKEN_URL / SF_CLIENT_ID / SF_CLIENT_SECRET in Vercel (Production) and redeploy.' })
           else if (d.sfError) setSaveMsg({ ok: false, text: `Salesforce error: ${d.sfError}` })
-          else setSaveMsg({ ok: true, text: `Synced — ${d.sfMatched ?? 0} of ${d.lpCount} LPs matched in Salesforce.` })
+          else setSaveMsg({ ok: true, text: `Synced — ${d.sfMatched ?? 0} Fund IV LPs matched in Salesforce${d.dstCount ? ` · ${d.dstCount} DST/1031 investors added` : ''}.` })
         }
       }
     } catch (e) {
@@ -2022,6 +2023,33 @@ function LpDirectoryView() {
     ? `Synced from ${data.scheduleName} · ${new Date(data.syncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
     : loading ? 'Loading…' : 'Not connected'
 
+  function exportCsv() {
+    if (!data) return
+    const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
+    const cols = ['Group', 'Investor', 'Commitment', 'Type / Stage', 'Primary Contact', 'Broker / Advisor Firm', 'Broker / Advisor Rep', 'Email', 'Phone', 'Last Interaction', 'Notes']
+    const lines = data.lps.map(lp => [
+      lp.group,
+      lp.investor,
+      lp.commitment,
+      lp.commitType || lp.sfLpType || '',
+      lp.contact || lp.sfBrokerContact || '',
+      lp.brokerFirm || lp.sfAdvisorFirm || '',
+      lp.brokerContact || lp.sfAdvisorContact || '',
+      lp.email,
+      lp.phone,
+      lp.lastInteraction ? `${lp.lastInteraction.date} · ${lp.lastInteraction.note}` : '',
+      lp.notes,
+    ].map(v => esc(String(v ?? ''))).join(','))
+    const csv = [cols.map(esc).join(','), ...lines].join('\r\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `LP-Directory-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -2030,16 +2058,21 @@ function LpDirectoryView() {
           <p>Limited partner profiles · Fund IV commitment schedule · Capital calls</p>
         </div>
         <div style={{ textAlign: 'right' }}>
-          <button className="btn btn-ghost" onClick={() => load(true)} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
-            {syncing ? '↻ Syncing…' : '↻ Sync with Salesforce'}
-          </button>
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button className="btn btn-ghost" onClick={exportCsv} disabled={!data} style={{ whiteSpace: 'nowrap' }}>
+              ⬇ Export to Excel
+            </button>
+            <button className="btn btn-ghost" onClick={() => load(true)} disabled={syncing} style={{ whiteSpace: 'nowrap' }}>
+              {syncing ? '↻ Syncing…' : '↻ Sync with Salesforce'}
+            </button>
+          </div>
           {data && (
-            <div style={{ fontSize: 10, color: data.sfError ? '#E55A4E' : '#9ca3af', marginTop: 4, maxWidth: 260, marginLeft: 'auto' }}>
+            <div style={{ fontSize: 10, color: data.sfError ? '#E55A4E' : '#9ca3af', marginTop: 4, maxWidth: 300, marginLeft: 'auto' }}>
               {data.sfConfigured === false
                 ? 'Salesforce not connected'
                 : data.sfError
                   ? `SF error: ${data.sfError}`
-                  : `${data.sfMatched ?? 0} of ${data.lpCount} LPs matched in Salesforce`}
+                  : `${data.sfMatched ?? 0} of ${data.lpCount} LPs matched in Salesforce${data.dstCount ? ` · +${data.dstCount} DST/1031 investors` : ''}`}
             </div>
           )}
         </div>

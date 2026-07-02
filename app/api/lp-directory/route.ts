@@ -268,11 +268,12 @@ export async function GET(req: NextRequest) {
     // Non-fatal: any SF failure leaves the columns null, exactly as before.
     let sfFieldMap: LpSfFieldMap | null = null;
     let sfMatched = 0;
+    let dstCount = 0;
     let sfError: string | null = null;
     const lpEmails = new Map<LpRecord, string[]>();
     if (salesforceConfigured()) {
       try {
-        const { byName, fieldMap, matched } = await fetchLpSalesforceData(lps.map((lp) => ({ investor: lp.investor, contact: lp.contact })));
+        const { byName, fieldMap, matched, dstInvestors } = await fetchLpSalesforceData(lps.map((lp) => ({ investor: lp.investor, contact: lp.contact })));
         sfFieldMap = fieldMap;
         sfMatched = matched;
         for (const lp of lps) {
@@ -290,6 +291,25 @@ export async function GET(req: NextRequest) {
             .map((e) => (e || "").toLowerCase().trim())
             .filter(Boolean);
           if (emails.length) lpEmails.set(lp, Array.from(new Set(emails)));
+        }
+        // DST/1031 investors live in Salesforce (with a broker/advisor) but are NOT in the Fund IV
+        // commitment schedule — append them as their own rows so their broker data shows here too.
+        dstCount = dstInvestors.length;
+        for (const d of dstInvestors) {
+          lps.push({
+            investor: d.investor,
+            commitment: d.commitment,
+            commitmentUsd: d.commitmentUsd,
+            commitType: "",
+            contact: d.advisorContact || "", email: "", phone: "",
+            date: "", notes: "",
+            group: "DST / 1031",
+            lastInteraction: null,
+            sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
+            sfBrokerCompany: null, sfBrokerContact: null,
+            sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
+            brokerFirm: "", brokerContact: "",
+          });
         }
       } catch (e) {
         sfError = String(e).slice(0, 200);
@@ -343,7 +363,8 @@ export async function GET(req: NextRequest) {
     }));
     const payload = {
       lps, lpCount: lps.length,
-      totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
+      totalCommittedUsd: lps.filter((lp) => lp.group !== "DST / 1031").reduce((s, lp) => s + lp.commitmentUsd, 0),
+      dstCount,
       groups,
       scheduleName: scheduleInfo.name,
       webUrl: scheduleInfo.webUrl,
