@@ -92,20 +92,24 @@ async function scan(): Promise<InteractionMaps> {
   since.setMonth(since.getMonth() - monthsBack());
   const sinceIso = since.toISOString();
 
+  // Fan out all folders (inbox + sent across every mailbox) in parallel — each folder still pages
+  // sequentially, but the folders no longer wait on each other.
+  const jobs: Promise<{ mb: string; dir: "received" | "sent"; msgs: any[] }>[] = [];
   for (const mb of mailboxes()) {
-    // Inbox — the counterparty is the sender.
-    try {
-      for (const m of await fetchFolder(t, mb, "inbox", "receivedDateTime", sinceIso)) {
+    jobs.push(fetchFolder(t, mb, "inbox", "receivedDateTime", sinceIso).then((msgs) => ({ mb, dir: "received" as const, msgs })).catch(() => ({ mb, dir: "received" as const, msgs: [] })));
+    jobs.push(fetchFolder(t, mb, "sentitems", "sentDateTime", sinceIso).then((msgs) => ({ mb, dir: "sent" as const, msgs })).catch(() => ({ mb, dir: "sent" as const, msgs: [] })));
+  }
+  for (const { mb, dir, msgs } of await Promise.all(jobs)) {
+    if (dir === "received") {
+      for (const m of msgs) {
         const from = m.from?.emailAddress;
         put(from, {
           date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received",
           counterparty: label(from), preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
         });
       }
-    } catch { /* skip */ }
-    // Sent — the counterparties are the recipients.
-    try {
-      for (const m of await fetchFolder(t, mb, "sentitems", "sentDateTime", sinceIso)) {
+    } else {
+      for (const m of msgs) {
         for (const rc of (m.toRecipients ?? [])) {
           const to = rc.emailAddress;
           put(to, {
@@ -114,7 +118,7 @@ async function scan(): Promise<InteractionMaps> {
           });
         }
       }
-    } catch { /* skip */ }
+    }
   }
   return { byEmail, byName };
 }

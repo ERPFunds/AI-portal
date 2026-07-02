@@ -224,6 +224,11 @@ export async function GET() {
       if (match) lp.lastInteraction = { date: match.date, note: match.note, source: "ir" };
     }
 
+    // Kick off the mailbox scan NOW so it runs in parallel with the Salesforce queries below
+    // (both are the slow parts). We await it in the Last-Interaction step.
+    const interactionsPromise: Promise<import("@/lib/agents/ir/mailbox-interactions").InteractionMaps> =
+      getInteractions().catch(() => ({ byEmail: {}, byName: {} }));
+
     // Enrich with Salesforce (LP Type / Called / Distributions / CRM Id), matched by email.
     // Non-fatal: any SF failure leaves the columns null, exactly as before.
     let sfFieldMap: LpSfFieldMap | null = null;
@@ -263,7 +268,7 @@ export async function GET() {
     // cross-attributed unrelated people (e.g. a shared first name). Overrides IR-log when newer.
     type Interaction = import("@/lib/agents/ir/mailbox-interactions").Interaction;
     try {
-      const { byEmail, byName } = await getInteractions();
+      const { byEmail, byName } = await interactionsPromise;
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
       const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
       const laLog: string[] = [];
