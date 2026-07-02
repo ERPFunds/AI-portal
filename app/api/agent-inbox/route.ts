@@ -198,6 +198,10 @@ export async function GET(req: NextRequest) {
       // Subfolders (Escalate, Forwarded Drafts, anything else the user created)
       const children = await listChildFolders(TEAM_MAILBOX, irFolderId);
       diagnostics.subfolders = children.map((c) => c.displayName);
+      console.log("[ir-folders]", JSON.stringify({
+        parentId: irFolderId,
+        children: children.map((c) => ({ name: c.displayName, id: c.id.slice(-12), items: c.totalItemCount })),
+      }));
       for (const child of children) {
         const path = `${IR_FOLDER} / ${child.displayName}`;
         const kind = folderKind(child.displayName);
