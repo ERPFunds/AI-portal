@@ -7,6 +7,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { section: 'Command' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
     { icon: '🤖', label: 'Agent Hub',         view: 'agents' },
+    { icon: '✏️', label: 'Drafting Workspace', view: 'drafting' },
     { section: 'Investor' },
     { icon: '📥', label: 'IR Inbox',            view: 'inbox' },
     { icon: '📁', label: 'Research Files',        view: 'output-files' },
@@ -31,6 +32,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
   executive: [
     { section: 'Overview' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
+    { icon: '✏️', label: 'Drafting Workspace', view: 'drafting' },
     { section: 'Investor' },
     { icon: '📥', label: 'IR Inbox',             view: 'inbox' },
     { icon: '🔬', label: 'Market & Comps',       view: 'market-research' },

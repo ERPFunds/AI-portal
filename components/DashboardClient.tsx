@@ -12,6 +12,7 @@ import { NEWSLETTER_PROMPTS, MARKET_DATA_SOURCES, type NewsletterPrompt, type Ma
 import { ENTITY_ORDER, ENTITY_LABELS, type Property } from '@/lib/data/properties'
 import { type WorkOrder } from '@/lib/data/workOrders'
 import MarketResearchView from './MarketResearchView'
+import DraftingWorkspaceView from './DraftingWorkspaceView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -322,6 +323,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     ),
     lp: <LpDirectoryView />,
     'ir-qa': <QaReviewView />,
+    drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
