@@ -76,9 +76,34 @@ export default function DraftingWorkspaceView() {
   const [savedUrl, setSavedUrl] = useState<string | null>(null)
   const [savedFolder, setSavedFolder] = useState('')
   const [saveError, setSaveError] = useState('')
+  const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
   const currentType = DOC_TYPES.find((d) => d.id === docType)!
+
+  const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    setUploadError('')
+    setAttachment(null)
+    const form = new FormData()
+    form.append('file', file)
+    try {
+      const res = await fetch('/api/drafting/upload', { method: 'POST', body: form })
+      const data = await res.json()
+      if (!res.ok) { setUploadError(data.error ?? 'Upload failed'); return }
+      setAttachment({ name: data.filename, text: data.text, chars: data.chars })
+    } catch (e) {
+      setUploadError(String(e))
+    } finally {
+      setUploading(false)
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }, [])
 
   const run = useCallback(async () => {
     if (!prompt.trim() || streaming) return
@@ -96,6 +121,8 @@ export default function DraftingWorkspaceView() {
           docType,
           prompt: prompt.trim(),
           sources: [...(useKb ? ['kb'] : []), ...(useNews ? ['news'] : [])],
+          attachmentText: attachment?.text ?? '',
+          attachmentName: attachment?.name ?? '',
         }),
         signal: abortRef.current.signal,
       })
@@ -249,6 +276,48 @@ export default function DraftingWorkspaceView() {
             {label}
           </label>
         ))}
+      </div>
+
+      {/* Attachment */}
+      <div style={{ ...s.card, padding: '12px 20px' }}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf,.docx,.xlsx,.pptx,.txt,.md,.csv"
+          style={{ display: 'none' }}
+          onChange={handleFileChange}
+        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || streaming}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 14px', borderRadius: 6, border: '1px solid #e5e7eb',
+              background: '#fff', color: '#374151', fontSize: 13, fontWeight: 500,
+              cursor: uploading || streaming ? 'not-allowed' : 'pointer',
+              opacity: uploading || streaming ? 0.6 : 1,
+            }}
+          >
+            {uploading ? '⏳ Reading…' : '📎 Attach file'}
+          </button>
+          {attachment && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+              <span style={{ color: '#111827', fontWeight: 500 }}>{attachment.name}</span>
+              <span style={{ color: '#9ca3af' }}>({Math.round(attachment.chars / 1000)}k chars)</span>
+              <button
+                onClick={() => setAttachment(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#9ca3af', fontSize: 14, padding: 0 }}
+              >
+                ✕
+              </button>
+            </div>
+          )}
+          {uploadError && <span style={{ fontSize: 12, color: '#dc2626' }}>{uploadError}</span>}
+          {!attachment && !uploading && (
+            <span style={{ fontSize: 12, color: '#9ca3af' }}>PDF, Word, Excel, PowerPoint, or text</span>
+          )}
+        </div>
       </div>
 
       {/* Prompt */}

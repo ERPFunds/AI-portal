@@ -34,6 +34,8 @@ export async function POST(req: NextRequest) {
   const docType: string = body.docType ?? "freeform";
   const prompt: string = body.prompt ?? "";
   const sources: string[] = body.sources ?? [];
+  const attachmentText: string = body.attachmentText ?? "";
+  const attachmentName: string = body.attachmentName ?? "";
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
 
@@ -82,6 +84,12 @@ export async function POST(req: NextRequest) {
           } catch {
             // Apify optional — skip silently
           }
+        }
+
+        // ── Attached file ───────────────────────────────────────────────────────
+        if (attachmentText) {
+          const header = attachmentName ? `--- Attached File: ${attachmentName} ---` : "--- Attached File ---";
+          context += `\n\n${header}\n${attachmentText}`;
         }
 
         const systemText = SYSTEM_PROMPTS[docType] ?? SYSTEM_PROMPTS.freeform;
