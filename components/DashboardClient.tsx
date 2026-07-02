@@ -212,7 +212,6 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     const agentMatch = inboxAgentFilter === 'All' || item.agent === inboxAgentFilter
     if (!agentMatch) return false
     if (inboxStatusFilter === 'all') return true
-    if (inboxStatusFilter === 'pending') return item.status === 'pending'
     if (inboxStatusFilter === 'handled') return item.status === 'handled'
     if (inboxStatusFilter === 'review') return item.status === 'needs-review'
     return true
@@ -1265,7 +1264,6 @@ function InboxView({
   const filtered = items.filter((item) => {
     if (folderFilter !== 'All' && item.folder !== folderFilter) return false
     if (ownerFilter !== 'All' && ownerFor(item) !== ownerFilter) return false
-    if (inboxStatusFilter === 'pending') return item.status === 'pending'
     if (inboxStatusFilter === 'handled') return item.status === 'handled'
     if (inboxStatusFilter === 'review') return item.status === 'needs-review'
     return true
@@ -1375,7 +1373,7 @@ function InboxView({
             <div>
               <div className="filter-label" style={{ marginBottom: 5 }}>Status</div>
               <div className="pill-row">
-                {[['all', 'All'], ['pending', 'Pending'], ['handled', 'Handled'], ['review', 'Needs Review']].map(([val, label]) => (
+                {[['all', 'All'], ['review', 'Needs Review'], ['handled', 'Handled']].map(([val, label]) => (
                   <div key={val} className={`pill ${inboxStatusFilter === val ? 'active' : ''}`} onClick={() => { setInboxStatusFilter(val); setSelectedInboxIdx(0) }}>{label}</div>
                 ))}
               </div>

@@ -73,11 +73,11 @@ function folderKind(name: string): AgentInboxItem["folderKind"] {
   return "ir";
 }
 
-// Folders flagged for review surface as "needs-review"; the forwarded-draft
-// queue is "pending"; everything else in the IR tree is an active thread.
+// Escalations and the forwarded-draft queue both surface as "needs-review"
+// (a human still has to act on them); everything else in the IR tree is an active thread.
 function statusForFolder(kind: AgentInboxItem["folderKind"]): ItemStatus {
   if (kind === "escalate") return "needs-review";
-  if (kind === "forwarded-drafts") return "pending";
+  if (kind === "forwarded-drafts") return "needs-review";
   return "active-thread";
 }
 
