@@ -402,135 +402,45 @@ export async function PATCH(req: NextRequest) {
   const body: LpUpdateBody = await req.json();
   if (!body.investor) return NextResponse.json({ error: "investor is required" }, { status: 400 });
 
+  // Salesforce is the system of record for LP edits — we deliberately do NOT write back to the
+  // SharePoint commitment schedule. Update the cached snapshot in place so the edit shows
+  // immediately, then push it to Salesforce.
+  let contactName = (body.contact ?? "").trim();
   try {
-    const { scheduleInfo, token, siteId } = await getScheduleContext();
-    const base = `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${scheduleInfo.itemId}/workbook`;
-
-    // Get first worksheet id
-    const sheetNames = await listWorksheetNames(token, siteId, scheduleInfo.itemId);
-    const sheetId = encodeURIComponent(sheetNames[0] ?? "Sheet1");
-
-    // Read raw usedRange (we need the address to compute absolute Excel row numbers)
-    const usedRes = await fetch(`${base}/worksheets/${sheetId}/usedRange`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (!usedRes.ok) throw new Error(`Could not read usedRange: ${await usedRes.text()}`);
-    const usedData = await usedRes.json();
-
-    const values: string[][] = (usedData.values ?? []).map((row: unknown[]) =>
-      row.map(c => String(c ?? ""))
-    );
-
-    // Parse start row from address like "Sheet1!A2:K30" → 2
-    const address: string = usedData.address ?? "";
-    const startRow = parseInt(address.match(/[A-Z]+(\d+):/)?.[1] ?? "1");
-
-    const { headerRowIdx, headers, iInvestor, iCommitment, iContact, iEmail, iPhone, iNotes } =
-      parseHeaders(values);
-
-    // Find the investor's row within data rows
-    const dataValues = values.slice(headerRowIdx + 1);
-    const rowIdx = dataValues.findIndex(row =>
-      String(row[iInvestor] ?? "").trim().toLowerCase() === body.investor.trim().toLowerCase()
-    );
-    if (rowIdx === -1)
-      return NextResponse.json({ error: `LP "${body.investor}" not found in schedule` }, { status: 404 });
-
-    // Build the updated row (copy current, patch changed fields)
-    const currentRow = dataValues[rowIdx].slice();
-    while (currentRow.length < headers.length) currentRow.push("");
-
-    if (iCommitment >= 0 && body.commitment !== undefined) currentRow[iCommitment] = body.commitment;
-    if (iContact    >= 0 && body.contact    !== undefined) currentRow[iContact]    = body.contact;
-    if (iEmail      >= 0 && body.email      !== undefined) currentRow[iEmail]      = body.email;
-    if (iPhone      >= 0 && body.phone      !== undefined) currentRow[iPhone]      = body.phone;
-    if (iNotes >= 0) {
-      const current = parseNotesCell(dataValues[rowIdx][iNotes] ?? "");
-      currentRow[iNotes] = packNotesCell(
-        body.commitType    ?? current.commitType,
-        body.date          ?? current.date,
-        body.brokerFirm    ?? current.brokerFirm,
-        body.brokerContact ?? current.brokerContact,
-        body.notes         ?? current.notes,
-      );
+    const cached = await readLpCache(supabase);
+    const data = cached?.data as ({ lps?: LpRecord[] } & Record<string, unknown>) | undefined;
+    const target = data?.lps?.find((l) => l.investor.trim().toLowerCase() === body.investor.trim().toLowerCase());
+    if (data && target) {
+      if (!contactName) contactName = (target.contact || "").trim();
+      if (body.commitment   !== undefined) { target.commitment = body.commitment; target.commitmentUsd = parseDollar(body.commitment); }
+      if (body.commitType   !== undefined) target.commitType   = body.commitType;
+      if (body.contact      !== undefined) target.contact      = body.contact;
+      if (body.email        !== undefined) target.email        = body.email;
+      if (body.phone        !== undefined) target.phone        = body.phone;
+      if (body.notes        !== undefined) target.notes        = body.notes;
+      if (body.date         !== undefined) target.date         = body.date;
+      if (body.brokerFirm   !== undefined) target.brokerFirm   = body.brokerFirm;
+      if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
+      await writeLpCache(supabase, data);
     }
+  } catch { /* cache update is best-effort */ }
 
-    // Open workbook session
-    const sessionRes = await fetch(`${base}/createSession`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ persistChanges: true }),
+  // Write the edit to Salesforce (non-fatal; per-field report returned).
+  let salesforce: SfWriteResult[] = [];
+  try {
+    salesforce = await applyLpEditToSalesforce({
+      investor: body.investor,
+      contact: contactName,
+      edits: {
+        email: body.email,
+        phone: body.phone,
+        notes: body.notes,
+        commitmentUsd: body.commitment !== undefined ? parseDollar(body.commitment) : undefined,
+        brokerFirm: body.brokerFirm,
+        brokerContact: body.brokerContact,
+      },
     });
-    if (!sessionRes.ok) throw new Error(`Session open failed: ${await sessionRes.text()}`);
-    const { id: sessionId } = await sessionRes.json();
-    const closeSession = () =>
-      fetch(`${base}/closeSession`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "workbook-session-id": sessionId },
-      }).catch(() => {});
+  } catch (e) { salesforce = [{ field: "salesforce", status: "error", detail: String(e).slice(0, 200) }]; }
 
-    // Calculate the exact Excel row number and PATCH it
-    const excelRow = startRow + headerRowIdx + 1 + rowIdx;
-    const lastCol = colLetter(headers.length - 1);
-    const rangeAddr = `A${excelRow}:${lastCol}${excelRow}`;
-
-    const patchRes = await fetch(
-      `${base}/worksheets/${sheetId}/range(address='${rangeAddr}')`,
-      {
-        method: "PATCH",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          "workbook-session-id": sessionId,
-        },
-        body: JSON.stringify({ values: [currentRow.slice(0, headers.length)] }),
-      }
-    );
-
-    await closeSession();
-
-    if (!patchRes.ok) throw new Error(`Excel write failed: ${await patchRes.text()}`);
-
-    // Excel is the source of truth, but the directory now serves the cached snapshot — so patch the
-    // edited LP row into the cache in place. This makes a stored Broker/Advisor (or any edit) show
-    // on the next load immediately, without waiting for the weekly refresh or re-running the scan.
-    try {
-      const cached = await readLpCache(supabase);
-      const data = cached?.data as ({ lps?: LpRecord[] } & Record<string, unknown>) | undefined;
-      const target = data?.lps?.find((l) => l.investor.trim().toLowerCase() === body.investor.trim().toLowerCase());
-      if (data && target) {
-        if (body.commitment   !== undefined) { target.commitment = body.commitment; target.commitmentUsd = parseDollar(body.commitment); }
-        if (body.commitType   !== undefined) target.commitType   = body.commitType;
-        if (body.contact      !== undefined) target.contact      = body.contact;
-        if (body.email        !== undefined) target.email        = body.email;
-        if (body.phone        !== undefined) target.phone        = body.phone;
-        if (body.notes        !== undefined) target.notes        = body.notes;
-        if (body.date         !== undefined) target.date         = body.date;
-        if (body.brokerFirm   !== undefined) target.brokerFirm   = body.brokerFirm;
-        if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
-        await writeLpCache(supabase, data);
-      }
-    } catch { /* cache update is best-effort */ }
-
-    // Two-way sync: push the edit back to Salesforce (non-fatal; per-field report returned).
-    let salesforce: SfWriteResult[] = [];
-    try {
-      salesforce = await applyLpEditToSalesforce({
-        investor: body.investor,
-        contact: body.contact ?? (iContact >= 0 ? String(dataValues[rowIdx][iContact] ?? "") : ""),
-        edits: {
-          email: body.email,
-          phone: body.phone,
-          notes: body.notes,
-          commitmentUsd: body.commitment !== undefined ? parseDollar(body.commitment) : undefined,
-          brokerFirm: body.brokerFirm,
-          brokerContact: body.brokerContact,
-        },
-      });
-    } catch (e) { salesforce = [{ field: "salesforce", status: "error", detail: String(e).slice(0, 200) }]; }
-
-    return NextResponse.json({ success: true, investor: body.investor, excelRow, salesforce });
-  } catch (err) {
-    return NextResponse.json({ error: String(err) }, { status: 500 });
-  }
+  return NextResponse.json({ success: true, investor: body.investor, salesforce });
 }

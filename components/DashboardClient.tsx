@@ -1989,10 +1989,10 @@ function LpDirectoryView() {
         const errors = sf.filter(w => w.status === 'error')
         const skipped = sf.filter(w => w.status === 'skipped')
         let sfText = ''
-        if (updated.length) sfText += ` · Salesforce updated: ${updated.join(', ')}`
-        if (errors.length) sfText += ` · SF errors: ${errors.map(w => `${w.field} (${w.detail})`).join('; ')}`
-        else if (!updated.length && skipped.length) sfText += ` · Salesforce: ${skipped.map(w => `${w.field} skipped — ${w.detail}`).join('; ')}`
-        setSaveMsg({ ok: errors.length === 0, text: `${investor} saved to Excel${sfText}` })
+        if (updated.length) sfText += `updated: ${updated.join(', ')}`
+        if (errors.length) sfText += `${sfText ? ' · ' : ''}errors: ${errors.map(w => `${w.field} (${w.detail})`).join('; ')}`
+        else if (!updated.length && skipped.length) sfText += `${sfText ? ' · ' : ''}skipped: ${skipped.map(w => `${w.field} — ${w.detail}`).join('; ')}`
+        setSaveMsg({ ok: errors.length === 0, text: `${investor} → Salesforce ${sfText || '(no changes)'}` })
         setTimeout(() => setSaveMsg(null), errors.length || skipped.length ? 12000 : 4000)
       }
     } catch (e) {
