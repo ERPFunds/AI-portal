@@ -2183,7 +2183,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Reach Out', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
@@ -2282,6 +2282,19 @@ function LpDirectoryView() {
                         ) : (
                           <span style={{ color: '#d1d5db', fontSize: 11 }}>—</span>
                         )}
+                      </td>
+
+                      {/* Reach Out? — suggestion based on how long since the last logged interaction */}
+                      <td style={{ padding: '11px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>
+                        {(() => {
+                          if (lp.group === 'DST / 1031') return <span style={{ color: '#d1d5db' }} title="Broker-managed — not a direct IR relationship">—</span>
+                          if (!lp.lastInteraction) return <span style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', background: '#f3f4f6', borderRadius: 20, padding: '2px 8px' }} title="No interaction found in the IR mailboxes (may just be missing data)">No contact logged</span>
+                          const days = Math.floor((Date.now() - new Date(lp.lastInteraction.date).getTime()) / 86400000)
+                          const mo = Math.max(1, Math.round(days / 30))
+                          if (days > 180) return <span style={{ fontSize: 10, fontWeight: 700, color: '#b91c1c', background: '#fef2f2', borderRadius: 20, padding: '2px 8px' }} title={`Last contact ~${mo} months ago`}>⚠ Reach out · {mo}mo</span>
+                          if (days > 90) return <span style={{ fontSize: 10, fontWeight: 700, color: '#b45309', background: '#fffbeb', borderRadius: 20, padding: '2px 8px' }} title={`Last contact ~${mo} months ago`}>Due soon · {mo}mo</span>
+                          return <span style={{ fontSize: 10, fontWeight: 600, color: '#16a34a', background: '#f0fdf4', borderRadius: 20, padding: '2px 8px' }} title={`Last contact ${days} days ago`}>Recent</span>
+                        })()}
                       </td>
 
                       {/* Salesforce columns */}
