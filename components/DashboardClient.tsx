@@ -126,7 +126,10 @@ function WfEditForm({ wf, onSave, onCancel }: { wf: any; onSave: (v: any) => voi
 export default function DashboardClient({ roleKey, userEmail, userName }: Props) {
   const role = ROLES[roleKey]
   const sidebarItems: SidebarItem[] = SIDEBARS[role.sidebar] ?? SIDEBARS.all
-  const defaultView = (sidebarItems.find((i) => 'view' in i) as { view: string } | undefined)?.view ?? 'dashboard'
+  // Prefer the Command Center / Dashboard as the landing view, regardless of nav order
+  // (Research Files sits first in the nav but shouldn't become the default screen).
+  const viewItems = sidebarItems.filter((i): i is { icon: string; label: string; view: string } => 'view' in i)
+  const defaultView = viewItems.find((i) => i.view === 'dashboard')?.view ?? viewItems[0]?.view ?? 'dashboard'
 
   const [currentView, setCurrentView] = useState(defaultView)
   const [drawerAgentId, setDrawerAgentId] = useState<string | null>(null)
