@@ -465,6 +465,27 @@ export async function PATCH(req: NextRequest) {
 
     if (!patchRes.ok) throw new Error(`Excel write failed: ${await patchRes.text()}`);
 
+    // Excel is the source of truth, but the directory now serves the cached snapshot — so patch the
+    // edited LP row into the cache in place. This makes a stored Broker/Advisor (or any edit) show
+    // on the next load immediately, without waiting for the weekly refresh or re-running the scan.
+    try {
+      const cached = await readLpCache(supabase);
+      const data = cached?.data as ({ lps?: LpRecord[] } & Record<string, unknown>) | undefined;
+      const target = data?.lps?.find((l) => l.investor.trim().toLowerCase() === body.investor.trim().toLowerCase());
+      if (data && target) {
+        if (body.commitment   !== undefined) { target.commitment = body.commitment; target.commitmentUsd = parseDollar(body.commitment); }
+        if (body.commitType   !== undefined) target.commitType   = body.commitType;
+        if (body.contact      !== undefined) target.contact      = body.contact;
+        if (body.email        !== undefined) target.email        = body.email;
+        if (body.phone        !== undefined) target.phone        = body.phone;
+        if (body.notes        !== undefined) target.notes        = body.notes;
+        if (body.date         !== undefined) target.date         = body.date;
+        if (body.brokerFirm   !== undefined) target.brokerFirm   = body.brokerFirm;
+        if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
+        await writeLpCache(supabase, data);
+      }
+    } catch { /* cache update is best-effort */ }
+
     return NextResponse.json({ success: true, investor: body.investor, excelRow });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
