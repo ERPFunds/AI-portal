@@ -15,8 +15,6 @@ export interface LpOnboardingOutput {
   outputType: "onboarding";
 }
 
-const PORTAL_URL = "https://app.erpfunds.com";
-
 export async function runLpOnboarding(params: {
   lpName: string;
   entityName?: string;
@@ -30,7 +28,6 @@ Entity: ${params.entityName ?? "N/A"}
 Investment Amount: ${params.investmentAmount ?? "N/A"}
 Signed Date: ${params.signedDate ?? "today"}
 Fund: ${params.fundName ?? "ERP Industrials"}
-Portal URL: ${PORTAL_URL}
 IR Contact: Meghan Berry — mberry@erpfunds.com
 Investor Support: Tracy Doyle — tdoyle@erpfunds.com (there is NO investors@erpfunds.com address — never use it)
 `;
@@ -41,6 +38,8 @@ Investor Support: Tracy Doyle — tdoyle@erpfunds.com (there is NO investors@erp
     system: [{ type: "text" as const, text: `You write LP onboarding email sequences for ERP Industrials, an industrial real estate private equity firm focused on the Permian Basin and select other markets.
 Tone: warm, professional, confident. Not corporate-stiff. These come from Meghan Berry (IR lead) — she will review before sending.
 
+IMPORTANT: Investors have NO online portal or app. NEVER mention a portal, app.erpfunds.com, logging in, or "portal access". For account/document/statement/K-1/distribution questions, point them to Tracy Doyle (tdoyle@erpfunds.com), who handles these directly.
+
 Write exactly three emails as a JSON array:
 [
   { "day": 1, "subject": "...", "htmlBody": "...full HTML email..." },
@@ -48,8 +47,8 @@ Write exactly three emails as a JSON array:
   { "day": 30, "subject": "...", "htmlBody": "...full HTML email..." }
 ]
 
-Day 1: Welcome, portal access instructions, key contacts, what to expect next, next reporting date
-Day 7: Check-in, highlight 1-2 specific things to explore in the portal, reinforce relationship
+Day 1: Welcome, key contacts (Meghan for IR, Tracy Doyle for account/document support), what to expect next, next reporting date
+Day 7: Check-in, reinforce the relationship, invite any questions (route account/doc questions to Tracy Doyle)
 Day 30: First month recap, open door for questions, restate the investment thesis briefly, long-term relationship tone`, cache_control: { type: "ephemeral" } }],
     messages: [
       {

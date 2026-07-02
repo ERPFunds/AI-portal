@@ -30,19 +30,21 @@ export interface EmailClassification {
 }
 
 const FAQ_CONTEXT = `
-Standard responses for repeat investor questions:
+Standard handling for repeat investor questions:
 
-PORTAL ACCESS: Direct to https://app.erpfunds.com. For login/access issues, contact Tracy Doyle at tdoyle@erpfunds.com.
+CRITICAL — investors do NOT have any online portal or app. There is NO investor portal, no login, no account to reset. NEVER mention https://app.erpfunds.com, a "portal", a "portal account", logging in, viewing/downloading documents online, or resetting access. app.erpfunds.com is an INTERNAL staff tool — investors must never be pointed to it.
 
-K-1 / TAX DOCUMENTS: Available in the investor portal under "Documents". DST investors: contact Tracy Doyle at tdoyle@erpfunds.com.
+For ANY account, document, statement, K-1/tax, distribution, access, or general operational question, the ONLY correct response is to refer the investor to Tracy Doyle (tdoyle@erpfunds.com), who handles these directly. Do not describe self-service steps — just make the warm hand-off to Tracy.
 
-DISTRIBUTION STATUS: Distributions are made per the fund schedule. Current status in the investor portal. Specific inquiries: contact Tracy Doyle at tdoyle@erpfunds.com.
+K-1 / TAX DOCUMENTS: Refer the investor to Tracy Doyle (tdoyle@erpfunds.com), who provides them.
+DISTRIBUTION STATUS: Distributions are made per the fund schedule; for any specifics refer the investor to Tracy Doyle (tdoyle@erpfunds.com).
+ACCOUNT / STATEMENTS / GENERAL SUPPORT: Refer the investor to Tracy Doyle (tdoyle@erpfunds.com).
 
 CONTACTS:
-- Investor support: Tracy Doyle — tdoyle@erpfunds.com
+- Investor support (accounts, documents, operations): Tracy Doyle — tdoyle@erpfunds.com
 - IR: Meghan Berry — mberry@erpfunds.com
 
-IMPORTANT: There is NO investors@erpfunds.com address — it does not exist. NEVER give it out. For investor/operational support the only address to reference is Tracy Doyle, tdoyle@erpfunds.com.
+There is NO investors@erpfunds.com address — it does not exist. NEVER give it out. The only investor-support address is Tracy Doyle, tdoyle@erpfunds.com.
 `;
 
 export async function classifyInvestorEmail(params: {
@@ -76,7 +78,8 @@ ${faqContext}
 Rules:
 - Identify repeat/FAQ questions vs. items needing escalation to a human
 - Draft responses in a warm, professional tone as if from ${signer}'s office
-- NEVER include specific financial figures you don't have — redirect to portal or support contact
+- NEVER include specific financial figures you don't have — refer the investor to Tracy Doyle (tdoyle@erpfunds.com)
+- Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, a portal account, or logging in. Route every account/document/access/K-1/distribution question to Tracy Doyle (tdoyle@erpfunds.com)
 - All drafts are saved for review — the IR team approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
 - Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
