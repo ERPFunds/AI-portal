@@ -72,6 +72,9 @@ export default function DraftingWorkspaceView() {
   const [error, setError] = useState('')
   const [outputEdited, setOutputEdited] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [savedUrl, setSavedUrl] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
   const currentType = DOC_TYPES.find((d) => d.id === docType)!
@@ -136,11 +139,38 @@ export default function DraftingWorkspaceView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const save = async () => {
+    if (!output.trim() || saveState === 'saving') return
+    setSaveState('saving')
+    setSaveError('')
+    try {
+      const res = await fetch('/api/drafting/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: output, docType, title: prompt.trim().slice(0, 60) }),
+      })
+      const data = await res.json()
+      if (data.saved && data.url) {
+        setSaveState('saved')
+        setSavedUrl(data.url)
+      } else {
+        setSaveState('error')
+        setSaveError(data.message ?? 'Save failed')
+      }
+    } catch (e) {
+      setSaveState('error')
+      setSaveError(String(e))
+    }
+  }
+
   const clear = () => {
     setOutput('')
     setPrompt('')
     setError('')
     setOutputEdited(false)
+    setSaveState('idle')
+    setSavedUrl(null)
+    setSaveError('')
   }
 
   const typeBtn = (active: boolean) => ({
@@ -306,6 +336,20 @@ export default function DraftingWorkspaceView() {
                   <button onClick={copy} style={actionBtn()}>
                     {copied ? '✓ Copied' : '⎘ Copy'}
                   </button>
+                  <button
+                    onClick={save}
+                    disabled={saveState === 'saving'}
+                    style={{
+                      ...actionBtn(),
+                      background: saveState === 'saved' ? '#f0fdf4' : '#fff',
+                      borderColor: saveState === 'saved' ? '#86efac' : saveState === 'error' ? '#fca5a5' : '#e5e7eb',
+                      color: saveState === 'saved' ? '#16a34a' : saveState === 'error' ? '#dc2626' : '#374151',
+                      opacity: saveState === 'saving' ? 0.6 : 1,
+                      cursor: saveState === 'saving' ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {saveState === 'saving' ? '⏳ Saving…' : saveState === 'saved' ? '✓ Saved' : '💾 Save to SharePoint'}
+                  </button>
                   <button onClick={clear} style={{ ...actionBtn(), color: '#9ca3af' }}>
                     ✕ Clear
                   </button>
@@ -334,17 +378,20 @@ export default function DraftingWorkspaceView() {
           />
           {streaming && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, fontSize: 12, color: '#6b7280' }}>
-              <span
-                style={{
-                  display: 'inline-block',
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: '#3b82f6',
-                }}
-              />
+              <span style={{ display: 'inline-block', width: 7, height: 7, borderRadius: '50%', background: '#3b82f6' }} />
               Generating…
             </div>
+          )}
+          {saveState === 'saved' && savedUrl && (
+            <div style={{ marginTop: 10, fontSize: 13, color: '#16a34a' }}>
+              Saved —{' '}
+              <a href={savedUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
+                Open in SharePoint
+              </a>
+            </div>
+          )}
+          {saveState === 'error' && saveError && (
+            <div style={{ marginTop: 10, fontSize: 13, color: '#dc2626' }}>{saveError}</div>
           )}
         </div>
       )}
