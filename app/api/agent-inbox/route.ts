@@ -160,7 +160,10 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      if (!hit) return NextResponse.json({ original: null });
+      if (!hit) {
+        console.log("[ir-original] not-found", JSON.stringify({ to: draft.to, subject: draft.subject, hasConv: Boolean(draft.conversationId) }));
+        return NextResponse.json({ original: null });
+      }
       const full = await getMessageBody(hostMailbox, hit.id);
       return NextResponse.json({
         original: {
@@ -169,6 +172,7 @@ export async function GET(req: NextRequest) {
         },
       });
     } catch (err) {
+      console.log("[ir-original] error", String(err).slice(0, 200));
       return NextResponse.json({ error: String(err), original: null }, { status: 200 });
     }
   }
@@ -267,6 +271,26 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // Purge DocuSign notifications from the IR inboxes (moves them to Deleted Items, recoverable).
+  if (body.action === "purge-docusign") {
+    const targets = (process.env.IR_DOCUSIGN_PURGE_MAILBOXES || `${TEAM_MAILBOX},${SEND_AS_MAILBOX}`)
+      .split(",").map((s) => s.trim()).filter(Boolean);
+    let deleted = 0;
+    const errors: string[] = [];
+    for (const mb of targets) {
+      try {
+        const msgs = await listFolderMessages(mb, "inbox", 150);
+        for (const m of msgs) {
+          if (/docusign/i.test(m.fromAddress) || /docusign/i.test(m.fromName || "")) {
+            try { await deleteMessage(mb, m.id); deleted++; }
+            catch (e) { errors.push(`${mb}:${String(e).slice(0, 40)}`); }
+          }
+        }
+      } catch (e) { errors.push(`${mb}:${String(e).slice(0, 60)}`); }
+    }
+    return NextResponse.json({ ok: true, deleted, errors });
   }
 
   if (body.action !== "send" || !body.id) {

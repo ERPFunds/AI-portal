@@ -1185,6 +1185,25 @@ function InboxView({
     }
   }
 
+  async function purgeDocusign() {
+    if (!window.confirm('Delete DocuSign notification emails from the team@ and mberry@ inboxes? They move to Deleted Items (recoverable).')) return
+    setBackfilling(true); setBackfillMsg(null)
+    try {
+      const res = await fetch('/api/agent-inbox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'purge-docusign' }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { setBackfillMsg('DocuSign purge failed: ' + (j.error || res.status)); return }
+      setBackfillMsg(`Deleted ${j.deleted ?? 0} DocuSign email${j.deleted === 1 ? '' : 's'}${j.errors?.length ? ` (${j.errors.length} error${j.errors.length === 1 ? '' : 's'})` : ''}`)
+      load()
+    } catch (e) {
+      setBackfillMsg('DocuSign purge failed: ' + String(e))
+    } finally {
+      setBackfilling(false)
+    }
+  }
+
   async function approveAndSend(item: AgentInboxItem) {
     if (!item.isDraft) return
     const to = item.to.join(', ') || 'the recipient'
@@ -1302,13 +1321,16 @@ function InboxView({
           <button className="btn btn-ghost" onClick={() => backfill(false)} disabled={backfilling} title="Triage the last month of investor emails from mberry@ and wmeyer@ into team@'s IR folders" style={{ whiteSpace: 'nowrap' }}>
             {backfilling ? '⏳ Working…' : '⇩ Import last month'}
           </button>
+          <button className="btn btn-ghost" onClick={purgeDocusign} disabled={backfilling} title="Delete DocuSign notification emails from the team@ and mberry@ inboxes (recoverable — moves to Deleted Items)" style={{ whiteSpace: 'nowrap' }}>
+            🗑 Clear DocuSign
+          </button>
           <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
             {loading ? '↻ Syncing…' : '↻ Sync now'}
           </button>
         </div>
       </div>
       {backfillMsg && (
-        <div style={{ fontSize: 12, color: backfillMsg.startsWith('Imported') || backfillMsg.startsWith('Preview') ? '#0e7490' : '#b91c1c', background: backfillMsg.startsWith('Backfill failed') || backfillMsg.startsWith('Sweep skipped') ? '#fef2f2' : '#f0f9fa', border: `1px solid ${backfillMsg.startsWith('Backfill failed') || backfillMsg.startsWith('Sweep skipped') ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: /failed/i.test(backfillMsg) ? '#b91c1c' : '#0e7490', background: /failed|skipped/i.test(backfillMsg) ? '#fef2f2' : '#f0f9fa', border: `1px solid ${/failed|skipped/i.test(backfillMsg) ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
           {backfillMsg}
         </div>
       )}

@@ -10,6 +10,7 @@ import {
   setMessageRead,
   getMessageMime,
   importMimeMessage,
+  deleteMessage,
 } from "@/lib/agents/ir/graph-mailbox";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
@@ -107,18 +108,22 @@ async function handleMailbox(
       }
     }
 
-    // Skip DocuSign automated notifications outright — never pulled into the IR inbox.
+    // DocuSign automated notifications: delete them (moves to Deleted Items, recoverable) so they
+    // don't clutter the inbox, then record it. Never pulled into the IR inbox.
     if (/docusign/i.test(fromAddr) || /docusign/i.test(m.fromAddress)) {
+      let action = "ignored-docusign";
       if (!dryRun) {
+        try { await deleteMessage(mailbox, m.id); action = "deleted-docusign"; }
+        catch (e) { action = `docusign-del-fail(${String(e).slice(0, 40)})`; }
         await markMessageProcessed({
           mailbox,
           messageId: m.id,
           internetMessageId: m.internetMessageId,
           isInvestor: false,
-          action: "ignored-docusign",
+          action,
         });
       }
-      details.push(`IGNORE ${fromAddr || m.fromAddress} — DocuSign notification`);
+      details.push(`${dryRun ? "IGNORE" : "DELETE"} ${fromAddr || m.fromAddress} — DocuSign notification`);
       continue;
     }
 

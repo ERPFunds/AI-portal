@@ -258,31 +258,37 @@ export async function listMessagesFrom(
   top = 25
 ): Promise<{ id: string; from: string; fromName: string | null; subject: string; receivedDateTime: string; isDraft: boolean }[]> {
   const t = await token();
+  // Use $search (KQL) rather than a $filter on from/emailAddress/address — the latter is rejected
+  // by many tenants. $search can't be combined with $orderby, so we sort by date in code.
   const url =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
-    `?$filter=${encodeURIComponent(`from/emailAddress/address eq '${fromAddress.replace(/'/g, "''")}'`)}` +
-    `&$select=id,subject,from,receivedDateTime,isDraft&$orderby=receivedDateTime desc&$top=${top}`;
+    `?$search="${encodeURIComponent(`from:${fromAddress}`)}"` +
+    `&$select=id,subject,from,receivedDateTime,isDraft&$top=${top}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
   });
   if (!res.ok) throw new Error(`Graph list from ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return (data.value || []).map(
-    (m: {
-      id: string;
-      subject?: string;
-      receivedDateTime: string;
-      isDraft?: boolean;
-      from?: { emailAddress?: { address?: string; name?: string } };
-    }) => ({
-      id: m.id,
-      from: m.from?.emailAddress?.address || "",
-      fromName: m.from?.emailAddress?.name ?? null,
-      subject: m.subject || "",
-      receivedDateTime: m.receivedDateTime,
-      isDraft: m.isDraft ?? false,
-    })
-  );
+  return (data.value || [])
+    .map(
+      (m: {
+        id: string;
+        subject?: string;
+        receivedDateTime: string;
+        isDraft?: boolean;
+        from?: { emailAddress?: { address?: string; name?: string } };
+      }) => ({
+        id: m.id,
+        from: m.from?.emailAddress?.address || "",
+        fromName: m.from?.emailAddress?.name ?? null,
+        subject: m.subject || "",
+        receivedDateTime: m.receivedDateTime,
+        isDraft: m.isDraft ?? false,
+      })
+    )
+    .sort((a: { receivedDateTime: string }, b: { receivedDateTime: string }) =>
+      new Date(b.receivedDateTime).getTime() - new Date(a.receivedDateTime).getTime()
+    );
 }
 
 /** Resolve a mail folder's id by display name (e.g., "Investor Relations"). Returns null if not found. */
