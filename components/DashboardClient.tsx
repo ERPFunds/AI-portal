@@ -2171,7 +2171,7 @@ function LpDirectoryView() {
       })()}
 
       {tab === 'lps' && (
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', overflowX: 'auto' }}>
           {loading && <div style={{ padding: 24, color: '#9ca3af', fontSize: 13 }}>Loading commitment schedule…</div>}
           {error && <div style={{ padding: 24, color: '#dc2626', fontSize: 13 }}>Error: {error}</div>}
           {saveMsg && (
@@ -2184,7 +2184,7 @@ function LpDirectoryView() {
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
                   {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
-                    <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
+                    <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2299,8 +2299,8 @@ function LpDirectoryView() {
                             {lp.date && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{lp.date}</div>}</>}
                       </td>
 
-                      {/* Edit / Save / Cancel */}
-                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap' }}>
+                      {/* Edit / Save / Cancel — pinned to the right edge so it stays visible */}
+                      <td style={{ padding: '8px 10px', whiteSpace: 'nowrap', position: 'sticky', right: 0, background: isEditing ? '#f8faff' : '#fff', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 1 }}>
                         {isEditing ? (
                           <div style={{ display: 'flex', gap: 6 }}>
                             <button onClick={() => saveEdit(lp.investor)} disabled={saving} style={{ fontSize: 11, fontWeight: 700, background: '#111827', color: '#fff', border: 'none', borderRadius: 5, padding: '5px 12px', cursor: saving ? 'wait' : 'pointer' }}>
