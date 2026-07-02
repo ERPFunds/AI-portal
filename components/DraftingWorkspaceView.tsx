@@ -74,6 +74,7 @@ export default function DraftingWorkspaceView() {
   const [copied, setCopied] = useState(false)
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [savedUrl, setSavedUrl] = useState<string | null>(null)
+  const [savedFolder, setSavedFolder] = useState('')
   const [saveError, setSaveError] = useState('')
   const abortRef = useRef<AbortController | null>(null)
 
@@ -147,12 +148,13 @@ export default function DraftingWorkspaceView() {
       const res = await fetch('/api/drafting/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: output, docType, title: prompt.trim().slice(0, 60) }),
+        body: JSON.stringify({ content: output, docType, prompt: prompt.trim() }),
       })
       const data = await res.json()
-      if (data.saved && data.url) {
+      if (data.saved) {
         setSaveState('saved')
-        setSavedUrl(data.url)
+        setSavedUrl(data.url ?? null)
+        setSavedFolder(data.resolvedFolder ?? '')
       } else {
         setSaveState('error')
         setSaveError(data.message ?? 'Save failed')
@@ -170,6 +172,7 @@ export default function DraftingWorkspaceView() {
     setOutputEdited(false)
     setSaveState('idle')
     setSavedUrl(null)
+    setSavedFolder('')
     setSaveError('')
   }
 
@@ -382,12 +385,12 @@ export default function DraftingWorkspaceView() {
               Generating…
             </div>
           )}
-          {saveState === 'saved' && savedUrl && (
+          {saveState === 'saved' && (
             <div style={{ marginTop: 10, fontSize: 13, color: '#16a34a' }}>
-              Saved —{' '}
-              <a href={savedUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>
-                Open in SharePoint
-              </a>
+              {savedFolder && <span style={{ color: '#6b7280' }}>{savedFolder} — </span>}
+              {savedUrl
+                ? <a href={savedUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Open in SharePoint</a>
+                : 'Saved to SharePoint'}
             </div>
           )}
           {saveState === 'error' && saveError && (
