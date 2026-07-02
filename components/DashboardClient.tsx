@@ -2237,7 +2237,6 @@ function LpDirectoryView() {
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
         const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
-        const hardCommits = visibleLps.filter(l => l.commitType === 'Hard Commit' || l.commitType === 'Signed Docs').length
         const anyCalled = visibleLps.some(lp => lp.sfCalled != null)
         const anyDistrib = visibleLps.some(lp => lp.sfDistributions != null)
         const calledToDate = visibleLps.reduce((s, lp) => s + (lp.sfCalled ?? 0), 0)
@@ -2255,7 +2254,6 @@ function LpDirectoryView() {
               { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
               { label: 'Fund IV Committed', value: loading ? '…' : data ? fmtUsd(fundIvCommitted) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
-              { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
               { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
               { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
             ].map(k => (
