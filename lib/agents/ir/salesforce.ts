@@ -508,6 +508,100 @@ export async function fetchLpSalesforceData(
   return { byName, fieldMap, matched, dstInvestors };
 }
 
+// ── Two-way sync: write LP directory edits back to Salesforce ─────────────────────
+// Guardrails: we only write when the target SF record is matched UNAMBIGUOUSLY (exactly one
+// Account/Contact/Opportunity by exact name). We never create records. Every field reports its
+// own outcome so the UI can show exactly what synced and what was skipped and why.
+
+export interface SfWriteResult { field: string; status: "updated" | "skipped" | "error"; detail?: string }
+
+async function sfQuery(soqlStr: string): Promise<Record<string, unknown>[]> {
+  const res = await sfFetch(`/query?q=${encodeURIComponent(soqlStr)}`);
+  if (!res.ok) throw new Error(`SF query ${res.status}: ${(await res.text()).slice(0, 150)}`);
+  return ((await res.json()).records ?? []) as Record<string, unknown>[];
+}
+
+async function sfUpdate(objectType: string, id: string, fields: Record<string, unknown>): Promise<{ ok: boolean; detail?: string }> {
+  const res = await sfFetch(`/sobjects/${objectType}/${id}`, { method: "PATCH", body: JSON.stringify(fields) });
+  if (res.status === 204) return { ok: true };
+  const txt = (await res.text().catch(() => "")).slice(0, 200);
+  return { ok: false, detail: `${res.status} ${res.status === 403 || res.status === 401 ? "(integration user lacks edit rights)" : ""} ${txt}`.trim() };
+}
+
+export async function applyLpEditToSalesforce(params: {
+  investor: string;
+  contact?: string;
+  edits: { email?: string; phone?: string; notes?: string; commitmentUsd?: number; brokerFirm?: string; brokerContact?: string };
+}): Promise<SfWriteResult[]> {
+  if (!salesforceConfigured()) return [{ field: "salesforce", status: "skipped", detail: "not configured" }];
+  const { investor, contact, edits } = params;
+  const out: SfWriteResult[] = [];
+  try {
+    const accts = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(investor)}'`);
+    const accountId = accts.length === 1 ? String(accts[0].Id) : null;
+
+    // Notes -> Account.Description (direct write to the matched Account)
+    if (edits.notes !== undefined) {
+      if (!accountId) out.push({ field: "notes", status: "skipped", detail: `${accts.length} SF accounts match "${investor}"` });
+      else { const r = await sfUpdate("Account", accountId, { Description: edits.notes }); out.push(r.ok ? { field: "notes", status: "updated" } : { field: "notes", status: "error", detail: r.detail }); }
+    }
+
+    // Email / Phone -> the LP's primary Contact (exact name, preferring one under this Account)
+    if (edits.email !== undefined || edits.phone !== undefined) {
+      const cname = (contact || "").trim();
+      if (!cname) out.push({ field: "email/phone", status: "skipped", detail: "no contact name on this row" });
+      else {
+        let cons = accountId ? await sfQuery(`SELECT Id FROM Contact WHERE Name = '${soql(cname)}' AND AccountId = '${accountId}'`) : [];
+        if (cons.length === 0) cons = await sfQuery(`SELECT Id FROM Contact WHERE Name = '${soql(cname)}'`);
+        if (cons.length === 1) {
+          const f: Record<string, unknown> = {};
+          if (edits.email !== undefined) f.Email = edits.email;
+          if (edits.phone !== undefined) f.Phone = edits.phone;
+          const r = await sfUpdate("Contact", String(cons[0].Id), f);
+          out.push(r.ok ? { field: "email/phone", status: "updated" } : { field: "email/phone", status: "error", detail: r.detail });
+        } else out.push({ field: "email/phone", status: "skipped", detail: `${cons.length} contacts match "${cname}"` });
+      }
+    }
+
+    // Commitment + Broker need the LP's single Opportunity
+    const needOpp = edits.commitmentUsd !== undefined || (edits.brokerFirm ?? "") !== "" || (edits.brokerContact ?? "") !== "";
+    let oppId: string | null = null;
+    let oppCount = 0;
+    if (needOpp && accountId) {
+      const opps = await sfQuery(`SELECT Id FROM Opportunity WHERE AccountId = '${accountId}' ORDER BY CreatedDate DESC`);
+      oppCount = opps.length;
+      oppId = opps.length === 1 ? String(opps[0].Id) : null;
+    }
+    const oppSkip = !accountId ? `LP account not uniquely matched (${accts.length})` : `${oppCount} opportunities for this LP`;
+
+    if (edits.commitmentUsd !== undefined) {
+      if (!oppId) out.push({ field: "commitment", status: "skipped", detail: oppSkip });
+      else { const r = await sfUpdate("Opportunity", oppId, { Amount: edits.commitmentUsd }); out.push(r.ok ? { field: "commitment", status: "updated" } : { field: "commitment", status: "error", detail: r.detail }); }
+    }
+
+    if ((edits.brokerFirm ?? "") !== "") {
+      if (!oppId) out.push({ field: "broker firm", status: "skipped", detail: oppSkip });
+      else {
+        const b = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(edits.brokerFirm!)}'`);
+        if (b.length === 1) { const r = await sfUpdate("Opportunity", oppId, { Partner_Advisor__c: String(b[0].Id) }); out.push(r.ok ? { field: "broker firm", status: "updated", detail: `linked Partner_Advisor → "${edits.brokerFirm}"` } : { field: "broker firm", status: "error", detail: r.detail }); }
+        else out.push({ field: "broker firm", status: "skipped", detail: `"${edits.brokerFirm}" ${b.length === 0 ? "not found" : "ambiguous"} in SF (won't create)` });
+      }
+    }
+
+    if ((edits.brokerContact ?? "") !== "") {
+      if (!oppId) out.push({ field: "broker rep", status: "skipped", detail: oppSkip });
+      else {
+        const c = await sfQuery(`SELECT Id FROM Contact WHERE Name = '${soql(edits.brokerContact!)}'`);
+        if (c.length === 1) { const r = await sfUpdate("Opportunity", oppId, { Partner_Advisor_Contact__c: String(c[0].Id) }); out.push(r.ok ? { field: "broker rep", status: "updated" } : { field: "broker rep", status: "error", detail: r.detail }); }
+        else out.push({ field: "broker rep", status: "skipped", detail: `"${edits.brokerContact}" ${c.length === 0 ? "not found" : "ambiguous"}` });
+      }
+    }
+  } catch (e) {
+    out.push({ field: "salesforce", status: "error", detail: String(e).slice(0, 200) });
+  }
+  return out;
+}
+
 /**
  * Diagnostic probe: given the LP company names + emails from the schedule, report how the data
  * lines up with Salesforce — Contact email matches vs Account NAME matches — plus the available

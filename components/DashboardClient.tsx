@@ -1984,8 +1984,16 @@ function LpDirectoryView() {
           } : lp),
         } : prev)
         setEditingRow(null)
-        setSaveMsg({ ok: true, text: `${investor} saved to Excel` })
-        setTimeout(() => setSaveMsg(null), 3000)
+        const sf = Array.isArray(result.salesforce) ? result.salesforce as { field: string; status: string; detail?: string }[] : []
+        const updated = sf.filter(w => w.status === 'updated').map(w => w.field)
+        const errors = sf.filter(w => w.status === 'error')
+        const skipped = sf.filter(w => w.status === 'skipped')
+        let sfText = ''
+        if (updated.length) sfText += ` · Salesforce updated: ${updated.join(', ')}`
+        if (errors.length) sfText += ` · SF errors: ${errors.map(w => `${w.field} (${w.detail})`).join('; ')}`
+        else if (!updated.length && skipped.length) sfText += ` · Salesforce: ${skipped.map(w => `${w.field} skipped — ${w.detail}`).join('; ')}`
+        setSaveMsg({ ok: errors.length === 0, text: `${investor} saved to Excel${sfText}` })
+        setTimeout(() => setSaveMsg(null), errors.length || skipped.length ? 12000 : 4000)
       }
     } catch (e) {
       setSaveMsg({ ok: false, text: String(e) })

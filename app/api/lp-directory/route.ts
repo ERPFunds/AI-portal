@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, applyLpEditToSalesforce, type LpSfFieldMap, type SfWriteResult } from "@/lib/agents/ir/salesforce";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 
 export const dynamic = "force-dynamic";
@@ -512,7 +512,24 @@ export async function PATCH(req: NextRequest) {
       }
     } catch { /* cache update is best-effort */ }
 
-    return NextResponse.json({ success: true, investor: body.investor, excelRow });
+    // Two-way sync: push the edit back to Salesforce (non-fatal; per-field report returned).
+    let salesforce: SfWriteResult[] = [];
+    try {
+      salesforce = await applyLpEditToSalesforce({
+        investor: body.investor,
+        contact: body.contact ?? (iContact >= 0 ? String(dataValues[rowIdx][iContact] ?? "") : ""),
+        edits: {
+          email: body.email,
+          phone: body.phone,
+          notes: body.notes,
+          commitmentUsd: body.commitment !== undefined ? parseDollar(body.commitment) : undefined,
+          brokerFirm: body.brokerFirm,
+          brokerContact: body.brokerContact,
+        },
+      });
+    } catch (e) { salesforce = [{ field: "salesforce", status: "error", detail: String(e).slice(0, 200) }]; }
+
+    return NextResponse.json({ success: true, investor: body.investor, excelRow, salesforce });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
