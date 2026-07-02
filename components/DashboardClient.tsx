@@ -1943,25 +1943,35 @@ function LpDirectoryView() {
   const [emailMsg, setEmailMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [emailingRow, setEmailingRow] = React.useState<string | null>(null)
 
-  // Start an investor outreach: create a draft in team@ (surfaces in the IR Inbox to review & send).
+  // Start an investor outreach: AI-draft a tailored email from the LP's context and save it to
+  // team@ (surfaces in the IR Inbox to review & send).
   async function emailLp(lp: LpRecord) {
     let to = (lp.resolvedEmail || '').trim()
     if (!to) {
       to = (window.prompt(`No email on file for ${lp.investor}. Enter the recipient's email address:`, '') || '').trim()
       if (!to) return
     }
-    const first = (lp.contact || '').split(/[ ,&/]/).filter(Boolean)[0] || 'there'
-    const subject = `ERP Industrials — ${lp.investor}`
-    const bodyText = `Hi ${first},\n\n\n\nBest,\nMeghan`
-    setEmailingRow(lp.investor); setEmailMsg(null)
+    const context = {
+      investor: lp.investor,
+      contact: lp.contact || undefined,
+      commitment: lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : (lp.commitment || undefined),
+      commitType: lp.commitType || undefined,
+      fundType: lp.group === 'DST / 1031' ? 'DST / 1031' : 'Fund IV',
+      lastInteraction: lp.lastInteraction?.note || undefined,
+      lastInteractionDate: lp.lastInteraction?.date || undefined,
+      advisorFirm: (lp.brokerFirm || lp.sfAdvisorFirm) || undefined,
+      advisorContact: (lp.brokerContact || lp.sfAdvisorContact) || undefined,
+      notes: lp.notes || undefined,
+    }
+    setEmailingRow(lp.investor); setEmailMsg({ ok: true, text: `Drafting an outreach to ${lp.investor}…` })
     try {
       const res = await fetch('/api/agent-inbox', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create-draft', to, subject, body: bodyText }),
+        body: JSON.stringify({ action: 'create-draft', to, ai: true, context }),
       })
       const j = await res.json()
       if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Draft failed: ${j.error || res.status}` }); return }
-      setEmailMsg({ ok: true, text: `Draft to ${to} created — review & send it in the IR Inbox.` })
+      setEmailMsg({ ok: true, text: `AI draft to ${to} created — review & send it in the IR Inbox.` })
     } catch (e) {
       setEmailMsg({ ok: false, text: `Draft failed: ${String(e)}` })
     } finally {

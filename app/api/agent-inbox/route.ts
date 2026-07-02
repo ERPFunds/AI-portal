@@ -15,6 +15,7 @@ import {
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
+import { draftLpOutreach, type LpOutreachInput } from "@/lib/agents/ir/lp-outreach";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -267,7 +268,10 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string };
+  let body: {
+    action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string;
+    ai?: boolean; context?: LpOutreachInput;
+  };
   try {
     body = await req.json();
   } catch {
@@ -275,16 +279,26 @@ export async function POST(req: NextRequest) {
   }
 
   // Create a new draft in the team hub (surfaces in the IR Inbox for review/send). Used by the
-  // "Email" button in the LP directory to start an outreach to an investor.
+  // "Email" button in the LP directory to start an outreach to an investor. With ai:true it
+  // AI-drafts a tailored outreach from the LP context; otherwise it uses the given subject/body.
   if (body.action === "create-draft") {
     const to = (body.to || "").trim();
     if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
       return NextResponse.json({ error: "A valid recipient email is required" }, { status: 400 });
     }
-    const subject = (body.subject || "").trim() || "ERP Industrials";
-    const text = (body.body || "").trim();
+    let subject = (body.subject || "").trim() || "ERP Industrials";
+    let text = (body.body || "").trim();
+    if (body.ai && body.context) {
+      try {
+        const drafted = await draftLpOutreach(body.context);
+        if (drafted.subject) subject = drafted.subject;
+        if (drafted.bodyText) text = drafted.bodyText;
+      } catch (e) {
+        return NextResponse.json({ error: `AI draft failed: ${String(e).slice(0, 150)}` }, { status: 500 });
+      }
+    }
     const htmlBody = text
-      ? text.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, "<br>").replace(/</g, "&lt;")}</p>`).join("")
+      ? text.split(/\n{2,}/).map((p) => `<p>${p.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</p>`).join("")
       : "<p></p>";
     const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: TEAM_MAILBOX, subject, htmlBody });
     if (!r.success) return NextResponse.json({ error: r.message || "Draft failed" }, { status: 500 });
