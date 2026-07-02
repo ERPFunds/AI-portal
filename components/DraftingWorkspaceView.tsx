@@ -1,6 +1,68 @@
 'use client'
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
+
+// ── History constants (mirrors OutputFilesView) ────────────────────────────────
+
+const EXCEL_EDIT_WORKFLOWS = new Set([
+  'update-pipeline-comps',
+  'update-buyer-list',
+  'competitive-intel-xls',
+  'update-commitment-schedule',
+])
+
+const EXCEL_EDIT_LABEL: Record<string, { icon: string; label: string; color: string }> = {
+  'update-pipeline-comps':      { icon: '🏭', label: 'Pipeline Comps',     color: '#0e7490' },
+  'update-buyer-list':          { icon: '🤝', label: 'Buyer List',          color: '#7c3aed' },
+  'competitive-intel-xls':      { icon: '📊', label: 'Competitive Intel',   color: '#b45309' },
+  'update-commitment-schedule': { icon: '💼', label: 'Commitment Schedule', color: '#166534' },
+}
+
+const DOC_RUN_WORKFLOWS = new Set(['deck-builder', 'om-writer', 'om-editor'])
+
+const DOC_RUN_LABEL: Record<string, { icon: string; label: string; color: string }> = {
+  'deck-builder': { icon: '📑', label: 'Fund Deck', color: '#c2410c' },
+  'om-writer':    { icon: '📄', label: 'OM Write',  color: '#1d4ed8' },
+  'om-editor':    { icon: '✏️',  label: 'OM Edit',   color: '#7c3aed' },
+}
+
+const EMAIL_DISPLAY: Record<string, string> = {
+  'mparad@erpfunds.com': 'Michele P.',
+  'mberry@erpfunds.com': 'Meghan',
+  'wmeyer@erpfunds.com': 'William',
+  'bberry@erpfunds.com': 'Brennan',
+}
+
+interface EditLogRow {
+  id: number
+  created_at: string
+  from_email: string | null
+  workflow_id: string
+  output_summary: string | null
+  onedrive_url: string | null
+}
+
+function fmtDate(iso: string) {
+  if (!iso) return '—'
+  const d = new Date(iso)
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) +
+    ' · ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+}
+
+function SenderChip({ email }: { email: string | null }) {
+  if (!email) return null
+  const name = EMAIL_DISPLAY[email.toLowerCase()] ?? email.split('@')[0]
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      fontSize: 10, fontWeight: 600, color: '#374151',
+      background: '#f3f4f6', border: '1px solid #e5e7eb',
+      borderRadius: 10, padding: '2px 7px',
+    }}>
+      <span style={{ fontSize: 11 }}>👤</span>{name}
+    </span>
+  )
+}
 
 type DocType = 'freeform' | 'om-section' | 'lp-memo' | 'deal-summary' | 'email-draft' | 'market-brief'
 
@@ -79,8 +141,24 @@ export default function DraftingWorkspaceView() {
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [editLog, setEditLog] = useState<EditLogRow[]>([])
+  const [editLogLoading, setEditLogLoading] = useState(true)
+  const [docLog, setDocLog] = useState<EditLogRow[]>([])
+  const [docLogLoading, setDocLogLoading] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    fetch('/api/research-log')
+      .then(r => r.json())
+      .then(d => {
+        const rows: EditLogRow[] = d.rows ?? []
+        setEditLog(rows.filter(r => EXCEL_EDIT_WORKFLOWS.has(r.workflow_id)))
+        setDocLog(rows.filter(r => DOC_RUN_WORKFLOWS.has(r.workflow_id)))
+      })
+      .catch(() => {})
+      .finally(() => { setEditLogLoading(false); setDocLogLoading(false) })
+  }, [])
 
   const currentType = DOC_TYPES.find((d) => d.id === docType)!
 
@@ -467,6 +545,111 @@ export default function DraftingWorkspaceView() {
           )}
         </div>
       )}
+      {/* ── Excel Edit History ─────────────────────────────────────────────── */}
+      <div style={{ marginTop: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', color: '#6b7280' }}>
+            Excel Edit History
+          </span>
+          <span style={{ fontSize: 11, color: '#9ca3af' }}>— rows appended to existing SharePoint files</span>
+        </div>
+        {editLogLoading && <div style={{ color: '#9ca3af', fontSize: 13, padding: '12px 0' }}>Loading…</div>}
+        {!editLogLoading && editLog.length === 0 && (
+          <div style={{ color: '#9ca3af', fontSize: 13, padding: '12px 0' }}>No Excel edits yet — pipeline comps, buyer list, and commitment schedule updates will appear here.</div>
+        )}
+        {!editLogLoading && editLog.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                {['When', 'Workflow / By', 'Summary', ''].map((h, i) => (
+                  <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {editLog.map((row, i) => {
+                const meta = EXCEL_EDIT_LABEL[row.workflow_id] ?? { icon: '📝', label: row.workflow_id, color: '#374151' }
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                    <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap' as const, verticalAlign: 'top', fontSize: 12 }}>{fmtDate(row.created_at)}</td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' as const }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: meta.color, background: `${meta.color}14`, border: `1px solid ${meta.color}33`, borderRadius: 4, padding: '2px 7px' }}>
+                        {meta.icon} {meta.label}
+                      </span>
+                      <div style={{ marginTop: 5 }}><SenderChip email={row.from_email} /></div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#374151', maxWidth: 420 }}>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                        {row.output_summary ?? '—'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' as const }}>
+                      {row.onedrive_url
+                        ? <span onClick={() => window.open(row.onedrive_url!, '_blank')} style={{ display: 'inline-flex', alignItems: 'center', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5, cursor: 'pointer' }}>Open File →</span>
+                        : <span style={{ color: '#d1d5db', fontSize: 11 }}>no link</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Deck & Doc History ─────────────────────────────────────────────── */}
+      <div style={{ marginTop: 32, marginBottom: 40 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '0.8px', color: '#6b7280' }}>
+            Deck &amp; Doc History
+          </span>
+          <span style={{ fontSize: 11, color: '#9ca3af' }}>— fund decks and OMs built or edited by agents</span>
+        </div>
+        {docLogLoading && <div style={{ color: '#9ca3af', fontSize: 13, padding: '12px 0' }}>Loading…</div>}
+        {!docLogLoading && docLog.length === 0 && (
+          <div style={{ color: '#9ca3af', fontSize: 13, padding: '12px 0' }}>No deck or OM runs yet — fund deck builds and OM writes will appear here.</div>
+        )}
+        {!docLogLoading && docLog.length > 0 && (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ borderBottom: '2px solid #e5e7eb' }}>
+                {['When', 'Workflow / By', 'Summary', ''].map((h, i) => (
+                  <th key={i} style={{ textAlign: 'left', padding: '8px 12px', fontSize: 10, textTransform: 'uppercase' as const, letterSpacing: '0.5px', color: '#9ca3af', fontWeight: 600 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {docLog.map((row, i) => {
+                const meta = DOC_RUN_LABEL[row.workflow_id] ?? { icon: '📎', label: row.workflow_id, color: '#374151' }
+                return (
+                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+                    onMouseLeave={e => (e.currentTarget.style.background = '')}>
+                    <td style={{ padding: '10px 12px', color: '#9ca3af', whiteSpace: 'nowrap' as const, verticalAlign: 'top', fontSize: 12 }}>{fmtDate(row.created_at)}</td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' as const }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 600, color: meta.color, background: `${meta.color}14`, border: `1px solid ${meta.color}33`, borderRadius: 4, padding: '2px 7px' }}>
+                        {meta.icon} {meta.label}
+                      </span>
+                      <div style={{ marginTop: 5 }}><SenderChip email={row.from_email} /></div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', color: '#374151', maxWidth: 420 }}>
+                      <div style={{ fontSize: 12, lineHeight: 1.5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const }}>
+                        {row.output_summary ?? '—'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '10px 12px', verticalAlign: 'top', whiteSpace: 'nowrap' as const }}>
+                      {row.onedrive_url
+                        ? <span onClick={() => window.open(row.onedrive_url!, '_blank')} style={{ display: 'inline-flex', alignItems: 'center', background: '#0f172a', color: '#fff', fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 5, cursor: 'pointer' }}>Open File →</span>
+                        : <span style={{ color: '#d1d5db', fontSize: 11 }}>no link</span>}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
     </div>
   )
 }
