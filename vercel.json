@@ -48,6 +48,10 @@
     {
       "path": "/api/cron/loopnet-sync",
       "schedule": "0 14 * * 1"
+    },
+    {
+      "path": "/api/lp-directory",
+      "schedule": "0 12 * * 1"
     }
   ]
 }

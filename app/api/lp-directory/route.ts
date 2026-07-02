@@ -8,6 +8,27 @@ import { salesforceConfigured, fetchLpSalesforceData, type LpSfFieldMap } from "
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 300;
+
+// ── Weekly-static cache ─────────────────────────────────────────────────────────
+// The enrichment (SharePoint schedule + Salesforce + 9-month mailbox scan) is heavy and
+// times out on cold loads (which is why broker/last-interaction "disappear"). We persist the
+// computed payload to `lp_directory_cache` and serve it instantly on every page load. The heavy
+// scan only runs on an explicit refresh: the weekly cron or the "Sync with Salesforce" button.
+type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+
+async function readLpCache(sb: SupabaseServer): Promise<{ data: Record<string, unknown>; updated_at: string } | null> {
+  try {
+    const { data } = await sb.from("lp_directory_cache").select("data, updated_at").eq("id", 1).maybeSingle();
+    return (data as { data: Record<string, unknown>; updated_at: string } | null) ?? null;
+  } catch { return null; }
+}
+
+async function writeLpCache(sb: SupabaseServer, payload: unknown): Promise<void> {
+  try {
+    await sb.from("lp_directory_cache").upsert({ id: 1, data: payload, updated_at: new Date().toISOString() });
+  } catch { /* cache write is best-effort */ }
+}
 
 export interface LpRecord {
   investor: string;
@@ -131,10 +152,24 @@ function parseHeaders(values: string[][]) {
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Auth: an interactive user session, OR the weekly cron (Bearer CRON_SECRET).
+  const isCron = !!process.env.CRON_SECRET &&
+    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+  if (!isCron) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // The cron and the "Sync with Salesforce" button (?refresh=1) force the heavy recompute.
+  // Every other page load is served instantly from the cached snapshot.
+  const refresh = isCron || req.nextUrl.searchParams.get("refresh") === "1";
+  if (!refresh) {
+    const cached = await readLpCache(supabase);
+    if (cached) return NextResponse.json({ ...cached.data, cachedAt: cached.updated_at, fromCache: true });
+  }
 
   try {
     const { scheduleInfo, token, siteId } = await getScheduleContext();
@@ -306,7 +341,7 @@ export async function GET() {
       withBroker: lps.filter((l) => l.sfBrokerCompany || l.sfBrokerContact).length,
       samples: lps.filter((l) => l.sfBrokerCompany || l.sfBrokerContact).slice(0, 5).map((l) => ({ n: l.investor, f: l.sfBrokerCompany, c: l.sfBrokerContact })),
     }));
-    return NextResponse.json({
+    const payload = {
       lps, lpCount: lps.length,
       totalCommittedUsd: lps.reduce((s, lp) => s + lp.commitmentUsd, 0),
       groups,
@@ -317,8 +352,16 @@ export async function GET() {
       sfMatched,
       sfFieldMap,
       sfError,
-    });
+    };
+    await writeLpCache(supabase, payload);
+    return NextResponse.json(payload);
   } catch (err) {
+    // Refresh failed (e.g. scan timed out) — fall back to the last good snapshot so the
+    // directory (and its broker/last-interaction columns) never goes blank.
+    const cached = await readLpCache(supabase);
+    if (cached) {
+      return NextResponse.json({ ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) });
+    }
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
 }

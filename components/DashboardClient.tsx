@@ -1907,7 +1907,9 @@ function LpDirectoryView() {
     setSyncing(true)
     if (manual) setSaveMsg(null)
     try {
-      const res = await fetch('/api/lp-directory')
+      // Manual "Sync with Salesforce" forces the heavy recompute; the initial page load
+      // serves the cached snapshot instantly (refreshed weekly by cron).
+      const res = await fetch(manual ? '/api/lp-directory?refresh=1' : '/api/lp-directory')
       const d = await res.json()
       if (!res.ok || d.error) {
         setError(d.error ?? `Sync failed (${res.status})`)
@@ -1915,7 +1917,8 @@ function LpDirectoryView() {
       } else {
         setError(null); setData(d)
         if (manual) {
-          if (d.sfConfigured === false) setSaveMsg({ ok: false, text: 'Salesforce not connected — set SF_TOKEN_URL / SF_CLIENT_ID / SF_CLIENT_SECRET in Vercel (Production) and redeploy.' })
+          if (d.refreshError) setSaveMsg({ ok: false, text: `Sync timed out — showing last saved data. (${d.refreshError})` })
+          else if (d.sfConfigured === false) setSaveMsg({ ok: false, text: 'Salesforce not connected — set SF_TOKEN_URL / SF_CLIENT_ID / SF_CLIENT_SECRET in Vercel (Production) and redeploy.' })
           else if (d.sfError) setSaveMsg({ ok: false, text: `Salesforce error: ${d.sfError}` })
           else setSaveMsg({ ok: true, text: `Synced — ${d.sfMatched ?? 0} of ${d.lpCount} LPs matched in Salesforce.` })
         }
