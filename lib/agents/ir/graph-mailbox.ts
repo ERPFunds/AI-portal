@@ -218,6 +218,43 @@ export async function resolveSubfolderId(
   return data.value?.[0]?.id ?? null;
 }
 
+/** Create a child folder under a parent (idempotent callers should resolve first). Returns its id. */
+export async function createChildFolder(mailbox: string, parentFolderId: string, displayName: string): Promise<string> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${parentFolderId}/childFolders`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName }),
+    }
+  );
+  if (!res.ok) throw new Error(`Graph create child folder ${res.status}: ${await res.text()}`);
+  return (await res.json()).id as string;
+}
+
+/**
+ * Resolve a "Parent / Child" subfolder, CREATING the parent and/or child if they don't exist.
+ * Use for destination folders that must exist (e.g. the team hub's IR routing subfolders).
+ */
+export async function ensureSubfolderId(mailbox: string, parentName: string, childName: string): Promise<string> {
+  const t = await token();
+  // Ensure the top-level parent exists.
+  let parentId = await resolveFolderId(mailbox, parentName);
+  if (!parentId) {
+    const res = await fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ displayName: parentName }),
+    });
+    if (!res.ok) throw new Error(`Graph create folder ${res.status}: ${await res.text()}`);
+    parentId = (await res.json()).id as string;
+  }
+  const childId = await resolveSubfolderId(mailbox, parentName, childName);
+  if (childId) return childId;
+  return createChildFolder(mailbox, parentId, childName);
+}
+
 /**
  * Move a message to another folder within the same mailbox.
  * A move creates a new message resource in the destination — returns its new id

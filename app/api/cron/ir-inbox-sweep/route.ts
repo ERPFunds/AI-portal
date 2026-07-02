@@ -5,6 +5,7 @@ import {
   listInboxMessages,
   listInboxMessagesSince,
   resolveSubfolderId,
+  ensureSubfolderId,
   moveMessage,
   setMessageRead,
   getMessageMime,
@@ -166,11 +167,12 @@ async function handleMailbox(
       actions.push("team-copy-skip(source=team hub)");
     } else try {
       let teamDestId: string | null;
+      // The team hub is our destination — create the routing subfolders if they don't exist yet.
       if (route === "escalate") {
-        if (teamEscalateFolderId === undefined) teamEscalateFolderId = await resolveSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
+        if (teamEscalateFolderId === undefined) teamEscalateFolderId = await ensureSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
         teamDestId = teamEscalateFolderId;
       } else {
-        if (teamDraftsFolderId === undefined) teamDraftsFolderId = await resolveSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_DRAFTS);
+        if (teamDraftsFolderId === undefined) teamDraftsFolderId = await ensureSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_DRAFTS);
         teamDestId = teamDraftsFolderId;
       }
       if (teamDestId) {

@@ -551,7 +551,7 @@ export async function createTask(p: {
       Subject: p.subject,
       Description: p.description,
       Status: "Completed",
-      Type: "Email",
+      // NOTE: no `Type` — the Task.Type picklist isn't enabled in this org (returns a 400).
       ActivityDate: p.activityDate,
     }),
   });
