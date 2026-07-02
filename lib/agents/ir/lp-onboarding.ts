@@ -32,7 +32,7 @@ Signed Date: ${params.signedDate ?? "today"}
 Fund: ${params.fundName ?? "ERP Industrials"}
 Portal URL: ${PORTAL_URL}
 IR Contact: Meghan Berry — mberry@erpfunds.com
-Investor Support: Tracy Doyle — tdoyle@erpfunds.com / investors@erpfunds.com
+Investor Support: Tracy Doyle — tdoyle@erpfunds.com (there is NO investors@erpfunds.com address — never use it)
 `;
 
   const msg = await client.messages.create({

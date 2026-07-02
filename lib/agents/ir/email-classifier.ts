@@ -32,15 +32,17 @@ export interface EmailClassification {
 const FAQ_CONTEXT = `
 Standard responses for repeat investor questions:
 
-PORTAL ACCESS: Direct to https://app.erpfunds.com. For login/access issues, contact Tracy Doyle at tdoyle@erpfunds.com or investors@erpfunds.com.
+PORTAL ACCESS: Direct to https://app.erpfunds.com. For login/access issues, contact Tracy Doyle at tdoyle@erpfunds.com.
 
 K-1 / TAX DOCUMENTS: Available in the investor portal under "Documents". DST investors: contact Tracy Doyle at tdoyle@erpfunds.com.
 
-DISTRIBUTION STATUS: Distributions are made per the fund schedule. Current status in the investor portal. Specific inquiries: investors@erpfunds.com.
+DISTRIBUTION STATUS: Distributions are made per the fund schedule. Current status in the investor portal. Specific inquiries: contact Tracy Doyle at tdoyle@erpfunds.com.
 
 CONTACTS:
-- Investor support: Tracy Doyle — tdoyle@erpfunds.com / investors@erpfunds.com
+- Investor support: Tracy Doyle — tdoyle@erpfunds.com
 - IR: Meghan Berry — mberry@erpfunds.com
+
+IMPORTANT: There is NO investors@erpfunds.com address — it does not exist. NEVER give it out. For investor/operational support the only address to reference is Tracy Doyle, tdoyle@erpfunds.com.
 `;
 
 export async function classifyInvestorEmail(params: {
