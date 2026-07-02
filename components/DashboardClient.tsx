@@ -2175,7 +2175,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>
                       {h}
                       {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
@@ -2201,6 +2201,14 @@ function LpDirectoryView() {
                         ) : (
                           (lp.contact || lp.email) && <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400, marginTop: 2 }}>{lp.contact}{lp.email ? ` · ${lp.email}` : ''}</div>
                         )}
+                      </td>
+
+                      {/* Type — Fund IV LP vs DST/1031 (derived from the group) */}
+                      <td style={{ padding: '11px 14px' }}>
+                        {(() => {
+                          const isDst = lp.group === 'DST / 1031'
+                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isDst ? '#fef3c7' : '#eff6ff', color: isDst ? '#92400e' : '#1d4ed8', whiteSpace: 'nowrap' }}>{isDst ? 'DST / 1031' : 'Fund IV LP'}</span>
+                        })()}
                       </td>
 
                       {/* LP Primary Contact — the LP's own contact + firm, from Salesforce (read-only) */}
