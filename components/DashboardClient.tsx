@@ -1920,6 +1920,7 @@ function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
   const [search, setSearch] = React.useState('')
+  const [sortStale, setSortStale] = React.useState(false)
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -2067,6 +2068,17 @@ function LpDirectoryView() {
     lp.brokerFirm, lp.brokerContact, lp.sfBrokerCompany, lp.sfBrokerContact, lp.sfAdvisorFirm, lp.sfAdvisorContact,
   ].some(v => (v || '').toLowerCase().includes(q))
 
+  // Higher score = more in need of outreach. Tiers keep confirmed-stale LPs above the
+  // "no contact logged" (uncertain) ones, with DST (broker-managed) at the bottom.
+  const staleScore = (lp: LpRecord): number => {
+    if (lp.group === 'DST / 1031') return -1
+    if (!lp.lastInteraction) return 1_000_000
+    const days = (Date.now() - new Date(lp.lastInteraction.date).getTime()) / 86_400_000
+    if (days > 180) return 3_000_000 + days
+    if (days > 90) return 2_000_000 + days
+    return days
+  }
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -2096,20 +2108,26 @@ function LpDirectoryView() {
       </div>
       <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Capital Raising · CIO & Chief of Staff" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
 
-      {/* Search — filters the table by investor, contact, broker/advisor, group, or notes */}
+      {/* Search + sort — filter by investor/contact/broker/group/notes; sort by outreach need */}
       {data && (
-        <div style={{ marginBottom: 12, position: 'relative', maxWidth: 420 }}>
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search LPs, contacts, brokers…"
-            style={{ width: '100%', padding: '8px 32px 8px 32px', fontSize: 13, border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} title="Clear"
-              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
-          )}
+        <div style={{ marginBottom: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, maxWidth: 420, minWidth: 220 }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search LPs, contacts, brokers…"
+              style={{ width: '100%', padding: '8px 32px 8px 32px', fontSize: 13, border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none' }}
+            />
+            {search && (
+              <button onClick={() => setSearch('')} title="Clear"
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+            )}
+          </div>
+          <button onClick={() => setSortStale(s => !s)} title="Sort so the LPs most overdue for outreach are at the top"
+            style={{ whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${sortStale ? '#111827' : '#e5e7eb'}`, background: sortStale ? '#111827' : '#fff', color: sortStale ? '#fff' : '#374151' }}>
+            ⇅ Most overdue first{sortStale ? ' ✓' : ''}
+          </button>
         </div>
       )}
 
@@ -2195,7 +2213,7 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).map((lp, i) => {
+                {data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).sort((a, b) => sortStale ? staleScore(b) - staleScore(a) : 0).map((lp, i) => {
                   const isEditing = editingRow === lp.investor
                   const ev = editValues
                   return (
