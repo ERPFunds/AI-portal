@@ -46,10 +46,10 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
       {
         name: "Email Escalation Filter",
         trigger: "email",
-        triggerSenders: ["investors@erpfunds.com", "mberry@erpfunds.com"],
+        triggerSenders: ["team@erpfunds.com", "mberry@erpfunds.com"],
         status: "active",
         steps: [
-          { type: "automated", label: "Receive Email", description: "Power Automate watches investors@erpfunds.com DST inbox · POSTs to /api/ir-webhook" },
+          { type: "automated", label: "Receive Email", description: "Power Automate watches team@erpfunds.com DST inbox · POSTs to /api/ir-webhook" },
           { type: "automated", label: "Classify", description: "Claude identifies: portal access · K-1 · distribution · escalation · new inquiry" },
           { type: "automated", label: "Draft Response", description: "For repeat questions: AI drafts reply saved to Meghan's Outlook Drafts — never auto-sent" },
           { type: "manual", label: "Review & Send", description: "Meghan reviews draft · sends or edits · escalations flagged for immediate attention" }
@@ -58,7 +58,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
       {
         name: "Attachment Auto-Filer",
         trigger: "email",
-        triggerSenders: ["investors@erpfunds.com", "mberry@erpfunds.com"],
+        triggerSenders: ["team@erpfunds.com", "mberry@erpfunds.com"],
         status: "active",
         steps: [
           { type: "automated", label: "Receive Email", description: "Power Automate detects investor email with attachment · POSTs to /api/ir-webhook" },
