@@ -247,6 +247,44 @@ export async function listInboxMessagesSince(mailbox: string, sinceIso: string, 
   return out;
 }
 
+/**
+ * List recent messages in a mailbox sent FROM a given address (across all folders), newest first.
+ * Used to find the inbound investor email a standalone draft is replying to (drafts don't share
+ * the original's conversationId, so we match on sender + subject instead).
+ */
+export async function listMessagesFrom(
+  mailbox: string,
+  fromAddress: string,
+  top = 25
+): Promise<{ id: string; from: string; fromName: string | null; subject: string; receivedDateTime: string; isDraft: boolean }[]> {
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
+    `?$filter=${encodeURIComponent(`from/emailAddress/address eq '${fromAddress.replace(/'/g, "''")}'`)}` +
+    `&$select=id,subject,from,receivedDateTime,isDraft&$orderby=receivedDateTime desc&$top=${top}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
+  });
+  if (!res.ok) throw new Error(`Graph list from ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.value || []).map(
+    (m: {
+      id: string;
+      subject?: string;
+      receivedDateTime: string;
+      isDraft?: boolean;
+      from?: { emailAddress?: { address?: string; name?: string } };
+    }) => ({
+      id: m.id,
+      from: m.from?.emailAddress?.address || "",
+      fromName: m.from?.emailAddress?.name ?? null,
+      subject: m.subject || "",
+      receivedDateTime: m.receivedDateTime,
+      isDraft: m.isDraft ?? false,
+    })
+  );
+}
+
 /** Resolve a mail folder's id by display name (e.g., "Investor Relations"). Returns null if not found. */
 export async function resolveFolderId(mailbox: string, displayName: string): Promise<string | null> {
   const t = await token();

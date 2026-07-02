@@ -7,6 +7,7 @@ import {
   listFolderMessagesSince,
   getMessageBody,
   listConversationMessages,
+  listMessagesFrom,
   sendMailAs,
   deleteMessage,
   type MailItem,
@@ -120,29 +121,45 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // The original inbound email a draft is replying to — found via the conversation, not
-  // by fragile subject/recipient matching. Returns the most recent inbound message in the
-  // same conversation (searches the team hub, then the send-as mailbox as a fallback).
+  // The original inbound email a draft is replying to. Drafts are created as standalone messages
+  // (no shared conversationId with the original), so we try the conversation first, then fall back
+  // to matching by the investor (the draft's recipient) + subject. Searches the team hub + send-as.
   const originalOf = req.nextUrl.searchParams.get("original");
   if (originalOf) {
     try {
       const draft = await getMessageBody(TEAM_MAILBOX, originalOf);
-      if (!draft.conversationId) return NextResponse.json({ original: null });
-      const mine = new Set([TEAM_MAILBOX, SEND_AS_MAILBOX].map((a) => a.toLowerCase()));
-      const pickFrom = async (mailbox: string) => {
-        const msgs = await listConversationMessages(mailbox, draft.conversationId!);
-        const candidates = msgs
-          .filter((m) => m.id !== originalOf && !m.isDraft && m.from)
-          .sort((a, b) => new Date(b.receivedDateTime).getTime() - new Date(a.receivedDateTime).getTime());
-        // Prefer an inbound message (from someone other than us); fall back to any non-draft.
-        return candidates.find((m) => !mine.has(m.from.toLowerCase())) || candidates[0] || null;
-      };
-      let hit = await pickFrom(TEAM_MAILBOX);
+      const searchMailboxes = [TEAM_MAILBOX, SEND_AS_MAILBOX].filter((v, i, a) => a.indexOf(v) === i);
+      const mine = new Set(searchMailboxes.map((a) => a.toLowerCase()));
+      type Hit = { id: string; subject: string; from: string; fromName: string | null; receivedDateTime: string };
+      let hit: Hit | null = null;
       let hostMailbox = TEAM_MAILBOX;
-      if (!hit && SEND_AS_MAILBOX.toLowerCase() !== TEAM_MAILBOX.toLowerCase()) {
-        hit = await pickFrom(SEND_AS_MAILBOX);
-        hostMailbox = SEND_AS_MAILBOX;
+
+      // 1) Same conversation (works when a draft was created as a real reply).
+      if (draft.conversationId) {
+        for (const mb of searchMailboxes) {
+          const msgs = await listConversationMessages(mb, draft.conversationId);
+          const cands = msgs
+            .filter((m) => m.id !== originalOf && !m.isDraft && m.from)
+            .sort((a, b) => new Date(b.receivedDateTime).getTime() - new Date(a.receivedDateTime).getTime());
+          const pick = cands.find((m) => !mine.has(m.from.toLowerCase())) || cands[0];
+          if (pick) { hit = pick; hostMailbox = mb; break; }
+        }
       }
+
+      // 2) Fallback: the inbound email from the investor (draft recipient) with a matching subject.
+      if (!hit) {
+        const investor = draft.to.find((a) => !mine.has(a.toLowerCase())) || draft.to[0];
+        const strip = (s: string) => (s || "").toLowerCase().replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "").trim();
+        const want = strip(draft.subject);
+        if (investor) {
+          for (const mb of searchMailboxes) {
+            const msgs = (await listMessagesFrom(mb, investor)).filter((m) => !m.isDraft);
+            const pick = msgs.find((m) => strip(m.subject) === want) || msgs[0];
+            if (pick) { hit = pick; hostMailbox = mb; break; }
+          }
+        }
+      }
+
       if (!hit) return NextResponse.json({ original: null });
       const full = await getMessageBody(hostMailbox, hit.id);
       return NextResponse.json({
