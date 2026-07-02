@@ -330,6 +330,10 @@ export async function GET(req: NextRequest) {
       for (const lp of lps) {
         const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
         const names = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter(isFullName);
+        // Also try an EXACT match on the investor entity name (e.g. a trust that emails under its own
+        // name). This is a full-string normalized match, not fuzzy token matching, so it won't
+        // cross-attribute unrelated people the way single shared tokens did.
+        const entityKey = norm(lp.investor || "");
         let best: Interaction | null = null;
         let via = "";
         const consider = (it: Interaction | undefined, tag: string) => {
@@ -337,6 +341,7 @@ export async function GET(req: NextRequest) {
         };
         for (const e of emails) consider(byEmail[e], "email");
         for (const n of new Set(names)) consider(byName[n], n);
+        if (entityKey) consider(byName[entityKey], "entity");
         if (best && (!lp.lastInteraction || new Date((best as Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
           const b = best as Interaction;
           const dir = b.direction === "sent" ? "Sent to" : "From";

@@ -1917,6 +1917,7 @@ const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verba
 function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
+  const [search, setSearch] = React.useState('')
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -2050,6 +2051,12 @@ function LpDirectoryView() {
     URL.revokeObjectURL(url)
   }
 
+  const q = search.trim().toLowerCase()
+  const matchesSearch = (lp: LpRecord) => !q || [
+    lp.investor, lp.contact, lp.email, lp.group, lp.notes,
+    lp.brokerFirm, lp.brokerContact, lp.sfBrokerCompany, lp.sfBrokerContact, lp.sfAdvisorFirm, lp.sfAdvisorContact,
+  ].some(v => (v || '').toLowerCase().includes(q))
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
@@ -2078,6 +2085,23 @@ function LpDirectoryView() {
         </div>
       </div>
       <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Capital Raising · CIO & Chief of Staff" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
+
+      {/* Search — filters the table by investor, contact, broker/advisor, group, or notes */}
+      {data && (
+        <div style={{ marginBottom: 12, position: 'relative', maxWidth: 420 }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search LPs, contacts, brokers…"
+            style={{ width: '100%', padding: '8px 32px 8px 32px', fontSize: 13, border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none' }}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} title="Clear"
+              style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+          )}
+        </div>
+      )}
 
       {/* Group view tabs — derived from section headers in the Excel sheet */}
       {data && data.groups.length > 1 && (
@@ -2110,7 +2134,7 @@ function LpDirectoryView() {
 
       {/* Summary metrics — scoped to the selected group */}
       {(() => {
-        const visibleLps = !data ? [] : groupView === 'All' ? data.lps : data.lps.filter(lp => lp.group === groupView)
+        const visibleLps = !data ? [] : data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
         const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
@@ -2161,7 +2185,7 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.filter(lp => groupView === 'All' || lp.group === groupView).map((lp, i) => {
+                {data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).map((lp, i) => {
                   const isEditing = editingRow === lp.investor
                   const ev = editValues
                   return (
