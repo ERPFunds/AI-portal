@@ -41,13 +41,14 @@ export interface AgentInboxItem {
   preview: string;
   receivedISO: string;
   folder: string; // display path, e.g. "Investor Relations / Escalate"
-  folderKind: "ir" | "escalate" | "forwarded-drafts" | "draft";
+  folderKind: "ir" | "escalate" | "forwarded-drafts" | "draft" | "sent";
   status: ItemStatus;
   isDraft: boolean;
   webLink: string | null;
   conversationId: string | null;
   owner: "Meghan" | "William" | null; // which IR lead's thread this belongs to
   originalReceivedISO: string | null;  // when the inbound email this draft replies to arrived
+  sentBody?: string;                    // full body for a sent reply (folderKind === "sent")
 }
 
 // Which IR lead a message belongs to, from its recipients (the mailbox the investor wrote to).
@@ -246,6 +247,38 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // 3) Sent replies — logged when a draft is approved & sent through the portal.
+    let sentCount = 0;
+    try {
+      const { data: sent } = await supabase
+        .from("ir_sent")
+        .select("id, sent_at, from_mailbox, to_email, subject, body, owner")
+        .order("sent_at", { ascending: false })
+        .limit(100);
+      for (const r of (sent ?? [])) {
+        items.push({
+          id: `sent:${r.id}`,
+          from: (r.from_mailbox as string) || "",
+          fromName: (r.owner as string) || null,
+          to: r.to_email ? [r.to_email as string] : [],
+          subject: (r.subject as string) || "",
+          preview: ((r.body as string) || "").replace(/\s+/g, " ").trim().slice(0, 140),
+          receivedISO: r.sent_at as string,
+          folder: "Sent",
+          folderKind: "sent",
+          status: "handled",
+          isDraft: false,
+          webLink: null,
+          conversationId: null,
+          owner: (r.owner as "Meghan" | "William" | null) ?? null,
+          originalReceivedISO: null,
+          sentBody: (r.body as string) || "",
+        });
+        sentCount++;
+      }
+      if (sentCount) folders.push({ name: "Sent", kind: "sent", count: sentCount });
+    } catch { /* non-fatal: no Sent section if the table is unavailable */ }
+
     return NextResponse.json({
       mailbox: TEAM_MAILBOX,
       folders,
@@ -348,6 +381,17 @@ export async function POST(req: NextRequest) {
     await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text" });
     // Clean up the draft that lived in the team hub (best-effort).
     try { await deleteMessage(TEAM_MAILBOX, body.id); } catch { /* leave it if delete fails */ }
+
+    // Log the sent reply so it surfaces in the IR Inbox "Sent" section (best-effort).
+    try {
+      await supabase.from("ir_sent").insert({
+        from_mailbox: sendFrom,
+        to_email: detail.to[0] ?? null,
+        subject: detail.subject,
+        body: content,
+        owner: ownerOf([sendFrom]),
+      });
+    } catch { /* non-fatal */ }
 
     // Workflow #3: AI-driven note from what was actually sent, logged to the Salesforce contact(s).
     let note = "note-skip(no SF creds)";

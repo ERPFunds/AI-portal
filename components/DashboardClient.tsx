@@ -1062,13 +1062,14 @@ interface AgentInboxItem {
   preview: string
   receivedISO: string
   folder: string
-  folderKind: 'ir' | 'escalate' | 'forwarded-drafts' | 'draft'
+  folderKind: 'ir' | 'escalate' | 'forwarded-drafts' | 'draft' | 'sent'
   status: 'active-thread' | 'pending' | 'handled' | 'needs-review'
   isDraft: boolean
   webLink: string | null
   conversationId?: string | null
   owner?: 'Meghan' | 'William' | null
   originalReceivedISO?: string | null
+  sentBody?: string
 }
 interface AgentInboxFolder { name: string; kind: AgentInboxItem['folderKind']; count: number }
 interface AgentInboxResponse {
@@ -1088,12 +1089,14 @@ const FOLDER_BADGE: Record<AgentInboxItem['folderKind'], string> = {
   escalate: 'badge-red',
   'forwarded-drafts': 'badge-gold',
   draft: 'badge-purple',
+  sent: 'badge-green',
 }
 const FOLDER_LABEL: Record<AgentInboxItem['folderKind'], string> = {
   ir: 'Investor Relations',
   escalate: 'Escalate',
   'forwarded-drafts': 'Forwarded Draft',
   draft: 'Draft · needs approval',
+  sent: 'Sent',
 }
 
 function formatInboxTime(iso: string): string {
@@ -1269,10 +1272,12 @@ function InboxView({
   })
   const selected = filtered[selectedInboxIdx]
 
-  // Fetch the full message body on open (the list only carries a short preview).
+  // Fetch the full message body on open (the list only carries a short preview). Sent items carry
+  // their body inline (their id is a DB row, not a Graph message id) — use it directly.
   React.useEffect(() => {
     const id = selected?.id
     if (!id || bodyCache[id] !== undefined) return
+    if (selected?.folderKind === 'sent') { setBodyCache((c) => ({ ...c, [id]: selected.sentBody ?? '' })); return }
     let cancelled = false
     setBodyLoading(true)
     fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}`)
@@ -1393,7 +1398,7 @@ function InboxView({
                       onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
                     >
                       <div className="inbox-item-header">
-                        <div className="inbox-from">{item.fromName || item.from || (item.isDraft ? `To: ${item.to[0] ?? '—'}` : '—')}</div>
+                        <div className="inbox-from">{(item.isDraft || item.folderKind === 'sent') ? `To: ${item.to[0] ?? '—'}` : (item.fromName || item.from || '—')}</div>
                         <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
                       </div>
                       <div className="inbox-subject">{item.subject || '(no subject)'}</div>
@@ -1455,7 +1460,7 @@ function InboxView({
                 )}
                 <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
                   <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : `From: ${selected.from}`}
+                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'sent' ? `Sent to: ${selected.to.join(', ') || '—'} · from ${selected.from}` : `From: ${selected.from}`}
                   </div>
                   {selected.isDraft ? (
                     bodyLoading && bodyCache[selected.id] === undefined ? (
@@ -1478,7 +1483,7 @@ function InboxView({
               <div className="draft-panel">
                 <div className="draft-label">
                   <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`} style={{ fontSize: 10 }}>{FOLDER_LABEL[selected.folderKind]}</span>
-                  {selected.isDraft ? `Review & edit the reply above, then send from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
+                  {selected.isDraft ? `Review & edit the reply above, then send from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'sent' ? `Sent ${formatInboxTime(selected.receivedISO)}${selected.owner ? ` from ${OWNER_SEND_FROM[selected.owner]}` : ''}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
                 </div>
                 <div className="draft-actions" style={{ alignItems: 'center' }}>
                   {selected.isDraft && (
