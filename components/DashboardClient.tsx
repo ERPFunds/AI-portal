@@ -1922,8 +1922,13 @@ const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verba
 function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
+  const [fundView, setFundView] = React.useState<'All' | 'Fund IV' | 'DST / 1031'>('All')
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
+  const DST_GROUP = 'DST / 1031'
+  // Fund IV = every schedule section except the DST/1031 book.
+  const inFundView = (lp: LpRecord) =>
+    fundView === 'All' || (fundView === DST_GROUP ? lp.group === DST_GROUP : lp.group !== DST_GROUP)
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -2134,12 +2139,44 @@ function LpDirectoryView() {
         </div>
       )}
 
-      {/* Group view tabs — derived from section headers in the Excel sheet */}
+      {/* Fund type filter — Fund IV vs the DST / 1031 book */}
+      {data && data.groups.includes(DST_GROUP) && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginRight: 2 }}>Fund:</span>
+          {(['All', 'Fund IV', 'DST / 1031'] as const).map(f => {
+            const isActive = fundView === f
+            const count = f === 'All' ? data.lps.length : f === DST_GROUP
+              ? data.lps.filter(lp => lp.group === DST_GROUP).length
+              : data.lps.filter(lp => lp.group !== DST_GROUP).length
+            return (
+              <button
+                key={f}
+                onClick={() => { setFundView(f); setGroupView('All') }}
+                style={{
+                  fontSize: 12, fontWeight: isActive ? 700 : 500,
+                  color: isActive ? '#fff' : '#374151',
+                  background: isActive ? '#0e7490' : '#ecfeff',
+                  border: `1px solid ${isActive ? '#0e7490' : '#a5f3fc'}`,
+                  borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                {f === 'Fund IV' ? 'Fund IV' : f}
+                <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#cffafe' : '#9ca3af' }}>{count}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Group view tabs — section headers in the Excel sheet, scoped to the selected fund */}
       {data && data.groups.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          {['All', ...data.groups].map(g => {
+          {['All', ...data.groups.filter(g => fundView === 'All' || (fundView === DST_GROUP ? g === DST_GROUP : g !== DST_GROUP))].map(g => {
             const isActive = groupView === g
-            const groupLps = g === 'All' ? data.lps : data.lps.filter(lp => lp.group === g)
+            const groupLps = g === 'All'
+              ? data.lps.filter(inFundView)
+              : data.lps.filter(lp => lp.group === g)
             return (
               <button
                 key={g}
@@ -2165,7 +2202,7 @@ function LpDirectoryView() {
 
       {/* Summary metrics — scoped to the selected group */}
       {(() => {
-        const visibleLps = !data ? [] : data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
+        const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
         const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
@@ -2216,7 +2253,7 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.filter(lp => (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).sort((a, b) => sortStale ? staleScore(b) - staleScore(a) : 0).map((lp, i) => {
+                {data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).sort((a, b) => sortStale ? staleScore(b) - staleScore(a) : 0).map((lp, i) => {
                   const isEditing = editingRow === lp.investor
                   const ev = editValues
                   return (
