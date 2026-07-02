@@ -4,11 +4,11 @@ export type SidebarItem =
 
 export const SIDEBARS: Record<string, SidebarItem[]> = {
   all: [
-    { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { section: 'Command' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
     { icon: '🤖', label: 'Agent Hub',         view: 'agents' },
     { section: 'Investor' },
+    { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { icon: '✏️', label: 'Drafting Workspace', view: 'drafting' },
     { icon: '📥', label: 'IR Inbox',            view: 'inbox' },
     { icon: '👥', label: 'LP Directory',        view: 'lp' },
@@ -30,10 +30,10 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '⚙️', label: 'Settings',            view: 'settings' },
   ],
   executive: [
-    { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { section: 'Overview' },
     { icon: '⚡', label: 'AI Command Center', view: 'dashboard' },
     { section: 'Investor' },
+    { icon: '📁', label: 'Research Files',        view: 'output-files' },
     { icon: '✏️', label: 'Drafting Workspace', view: 'drafting' },
     { icon: '📥', label: 'IR Inbox',             view: 'inbox' },
     { icon: '🔬', label: 'Market & Comps',       view: 'market-research' },
