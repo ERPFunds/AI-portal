@@ -128,7 +128,6 @@ export default function DraftingWorkspaceView() {
   const [docType, setDocType] = useState<DocType>('freeform')
   const [prompt, setPrompt] = useState('')
   const [useKb, setUseKb] = useState(true)
-  const [useNews, setUseNews] = useState(false)
   const [output, setOutput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
@@ -198,7 +197,7 @@ export default function DraftingWorkspaceView() {
         body: JSON.stringify({
           docType,
           prompt: prompt.trim(),
-          sources: [...(useKb ? ['kb'] : []), ...(useNews ? ['news'] : [])],
+          sources: useKb ? ['kb'] : [],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
         }),
@@ -235,7 +234,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useNews, streaming])
+  }, [docType, prompt, useKb, streaming])
 
   const stop = () => abortRef.current?.abort()
 
@@ -318,7 +317,7 @@ export default function DraftingWorkspaceView() {
       <div style={{ marginBottom: 22 }}>
         <h2 style={{ fontSize: 20, fontWeight: 700, color: '#111827', margin: 0 }}>Drafting Workspace</h2>
         <p style={{ fontSize: 14, color: '#6b7280', marginTop: 4, marginBottom: 0 }}>
-          Research, write, and edit — grounded on your knowledge base and live market data.
+          Research, write, and edit — grounded on your knowledge base.
         </p>
       </div>
 
@@ -339,7 +338,6 @@ export default function DraftingWorkspaceView() {
         <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
         {[
           { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
-          { id: 'news', label: '📰 Live News', val: useNews, set: setUseNews },
         ].map(({ id, label, val, set }) => (
           <label
             key={id}
