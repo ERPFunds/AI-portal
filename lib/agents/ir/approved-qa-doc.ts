@@ -6,9 +6,9 @@ const anthropic = new Anthropic();
 // Auto-generated, always-current doc of APPROVED Learned Q&A. Lives on the SOPs page
 // (a live file) AND in the document_markdown layer. Regenerated whenever an entry is
 // approved/edited/rejected. Filed under the "Agent Working Guides" SOP folder, in an
-// "Agent 2 — Investor Relations" subfolder (project_tag), alongside the other agent guides.
+// "Agent 2 - Investor Relations" subfolder (project_tag), alongside the other agent guides.
 const DOC_CATEGORY = process.env.LEARNED_QA_DOC_CATEGORY || "Agent Working Guides";
-const DOC_SUBFOLDER = process.env.LEARNED_QA_DOC_SUBFOLDER || "Agent 2 — Investor Relations";
+const DOC_SUBFOLDER = process.env.LEARNED_QA_DOC_SUBFOLDER || "Agent 2 - Investor Relations";
 const DOC_NAME = "Approved Learned Q&A (auto-generated).md";
 
 function buildMarkdown(rows: { question: string; answer: string; category: string | null }[]): string {

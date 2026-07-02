@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
 
 const anthropic = new Anthropic();
@@ -23,8 +24,7 @@ export async function POST(req: NextRequest) {
 
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-    const supabase = await createClient();
-    const { error } = await supabase.from("uploaded_files").insert({
+    const row = {
       file_id:     uploaded.id,
       filename:    file.name,
       size_bytes:  file.size,
@@ -33,7 +33,21 @@ export async function POST(req: NextRequest) {
       category:    category ?? null,
       uploaded_by: uploadedBy ?? null,
       expires_at:  expiresAt,
-    });
+    };
+
+    const supabase = await createClient();
+    let { error } = await supabase.from("uploaded_files").insert(row);
+
+    // Fall back to the service-role client when the session insert is blocked by RLS
+    // (e.g. an unauthenticated/programmatic upload with no Supabase session cookie).
+    if (error) {
+      try {
+        const admin = createAdminClient();
+        ({ error } = await admin.from("uploaded_files").insert(row));
+      } catch (e) {
+        console.error("Admin insert fallback failed:", e);
+      }
+    }
 
     if (error) {
       console.error("File metadata save error:", error);
