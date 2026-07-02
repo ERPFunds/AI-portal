@@ -2111,6 +2111,8 @@ function LpDirectoryView() {
       {/* Summary metrics — scoped to the selected group */}
       {(() => {
         const visibleLps = !data ? [] : groupView === 'All' ? data.lps : data.lps.filter(lp => lp.group === groupView)
+        const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
+        const fundIvVisible = visibleLps.length - dstVisible
         const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const hardCommits = visibleLps.filter(l => l.commitType === 'Hard Commit' || l.commitType === 'Signed Docs').length
         const anyCalled = visibleLps.some(lp => lp.sfCalled != null)
@@ -2120,7 +2122,7 @@ function LpDirectoryView() {
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? 'Fund IV commitment schedule' : groupView },
+              { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
               { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
               { label: 'Hard Commits',    value: loading ? '…' : data ? `${hardCommits}` : '—',          sub: 'Hard Commit + Signed Docs' },
               { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
