@@ -65,6 +65,26 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // ── Newsletter grounding: the app's own market briefs (Permian/Brevard), not live news ──
+        if (sources.includes("newsletter")) {
+          const { data: briefs } = await supabase
+            .from("briefs")
+            .select("agent_name, subject, narrative, sent_at")
+            .order("sent_at", { ascending: false })
+            .limit(6);
+
+          if (briefs?.length) {
+            context += "\n\n--- Recent ERP Market Briefs (newsletters) ---\n";
+            for (const b of briefs) {
+              const narr = (b.narrative as string | null)?.slice(0, 6000) ?? "";
+              if (narr) {
+                const when = b.sent_at ? new Date(b.sent_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+                context += `\n[${b.subject || b.agent_name}${when ? ` | ${when}` : ""}]\n${narr}\n`;
+              }
+            }
+          }
+        }
+
         // ── Live news via Apify ─────────────────────────────────────────────────
         if (sources.includes("news") && process.env.APIFY_API_TOKEN) {
           try {

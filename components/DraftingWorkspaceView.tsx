@@ -128,6 +128,7 @@ export default function DraftingWorkspaceView() {
   const [docType, setDocType] = useState<DocType>('freeform')
   const [prompt, setPrompt] = useState('')
   const [useKb, setUseKb] = useState(true)
+  const [useNewsletter, setUseNewsletter] = useState(false)
   const [output, setOutput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
@@ -197,7 +198,7 @@ export default function DraftingWorkspaceView() {
         body: JSON.stringify({
           docType,
           prompt: prompt.trim(),
-          sources: useKb ? ['kb'] : [],
+          sources: [...(useKb ? ['kb'] : []), ...(useNewsletter ? ['newsletter'] : [])],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
         }),
@@ -234,7 +235,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, streaming])
+  }, [docType, prompt, useKb, useNewsletter, attachment, streaming])
 
   const stop = () => abortRef.current?.abort()
 
@@ -338,6 +339,7 @@ export default function DraftingWorkspaceView() {
         <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
         {[
           { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
+          { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
         ].map(({ id, label, val, set }) => (
           <label
             key={id}
