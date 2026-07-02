@@ -52,6 +52,7 @@ export interface LpRecord {
   sfAdvisorContact: string | null;
   brokerFirm: string;
   brokerContact: string;
+  resolvedEmail: string | null; // best-known email (schedule → SF contact → past correspondence)
 }
 
 interface LpUpdateBody {
@@ -225,6 +226,7 @@ export async function GET(req: NextRequest) {
         sfBrokerCompany: null, sfBrokerContact: null,
         sfAdvisorFirm: null, sfAdvisorContact: null,
         brokerFirm, brokerContact,
+        resolvedEmail: email && email.trim() ? email.trim() : null,
       });
     }
 
@@ -245,6 +247,7 @@ export async function GET(req: NextRequest) {
         ex.date = ex.date || lp.date;
         ex.brokerFirm = ex.brokerFirm || lp.brokerFirm;
         ex.brokerContact = ex.brokerContact || lp.brokerContact;
+        ex.resolvedEmail = ex.resolvedEmail || lp.resolvedEmail;
         ex.notes = ex.notes || lp.notes;
       }
       const merged = [...byInvestor.values()];
@@ -287,6 +290,7 @@ export async function GET(req: NextRequest) {
           lp.sfBrokerContact = sf.brokerContact;
           lp.sfAdvisorFirm = sf.advisorFirm;
           lp.sfAdvisorContact = sf.advisorContact;
+          if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
             .filter(Boolean);
@@ -309,6 +313,7 @@ export async function GET(req: NextRequest) {
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
             brokerFirm: "", brokerContact: "",
+            resolvedEmail: null,
           });
         }
       } catch (e) {
@@ -349,6 +354,7 @@ export async function GET(req: NextRequest) {
           const subj = b.subject ? ` · ${b.subject}` : "";
           const prev = b.preview ? ` — ${b.preview.slice(0, 140)}` : "";
           lp.lastInteraction = { date: b.date, note: `${dir}${who}${subj}${prev} (${b.mailbox})`, source: "email" };
+          if (!lp.resolvedEmail && b.counterpartyEmail) lp.resolvedEmail = b.counterpartyEmail;
           if (laLog.length < 15) laLog.push(`${lp.investor} <=[${via}]= ${b.direction} ${b.counterparty}`);
         }
       }

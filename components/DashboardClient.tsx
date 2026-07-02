@@ -1891,6 +1891,7 @@ interface LpRecord {
   sfBrokerCompany: string | null; sfBrokerContact: string | null;
   sfAdvisorFirm: string | null; sfAdvisorContact: string | null;
   brokerFirm: string; brokerContact: string;
+  resolvedEmail: string | null;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -1939,6 +1940,34 @@ function LpDirectoryView() {
   const [saving, setSaving] = React.useState(false)
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
+  const [emailMsg, setEmailMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
+  const [emailingRow, setEmailingRow] = React.useState<string | null>(null)
+
+  // Start an investor outreach: create a draft in team@ (surfaces in the IR Inbox to review & send).
+  async function emailLp(lp: LpRecord) {
+    let to = (lp.resolvedEmail || '').trim()
+    if (!to) {
+      to = (window.prompt(`No email on file for ${lp.investor}. Enter the recipient's email address:`, '') || '').trim()
+      if (!to) return
+    }
+    const first = (lp.contact || '').split(/[ ,&/]/).filter(Boolean)[0] || 'there'
+    const subject = `ERP Industrials — ${lp.investor}`
+    const bodyText = `Hi ${first},\n\n\n\nBest,\nMeghan`
+    setEmailingRow(lp.investor); setEmailMsg(null)
+    try {
+      const res = await fetch('/api/agent-inbox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create-draft', to, subject, body: bodyText }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Draft failed: ${j.error || res.status}` }); return }
+      setEmailMsg({ ok: true, text: `Draft to ${to} created — review & send it in the IR Inbox.` })
+    } catch (e) {
+      setEmailMsg({ ok: false, text: `Draft failed: ${String(e)}` })
+    } finally {
+      setEmailingRow(null)
+    }
+  }
 
   const load = React.useCallback(async (manual = false) => {
     setSyncing(true)
@@ -2249,6 +2278,12 @@ function LpDirectoryView() {
               {saveMsg.ok ? '✅' : '⚠️'} {saveMsg.text}
             </div>
           )}
+          {emailMsg && (
+            <div style={{ padding: '8px 14px', background: emailMsg.ok ? '#ecfeff' : '#fef2f2', borderBottom: '1px solid #e5e7eb', fontSize: 12, color: emailMsg.ok ? '#0e7490' : '#dc2626', display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+              <span>{emailMsg.ok ? '✉' : '⚠️'} {emailMsg.text}</span>
+              <button onClick={() => setEmailMsg(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', cursor: 'pointer', fontSize: 12 }}>✕</button>
+            </div>
+          )}
           {!loading && !error && data && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
@@ -2394,9 +2429,14 @@ function LpDirectoryView() {
                             </button>
                           </div>
                         ) : (
-                          <button onClick={() => startEdit(lp)} style={{ fontSize: 11, background: 'none', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>
-                            ✎ Edit
-                          </button>
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => emailLp(lp)} disabled={emailingRow === lp.investor} title={lp.resolvedEmail ? `Draft an email to ${lp.resolvedEmail}` : 'Draft an email (you\'ll be asked for the address)'} style={{ fontSize: 11, fontWeight: 600, background: '#ecfeff', color: '#0e7490', border: '1px solid #a5f3fc', borderRadius: 5, padding: '4px 10px', cursor: emailingRow === lp.investor ? 'wait' : 'pointer' }}>
+                              {emailingRow === lp.investor ? '…' : '✉ Email'}
+                            </button>
+                            <button onClick={() => startEdit(lp)} style={{ fontSize: 11, background: 'none', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>
+                              ✎ Edit
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>

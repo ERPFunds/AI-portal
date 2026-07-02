@@ -22,8 +22,9 @@ export interface Interaction {
   subject: string;
   mailbox: string;
   direction: "sent" | "received";
-  counterparty: string;   // display name (or email) of the LP/broker on the other side
-  preview: string;        // short body snippet for context
+  counterparty: string;        // display name (or email) of the LP/broker on the other side
+  counterpartyEmail: string;   // their email address (for one-click drafting)
+  preview: string;             // short body snippet for context
 }
 
 export interface InteractionMaps {
@@ -105,7 +106,8 @@ async function scan(): Promise<InteractionMaps> {
         const from = m.from?.emailAddress;
         put(from, {
           date: m.receivedDateTime, subject: m.subject || "", mailbox: mb, direction: "received",
-          counterparty: label(from), preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
+          counterparty: label(from), counterpartyEmail: (from?.address || "").trim(),
+          preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
         });
       }
     } else {
@@ -114,7 +116,8 @@ async function scan(): Promise<InteractionMaps> {
           const to = rc.emailAddress;
           put(to, {
             date: m.sentDateTime, subject: m.subject || "", mailbox: mb, direction: "sent",
-            counterparty: label(to), preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
+            counterparty: label(to), counterpartyEmail: (to?.address || "").trim(),
+            preview: (m.bodyPreview || "").replace(/\s+/g, " ").trim(),
           });
         }
       }

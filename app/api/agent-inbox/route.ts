@@ -14,6 +14,7 @@ import {
 } from "@/lib/agents/ir/graph-mailbox";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
+import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -266,11 +267,28 @@ export async function POST(req: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  let body: { action?: string; id?: string; body?: string; from?: string };
+  let body: { action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // Create a new draft in the team hub (surfaces in the IR Inbox for review/send). Used by the
+  // "Email" button in the LP directory to start an outreach to an investor.
+  if (body.action === "create-draft") {
+    const to = (body.to || "").trim();
+    if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+      return NextResponse.json({ error: "A valid recipient email is required" }, { status: 400 });
+    }
+    const subject = (body.subject || "").trim() || "ERP Industrials";
+    const text = (body.body || "").trim();
+    const htmlBody = text
+      ? text.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, "<br>").replace(/</g, "&lt;")}</p>`).join("")
+      : "<p></p>";
+    const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: TEAM_MAILBOX, subject, htmlBody });
+    if (!r.success) return NextResponse.json({ error: r.message || "Draft failed" }, { status: 500 });
+    return NextResponse.json({ ok: true, draftId: r.draftId });
   }
 
   // Purge DocuSign notifications from the IR inboxes (moves them to Deleted Items, recoverable).
