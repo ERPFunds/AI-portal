@@ -199,6 +199,10 @@ export async function GET(req: NextRequest) {
       const investorName = g(iInvestor);
       if (!investorName) continue;
 
+      // Skip subtotal / summary rows (e.g. "Total 1st Close", "Total ERP Funds IV") — they're
+      // sums, not LPs. "ERP GP IV" (the GP entity) is intentionally kept.
+      if (/^\s*(grand\s+|sub\s*)?total\b/i.test(investorName)) continue;
+
       const commitment = g(iCommitment);
       const contact    = g(iContact);
       const email      = g(iEmail);
