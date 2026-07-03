@@ -26,15 +26,23 @@ export async function embed(texts: string[], inputType: "document" | "query"): P
   const out: number[][] = [];
   for (let i = 0; i < texts.length; i += EMBED_BATCH) {
     const batch = texts.slice(i, i + EMBED_BATCH);
-    const res = await fetch(VOYAGE_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ input: batch, model: VOYAGE_MODEL, input_type: inputType, output_dimension: EMBED_DIM }),
-    });
-    if (!res.ok) throw new Error(`Voyage ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      res = await fetch(VOYAGE_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.VOYAGE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ input: batch, model: VOYAGE_MODEL, input_type: inputType, output_dimension: EMBED_DIM }),
+      });
+      if (res.status !== 429) break;
+      // Rate limited — respect Retry-After (capped) and back off before retrying.
+      const ra = parseInt(res.headers.get("retry-after") || "", 10);
+      const waitMs = Math.min((Number.isFinite(ra) ? ra : 2 ** attempt) * 1000, 20_000);
+      await new Promise((r) => setTimeout(r, waitMs));
+    }
+    if (!res || !res.ok) throw new Error(`Voyage ${res?.status}: ${(await res?.text())?.slice(0, 200)}`);
     const data = await res.json();
     const rows = (data.data ?? []) as { embedding: number[]; index: number }[];
     rows.sort((a, b) => a.index - b.index);
