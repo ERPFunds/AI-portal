@@ -10,6 +10,7 @@ import {
   listMessagesFrom,
   sendMailAs,
   deleteMessage,
+  importMimeMessage,
   type MailItem,
 } from "@/lib/agents/ir/graph-mailbox";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
@@ -381,6 +382,24 @@ export async function POST(req: NextRequest) {
     await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text" });
     // Clean up the draft that lived in the team hub (best-effort).
     try { await deleteMessage(TEAM_MAILBOX, body.id); } catch { /* leave it if delete fails */ }
+
+    // Drop a faithful copy into team@'s Sent Items so BOTH the app and team@ Outlook show what
+    // Meghan and William send (the live send saved to the sender's own Sent; team@ is the shared view).
+    const senderName = ownerOf([sendFrom]) === "William" ? "William Meyer" : "Meghan Berry";
+    try {
+      const mime = [
+        `From: ${senderName} <${sendFrom}>`,
+        `To: ${detail.to.join(", ")}`,
+        `Subject: ${detail.subject}`,
+        `Date: ${new Date().toUTCString()}`,
+        "MIME-Version: 1.0",
+        "Content-Type: text/plain; charset=utf-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        content,
+      ].join("\r\n");
+      await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
+    } catch { /* non-fatal: sender's own Sent still has the copy */ }
 
     // Log the sent reply so it surfaces in the IR Inbox "Sent" section (best-effort).
     try {
