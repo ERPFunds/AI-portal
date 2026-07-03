@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
+import { embedAndStoreChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -129,6 +131,17 @@ async function runSync(dryRun: boolean): Promise<{ status: number; body: any }> 
         uploaded_by: SYNC_TAG,
         expires_at: new Date(Date.now() + EXPIRY_MS).toISOString(),
       });
+
+      // Capture text + embeddings from the bytes we already have (Anthropic won't let us
+      // download user-uploaded files back later, so this is the only chance). Best-effort.
+      try {
+        const md = await extractAndStoreMarkdown({ fileId: uploaded.id, filename: f.name, mimeType: f.mimeType ?? null, category: kbCategory, bytes: buffer });
+        if (md && voyageConfigured()) {
+          await embedAndStoreChunks({ fileId: uploaded.id, filename: f.name, category: kbCategory, text: md });
+        }
+      } catch (e) {
+        console.error(`KB extract/embed failed for ${f.name}:`, e);
+      }
     }
 
     async function deleteRow(fileId: string) {
