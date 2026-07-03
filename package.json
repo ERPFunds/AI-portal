@@ -26,7 +26,9 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.12.7",
-    "rss-parser": "^3.13.0"
+    "rss-parser": "^3.13.0",
+    "unpdf": "^1.6.2",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/adm-zip": "^0.5.7",
