@@ -2403,7 +2403,6 @@ function LpDirectoryView() {
                       {/* Reach Out? — suggestion based on how long since the last logged interaction */}
                       <td style={{ padding: '11px 14px', fontSize: 11, whiteSpace: 'nowrap' }}>
                         {(() => {
-                          if (lp.group === 'DST / 1031') return <span style={{ color: '#d1d5db' }} title="Broker-managed — not a direct IR relationship">—</span>
                           if (!lp.lastInteraction) return <span style={{ fontSize: 10, fontWeight: 600, color: '#6b7280', background: '#f3f4f6', borderRadius: 20, padding: '2px 8px' }} title="No interaction found in the IR mailboxes (may just be missing data)">No contact logged</span>
                           const days = Math.floor((Date.now() - new Date(lp.lastInteraction.date).getTime()) / 86400000)
                           const mo = Math.max(1, Math.round(days / 30))

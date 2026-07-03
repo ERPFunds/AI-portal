@@ -334,23 +334,36 @@ export async function GET(req: NextRequest) {
     try {
       const { byEmail, byName } = await interactionsPromise;
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      const tok = (s: string) => norm(s).split(" ").filter((w) => w.length >= 2);
       const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
+      // Token index over every counterparty display name — for fuzzy name matching (below).
+      const nameEntries = Object.entries(byName).map(([nm, it]) => ({ toks: new Set(tok(nm)), it }));
       const laLog: string[] = [];
       for (const lp of lps) {
         const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
         const names = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter(isFullName);
-        // Also try an EXACT match on the investor entity name (e.g. a trust that emails under its own
-        // name). This is a full-string normalized match, not fuzzy token matching, so it won't
-        // cross-attribute unrelated people the way single shared tokens did.
         const entityKey = norm(lp.investor || "");
         let best: Interaction | null = null;
         let via = "";
         const consider = (it: Interaction | undefined, tag: string) => {
           if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) { best = it; via = tag; }
         };
+        // 1) Precise passes first: email, exact contact name, exact entity name.
         for (const e of emails) consider(byEmail[e], "email");
         for (const n of new Set(names)) consider(byName[n], n);
         if (entityKey) consider(byName[entityKey], "entity");
+        // 2) Only if nothing precise matched, fall back to FUZZY token matching on the LP's real
+        //    contact name(s): require 2+ shared name tokens (one 4+ chars) so a single shared
+        //    first name/surname can't cross-attribute unrelated people.
+        if (!best) {
+          for (const cset of [lp.contact, lp.sfBrokerContact].map((n) => tok(n || "")).filter((t) => t.length >= 2)) {
+            for (const e of nameEntries) {
+              let shared = 0, maxLen = 0;
+              for (const t of cset) if (e.toks.has(t)) { shared++; if (t.length > maxLen) maxLen = t.length; }
+              if (shared >= 2 && maxLen >= 4) consider(e.it, "~name");
+            }
+          }
+        }
         if (best && (!lp.lastInteraction || new Date((best as Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
           const b = best as Interaction;
           const dir = b.direction === "sent" ? "Sent to" : "From";
