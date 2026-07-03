@@ -6036,15 +6036,12 @@ function SOPsView() {
           <button onClick={() => setQuery('')} title="Clear" style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9ca3af', background: 'none', border: 'none', cursor: 'pointer' }}>✕</button>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, alignItems: 'start' }}>
-        {/* Claude Training and Assets + Agent Working Guides lead, side by side */}
-        {SOP_CATEGORIES.slice(0, 2).map((cat) => (
+      {/* One section per row (full width), stacked top to bottom */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, alignItems: 'start' }}>
+        {SOP_CATEGORIES.map((cat) => (
           <SOPCategoryCard key={cat.label} cat={cat} query={query} reloadKey={reloadKey} />
         ))}
         <UploadedFilesCard query={query} />
-        {SOP_CATEGORIES.slice(2).map((cat) => (
-          <SOPCategoryCard key={cat.label} cat={cat} query={query} reloadKey={reloadKey} />
-        ))}
       </div>
     </div>
   )
