@@ -35,6 +35,7 @@ export async function POST(req: NextRequest) {
   const admin = createAdminClient();
 
   const results: Record<string, unknown>[] = [];
+  const debug: Record<string, unknown>[] = [];
   let embedded = 0, skipped = 0, chunks = 0;
   const errors: string[] = [];
 
@@ -63,25 +64,28 @@ export async function POST(req: NextRequest) {
 
     for (const f of files) {
       const row = rowByName.get(f.name);
-      if (!row) { skipped++; continue; } // in SharePoint but not in the KB table
+      if (!row) { skipped++; if (debug.length < 20) debug.push({ name: f.name, reason: "no matching KB row" }); continue; }
       try {
         if (!force) {
           const { count } = await admin.from("document_chunks").select("id", { count: "exact", head: true }).eq("file_id", row.file_id);
           if ((count ?? 0) > 0) { skipped++; continue; }
         }
-        const buf = f.downloadUrl
-          ? Buffer.from(await (await fetch(f.downloadUrl)).arrayBuffer())
-          : Buffer.from(await (await fetch(`${driveBase}/items/${f.id}/content`, { headers })).arrayBuffer());
+        const dl = f.downloadUrl ? await fetch(f.downloadUrl) : await fetch(`${driveBase}/items/${f.id}/content`, { headers });
+        const buf = Buffer.from(await dl.arrayBuffer());
         const text = await extractAndStoreMarkdown({ fileId: row.file_id, filename: f.name, mimeType: row.mime_type ?? f.mimeType, category, bytes: buf });
-        if (!text.trim()) { skipped++; continue; }
+        if (!text.trim()) {
+          skipped++;
+          if (debug.length < 20) debug.push({ name: f.name, reason: "empty text", dlOk: dl.ok, dlStatus: dl.status, bytes: buf.length, mime: row.mime_type ?? f.mimeType });
+          continue;
+        }
         const n = await embedAndStoreChunks({ fileId: row.file_id, filename: f.name, category, text });
         embedded++; chunks += n;
       } catch (e) {
-        errors.push(`${f.name}: ${String(e).slice(0, 120)}`);
+        errors.push(`${f.name}: ${String(e).slice(0, 160)}`);
       }
     }
     results.push({ folder, category, sharePointFiles: files.length, kbRows: rowByName.size });
   }
 
-  return NextResponse.json({ embedded, skipped, chunks, results, errors });
+  return NextResponse.json({ embedded, skipped, chunks, results, debug, errors });
 }
