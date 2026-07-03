@@ -16,6 +16,7 @@ import {
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
+import { markMessageProcessed } from "@/lib/db";
 import { draftLpOutreach, type LpOutreachInput } from "@/lib/agents/ir/lp-outreach";
 
 export const dynamic = "force-dynamic";
@@ -398,7 +399,10 @@ export async function POST(req: NextRequest) {
         "",
         content,
       ].join("\r\n");
-      await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
+      const copyId = await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
+      // Mark this copy as already-logged so the sent-log cron (which scans team@ Sent for
+      // Outlook-sent replies) doesn't double-log a reply the app already logged to Salesforce.
+      try { await markMessageProcessed({ mailbox: TEAM_MAILBOX, messageId: copyId, internetMessageId: null, isInvestor: true, action: "sent-logged(app)" }); } catch { /* non-fatal */ }
     } catch { /* non-fatal: sender's own Sent still has the copy */ }
 
     // Log the sent reply so it surfaces in the IR Inbox "Sent" section (best-effort).
