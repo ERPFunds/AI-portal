@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
+import { embedAndStoreChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 
 const anthropic = new Anthropic();
 
@@ -55,9 +56,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Workflow 7: extract the document to text/markdown and store it (best-effort; never fails the upload).
+    // Then chunk + embed it into the KB retrieval layer so agents can retrieve just the relevant passages.
     try {
       const bytes = Buffer.from(await file.arrayBuffer());
-      await extractAndStoreMarkdown({ fileId: uploaded.id, filename: file.name, mimeType: file.type || null, category: category ?? undefined, bytes });
+      const md = await extractAndStoreMarkdown({ fileId: uploaded.id, filename: file.name, mimeType: file.type || null, category: category ?? undefined, bytes });
+      if (md && voyageConfigured()) {
+        try {
+          await embedAndStoreChunks({ fileId: uploaded.id, filename: file.name, category: category ?? null, text: md });
+        } catch (e) {
+          console.error("KB embedding failed:", e);
+        }
+      }
     } catch (e) {
       console.error("Markdown extraction (WF7) failed:", e);
     }

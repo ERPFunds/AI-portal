@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getDocText } from "@/lib/agents/ir/markdown-store";
+import { retrieveChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 import { getGraphToken } from "@/lib/agents/graph-token";
 
 const client = new Anthropic();
@@ -42,14 +43,32 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
     .order("created_at", { ascending: false });
   const docs = (data ?? []) as { file_id: string; filename: string; mime_type: string | null; category: string }[];
 
-  const sections: string[] = [];
-  const avail: { file_id: string; filename: string; mime_type: string | null }[] = [];
-  for (const d of docs) {
-    avail.push({ file_id: d.file_id, filename: d.filename, mime_type: d.mime_type });
-    const text = await getDocText({ fileId: d.file_id, filename: d.filename, mimeType: d.mime_type, category: d.category });
-    if (text) sections.push(`<document source="${d.filename}">\n${text}\n</document>`);
-  }
+  const avail = docs.map((d) => ({ file_id: d.file_id, filename: d.filename, mime_type: d.mime_type }));
   const fileList = avail.map((a) => `- ${a.filename}`).join("\n");
+
+  // Grounding: retrieve only the passages relevant to THIS inquiry (vector search) instead of
+  // stuffing every fund document into the prompt. Falls back to full-doc stuffing if nothing is
+  // embedded yet (e.g. before the backfill runs) or if retrieval errors.
+  let sections: string[] = [];
+  if (voyageConfigured()) {
+    try {
+      const chunks = await retrieveChunks(`${params.subject}\n\n${params.body}`, CATEGORIES, 12);
+      const bySource = new Map<string, string[]>();
+      for (const c of chunks) {
+        if (!bySource.has(c.filename)) bySource.set(c.filename, []);
+        bySource.get(c.filename)!.push(c.content);
+      }
+      sections = [...bySource.entries()].map(([fn, cs]) => `<document source="${fn}">\n${cs.join("\n---\n")}\n</document>`);
+    } catch (e) {
+      console.error("DD retrieval failed; falling back to full docs:", e);
+    }
+  }
+  if (sections.length === 0) {
+    for (const d of docs) {
+      const text = await getDocText({ fileId: d.file_id, filename: d.filename, mimeType: d.mime_type, category: d.category });
+      if (text) sections.push(`<document source="${d.filename}">\n${text}\n</document>`);
+    }
+  }
 
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
