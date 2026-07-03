@@ -4,7 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 // `document_chunks`, and retrieve the top-k relevant chunks for a query. Used by the DD responder,
 // Fund Q&A, and any KB-grounded agent so they send only relevant passages instead of whole docs.
 
-const VOYAGE_URL = "https://api.voyageai.com/v1/embeddings";
+// MongoDB Atlas-issued Voyage keys authenticate against ai.mongodb.com; native Voyage-platform
+// keys use api.voyageai.com. Default to the Atlas endpoint (our key is Atlas-issued); override with
+// VOYAGE_EMBED_URL if you switch to a native Voyage key.
+const VOYAGE_URL = process.env.VOYAGE_EMBED_URL || "https://ai.mongodb.com/v1/embeddings";
 const VOYAGE_MODEL = process.env.VOYAGE_MODEL || "voyage-4";
 const EMBED_DIM = 1024; // must match the vector(1024) column + match_document_chunks signature
 
