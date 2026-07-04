@@ -3856,17 +3856,51 @@ function KBSearchBox() {
   const [loading, setLoading] = useState(false)
   const [res, setRes] = useState<{ answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
   const [err, setErr] = useState('')
+  const [lastQ, setLastQ] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+  type SavedItem = { id: string; query: string; answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[]; saved_by: string | null; saved_at: string }
+  const [savedList, setSavedList] = useState<SavedItem[]>([])
+  const [showSaved, setShowSaved] = useState(false)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+
+  const loadSaved = async () => {
+    try {
+      const r = await fetch('/api/kb/saved-searches')
+      const d = await r.json()
+      if (r.ok) setSavedList(d.items ?? [])
+    } catch { /* ignore */ }
+  }
+  useEffect(() => { loadSaved() }, [])
 
   const run = async () => {
     if (!q.trim() || loading) return
-    setLoading(true); setErr(''); setRes(null)
+    setLoading(true); setErr(''); setRes(null); setSaved(false)
     try {
       const r = await fetch('/api/kb/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: q.trim() }) })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'Search failed'); return }
-      setRes(d)
+      setRes(d); setLastQ(q.trim())
     } catch (e) { setErr(String(e)) } finally { setLoading(false) }
   }
+
+  const saveResult = async () => {
+    if (!res || saving || saved) return
+    setSaving(true)
+    try {
+      const r = await fetch('/api/kb/saved-searches', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: lastQ, answer: res.answer, sources: res.sources }) })
+      const d = await r.json()
+      if (r.ok) { setSaved(true); setSavedList((prev) => [d.item, ...prev]); setShowSaved(true) }
+      else setErr(d.error || 'Could not save')
+    } catch (e) { setErr(String(e)) } finally { setSaving(false) }
+  }
+
+  const deleteSaved = async (id: string) => {
+    setSavedList((prev) => prev.filter((s) => s.id !== id))
+    try { await fetch(`/api/kb/saved-searches?id=${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch { /* ignore */ }
+  }
+
+  const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) } catch { return '' } }
 
   return (
     <div style={{ marginBottom: 20 }}>
@@ -3885,7 +3919,13 @@ function KBSearchBox() {
       {err && <div style={{ marginTop: 10, fontSize: 12, color: '#b91c1c' }}>{err}</div>}
       {res && (
         <div style={{ marginTop: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px' }}>
-          <div style={{ fontSize: 13, color: '#111827', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{res.answer}</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+            <div style={{ fontSize: 13, color: '#111827', lineHeight: 1.6, whiteSpace: 'pre-wrap', flex: 1 }}>{res.answer}</div>
+            <button onClick={saveResult} disabled={saving || saved}
+              style={{ flexShrink: 0, padding: '6px 12px', borderRadius: 6, border: '1px solid ' + (saved ? '#10b981' : '#d1d5db'), background: saved ? '#ecfdf5' : '#fff', color: saved ? '#047857' : '#374151', fontSize: 12, fontWeight: 600, cursor: saving || saved ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+              {saved ? '✓ Saved' : saving ? 'Saving…' : '☆ Save'}
+            </button>
+          </div>
           {res.sources.length > 0 && (
             <div style={{ marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>Sources</div>
@@ -3895,6 +3935,52 @@ function KBSearchBox() {
                   <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.45, marginTop: 2 }}>{s.snippet}…</div>
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {savedList.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <button onClick={() => setShowSaved((v) => !v)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 12, fontWeight: 700, color: '#374151', textTransform: 'uppercase' as const, letterSpacing: '.5px' }}>
+            <span style={{ display: 'inline-block', transform: showSaved ? 'rotate(90deg)' : 'none', transition: 'transform .15s' }}>▸</span>
+            Saved Searches ({savedList.length})
+          </button>
+          {showSaved && (
+            <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {savedList.map((s) => {
+                const open = expandedId === s.id
+                return (
+                  <div key={s.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', cursor: 'pointer' }} onClick={() => setExpandedId(open ? null : s.id)}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.query}</div>
+                        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{s.saved_by || 'Unknown'} · {fmtDate(s.saved_at)}</div>
+                      </div>
+                      <button onClick={(e) => { e.stopPropagation(); deleteSaved(s.id) }} title="Remove"
+                        style={{ flexShrink: 0, background: 'none', border: 'none', color: '#b91c1c', fontSize: 14, cursor: 'pointer', padding: '2px 6px', borderRadius: 4 }}>✕</button>
+                      <span style={{ flexShrink: 0, fontSize: 11, color: '#9ca3af' }}>{open ? 'Hide' : 'View'}</span>
+                    </div>
+                    {open && (
+                      <div style={{ padding: '0 14px 14px', borderTop: '1px solid #f3f4f6' }}>
+                        <div style={{ fontSize: 13, color: '#111827', lineHeight: 1.6, whiteSpace: 'pre-wrap', marginTop: 12 }}>{s.answer}</div>
+                        {s.sources.length > 0 && (
+                          <div style={{ marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>Sources</div>
+                            {s.sources.map((src, i) => (
+                              <div key={i} style={{ marginBottom: 8 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: '#0e7490' }}>📄 {src.filename}{src.category ? ` · ${src.category}` : ''}</div>
+                                <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.45, marginTop: 2 }}>{src.snippet}…</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           )}
         </div>
