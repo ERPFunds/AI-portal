@@ -309,7 +309,7 @@ export async function GET(req: NextRequest) {
             commitment: d.commitment,
             commitmentUsd: d.commitmentUsd,
             commitType: "",
-            contact: d.advisorContact || "", email: "", phone: "",
+            contact: d.advisorContact || "", email: d.advisorEmail || "", phone: "",
             date: "", notes: "",
             group: "DST / 1031",
             lastInteraction: null,
@@ -317,7 +317,8 @@ export async function GET(req: NextRequest) {
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
             brokerFirm: "", brokerContact: "",
-            resolvedEmail: null,
+            // DST contact = the broker/advisor rep, so the email button targets the rep's address.
+            resolvedEmail: d.advisorEmail || null,
           });
         }
       } catch (e) {
