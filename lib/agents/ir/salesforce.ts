@@ -192,6 +192,8 @@ export interface DstInvestor {
   advisorFirm: string | null;
   advisorContact: string | null;
   advisorEmail: string | null;
+  directContact: string | null;  // the investor's OWN contact person (not the broker)
+  directEmail: string | null;    // the investor's OWN email (not the broker)
   stage: string | null;
   crmId: string | null;
 }
@@ -490,19 +492,57 @@ export async function fetchLpSalesforceData(
     }
   }
 
-  const dstInvestors: DstInvestor[] = [...dstByAcct.values()].map((d) => ({
-    investor: cleanDstName(d.name),
-    commitmentUsd: d.amountUsd,
-    commitment: d.amountUsd > 0 ? `$${Math.round(d.amountUsd).toLocaleString("en-US")}` : "",
-    advisorFirm: d.firm,
-    advisorContact: d.rep,
-    advisorEmail: d.repEmail,
-    stage: d.stage,
-    crmId: d.id,
-  }));
+  // Direct investor contacts: the person + email ON each investor's OWN Account (Fund IV matched
+  // accounts + DST accounts). This is the DIRECT investor email — never the broker rep.
+  const directByAcct = new Map<string, { name: string | null; email: string | null }>();
+  {
+    const dstIds = [...dstByAcct.values()].map((d) => d.id).filter(Boolean) as string[];
+    const allIds = [...new Set([...accIds, ...dstIds])];
+    for (let i = 0; i < allIds.length; i += 200) {
+      const inList = allIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
+      try {
+        const cr = await sfFetch(`/query?q=${encodeURIComponent(`SELECT AccountId, Name, Email FROM Contact WHERE AccountId IN (${inList})`)}`);
+        if (!cr.ok) continue;
+        for (const c of (((await cr.json()).records ?? []) as Record<string, unknown>[])) {
+          const aid = String(c.AccountId ?? "");
+          if (!aid) continue;
+          const email = c.Email != null && String(c.Email).trim() ? String(c.Email) : null;
+          const name = c.Name != null && String(c.Name).trim() ? String(c.Name) : null;
+          const ex = directByAcct.get(aid);
+          // Prefer whichever contact on the account actually has an email.
+          if (!ex) directByAcct.set(aid, { name, email });
+          else if (!ex.email && email) directByAcct.set(aid, { name, email });
+        }
+      } catch { /* skip */ }
+    }
+  }
+  // Fund IV: fill each matched LP's direct email from its own Account contact.
+  for (const [acctId, key] of Object.entries(idToKey)) {
+    const d = directByAcct.get(acctId);
+    if (d?.email && byName[key] && !byName[key].contactEmail) byName[key].contactEmail = d.email;
+  }
+  const directEmailCount = [...directByAcct.values()].filter((d) => d.email).length;
+
+  const dstInvestors: DstInvestor[] = [...dstByAcct.values()].map((d) => {
+    const direct = d.id ? directByAcct.get(d.id) : undefined;
+    return {
+      investor: cleanDstName(d.name),
+      commitmentUsd: d.amountUsd,
+      commitment: d.amountUsd > 0 ? `$${Math.round(d.amountUsd).toLocaleString("en-US")}` : "",
+      advisorFirm: d.firm,
+      advisorContact: d.rep,
+      advisorEmail: d.repEmail,
+      directContact: direct?.name ?? null,
+      directEmail: direct?.email ?? null,
+      stage: d.stage,
+      crmId: d.id,
+    };
+  });
   console.log("[lp-dst]", JSON.stringify({
     count: dstInvestors.length,
-    sample: dstInvestors.slice(0, 8).map((d) => ({ n: d.investor, f: d.advisorFirm, amt: d.commitmentUsd, st: d.stage })),
+    accountsWithDirectEmail: directEmailCount,
+    dstWithDirectEmail: dstInvestors.filter((d) => d.directEmail).length,
+    sample: dstInvestors.slice(0, 8).map((d) => ({ n: d.investor, direct: d.directContact, email: Boolean(d.directEmail) })),
   }));
 
   return { byName, fieldMap, matched, dstInvestors };

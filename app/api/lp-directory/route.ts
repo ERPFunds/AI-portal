@@ -309,7 +309,7 @@ export async function GET(req: NextRequest) {
             commitment: d.commitment,
             commitmentUsd: d.commitmentUsd,
             commitType: "",
-            contact: d.advisorContact || "", email: d.advisorEmail || "", phone: "",
+            contact: d.directContact || "", email: d.directEmail || "", phone: "",
             date: "", notes: "",
             group: "DST / 1031",
             lastInteraction: null,
@@ -317,8 +317,8 @@ export async function GET(req: NextRequest) {
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
             brokerFirm: "", brokerContact: "",
-            // DST contact = the broker/advisor rep, so the email button targets the rep's address.
-            resolvedEmail: d.advisorEmail || null,
+            // Contact + email = the DST investor's OWN person (broker stays in the Broker/Advisor column).
+            resolvedEmail: d.directEmail || null,
           });
         }
       } catch (e) {
@@ -335,10 +335,7 @@ export async function GET(req: NextRequest) {
     try {
       const { byEmail, byName } = await interactionsPromise;
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-      const tok = (s: string) => norm(s).split(" ").filter((w) => w.length >= 2);
       const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
-      // Token index over every counterparty display name — for fuzzy name matching (below).
-      const nameEntries = Object.entries(byName).map(([nm, it]) => ({ toks: new Set(tok(nm)), it }));
       const laLog: string[] = [];
       for (const lp of lps) {
         const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
@@ -349,22 +346,11 @@ export async function GET(req: NextRequest) {
         const consider = (it: Interaction | undefined, tag: string) => {
           if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) { best = it; via = tag; }
         };
-        // 1) Precise passes first: email, exact contact name, exact entity name.
+        // Match ONLY on precise signals — the LP's direct email or an EXACT contact/entity name.
+        // (Fuzzy token matching was removed: it cross-attributed the wrong person's emails.)
         for (const e of emails) consider(byEmail[e], "email");
         for (const n of new Set(names)) consider(byName[n], n);
         if (entityKey) consider(byName[entityKey], "entity");
-        // 2) Only if nothing precise matched, fall back to FUZZY token matching on the LP's real
-        //    contact name(s): require 2+ shared name tokens (one 4+ chars) so a single shared
-        //    first name/surname can't cross-attribute unrelated people.
-        if (!best) {
-          for (const cset of [lp.contact, lp.sfBrokerContact].map((n) => tok(n || "")).filter((t) => t.length >= 2)) {
-            for (const e of nameEntries) {
-              let shared = 0, maxLen = 0;
-              for (const t of cset) if (e.toks.has(t)) { shared++; if (t.length > maxLen) maxLen = t.length; }
-              if (shared >= 2 && maxLen >= 4) consider(e.it, "~name");
-            }
-          }
-        }
         if (best && (!lp.lastInteraction || new Date((best as Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
           const b = best as Interaction;
           const dir = b.direction === "sent" ? "Sent to" : "From";
