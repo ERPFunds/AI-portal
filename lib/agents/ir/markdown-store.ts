@@ -14,7 +14,7 @@ export async function getStoredMarkdown(fileId: string): Promise<string | null> 
   return (data?.markdown as string) ?? null;
 }
 
-const MAX_PARSE_BYTES = 30_000_000; // skip parsing files larger than ~30 MB (avoid serverless OOM)
+const MAX_PARSE_BYTES = 60_000_000; // skip parsing files larger than ~60 MB (avoid serverless OOM)
 
 function decodeXml(s: string): string {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, "&");
