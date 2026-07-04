@@ -2249,7 +2249,6 @@ function LpDirectoryView() {
         const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
-        const totalCommitted = visibleLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const anyCalled = visibleLps.some(lp => lp.sfCalled != null)
         const anyDistrib = visibleLps.some(lp => lp.sfDistributions != null)
         const calledToDate = visibleLps.reduce((s, lp) => s + (lp.sfCalled ?? 0), 0)
@@ -2264,7 +2263,6 @@ function LpDirectoryView() {
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
-              { label: 'Total Committed', value: loading ? '…' : data ? fmtUsd(totalCommitted) : '—',   sub: 'Across all commitment types' },
               { label: 'Fund IV Committed', value: loading ? '…' : data ? fmtUsd(fundIvCommitted) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
               { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
