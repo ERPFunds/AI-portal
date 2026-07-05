@@ -4581,9 +4581,161 @@ const confidenceTone: Record<CapturedContact['confidence'], 'green' | 'yellow' |
   High: 'green', Medium: 'yellow', Low: 'red',
 }
 
+// CSV/TSV line split that respects double-quoted fields.
+function splitCsvLine(line: string, delim: string): string[] {
+  const out: string[] = []; let cur = ''; let q = false
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i]
+    if (q) { if (ch === '"') { if (line[i + 1] === '"') { cur += '"'; i++ } else q = false } else cur += ch }
+    else { if (ch === '"') q = true; else if (ch === delim) { out.push(cur); cur = '' } else cur += ch }
+  }
+  out.push(cur); return out
+}
+
+type ParsedContact = { name: string; email: string; company: string; title: string; phone: string; notes: string }
+
+// Parse pasted/CSV text into contacts. Detects a header row (maps by column name) or falls back to
+// positional order: name, email, company, title, phone.
+function parseContactRows(text: string): ParsedContact[] {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+  if (!lines.length) return []
+  const delim = lines[0].includes('\t') ? '\t' : ','
+  const header = splitCsvLine(lines[0], delim).map(s => s.toLowerCase().trim())
+  const hasHeader = header.some(h => /e-?mail|name|company|phone|title|organi|first|last/.test(h))
+  const idx = { name: -1, first: -1, last: -1, email: -1, company: -1, title: -1, phone: -1 }
+  let start = 0
+  if (hasHeader) {
+    start = 1
+    header.forEach((h, i) => {
+      if (idx.email < 0 && /e-?mail/.test(h)) idx.email = i
+      else if (idx.first < 0 && /first/.test(h)) idx.first = i
+      else if (idx.last < 0 && /last|surname/.test(h)) idx.last = i
+      else if (idx.name < 0 && /(full ?name|^name$|contact)/.test(h)) idx.name = i
+      else if (idx.company < 0 && /company|organi|firm|employer|account/.test(h)) idx.company = i
+      else if (idx.title < 0 && /title|role|position|job/.test(h)) idx.title = i
+      else if (idx.phone < 0 && /phone|mobile|cell|^tel/.test(h)) idx.phone = i
+    })
+  } else {
+    idx.name = 0; idx.email = 1; idx.company = 2; idx.title = 3; idx.phone = 4
+  }
+  const rows: ParsedContact[] = []
+  for (let i = start; i < lines.length; i++) {
+    const cells = splitCsvLine(lines[i], delim)
+    const get = (j: number) => (j >= 0 && j < cells.length ? cells[j].trim() : '')
+    let name = get(idx.name)
+    if (!name && (idx.first >= 0 || idx.last >= 0)) name = [get(idx.first), get(idx.last)].filter(Boolean).join(' ')
+    const row = { name, email: get(idx.email), company: get(idx.company), title: get(idx.title), phone: get(idx.phone), notes: '' }
+    if (row.name || row.email) rows.push(row)
+  }
+  return rows
+}
+
+type ImportedContact = { id: string; name: string | null; email: string | null; company: string | null; title: string | null; phone: string | null; category: string | null; event: string | null; status: string; created_at: string }
+
+const CONTACT_CATEGORIES = ['Event Lead', 'Broker / Advisor', 'Vendor', 'Prospective Investor', 'Other']
+
+function ContactImportModal({ onClose, onImported }: { onClose: () => void; onImported: () => void }) {
+  const [event, setEvent] = useState('')
+  const [category, setCategory] = useState(CONTACT_CATEGORIES[0])
+  const [raw, setRaw] = useState('')
+  const [fileName, setFileName] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [err, setErr] = useState('')
+  const parsed = React.useMemo(() => parseContactRows(raw), [raw])
+
+  const onFile = (f: File | undefined) => {
+    if (!f) return
+    setFileName(f.name)
+    const reader = new FileReader()
+    reader.onload = () => setRaw(String(reader.result ?? ''))
+    reader.readAsText(f)
+  }
+
+  const doImport = async () => {
+    if (!parsed.length || importing) return
+    setImporting(true); setErr('')
+    try {
+      const r = await fetch('/api/contacts/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ event: event.trim(), category, contacts: parsed }) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Import failed'); return }
+      onImported(); onClose()
+    } catch (e) { setErr(String(e)) } finally { setImporting(false) }
+  }
+
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4, display: 'block' }
+  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#111827' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 640, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 4 }}>Import contacts</div>
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>Paste rows or upload a CSV (e.g. an event badge-scan export). Columns are auto-detected; with no header the order is <em>name, email, company, title, phone</em>.</div>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}><label style={lbl}>Event / source</label><input style={inp} value={event} onChange={e => setEvent(e.target.value)} placeholder="e.g. NAIOP Conference 2026" /></div>
+          <div style={{ flex: 1 }}><label style={lbl}>Category</label><select style={inp} value={category} onChange={e => setCategory(e.target.value)}>{CONTACT_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></div>
+        </div>
+        <div style={{ marginBottom: 12 }}>
+          <label style={lbl}>Paste rows (CSV or tab-separated)</label>
+          <textarea value={raw} onChange={e => { setRaw(e.target.value); setFileName('') }} placeholder={"Jane Doe, jane@acme.com, Acme Capital, Managing Director, 555-123-4567\nJohn Smith, john@brokers.com, Smith Partners, Advisor, 555-987-6543"} style={{ ...inp, minHeight: 120, resize: 'vertical', fontFamily: 'monospace', fontSize: 12 }} />
+          <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10 }}>
+            <label style={{ fontSize: 12, fontWeight: 600, color: '#0D2D52', cursor: 'pointer' }}>
+              📎 Upload CSV
+              <input type="file" accept=".csv,.tsv,.txt" style={{ display: 'none' }} onChange={e => onFile(e.target.files?.[0])} />
+            </label>
+            {fileName && <span style={{ fontSize: 11, color: '#6b7280' }}>{fileName}</span>}
+          </div>
+        </div>
+
+        {parsed.length > 0 && (
+          <div style={{ marginBottom: 12, border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#374151', padding: '8px 12px', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>Preview — {parsed.length} contact{parsed.length === 1 ? '' : 's'} detected</div>
+            <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+              {parsed.slice(0, 8).map((c, i) => (
+                <div key={i} style={{ display: 'flex', gap: 10, padding: '7px 12px', borderBottom: '1px solid #f3f4f6', fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, color: '#111827', minWidth: 130 }}>{c.name || <em style={{ color: '#9ca3af' }}>no name</em>}</span>
+                  <span style={{ color: '#6b7280', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{[c.email, c.company, c.title].filter(Boolean).join(' · ')}</span>
+                </div>
+              ))}
+              {parsed.length > 8 && <div style={{ padding: '7px 12px', fontSize: 11, color: '#9ca3af' }}>…and {parsed.length - 8} more</div>}
+            </div>
+          </div>
+        )}
+
+        {err && <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 10 }}>{err}</div>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+          <button onClick={doImport} disabled={!parsed.length || importing} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !parsed.length || importing ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !parsed.length || importing ? 'default' : 'pointer' }}>{importing ? 'Importing…' : `Import ${parsed.length || ''} contact${parsed.length === 1 ? '' : 's'}`}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ContactCaptureView() {
   const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }
   const td: React.CSSProperties = { padding: '11px 14px', fontSize: 12, color: '#374151', borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' }
+
+  const [imported, setImported] = useState<ImportedContact[]>([])
+  const [loadingImported, setLoadingImported] = useState(true)
+  const [showImport, setShowImport] = useState(false)
+
+  const loadImported = async () => {
+    setLoadingImported(true)
+    try {
+      const r = await fetch('/api/contacts/import')
+      const d = await r.json()
+      if (r.ok) setImported(d.items ?? [])
+    } catch { /* ignore */ } finally { setLoadingImported(false) }
+  }
+  useEffect(() => { loadImported() }, [])
+
+  const removeImported = async (id: string) => {
+    setImported(prev => prev.filter(c => c.id !== id))
+    try { await fetch(`/api/contacts/import?id=${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch { /* ignore */ }
+  }
+
+  const fmtDate = (iso: string) => { try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) } catch { return '' } }
+
   const pending = CAPTURED_CONTACTS.filter(c => c.status === 'Needs review').length
   const cards: { label: string; value: string | number }[] = [
     { label: 'Pending review', value: pending },
@@ -4593,7 +4745,63 @@ function ContactCaptureView() {
   ]
   return (
     <div>
-      <div className="page-header"><h2>🪪 Contact Auto-Capture</h2><p>When email arrives from a sender not yet in Salesforce, the agent parses the signature and stages a categorized contact record — brokers, vendors, and advisors outside the LP/capital-raise flow — for one-click confirmation</p></div>
+      {showImport && <ContactImportModal onClose={() => setShowImport(false)} onImported={loadImported} />}
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>🪪 Contacts</h2>
+          <p>Import contacts you collected at an event or in bulk, and review contacts auto-captured from inbound email signatures</p>
+        </div>
+        <button onClick={() => setShowImport(true)} style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>📥 Import contacts</button>
+      </div>
+
+      {/* Imported contacts (real) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '18px 0 10px' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0D2D52', margin: 0 }}>Imported Contacts</h3>
+        {imported.length > 0 && <span style={{ fontSize: 11, color: '#6b7280', background: '#f3f4f6', borderRadius: 10, padding: '2px 9px' }}>{imported.length}</span>}
+      </div>
+      {loadingImported ? (
+        <div style={{ padding: 24, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
+      ) : imported.length === 0 ? (
+        <div className="card" style={{ margin: 0, padding: 28, textAlign: 'center', border: '1px dashed #d1d5db' }}>
+          <div style={{ fontSize: 26, marginBottom: 6 }}>📇</div>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151' }}>No imported contacts yet</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 3 }}>Click <strong>Import contacts</strong> to add people from an event badge scan, spreadsheet, or pasted list.</div>
+        </div>
+      ) : (
+        <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>{['Contact', 'Company', 'Title', 'Phone', 'Category', 'Event / source', 'Added', ''].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+              </thead>
+              <tbody>
+                {imported.map((c) => (
+                  <tr key={c.id}>
+                    <td style={td}>
+                      <div style={{ fontWeight: 600, color: '#111827' }}>{c.name || '—'}</div>
+                      {c.email && <div style={{ fontSize: 11, color: '#9ca3af' }}>{c.email}</div>}
+                    </td>
+                    <td style={td}>{c.company || '—'}</td>
+                    <td style={td}>{c.title || '—'}</td>
+                    <td style={{ ...td, whiteSpace: 'nowrap' }}>{c.phone || '—'}</td>
+                    <td style={td}>{c.category ? <StatusPill label={c.category} tone="blue" /> : '—'}</td>
+                    <td style={{ ...td, color: '#6b7280' }}>{c.event || '—'}</td>
+                    <td style={{ ...td, color: '#9ca3af', whiteSpace: 'nowrap' }}>{fmtDate(c.created_at)}</td>
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <button onClick={() => removeImported(c.id)} title="Remove" style={{ background: 'none', border: 'none', color: '#b91c1c', fontSize: 13, cursor: 'pointer' }}>✕</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-capture (roadmap preview / mock) */}
+      <div style={{ margin: '26px 0 10px' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: '#0D2D52', margin: 0 }}>Auto-captured from email</h3>
+      </div>
       <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF10 · Generic Contact Auto-Capture (lower priority)" />
       <SourceBar source="Outlook · Email signature parser → Salesforce" agents="Executive Assistant Agent" synced="Live — on inbound from unknown sender" link="Open in Salesforce ↗" />
 
