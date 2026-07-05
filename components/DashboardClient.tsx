@@ -1756,8 +1756,8 @@ function FinancialView() {
         ))}
       </div>
 
-      {/* Row 2: NOI Chart + Fund IV Progress */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+      {/* Row 2: NOI Chart (Fund IV raise progress moved to the Capital Raising section) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16, marginBottom: 16 }}>
 
         {/* NOI Chart */}
         <div style={cardStyle}>
@@ -1786,39 +1786,6 @@ function FinancialView() {
           </div>
         </div>
 
-        {/* Fund IV Capital Raise */}
-        <div style={cardStyle}>
-          <div style={cardTitle}>
-            Fund IV — Capital Raise Progress
-            <span style={cardTitleSub}>vs. target</span>
-          </div>
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
-              <span style={{ color: '#6b7280' }}>Committed Capital</span>
-              <span style={{ color: '#d1d5db', fontWeight: 600 }}>— / target</span>
-            </div>
-            <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4 }} />
-            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 5 }}>Connect Salesforce to track raise progress</div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {[
-              { label: 'LP Commitments',    sub: 'Signed commitment docs' },
-              { label: 'Soft Circles',      sub: 'Investors in diligence' },
-              { label: 'Pipeline (Engaged)',sub: 'Active prospects' },
-            ].map((row) => (
-              <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#f8fafc', borderRadius: 7, border: '1px solid #e5e7eb' }}>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{row.label}</div>
-                  <div style={{ fontSize: 10, color: '#9ca3af' }}>{row.sub}</div>
-                </div>
-                {dash}
-              </div>
-            ))}
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, padding: '4px 10px 0' }}>
-              <span style={{ color: '#9ca3af' }}>Close target</span>{dash}
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* Row 3: Fund Performance + Acquisition Pipeline */}
@@ -6436,6 +6403,51 @@ function CapitalRaiseView() {
           )
         })}
       </div>
+
+      {/* Fund IV — Capital Raise Progress (moved from the Investment Dashboard, now live from the pipeline) */}
+      {(() => {
+        const sum = (stages: string[]) => rows.filter((r) => stages.includes(r.stage)).reduce((a, r) => a + (r.expected_amount || 0), 0)
+        const cnt = (stages: string[]) => rows.filter((r) => stages.includes(r.stage)).length
+        const totalAll = rows.reduce((a, r) => a + (r.expected_amount || 0), 0)
+        const fundedAmt = sum(['Funded'])
+        const subDocsAmt = sum(['Subscription docs'])
+        const pct = (n: number) => totalAll > 0 ? Math.round((n / totalAll) * 100) : 0
+        const groups = [
+          { label: 'LP Commitments', sub: 'Subscription docs & funded', amt: sum(['Subscription docs', 'Funded']), count: cnt(['Subscription docs', 'Funded']) },
+          { label: 'Soft Circles', sub: 'In diligence & verbal', amt: sum(['Diligence', 'Soft-circle']), count: cnt(['Diligence', 'Soft-circle']) },
+          { label: 'Pipeline (Engaged)', sub: 'Identified, contacted, deck sent', amt: sum(['Identified', 'Contacted', 'Deck/OM sent']), count: cnt(['Identified', 'Contacted', 'Deck/OM sent']) },
+        ]
+        return (
+          <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52', marginBottom: 14 }}>Fund IV — Capital Raise Progress</div>
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 6 }}>
+                <span style={{ color: '#6b7280' }}>Funded of total pipeline</span>
+                <span style={{ fontWeight: 600, color: '#111827' }}>{crUsd(fundedAmt)} / {crUsd(totalAll)}</span>
+              </div>
+              <div style={{ height: 8, background: '#f3f4f6', borderRadius: 4, overflow: 'hidden', display: 'flex' }}>
+                <div style={{ width: `${pct(fundedAmt)}%`, background: '#10b981' }} />
+                <div style={{ width: `${pct(subDocsAmt)}%`, background: '#059669', opacity: .5 }} />
+              </div>
+              <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 5 }}>{totalAll > 0 ? `${pct(fundedAmt)}% funded · ${pct(subDocsAmt)}% in subscription docs` : 'Add prospects to track raise progress'}</div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {groups.map((g) => (
+                <div key={g.label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: '#f8fafc', borderRadius: 7, border: '1px solid #e5e7eb' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{g.label}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af' }}>{g.sub}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52' }}>{crUsd(g.amt)}</div>
+                    <div style={{ fontSize: 10, color: '#9ca3af' }}>{g.count} {g.count === 1 ? 'prospect' : 'prospects'}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )
+      })()}
 
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading pipeline…</div>
