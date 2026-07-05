@@ -721,11 +721,21 @@ export async function opportunityPipelineProbe(): Promise<Record<string, unknown
     out.customFields = f.filter((x) => x.name.endsWith("__c")).map((x) => `${x.label} (${x.name})`).slice(0, 40);
   } catch (e) { out.fieldsErr = String(e).slice(0, 160); }
 
-  // Open-opp counts by stage.
+  // Counts by stage (all opps — the org may keep the raise as closed/won records).
   try {
-    const grp = await sfQuery("SELECT StageName stage, COUNT(Id) cnt, SUM(Amount) amt FROM Opportunity WHERE IsClosed = false GROUP BY StageName");
-    out.openByStage = grp.map((r) => ({ stage: r.stage, count: r.cnt, amount: r.amt }));
-  } catch (e) { out.openByStageErr = String(e).slice(0, 160); }
+    const grp = await sfQuery("SELECT StageName stage, COUNT(Id) cnt, SUM(Amount) amt FROM Opportunity GROUP BY StageName");
+    out.byStage = grp.map((r) => ({ stage: r.stage, count: r.cnt, amount: r.amt }));
+  } catch (e) { out.byStageErr = String(e).slice(0, 160); }
+
+  // Distinct Fund + Type values (to identify Fund IV raise opps and the channel).
+  try {
+    const funds = await sfQuery("SELECT Fund__c f, COUNT(Id) cnt, SUM(Amount) amt FROM Opportunity GROUP BY Fund__c ORDER BY COUNT(Id) DESC");
+    out.byFund = funds.map((r) => ({ fund: r.f, count: r.cnt, amount: r.amt }));
+  } catch (e) { out.byFundErr = String(e).slice(0, 160); }
+  try {
+    const types = await sfQuery("SELECT Type t, COUNT(Id) cnt FROM Opportunity GROUP BY Type ORDER BY COUNT(Id) DESC");
+    out.byType = types.map((r) => ({ type: r.t, count: r.cnt }));
+  } catch (e) { out.byTypeErr = String(e).slice(0, 160); }
 
   // Totals.
   try {
@@ -735,14 +745,13 @@ export async function opportunityPipelineProbe(): Promise<Record<string, unknown
     out.openOpps = open[0]?.cnt ?? 0;
   } catch (e) { out.totalsErr = String(e).slice(0, 160); }
 
-  // A few sample open opportunities with the fields we'd map.
+  // A few recent sample opportunities with the fields we'd map.
   try {
-    const s = await sfQuery("SELECT Name, Account.Name, Amount, StageName, Probability, NextStep, CloseDate, Owner.Name, Type, RecordType.Name, LastActivityDate FROM Opportunity WHERE IsClosed = false ORDER BY Amount DESC NULLS LAST LIMIT 12");
+    const s = await sfQuery("SELECT Name, Account.Name, Amount, StageName, Probability, NextStep, CloseDate, Owner.Name, Type, Fund__c, LastActivityDate FROM Opportunity ORDER BY CreatedDate DESC LIMIT 12");
     out.sample = s.map((r) => ({
       name: r.Name, account: (r.Account as { Name?: unknown } | null)?.Name ?? null, amount: r.Amount,
       stage: r.StageName, prob: r.Probability, nextStep: r.NextStep, close: r.CloseDate,
-      owner: (r.Owner as { Name?: unknown } | null)?.Name ?? null, type: r.Type,
-      recordType: (r.RecordType as { Name?: unknown } | null)?.Name ?? null, lastActivity: r.LastActivityDate,
+      owner: (r.Owner as { Name?: unknown } | null)?.Name ?? null, type: r.Type, fund: r.Fund__c, lastActivity: r.LastActivityDate,
     }));
   } catch (e) { out.sampleErr = String(e).slice(0, 160); }
 
