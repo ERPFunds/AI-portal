@@ -57,9 +57,12 @@ async function extractPdf(buf: Buffer): Promise<string> {
   return Array.isArray(r.text) ? r.text.join("\n") : (r.text ?? "");
 }
 
-async function parseBytes(buf: Buffer, filename: string, mimeType: string | null): Promise<string> {
+export async function parseBytes(buf: Buffer, filename: string, mimeType: string | null): Promise<string> {
   const mt = mimeType ?? "";
   const name = filename.toLowerCase();
+  if (/html/.test(mt) || /\.html?$/i.test(name)) {
+    return decodeXml(buf.toString("utf-8").replace(/<style[\s\S]*?<\/style>/gi, "").replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+  }
   if (/text|markdown|json/.test(mt) || /\.(txt|md|csv|json)$/i.test(name)) return buf.toString("utf-8");
   if (buf.length > MAX_PARSE_BYTES) return ""; // too large to parse safely in serverless
   if (/pdf/.test(mt) || name.endsWith(".pdf")) return await extractPdf(buf);

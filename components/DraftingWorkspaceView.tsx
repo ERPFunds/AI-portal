@@ -151,9 +151,24 @@ export default function DraftingWorkspaceView() {
   const [editLogLoading, setEditLogLoading] = useState(true)
   const [docLog, setDocLog] = useState<EditLogRow[]>([])
   const [docLogLoading, setDocLogLoading] = useState(true)
-  const [newsletters, setNewsletters] = useState<{ id: string; label: string; subject: string; sentAt: string; narrative: string }[]>([])
+  const [newsletters, setNewsletters] = useState<{ id: string; label: string; subject: string; sentAt: string; narrative: string; source?: string; path?: string }[]>([])
   const [newslettersLoading, setNewslettersLoading] = useState(false)
   const [selectedNewsletterId, setSelectedNewsletterId] = useState('')
+  const [newsletterLoadingText, setNewsletterLoadingText] = useState(false)
+
+  // When a SharePoint newsletter (no inline narrative) is picked, fetch its text on demand.
+  async function pickNewsletter(id: string) {
+    setSelectedNewsletterId(id)
+    const n = newsletters.find(x => x.id === id)
+    if (!n || n.narrative || !n.path) return
+    setNewsletterLoadingText(true)
+    try {
+      const res = await fetch('/api/drafting/newsletters', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: n.path }) })
+      const d = await res.json()
+      if (d.narrative) setNewsletters(prev => prev.map(x => x.id === id ? { ...x, narrative: d.narrative } : x))
+    } catch { /* leave empty */ }
+    finally { setNewsletterLoadingText(false) }
+  }
   const [kbFiles, setKbFiles] = useState<{ file_id: string; filename: string; category: string | null; char_count: number | null }[]>([])
   const [kbFilesLoading, setKbFilesLoading] = useState(false)
   const [selectedKbFileIds, setSelectedKbFileIds] = useState<Set<string>>(new Set())
@@ -448,12 +463,12 @@ export default function DraftingWorkspaceView() {
             <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading newsletters…</div>
           )}
           {!newslettersLoading && newsletters.length === 0 && (
-            <div style={{ fontSize: 13, color: '#9ca3af' }}>No newsletters found — they appear here after the first Monday send.</div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No newsletters found — historical newsletters from Research Files and archived briefs appear here.</div>
           )}
           {!newslettersLoading && newsletters.length > 0 && (
             <select
               value={selectedNewsletterId}
-              onChange={e => setSelectedNewsletterId(e.target.value)}
+              onChange={e => pickNewsletter(e.target.value)}
               style={{
                 width: '100%', padding: '9px 12px', borderRadius: 6,
                 border: '1px solid #e5e7eb', fontSize: 14, color: '#111827',
@@ -463,7 +478,7 @@ export default function DraftingWorkspaceView() {
               <option value=''>— pick a newsletter —</option>
               {newsletters.map(n => (
                 <option key={n.id} value={n.id}>
-                  {n.label} · {new Date(n.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                  {n.label}{n.source === 'sharepoint' ? ' (Research Files)' : ''} · {new Date(n.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </option>
               ))}
             </select>
@@ -471,7 +486,8 @@ export default function DraftingWorkspaceView() {
           {selectedNewsletterId && (
             <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, color: '#374151', lineHeight: 1.6, maxHeight: 120, overflow: 'hidden', position: 'relative' }}>
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 32, background: 'linear-gradient(transparent, #f8fafc)' }} />
-              {newsletters.find(n => n.id === selectedNewsletterId)?.narrative?.slice(0, 400)}…
+              {newsletterLoadingText ? 'Loading newsletter text…'
+                : (newsletters.find(n => n.id === selectedNewsletterId)?.narrative?.slice(0, 400) || 'No text extracted from this file.') + '…'}
             </div>
           )}
         </div>
