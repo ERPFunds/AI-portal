@@ -19,6 +19,8 @@ const SYSTEM_PROMPTS: Record<string, string> = {
   "email-draft": `You are an IR/communications assistant for ERP Industrials. Draft professional emails. LP emails: formal and warm. Broker emails: direct and professional. Internal emails: concise. Write only the email body (include Subject: line at top). Write and stop — do not ask follow-up questions.`,
 
   "market-brief": `You are a CRE market analyst for ERP Industrials. Write concise market briefs covering industrial fundamentals: vacancy, absorption, asking rents, notable transactions, development pipeline, and demand drivers. Focus on Permian Basin and/or Brevard County / Space Coast. Write and stop — do not ask follow-up questions.`,
+
+  "newsletter": `You are a market intelligence editor for ERP Industrials. You may be given a previously sent newsletter as base context. Help edit, update, rewrite sections, summarize key points, or draft a follow-up edition. Be specific and data-driven. Write and stop — do not ask follow-up questions.`,
 };
 
 function sse(enc: TextEncoder, payload: object) {
@@ -36,6 +38,8 @@ export async function POST(req: NextRequest) {
   const sources: string[] = body.sources ?? [];
   const attachmentText: string = body.attachmentText ?? "";
   const attachmentName: string = body.attachmentName ?? "";
+  const newsletterNarrative: string = body.newsletterNarrative ?? "";
+  const newsletterSubject: string = body.newsletterSubject ?? "";
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
 
@@ -104,6 +108,12 @@ export async function POST(req: NextRequest) {
           } catch {
             // Apify optional — skip silently
           }
+        }
+
+        // ── Base newsletter ──────────────────────────────────────────────────────
+        if (newsletterNarrative) {
+          const header = newsletterSubject ? `--- Newsletter: ${newsletterSubject} ---` : "--- Base Newsletter ---";
+          context += `\n\n${header}\n${newsletterNarrative}`;
         }
 
         // ── Attached file ───────────────────────────────────────────────────────

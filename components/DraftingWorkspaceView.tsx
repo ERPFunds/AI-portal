@@ -103,6 +103,12 @@ const DOC_TYPES: { id: DocType; label: string; icon: string; placeholder: string
     icon: '📈',
     placeholder: 'Write a brief on current industrial market conditions in Brevard County, focusing on vacancy trends and aerospace demand drivers...',
   },
+  {
+    id: 'newsletter',
+    label: 'Newsletter',
+    icon: '📰',
+    placeholder: 'Edit the market narrative, rewrite the intro paragraph, summarize key takeaways, or draft a follow-up edition...',
+  },
 ]
 
 const s = {
@@ -145,8 +151,22 @@ export default function DraftingWorkspaceView() {
   const [editLogLoading, setEditLogLoading] = useState(true)
   const [docLog, setDocLog] = useState<EditLogRow[]>([])
   const [docLogLoading, setDocLogLoading] = useState(true)
+  const [newsletters, setNewsletters] = useState<{ id: string; label: string; subject: string; sentAt: string; narrative: string }[]>([])
+  const [newslettersLoading, setNewslettersLoading] = useState(false)
+  const [selectedNewsletterId, setSelectedNewsletterId] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (docType !== 'newsletter') return
+    if (newsletters.length > 0) return
+    setNewslettersLoading(true)
+    fetch('/api/drafting/newsletters')
+      .then(r => r.json())
+      .then(d => setNewsletters(d.briefs ?? []))
+      .catch(() => {})
+      .finally(() => setNewslettersLoading(false))
+  }, [docType])
 
   useEffect(() => {
     fetch('/api/research-log')
@@ -201,6 +221,8 @@ export default function DraftingWorkspaceView() {
           sources: [...(useKb ? ['kb'] : []), ...(useNewsletter ? ['newsletter'] : [])],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
+          newsletterNarrative: newsletters.find(n => n.id === selectedNewsletterId)?.narrative ?? '',
+          newsletterSubject: newsletters.find(n => n.id === selectedNewsletterId)?.subject ?? '',
         }),
         signal: abortRef.current.signal,
       })
@@ -333,6 +355,43 @@ export default function DraftingWorkspaceView() {
           ))}
         </div>
       </div>
+
+      {/* Newsletter picker */}
+      {docType === 'newsletter' && (
+        <div style={s.card}>
+          <span style={s.label}>Select Newsletter</span>
+          {newslettersLoading && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading newsletters…</div>
+          )}
+          {!newslettersLoading && newsletters.length === 0 && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No newsletters found — they appear here after the first Monday send.</div>
+          )}
+          {!newslettersLoading && newsletters.length > 0 && (
+            <select
+              value={selectedNewsletterId}
+              onChange={e => setSelectedNewsletterId(e.target.value)}
+              style={{
+                width: '100%', padding: '9px 12px', borderRadius: 6,
+                border: '1px solid #e5e7eb', fontSize: 14, color: '#111827',
+                background: '#fff', fontFamily: 'inherit', outline: 'none',
+              }}
+            >
+              <option value=''>— pick a newsletter —</option>
+              {newsletters.map(n => (
+                <option key={n.id} value={n.id}>
+                  {n.label} · {new Date(n.sentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                </option>
+              ))}
+            </select>
+          )}
+          {selectedNewsletterId && (
+            <div style={{ marginTop: 10, padding: '10px 12px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, color: '#374151', lineHeight: 1.6, maxHeight: 120, overflow: 'hidden', position: 'relative' }}>
+              <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 32, background: 'linear-gradient(transparent, #f8fafc)' }} />
+              {newsletters.find(n => n.id === selectedNewsletterId)?.narrative?.slice(0, 400)}…
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sources */}
       <div style={{ ...s.card, display: 'flex', alignItems: 'center', gap: 28, padding: '12px 20px' }}>
