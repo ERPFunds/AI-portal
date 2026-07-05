@@ -5192,9 +5192,10 @@ type M365Account = {
 }
 
 const DEFAULT_M365_ACCOUNTS: M365Account[] = [
-  { id: 'm365-meghan',  label: 'Meghan Berry',  email: 'mberry@erpfunds.com',    tenantId: '', clientId: '', status: 'disconnected' },
-  { id: 'm365-william', label: 'William Meyer', email: 'wmeyer@erpfunds.com',    tenantId: '', clientId: '', status: 'disconnected' },
-  { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpfunds.com', tenantId: '', clientId: '', status: 'disconnected' },
+  { id: 'm365-team',    label: 'IR Team (shared)', email: 'team@erpfunds.com', tenantId: '', clientId: '', status: 'connected' },
+  { id: 'm365-meghan',  label: 'Meghan Berry',  email: 'mberry@erpfunds.com',    tenantId: '', clientId: '', status: 'connected' },
+  { id: 'm365-william', label: 'William Meyer', email: 'wmeyer@erpfunds.com',    tenantId: '', clientId: '', status: 'connected' },
+  { id: 'm365-michele', label: 'Michele Parad', email: 'mparad@erpfunds.com', tenantId: '', clientId: '', status: 'connected' },
 ]
 
 const RSS_FEEDS_DISPLAY: { icon: string; name: string; url: string; desc: string; agent: string }[] = [
