@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/sql";
 
 const AGENT_LABELS: Record<string, string> = {
   "brevard-weekly":           "Brevard Weekly Market Update",
