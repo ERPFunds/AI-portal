@@ -2655,6 +2655,18 @@ function BrokerageNewsletterView() {
   const [generating, setGenerating] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
   const [genError, setGenError] = React.useState<string | null>(null)
+  // Distribution-list send
+  const [brokerEmails, setBrokerEmails] = React.useState<string[]>([])
+  const [distList, setDistList] = React.useState<'none' | 'brokers'>('none')
+  const [sendFrom, setSendFrom] = React.useState<'Meghan' | 'William'>('Meghan')
+  const [sending, setSending] = React.useState(false)
+  const [sendResult, setSendResult] = React.useState<{ ok: boolean; text: string } | null>(null)
+
+  React.useEffect(() => {
+    fetch('/api/distribution-lists').then(r => r.json())
+      .then(d => { if (Array.isArray(d.brokers)) setBrokerEmails(d.brokers.map((b: { email: string }) => b.email)) })
+      .catch(() => {})
+  }, [])
 
   const tpl = NEWSLETTER_TEMPLATES.find(p => p.id === selectedId) ?? NEWSLETTER_TEMPLATES[0]
 
@@ -2730,6 +2742,23 @@ function BrokerageNewsletterView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  async function handleSendList() {
+    const emails = distList === 'brokers' ? brokerEmails : []
+    if (emails.length === 0) { setSendResult({ ok: false, text: 'Pick a distribution list first.' }); return }
+    if (!window.confirm(`Send "${subject}" to ${emails.length} broker${emails.length === 1 ? '' : 's'} (BCC) from ${sendFrom}?\n\nThis sends immediately.`)) return
+    setSending(true); setSendResult(null)
+    try {
+      const res = await fetch('/api/distribution-lists', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ from: sendFrom, subject, body: buildHtml(), contentType: 'HTML', emails }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { setSendResult({ ok: false, text: `Send failed: ${j.error || res.status}` }); return }
+      setSendResult({ ok: true, text: `Sent to ${j.sent} broker${j.sent === 1 ? '' : 's'} from ${sendFrom}.` })
+    } catch (e) { setSendResult({ ok: false, text: `Send failed: ${String(e)}` }) }
+    finally { setSending(false) }
+  }
+
   const btnBase: React.CSSProperties = { fontSize: 12, fontWeight: 600, border: 'none', borderRadius: 7, padding: '8px 18px', cursor: 'pointer', fontFamily: 'inherit' }
 
   return (
@@ -2780,11 +2809,28 @@ function BrokerageNewsletterView() {
           <button onClick={handleCopy} style={{ ...btnBase, background: copied ? '#f0fdf4' : '#f3f4f6', color: copied ? '#3DAE7A' : '#374151' }}>
             {copied ? '✓ Copied' : '⎘ Copy HTML'}
           </button>
+          {/* Send to a distribution list */}
+          <select value={distList} onChange={e => setDistList(e.target.value as 'none' | 'brokers')} title="Distribution list"
+            style={{ ...btnBase, background: '#fff', color: '#374151', border: '1px solid #e5e7eb', fontWeight: 500 }}>
+            <option value="none">Distribution list…</option>
+            <option value="brokers">Brokers &amp; Advisors ({brokerEmails.length})</option>
+          </select>
+          <select value={sendFrom} onChange={e => setSendFrom(e.target.value as 'Meghan' | 'William')} title="Send from"
+            style={{ ...btnBase, background: '#fff', color: '#374151', border: '1px solid #e5e7eb', fontWeight: 500 }}>
+            <option value="Meghan">From: Meghan</option>
+            <option value="William">From: William</option>
+          </select>
+          <button onClick={handleSendList} disabled={sending || distList === 'none'} style={{ ...btnBase, background: '#0e7490', color: '#fff', opacity: sending || distList === 'none' ? 0.5 : 1 }}>
+            {sending ? '⏳ Sending…' : '✉ Send'}
+          </button>
         </div>
 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {genError && (
             <div style={{ fontSize: 12, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 8, padding: '8px 14px', marginBottom: 16 }}>{genError}</div>
+          )}
+          {sendResult && (
+            <div style={{ fontSize: 12, color: sendResult.ok ? '#16a34a' : '#b91c1c', background: sendResult.ok ? '#f0fdf4' : '#fef2f2', border: `1px solid ${sendResult.ok ? '#86efac' : '#fca5a5'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 16 }}>{sendResult.ok ? '✅ ' : '⚠️ '}{sendResult.text}</div>
           )}
           {tab === 'edit' ? (
             <div>
@@ -4071,110 +4117,51 @@ function DistributionListsView() {
   const [brokers, setBrokers] = React.useState<BrokerContact[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [selected, setSelected] = React.useState<Set<string>>(new Set())
   const [search, setSearch] = React.useState('')
-  const [from, setFrom] = React.useState<'Meghan' | 'William'>('Meghan')
-  const [subject, setSubject] = React.useState('')
-  const [msgBody, setMsgBody] = React.useState('')
-  const [sending, setSending] = React.useState(false)
-  const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null)
 
   React.useEffect(() => {
     fetch('/api/distribution-lists')
       .then(r => r.json())
-      .then(d => {
-        if (d.error) setError(d.error)
-        else { setBrokers(d.brokers || []); setSelected(new Set((d.brokers || []).map((b: BrokerContact) => b.email))) }
-      })
+      .then(d => { if (d.error) setError(d.error); else setBrokers(d.brokers || []) })
       .catch(e => setError(String(e)))
       .finally(() => setLoading(false))
   }, [])
 
   const filtered = brokers.filter(b => !search || `${b.rep ?? ''} ${b.firm ?? ''} ${b.email}`.toLowerCase().includes(search.toLowerCase()))
-  const toggle = (email: string) => setSelected(s => { const n = new Set(s); if (n.has(email)) n.delete(email); else n.add(email); return n })
-  const allShownSelected = filtered.length > 0 && filtered.every(b => selected.has(b.email))
-  const toggleAll = () => setSelected(s => {
-    const n = new Set(s)
-    if (allShownSelected) filtered.forEach(b => n.delete(b.email))
-    else filtered.forEach(b => n.add(b.email))
-    return n
-  })
-
-  async function send() {
-    const emails = [...selected]
-    if (emails.length === 0) { setResult({ ok: false, text: 'Select at least one recipient.' }); return }
-    if (!msgBody.trim()) { setResult({ ok: false, text: 'Write a message first.' }); return }
-    if (!window.confirm(`Send this email to ${emails.length} broker${emails.length === 1 ? '' : 's'} (BCC) from ${from}?\n\nThis sends immediately.`)) return
-    setSending(true); setResult(null)
-    try {
-      const res = await fetch('/api/distribution-lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, subject, body: msgBody, emails }) })
-      const j = await res.json()
-      if (!res.ok || j.error) { setResult({ ok: false, text: `Send failed: ${j.error || res.status}` }); return }
-      setResult({ ok: true, text: `Sent to ${j.sent} broker${j.sent === 1 ? '' : 's'} from ${from}.` }); setMsgBody(''); setSubject('')
-    } catch (e) { setResult({ ok: false, text: `Send failed: ${String(e)}` }) }
-    finally { setSending(false) }
-  }
-
-  const inp = { width: '100%', boxSizing: 'border-box' as const, fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none' }
 
   return (
     <div>
-      <div className="page-header"><h2>Distribution Lists</h2><p>Reusable recipient lists for IR email blasts. First list: brokers &amp; advisors (from Salesforce).</p></div>
+      <div className="page-header"><h2>Distribution Lists</h2><p>Reusable recipient lists for IR email blasts. Select a list in the <strong>Newsletter</strong> to send to it.</p></div>
       <SourceBar source="Salesforce (Opportunity partner contacts)" agents="Investor Relations" synced={loading ? 'Loading…' : `${brokers.length} brokers`} link="" />
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginTop: 16, alignItems: 'start' }}>
-        {/* Broker list */}
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-          <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', gap: 10, alignItems: 'center' }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>🏦 Brokers &amp; Advisors</div>
-            <span style={{ fontSize: 11, color: '#0e7490', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 999, padding: '1px 8px', fontWeight: 600 }}>{selected.size} selected</span>
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ ...inp, marginLeft: 'auto', width: 160, padding: '5px 8px', fontSize: 12 }} />
-          </div>
-          {loading ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>Loading brokers…</div>
-            : error ? <div style={{ padding: 20, color: '#dc2626', fontSize: 13 }}>{error}</div>
-            : brokers.length === 0 ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>No broker emails found in Salesforce.</div>
-            : (
-              <div style={{ maxHeight: 460, overflowY: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
-                  <thead><tr style={{ borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, background: '#f9fafb' }}>
-                    <th style={{ padding: '7px 10px', width: 28 }}><input type="checkbox" checked={allShownSelected} onChange={toggleAll} /></th>
-                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Rep</th>
-                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Firm</th>
-                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Email</th>
-                  </tr></thead>
-                  <tbody>
-                    {filtered.map(b => (
-                      <tr key={b.email} style={{ borderBottom: '1px solid #f3f4f6', background: selected.has(b.email) ? '#f0fdff' : undefined }}>
-                        <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={selected.has(b.email)} onChange={() => toggle(b.email)} /></td>
-                        <td style={{ padding: '7px 10px', color: '#111827' }}>{b.rep || '—'}</td>
-                        <td style={{ padding: '7px 10px', color: '#6b7280' }}>{b.firm || '—'}</td>
-                        <td style={{ padding: '7px 10px', color: '#6b7280' }}>{b.email}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden', marginTop: 16 }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>🏦 Brokers &amp; Advisors</div>
+          <span style={{ fontSize: 11, color: '#0e7490', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 999, padding: '1px 8px', fontWeight: 600 }}>{brokers.length} contacts</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ marginLeft: 'auto', width: 200, boxSizing: 'border-box', fontSize: 12, padding: '5px 8px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none' }} />
         </div>
-        {/* Compose */}
-        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Compose blast</div>
-          <div>
-            <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>From</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {(['Meghan', 'William'] as const).map(p => (
-                <button key={p} onClick={() => setFrom(p)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${from === p ? '#0e7490' : '#e5e7eb'}`, background: from === p ? '#0e7490' : '#fff', color: from === p ? '#fff' : '#374151' }}>{p}</button>
-              ))}
+        {loading ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>Loading brokers…</div>
+          : error ? <div style={{ padding: 20, color: '#dc2626', fontSize: 13 }}>{error}</div>
+          : brokers.length === 0 ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>No broker emails found in Salesforce.</div>
+          : (
+            <div style={{ maxHeight: 560, overflowY: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead><tr style={{ borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, background: '#f9fafb' }}>
+                  <th style={{ textAlign: 'left', padding: '7px 14px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Rep</th>
+                  <th style={{ textAlign: 'left', padding: '7px 14px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Firm</th>
+                  <th style={{ textAlign: 'left', padding: '7px 14px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Email</th>
+                </tr></thead>
+                <tbody>
+                  {filtered.map(b => (
+                    <tr key={b.email} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '7px 14px', color: '#111827' }}>{b.rep || '—'}</td>
+                      <td style={{ padding: '7px 14px', color: '#6b7280' }}>{b.firm || '—'}</td>
+                      <td style={{ padding: '7px 14px', color: '#6b7280' }}>{b.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
-          <div><label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Subject</label>
-            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" style={inp} /></div>
-          <div><label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Message</label>
-            <textarea value={msgBody} onChange={e => setMsgBody(e.target.value)} rows={10} placeholder="Write the blast… (sent BCC — recipients won't see each other)" style={{ ...inp, resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} /></div>
-          <button onClick={send} disabled={sending} style={{ fontSize: 13, fontWeight: 700, background: '#0e7490', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', cursor: sending ? 'wait' : 'pointer' }}>
-            {sending ? 'Sending…' : `Send to ${selected.size} broker${selected.size === 1 ? '' : 's'} (BCC)`}
-          </button>
-          {result && <div style={{ fontSize: 12, color: result.ok ? '#16a34a' : '#dc2626' }}>{result.ok ? '✅' : '⚠️'} {result.text}</div>}
-        </div>
+          )}
       </div>
     </div>
   )

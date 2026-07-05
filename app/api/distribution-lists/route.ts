@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
-  let body: { from?: string; subject?: string; body?: string; emails?: string[] };
+  let body: { from?: string; subject?: string; body?: string; emails?: string[]; contentType?: string };
   try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
 
   const emails = [...new Set((body.emails ?? []).map((e) => (e || "").trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)))];
@@ -88,11 +88,12 @@ export async function POST(req: NextRequest) {
   const content = (body.body || "").trim();
   if (!content) return NextResponse.json({ error: "Message body is required" }, { status: 400 });
   const subject = (body.subject || "").trim() || "ERP Industrials";
+  const contentType = body.contentType === "HTML" ? "HTML" : "Text";
   const fromMailbox = body.from === "William" ? SEND_AS.William : SEND_AS.Meghan;
 
   try {
     // BCC the whole list so recipients don't see each other; the To is the sender's own mailbox.
-    await sendMailAs(fromMailbox, { to: [fromMailbox], bcc: emails, subject, content, contentType: "Text" });
+    await sendMailAs(fromMailbox, { to: [fromMailbox], bcc: emails, subject, content, contentType });
     return NextResponse.json({ ok: true, sent: emails.length, from: fromMailbox });
   } catch (e) {
     return NextResponse.json({ error: `Send failed: ${String(e).slice(0, 200)}` }, { status: 500 });
