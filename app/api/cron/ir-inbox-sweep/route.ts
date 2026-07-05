@@ -193,7 +193,8 @@ async function handleMailbox(
         actions.push(`team-copy-skip(no "${subName}" subfolder in ${TEAM_INBOX})`);
       }
     } catch (e) {
-      actions.push(`team-copy-fail(${String(e).slice(0, 60)})`);
+      console.log("[ir-sweep] team-copy-fail", String(e).slice(0, 400));
+      actions.push(`team-copy-fail(${String(e).slice(0, 250)})`);
     }
 
     // 2) Salesforce: find-or-create the Contact + log a correspondence Task (direct REST)
