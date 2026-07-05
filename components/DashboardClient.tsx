@@ -5002,9 +5002,9 @@ const CONNECTIONS_DATA = [
     id: 'yardi',
     icon: '🏢',
     name: 'Yardi Voyager',
-    status: 'connected' as const,
+    status: 'disconnected' as const,
     meta: 'Rent roll, GL, work orders, AP/AR — primary property management system',
-    sync: 'Synced every 30 min',
+    sync: 'Not connected',
     fields: [
       { label: 'Server URL',    key: 'url',      placeholder: 'https://yourfirm.yardipcmng.com' },
       { label: 'Username',      key: 'user',     placeholder: 'api-user@erpfunds' },
@@ -5043,9 +5043,9 @@ const CONNECTIONS_DATA = [
     id: 'docusign',
     icon: '✍️',
     name: 'DocuSign',
-    status: 'connected' as const,
+    status: 'disconnected' as const,
     meta: 'Lease execution, capital call notices, and K-1 delivery workflows',
-    sync: 'Webhook connected',
+    sync: 'Not connected',
     fields: [
       { label: 'Account ID',  key: 'account', placeholder: 'DocuSign Account ID' },
       { label: 'Base URI',    key: 'uri',     placeholder: 'https://na4.docusign.net' },
