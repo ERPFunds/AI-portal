@@ -12,6 +12,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '✏️', label: 'Drafting Workspace', view: 'drafting' },
     { icon: '📥', label: 'IR Inbox',            view: 'inbox' },
     { icon: '👥', label: 'LP Directory',        view: 'lp' },
+    { icon: '📇', label: 'Distribution Lists',  view: 'distribution-lists' },
     { icon: '💬', label: 'Learned Q&A',              view: 'ir-qa' },
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { section: 'Property' },

@@ -325,6 +325,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     ),
     lp: <LpDirectoryView />,
     'ir-qa': <QaReviewView />,
+    'distribution-lists': <DistributionListsView />,
     drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
     'acquisition-checklist': <AcquisitionChecklistView />,
@@ -4059,6 +4060,122 @@ function KBSearchBox() {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Distribution Lists ───────────────────────────────────────────────────────
+type BrokerContact = { rep: string | null; firm: string | null; email: string }
+
+function DistributionListsView() {
+  const [brokers, setBrokers] = React.useState<BrokerContact[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [selected, setSelected] = React.useState<Set<string>>(new Set())
+  const [search, setSearch] = React.useState('')
+  const [from, setFrom] = React.useState<'Meghan' | 'William'>('Meghan')
+  const [subject, setSubject] = React.useState('')
+  const [msgBody, setMsgBody] = React.useState('')
+  const [sending, setSending] = React.useState(false)
+  const [result, setResult] = React.useState<{ ok: boolean; text: string } | null>(null)
+
+  React.useEffect(() => {
+    fetch('/api/distribution-lists')
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) setError(d.error)
+        else { setBrokers(d.brokers || []); setSelected(new Set((d.brokers || []).map((b: BrokerContact) => b.email))) }
+      })
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const filtered = brokers.filter(b => !search || `${b.rep ?? ''} ${b.firm ?? ''} ${b.email}`.toLowerCase().includes(search.toLowerCase()))
+  const toggle = (email: string) => setSelected(s => { const n = new Set(s); if (n.has(email)) n.delete(email); else n.add(email); return n })
+  const allShownSelected = filtered.length > 0 && filtered.every(b => selected.has(b.email))
+  const toggleAll = () => setSelected(s => {
+    const n = new Set(s)
+    if (allShownSelected) filtered.forEach(b => n.delete(b.email))
+    else filtered.forEach(b => n.add(b.email))
+    return n
+  })
+
+  async function send() {
+    const emails = [...selected]
+    if (emails.length === 0) { setResult({ ok: false, text: 'Select at least one recipient.' }); return }
+    if (!msgBody.trim()) { setResult({ ok: false, text: 'Write a message first.' }); return }
+    if (!window.confirm(`Send this email to ${emails.length} broker${emails.length === 1 ? '' : 's'} (BCC) from ${from}?\n\nThis sends immediately.`)) return
+    setSending(true); setResult(null)
+    try {
+      const res = await fetch('/api/distribution-lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, subject, body: msgBody, emails }) })
+      const j = await res.json()
+      if (!res.ok || j.error) { setResult({ ok: false, text: `Send failed: ${j.error || res.status}` }); return }
+      setResult({ ok: true, text: `Sent to ${j.sent} broker${j.sent === 1 ? '' : 's'} from ${from}.` }); setMsgBody(''); setSubject('')
+    } catch (e) { setResult({ ok: false, text: `Send failed: ${String(e)}` }) }
+    finally { setSending(false) }
+  }
+
+  const inp = { width: '100%', boxSizing: 'border-box' as const, fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none' }
+
+  return (
+    <div>
+      <div className="page-header"><h2>Distribution Lists</h2><p>Reusable recipient lists for IR email blasts. First list: brokers &amp; advisors (from Salesforce).</p></div>
+      <SourceBar source="Salesforce (Opportunity partner contacts)" agents="Investor Relations" synced={loading ? 'Loading…' : `${brokers.length} brokers`} link="" />
+      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16, marginTop: 16, alignItems: 'start' }}>
+        {/* Broker list */}
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', gap: 10, alignItems: 'center' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>🏦 Brokers &amp; Advisors</div>
+            <span style={{ fontSize: 11, color: '#0e7490', background: '#ecfeff', border: '1px solid #a5f3fc', borderRadius: 999, padding: '1px 8px', fontWeight: 600 }}>{selected.size} selected</span>
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search…" style={{ ...inp, marginLeft: 'auto', width: 160, padding: '5px 8px', fontSize: 12 }} />
+          </div>
+          {loading ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>Loading brokers…</div>
+            : error ? <div style={{ padding: 20, color: '#dc2626', fontSize: 13 }}>{error}</div>
+            : brokers.length === 0 ? <div style={{ padding: 20, color: '#9ca3af', fontSize: 13 }}>No broker emails found in Salesforce.</div>
+            : (
+              <div style={{ maxHeight: 460, overflowY: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead><tr style={{ borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, background: '#f9fafb' }}>
+                    <th style={{ padding: '7px 10px', width: 28 }}><input type="checkbox" checked={allShownSelected} onChange={toggleAll} /></th>
+                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Rep</th>
+                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Firm</th>
+                    <th style={{ textAlign: 'left', padding: '7px 10px', fontSize: 10, color: '#9ca3af', textTransform: 'uppercase' }}>Email</th>
+                  </tr></thead>
+                  <tbody>
+                    {filtered.map(b => (
+                      <tr key={b.email} style={{ borderBottom: '1px solid #f3f4f6', background: selected.has(b.email) ? '#f0fdff' : undefined }}>
+                        <td style={{ padding: '7px 10px' }}><input type="checkbox" checked={selected.has(b.email)} onChange={() => toggle(b.email)} /></td>
+                        <td style={{ padding: '7px 10px', color: '#111827' }}>{b.rep || '—'}</td>
+                        <td style={{ padding: '7px 10px', color: '#6b7280' }}>{b.firm || '—'}</td>
+                        <td style={{ padding: '7px 10px', color: '#6b7280' }}>{b.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+        </div>
+        {/* Compose */}
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Compose blast</div>
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>From</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {(['Meghan', 'William'] as const).map(p => (
+                <button key={p} onClick={() => setFrom(p)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 12px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${from === p ? '#0e7490' : '#e5e7eb'}`, background: from === p ? '#0e7490' : '#fff', color: from === p ? '#fff' : '#374151' }}>{p}</button>
+              ))}
+            </div>
+          </div>
+          <div><label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Subject</label>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subject" style={inp} /></div>
+          <div><label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Message</label>
+            <textarea value={msgBody} onChange={e => setMsgBody(e.target.value)} rows={10} placeholder="Write the blast… (sent BCC — recipients won't see each other)" style={{ ...inp, resize: 'vertical', lineHeight: 1.6, fontFamily: 'inherit' }} /></div>
+          <button onClick={send} disabled={sending} style={{ fontSize: 13, fontWeight: 700, background: '#0e7490', color: '#fff', border: 'none', borderRadius: 8, padding: '10px', cursor: sending ? 'wait' : 'pointer' }}>
+            {sending ? 'Sending…' : `Send to ${selected.size} broker${selected.size === 1 ? '' : 's'} (BCC)`}
+          </button>
+          {result && <div style={{ fontSize: 12, color: result.ok ? '#16a34a' : '#dc2626' }}>{result.ok ? '✅' : '⚠️'} {result.text}</div>}
+        </div>
+      </div>
     </div>
   )
 }

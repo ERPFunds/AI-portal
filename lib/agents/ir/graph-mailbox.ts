@@ -506,20 +506,19 @@ export async function sendDraftMessage(mailbox: string, messageId: string): Prom
 /** Send a NEW message as `mailbox` (e.g. mberry@) — used to reply from a person's own address. */
 export async function sendMailAs(
   mailbox: string,
-  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML" }
+  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML"; bcc?: string[] }
 ): Promise<void> {
   const t = await token();
+  const message: Record<string, unknown> = {
+    subject: p.subject,
+    body: { contentType: p.contentType ?? "Text", content: p.content },
+    toRecipients: p.to.map((a) => ({ emailAddress: { address: a } })),
+  };
+  if (p.bcc && p.bcc.length) message.bccRecipients = p.bcc.map((a) => ({ emailAddress: { address: a } }));
   const res = await fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/sendMail`, {
     method: "POST",
     headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: {
-        subject: p.subject,
-        body: { contentType: p.contentType ?? "Text", content: p.content },
-        toRecipients: p.to.map((a) => ({ emailAddress: { address: a } })),
-      },
-      saveToSentItems: true,
-    }),
+    body: JSON.stringify({ message, saveToSentItems: true }),
   });
   if (!res.ok) throw new Error(`Graph sendMail ${res.status}: ${await res.text()}`);
 }
