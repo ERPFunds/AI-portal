@@ -417,17 +417,26 @@ export async function importMimeMessage(
   base64Mime: string
 ): Promise<string> {
   const t = await token();
-  const res = await fetch(
-    `${GRAPH}/users/${encodeURIComponent(destMailbox)}/mailFolders/${destFolderId}/messages`,
+  // Graph accepts MIME create only at the mailbox level (POST /messages). Posting MIME to a
+  // specific folder's /messages collection is rejected with 400 "UnableToDeserialize" — so create
+  // it at the top level, then move the new message into the destination folder.
+  const createRes = await fetch(`${GRAPH}/users/${encodeURIComponent(destMailbox)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${t}`, "Content-Type": "text/plain" },
+    body: base64Mime,
+  });
+  if (!createRes.ok) throw new Error(`Graph import mime ${createRes.status}: ${(await createRes.text()).slice(0, 200)}`);
+  const newId = (await createRes.json()).id as string;
+  const moveRes = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(destMailbox)}/messages/${encodeURIComponent(newId)}/move`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${t}`, "Content-Type": "text/plain" },
-      body: base64Mime,
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ destinationId: destFolderId }),
     }
   );
-  if (!res.ok) throw new Error(`Graph import mime ${res.status}: ${await res.text()}`);
-  const data = await res.json();
-  return data.id as string;
+  if (!moveRes.ok) return newId; // created in the mailbox but couldn't be filed — still surfaces
+  return ((await moveRes.json()).id as string) || newId;
 }
 
 /** Read a single message's subject, recipients, text body, and conversation id. */
