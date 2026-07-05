@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
   const docType: string = body.docType ?? "freeform";
   const prompt: string = body.prompt ?? "";
   const sources: string[] = body.sources ?? [];
+  const kbFileIds: string[] = body.kbFileIds ?? [];
   const attachmentText: string = body.attachmentText ?? "";
   const attachmentName: string = body.attachmentName ?? "";
   const newsletterNarrative: string = body.newsletterNarrative ?? "";
@@ -52,11 +53,13 @@ export async function POST(req: NextRequest) {
 
         // ── KB grounding ────────────────────────────────────────────────────────
         if (sources.includes("kb")) {
-          const { data: docs } = await supabase
+          const query = supabase
             .from("document_markdown")
-            .select("filename, category, markdown")
-            .order("extracted_at", { ascending: false })
-            .limit(6);
+            .select("filename, category, markdown");
+
+          const { data: docs } = kbFileIds.length > 0
+            ? await query.in("file_id", kbFileIds)
+            : await query.order("extracted_at", { ascending: false }).limit(6);
 
           if (docs?.length) {
             context += "\n\n--- Knowledge Base Documents ---\n";

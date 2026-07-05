@@ -154,8 +154,22 @@ export default function DraftingWorkspaceView() {
   const [newsletters, setNewsletters] = useState<{ id: string; label: string; subject: string; sentAt: string; narrative: string }[]>([])
   const [newslettersLoading, setNewslettersLoading] = useState(false)
   const [selectedNewsletterId, setSelectedNewsletterId] = useState('')
+  const [kbFiles, setKbFiles] = useState<{ file_id: string; filename: string; category: string | null; char_count: number | null }[]>([])
+  const [kbFilesLoading, setKbFilesLoading] = useState(false)
+  const [selectedKbFileIds, setSelectedKbFileIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    if (!useKb) return
+    if (kbFiles.length > 0) return
+    setKbFilesLoading(true)
+    fetch('/api/drafting/kb-files')
+      .then(r => r.json())
+      .then(d => setKbFiles(d.files ?? []))
+      .catch(() => {})
+      .finally(() => setKbFilesLoading(false))
+  }, [useKb])
 
   useEffect(() => {
     if (docType !== 'newsletter') return
@@ -218,7 +232,8 @@ export default function DraftingWorkspaceView() {
         body: JSON.stringify({
           docType,
           prompt: prompt.trim(),
-          sources: [...(useKb ? ['kb'] : []), ...(useNewsletter ? ['newsletter'] : [])],
+          sources: [...(useKb ? ['kb'] : []), ...(useNews ? ['news'] : [])],
+          kbFileIds: [...selectedKbFileIds],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
           newsletterNarrative: newsletters.find(n => n.id === selectedNewsletterId)?.narrative ?? '',
@@ -355,6 +370,75 @@ export default function DraftingWorkspaceView() {
           ))}
         </div>
       </div>
+
+      {/* KB file picker */}
+      {useKb && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={s.label}>Knowledge Base Files</span>
+            {kbFiles.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setSelectedKbFileIds(new Set(kbFiles.map(f => f.file_id)))}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setSelectedKbFileIds(new Set())}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#9ca3af', cursor: 'pointer' }}
+                >
+                  None
+                </button>
+              </div>
+            )}
+          </div>
+          {kbFilesLoading && <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading files…</div>}
+          {!kbFilesLoading && kbFiles.length === 0 && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No KB files found.</div>
+          )}
+          {!kbFilesLoading && kbFiles.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+              {kbFiles.map(f => {
+                const checked = selectedKbFileIds.has(f.file_id)
+                return (
+                  <label
+                    key={f.file_id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
+                      borderRadius: 6, cursor: 'pointer',
+                      background: checked ? '#eff6ff' : 'transparent',
+                      border: `1px solid ${checked ? '#bfdbfe' : 'transparent'}`,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedKbFileIds(prev => {
+                          const next = new Set(prev)
+                          checked ? next.delete(f.file_id) : next.add(f.file_id)
+                          return next
+                        })
+                      }}
+                      style={{ accentColor: '#1d4ed8', width: 14, height: 14, flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                        {f.category ?? 'general'}{f.char_count ? ` · ${Math.round(f.char_count / 1000)}k chars` : ''}
+                      </div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {selectedKbFileIds.size === 0 && !kbFilesLoading && kbFiles.length > 0 && (
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>No files selected — will use 6 most recent</div>
+          )}
+        </div>
+      )}
 
       {/* Newsletter picker */}
       {docType === 'newsletter' && (
