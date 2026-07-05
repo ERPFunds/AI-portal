@@ -5099,6 +5099,19 @@ const CONNECTIONS_DATA = [
     ],
   },
   {
+    id: 'mongodb-voyage',
+    icon: '🍃',
+    name: 'MongoDB / Voyage',
+    status: 'connected' as const,
+    meta: 'Vector search + Voyage embeddings for knowledge-base retrieval (RAG) — powers document search and due-diligence answers',
+    sync: 'Embeddings via Voyage (ai.mongodb.com)',
+    fields: [
+      { label: 'Voyage API Key',  key: 'voyageKey', placeholder: 'VOYAGE_API_KEY (set in Vercel env)' },
+      { label: 'Embedding Model', key: 'model',     placeholder: 'voyage-3' },
+      { label: 'MongoDB URI',     key: 'uri',       placeholder: 'MONGODB_URI (set in Vercel env)' },
+    ],
+  },
+  {
     id: 'fred',
     icon: '📈',
     name: 'FRED API (Federal Reserve)',
