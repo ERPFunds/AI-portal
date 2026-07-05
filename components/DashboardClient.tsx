@@ -787,7 +787,7 @@ function RightRail({ recentRuns }: { recentRuns: any[] }) {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
               {recentRuns.map((run, i) => {
-                const agent = AGENT_LABEL[run.agent_id] ?? { icon: '🤖', name: run.agent_id }
+                const agent = run.icon ? { icon: run.icon, name: run.agent_name ?? '' } : (AGENT_LABEL[run.agent_id] ?? { icon: '🤖', name: run.agent_id })
                 const wfLabel = WF_LABEL[run.workflow_id] ?? run.workflow_id
                 const isErr = run.status === 'error'
                 const pfx = run.prefix ? PREFIX_BADGE[run.prefix as string] : null

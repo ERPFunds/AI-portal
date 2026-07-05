@@ -423,19 +423,48 @@ export async function logAgentRun(params: {
 }
 
 export async function getRecentAgentRuns(limit = 40) {
-  // Unified feed: agent_runs + research_log (lp-intel) + ir_email_log (ir)
+  // Unified activity feed. Surfaces the real events the portal produces (IR inbox processing,
+  // Q&A mining/learning, KB uploads & SharePoint syncs, capital-raise changes, saved searches)
+  // plus the run-log tables (agent_runs / research_log / ir_email_log) for when those populate.
+  // Each row carries its own icon + agent_name so the UI renders without a lookup table.
   try {
     const { rows } = await sql`
-      SELECT agent_id, workflow_id, status, summary, market, created_at, NULL AS prefix
-      FROM agent_runs
-      UNION ALL
-      SELECT 'lp-intel' AS agent_id, workflow_id, 'success' AS status,
-             output_summary AS summary, NULL AS market, created_at, prefix
-      FROM research_log
-      UNION ALL
-      SELECT 'ir' AS agent_id, workflow_id, 'success' AS status,
-             summary, NULL AS market, created_at, NULL AS prefix
-      FROM ir_email_log
+      SELECT * FROM (
+        SELECT agent_id, workflow_id, status, summary, created_at, prefix,
+               NULL::text AS icon, NULL::text AS agent_name
+        FROM agent_runs
+        UNION ALL
+        SELECT 'lp-intel', workflow_id, 'success', output_summary, created_at, prefix, '🔬', 'Market Intelligence'
+        FROM research_log
+        UNION ALL
+        SELECT 'ir', workflow_id, 'success', summary, created_at, NULL, '📧', 'Investor Relations'
+        FROM ir_email_log
+        UNION ALL
+        SELECT 'kb',
+               CASE WHEN uploaded_by = 'sharepoint-sync' THEN 'Synced from SharePoint' ELSE 'Document added' END,
+               'success', filename || COALESCE(' · ' || category, ''), created_at, NULL,
+               CASE WHEN uploaded_by = 'sharepoint-sync' THEN '🔄' ELSE '📄' END, 'Knowledge Base'
+        FROM uploaded_files
+        UNION ALL
+        SELECT 'ir', 'IR email ' || COALESCE(action, 'processed'), 'success',
+               mailbox, processed_at, NULL, '📥', 'Investor Relations'
+        FROM ir_processed_messages WHERE is_investor = true
+        UNION ALL
+        SELECT 'ir', 'Learned Q&A ' || COALESCE(status, ''), 'success',
+               question, created_at, NULL, '💬', 'Learned Q&A'
+        FROM ir_qa
+        UNION ALL
+        SELECT 'ir', 'Mined replies for Q&A', 'success',
+               'extracted ' || COALESCE(extracted, 0) || ' from ' || mailbox, processed_at, NULL, '🔎', 'IR Q&A Miner'
+        FROM ir_qa_processed WHERE extracted > 0
+        UNION ALL
+        SELECT 'capital-raise', 'Prospect · ' || stage, 'success',
+               prospect, updated_at, NULL, '💰', 'Capital Raising'
+        FROM capital_raise_pipeline
+        UNION ALL
+        SELECT 'kb', 'KB search saved', 'success', query, saved_at, NULL, '🔍', 'Saved Search'
+        FROM kb_saved_searches
+      ) feed
       ORDER BY created_at DESC
       LIMIT ${limit}
     `;
