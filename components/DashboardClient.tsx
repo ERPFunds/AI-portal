@@ -1944,17 +1944,16 @@ function LpDirectoryView() {
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
   const [emailMsg, setEmailMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
-  const [emailingRow, setEmailingRow] = React.useState<string | null>(null)
+  const [compose, setCompose] = React.useState<null | { lp: LpRecord; from: 'Meghan' | 'William'; to: string; subject: string; body: string }>(null)
+  const [composeBusy, setComposeBusy] = React.useState<'' | 'ai' | 'send' | 'draft'>('')
 
-  // Start an investor outreach: AI-draft a tailored email from the LP's context and save it to
-  // team@ (surfaces in the IR Inbox to review & send).
-  async function emailLp(lp: LpRecord) {
-    let to = (lp.resolvedEmail || '').trim()
-    if (!to) {
-      to = (window.prompt(`No email on file for ${lp.investor}. Enter the recipient's email address:`, '') || '').trim()
-      if (!to) return
-    }
-    const context = {
+  // Open the compose popup for an LP (pre-fills the known email; empty is fine — user can type it).
+  function emailLp(lp: LpRecord) {
+    setEmailMsg(null)
+    setCompose({ lp, from: 'Meghan', to: (lp.resolvedEmail || '').trim(), subject: `ERP Industrials — ${lp.investor}`, body: '' })
+  }
+  function composeContext(lp: LpRecord) {
+    return {
       investor: lp.investor,
       contact: lp.contact || undefined,
       commitment: lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : (lp.commitment || undefined),
@@ -1966,20 +1965,41 @@ function LpDirectoryView() {
       advisorContact: (lp.brokerContact || lp.sfAdvisorContact) || undefined,
       notes: lp.notes || undefined,
     }
-    setEmailingRow(lp.investor); setEmailMsg({ ok: true, text: `Drafting an outreach to ${lp.investor}…` })
+  }
+  async function composeAiDraft() {
+    if (!compose) return
+    setComposeBusy('ai')
     try {
-      const res = await fetch('/api/agent-inbox', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'create-draft', to, ai: true, context }),
-      })
+      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'outreach-preview', context: composeContext(compose.lp) }) })
+      const j = await res.json()
+      if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `AI draft failed: ${j.error || res.status}` }); return }
+      setCompose(c => c ? { ...c, subject: j.subject || c.subject, body: j.body || c.body } : c)
+    } catch (e) { setEmailMsg({ ok: false, text: `AI draft failed: ${String(e)}` }) }
+    finally { setComposeBusy('') }
+  }
+  async function composeSend() {
+    if (!compose || !compose.to.trim()) { setEmailMsg({ ok: false, text: 'Enter a recipient email.' }); return }
+    const fromAddr = compose.from === 'William' ? 'wmeyer@erpfunds.com' : 'mberry@erpfunds.com'
+    if (!window.confirm(`Send this email to ${compose.to} from ${compose.from} (${fromAddr})?\n\nThis sends immediately.`)) return
+    setComposeBusy('send')
+    try {
+      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-compose', to: compose.to.trim(), from: compose.from, subject: compose.subject, body: compose.body }) })
+      const j = await res.json()
+      if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Send failed: ${j.error || res.status}` }); return }
+      setEmailMsg({ ok: true, text: `Sent to ${compose.to} from ${compose.from}.` }); setCompose(null)
+    } catch (e) { setEmailMsg({ ok: false, text: `Send failed: ${String(e)}` }) }
+    finally { setComposeBusy('') }
+  }
+  async function composeSaveDraft() {
+    if (!compose || !compose.to.trim()) { setEmailMsg({ ok: false, text: 'Enter a recipient email.' }); return }
+    setComposeBusy('draft')
+    try {
+      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create-draft', to: compose.to.trim(), subject: compose.subject, body: compose.body }) })
       const j = await res.json()
       if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Draft failed: ${j.error || res.status}` }); return }
-      setEmailMsg({ ok: true, text: `AI draft to ${to} created — review & send it in the IR Inbox.` })
-    } catch (e) {
-      setEmailMsg({ ok: false, text: `Draft failed: ${String(e)}` })
-    } finally {
-      setEmailingRow(null)
-    }
+      setEmailMsg({ ok: true, text: `Draft saved to the IR Inbox for ${compose.to}.` }); setCompose(null)
+    } catch (e) { setEmailMsg({ ok: false, text: `Draft failed: ${String(e)}` }) }
+    finally { setComposeBusy('') }
   }
 
   const load = React.useCallback(async (manual = false) => {
@@ -2180,6 +2200,60 @@ function LpDirectoryView() {
             style={{ whiteSpace: 'nowrap', fontSize: 12, fontWeight: 600, padding: '8px 14px', borderRadius: 8, cursor: 'pointer', border: `1px solid ${sortStale ? '#111827' : '#e5e7eb'}`, background: sortStale ? '#111827' : '#fff', color: sortStale ? '#fff' : '#374151' }}>
             ⇅ Most overdue first{sortStale ? ' ✓' : ''}
           </button>
+        </div>
+      )}
+
+      {/* Compose email popup — pick sender (Meghan/William), edit recipient, AI-draft, send or save */}
+      {compose && (
+        <div onClick={() => composeBusy === '' && setCompose(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '48px 16px', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 620, boxShadow: '0 20px 60px rgba(0,0,0,.3)', overflow: 'hidden' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>Email — {compose.lp.investor}</div>
+              <button onClick={() => setCompose(null)} disabled={composeBusy !== ''} style={{ border: 'none', background: 'none', fontSize: 18, color: '#9ca3af', cursor: 'pointer' }}>✕</button>
+            </div>
+            <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>From</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {(['Meghan', 'William'] as const).map(p => (
+                    <button key={p} onClick={() => setCompose(c => c ? { ...c, from: p } : c)}
+                      style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 20, cursor: 'pointer', border: `1px solid ${compose.from === p ? '#0e7490' : '#e5e7eb'}`, background: compose.from === p ? '#0e7490' : '#fff', color: compose.from === p ? '#fff' : '#374151' }}>
+                      {p} ({p === 'William' ? 'wmeyer' : 'mberry'}@)
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>To {!compose.to && <span style={{ color: '#b45309', fontWeight: 500 }}>· no email on file — add one</span>}</label>
+                <input value={compose.to} onChange={e => setCompose(c => c ? { ...c, to: e.target.value } : c)} placeholder="investor@example.com" style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none' }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 5 }}>Subject</label>
+                <input value={compose.subject} onChange={e => setCompose(c => c ? { ...c, subject: e.target.value } : c)} style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none' }} />
+              </div>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                  <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280' }}>Message</label>
+                  <button onClick={composeAiDraft} disabled={composeBusy !== ''} style={{ fontSize: 11, fontWeight: 600, background: '#f5f3ff', color: '#7c3aed', border: '1px solid #ddd6fe', borderRadius: 5, padding: '3px 10px', cursor: composeBusy ? 'wait' : 'pointer' }}>
+                    {composeBusy === 'ai' ? '✨ Drafting…' : '✨ AI draft'}
+                  </button>
+                </div>
+                <textarea value={compose.body} onChange={e => setCompose(c => c ? { ...c, body: e.target.value } : c)} placeholder="Write a note, or click ✨ AI draft to generate one from this LP's context…" rows={9}
+                  style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, lineHeight: 1.6, padding: '10px 12px', border: '1px solid #e5e7eb', borderRadius: 6, outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+              </div>
+            </div>
+            <div style={{ padding: '12px 18px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 8, alignItems: 'center' }}>
+              <button onClick={() => setCompose(null)} disabled={composeBusy !== ''} style={{ fontSize: 12, background: 'none', color: '#6b7280', border: '1px solid #e5e7eb', borderRadius: 6, padding: '7px 14px', cursor: 'pointer' }}>Cancel</button>
+              <button onClick={composeSaveDraft} disabled={composeBusy !== ''} style={{ fontSize: 12, fontWeight: 600, background: '#fff', color: '#0e7490', border: '1px solid #a5f3fc', borderRadius: 6, padding: '7px 14px', cursor: composeBusy ? 'wait' : 'pointer' }}>
+                {composeBusy === 'draft' ? 'Saving…' : 'Save to IR Inbox'}
+              </button>
+              <button onClick={composeSend} disabled={composeBusy !== ''} style={{ fontSize: 12, fontWeight: 700, background: '#0e7490', color: '#fff', border: 'none', borderRadius: 6, padding: '7px 16px', cursor: composeBusy ? 'wait' : 'pointer' }}>
+                {composeBusy === 'send' ? 'Sending…' : `Send from ${compose.from}`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -2438,8 +2512,8 @@ function LpDirectoryView() {
                           </div>
                         ) : (
                           <div style={{ display: 'flex', gap: 6 }}>
-                            <button onClick={() => emailLp(lp)} disabled={emailingRow === lp.investor} title={lp.resolvedEmail ? `Draft an email to ${lp.resolvedEmail}` : 'Draft an email (you\'ll be asked for the address)'} style={{ fontSize: 11, fontWeight: 600, background: '#ecfeff', color: '#0e7490', border: '1px solid #a5f3fc', borderRadius: 5, padding: '4px 10px', cursor: emailingRow === lp.investor ? 'wait' : 'pointer' }}>
-                              {emailingRow === lp.investor ? '…' : '✉ Email'}
+                            <button onClick={() => emailLp(lp)} title={lp.resolvedEmail ? `Email ${lp.resolvedEmail}` : 'Compose an email (add the address in the popup)'} style={{ fontSize: 11, fontWeight: 600, background: '#ecfeff', color: '#0e7490', border: '1px solid #a5f3fc', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>
+                              ✉ Email
                             </button>
                             <button onClick={() => startEdit(lp)} style={{ fontSize: 11, background: 'none', color: '#9ca3af', border: '1px solid #e5e7eb', borderRadius: 5, padding: '4px 10px', cursor: 'pointer' }}>
                               ✎ Edit

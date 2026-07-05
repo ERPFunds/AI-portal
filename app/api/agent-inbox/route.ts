@@ -344,6 +344,57 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, draftId: r.draftId });
   }
 
+  // AI-draft an outreach and RETURN it (no send/save) so the compose popup can show it for editing.
+  if (body.action === "outreach-preview") {
+    if (!body.context) return NextResponse.json({ error: "context required" }, { status: 400 });
+    try {
+      const d = await draftLpOutreach(body.context);
+      return NextResponse.json({ subject: d.subject, body: d.bodyText });
+    } catch (e) {
+      return NextResponse.json({ error: `AI draft failed: ${String(e).slice(0, 150)}` }, { status: 500 });
+    }
+  }
+
+  // Compose-and-send from the LP directory popup: sends AS Meghan or William, logs to Salesforce,
+  // and drops a copy in team@ Sent (same as the draft-approval path).
+  if (body.action === "send-compose") {
+    const to = (body.to || "").trim();
+    if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+      return NextResponse.json({ error: "A valid recipient email is required" }, { status: 400 });
+    }
+    const content = (body.body || "").trim();
+    if (!content) return NextResponse.json({ error: "Message body is required" }, { status: 400 });
+    const subject = (body.subject || "").trim() || "ERP Industrials";
+    const sendFrom = body.from === "William" ? "wmeyer@erpfunds.com" : SEND_AS_MAILBOX;
+    const senderName = body.from === "William" ? "William Meyer" : "Meghan Berry";
+    try {
+      await sendMailAs(sendFrom, { to: [to], subject, content, contentType: "Text" });
+      // team@ Sent copy (so it shows in team@ Outlook + the app Sent section)
+      try {
+        const mime = [
+          `From: ${senderName} <${sendFrom}>`, `To: ${to}`, `Subject: ${subject}`,
+          `Date: ${new Date().toUTCString()}`, "MIME-Version: 1.0",
+          "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: 8bit", "", content,
+        ].join("\r\n");
+        const copyId = await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
+        try { await markMessageProcessed({ mailbox: TEAM_MAILBOX, messageId: copyId, internetMessageId: null, isInvestor: true, action: "sent-logged(app)" }); } catch { /* non-fatal */ }
+      } catch { /* non-fatal */ }
+      // Salesforce log + app Sent-section log
+      try {
+        await supabase.from("ir_sent").insert({ from_mailbox: sendFrom, to_email: to, subject, body: content, owner: body.from === "William" ? "William" : "Meghan" });
+      } catch { /* non-fatal */ }
+      if (salesforceConfigured()) {
+        try {
+          const { note, nextStep } = await composeContactNote({ subject, sentReply: content });
+          await logReplyNote({ contactEmail: to, subject, note, nextStep, sentDate: new Date().toISOString() });
+        } catch { /* non-fatal */ }
+      }
+      return NextResponse.json({ ok: true, sentFrom: sendFrom });
+    } catch (e) {
+      return NextResponse.json({ error: `Send failed: ${String(e).slice(0, 200)}` }, { status: 500 });
+    }
+  }
+
   // Purge DocuSign notifications from the IR inboxes (moves them to Deleted Items, recoverable).
   if (body.action === "purge-docusign") {
     const targets = (process.env.IR_DOCUSIGN_PURGE_MAILBOXES || `${TEAM_MAILBOX},${SEND_AS_MAILBOX}`)
