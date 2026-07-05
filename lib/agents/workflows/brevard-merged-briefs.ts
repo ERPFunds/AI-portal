@@ -55,8 +55,8 @@ const MONDAY_KEYWORDS = [
 ];
 
 const SUBMARKET_QUERIES = [
-  "Brevard County Florida industrial real estate 2025",
-  "Space Coast Florida industrial warehouse lease sale",
+  "Brevard County Florida industrial real estate 2026",
+  "Space Coast Florida industrial warehouse lease sale 2026",
   "Melbourne Florida industrial logistics flex space",
   "Titusville Palm Bay Cocoa industrial CRE",
   "Kennedy Space Center aerospace industrial real estate",
@@ -71,12 +71,12 @@ const SUBMARKET_KEYWORDS = [
 ];
 
 const FUND_QUERIES = [
-  "Florida industrial CRE fund raise 2025",
+  "Florida industrial CRE fund raise 2026",
   "Space Coast Florida industrial investment fund",
   "aerospace adjacent industrial real estate fund Florida",
   "EastGroup Properties Florida industrial acquisition",
   "Rockefeller Group Exeter GreenPointe Florida industrial fund",
-  "industrial real estate fund IRR benchmarks LP 2025",
+  "industrial real estate fund IRR benchmarks LP 2026",
 ];
 
 const FUND_KEYWORDS = [

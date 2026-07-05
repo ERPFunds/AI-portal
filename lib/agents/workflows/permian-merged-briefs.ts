@@ -31,9 +31,9 @@ const PERMIAN_FEEDS = [
 ];
 
 const PERMIAN_QUERIES = [
-  "Permian Basin industrial real estate 2025",
-  "Midland Odessa Texas industrial warehouse lease sale",
-  "West Texas industrial CRE investment 2025",
+  "Permian Basin industrial real estate 2026",
+  "Midland Odessa Texas industrial warehouse lease sale 2026",
+  "West Texas industrial CRE investment 2026",
   "Permian Basin IOS industrial outdoor storage",
   "Midland Texas commercial real estate market update",
 ];
