@@ -2178,7 +2178,7 @@ function LpDirectoryView() {
           )}
         </div>
       </div>
-      <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Capital Raising · CIO & Chief of Staff" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
+      <SourceBar source="Commitment Schedule (SharePoint) · Salesforce" agents="Investor Relations" synced={syncedLabel} link={data?.webUrl ? "View in SharePoint ↗" : "Connect data sources ↗"} />
 
       {/* Search + sort — filter by investor/contact/broker/group/notes; sort by outreach need */}
       {data && (

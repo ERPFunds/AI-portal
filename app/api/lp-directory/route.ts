@@ -317,8 +317,9 @@ export async function GET(req: NextRequest) {
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
             brokerFirm: "", brokerContact: "",
-            // Contact + email = the DST investor's OWN person (broker stays in the Broker/Advisor column).
-            resolvedEmail: d.directEmail || null,
+            // Prefer the investor's OWN email; fall back to the broker/advisor rep's email so the
+            // Email button still works (you're then reaching the investor via their broker).
+            resolvedEmail: d.directEmail || d.advisorEmail || null,
           });
         }
       } catch (e) {
