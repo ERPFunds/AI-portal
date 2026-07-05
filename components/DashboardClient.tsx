@@ -324,6 +324,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
       />
     ),
     lp: <LpDirectoryView />,
+    'capital-raise': <CapitalRaiseView />,
     'ir-qa': <QaReviewView />,
     'distribution-lists': <DistributionListsView />,
     drafting: <DraftingWorkspaceView />,
@@ -6332,6 +6333,209 @@ function SopGeneratorModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ─── Capital Raising (Fund IV pipeline) ─────────────────────────────────────────
+
+const CR_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
+const CR_STAGE_PROB: Record<string, number> = { 'Identified': 10, 'Contacted': 20, 'Deck/OM sent': 35, 'Diligence': 50, 'Soft-circle': 70, 'Subscription docs': 90, 'Funded': 100 }
+const CR_STAGE_COLOR: Record<string, string> = { 'Identified': '#9ca3af', 'Contacted': '#3b82f6', 'Deck/OM sent': '#0ea5e9', 'Diligence': '#8b5cf6', 'Soft-circle': '#f59e0b', 'Subscription docs': '#059669', 'Funded': '#10b981' }
+const CR_CHANNELS = ['Direct Fund IV LP', 'DST/1031']
+const CR_OWNERS = ['Meghan', 'William']
+
+type CRRow = { id: string; prospect: string; channel: string; stage: string; expected_amount: number; owner: string | null; probability: number; next_step: string | null; last_touch: string | null; notes: string | null; created_at: string; updated_at: string }
+
+const crUsd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
+const crDaysSince = (iso: string | null) => { if (!iso) return null; const d = Math.floor((Date.now() - new Date(iso + 'T00:00:00').getTime()) / 86400000); return d }
+
+function CapitalRaiseView() {
+  const [rows, setRows] = useState<CRRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<Partial<CRRow> | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/capital-raise')
+      const d = await r.json()
+      if (r.ok) setRows(d.items ?? [])
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
+
+  const save = async () => {
+    if (!editing || !editing.prospect?.trim() || saving) return
+    setSaving(true); setErr('')
+    try {
+      const method = editing.id ? 'PATCH' : 'POST'
+      const r = await fetch('/api/capital-raise', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Save failed'); return }
+      setEditing(null); await load()
+    } catch (e) { setErr(String(e)) } finally { setSaving(false) }
+  }
+
+  const remove = async (id: string) => {
+    setRows((prev) => prev.filter((x) => x.id !== id))
+    setEditing(null)
+    try { await fetch(`/api/capital-raise?id=${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch { /* ignore */ }
+  }
+
+  // KPIs — open pipeline excludes Funded (realized).
+  const open = rows.filter((r) => r.stage !== 'Funded')
+  const totalOpen = open.reduce((s, r) => s + (r.expected_amount || 0), 0)
+  const weighted = open.reduce((s, r) => s + (r.expected_amount || 0) * (r.probability || 0) / 100, 0)
+  const funded = rows.filter((r) => r.stage === 'Funded').reduce((s, r) => s + (r.expected_amount || 0), 0)
+
+  // Funnel-ordered, amount desc within stage.
+  const sorted = [...rows].sort((a, b) => (CR_STAGES.indexOf(a.stage) - CR_STAGES.indexOf(b.stage)) || (b.expected_amount - a.expected_amount))
+
+  const kpi = (label: string, value: string, sub?: string, color?: string) => (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', flex: 1, minWidth: 150 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px' }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || '#0D2D52', marginTop: 4 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+
+  return (
+    <div>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>Capital Raising</h2>
+          <p>Fund IV raise pipeline — prospects moving from first contact through funded, with a probability-weighted forecast</p>
+        </div>
+        <button onClick={() => setEditing({ stage: 'Identified', channel: 'Direct Fund IV LP', probability: 10, expected_amount: 0 })}
+          style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add prospect</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        {kpi('Weighted Pipeline', crUsd(weighted), 'Σ amount × probability (open)', '#0e7490')}
+        {kpi('Total Open Expected', crUsd(totalOpen), `${open.length} active prospect${open.length === 1 ? '' : 's'}`)}
+        {kpi('Funded', crUsd(funded), 'Closed & funded', '#10b981')}
+      </div>
+
+      {/* Stage funnel bar */}
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
+        {CR_STAGES.map((s) => {
+          const n = rows.filter((r) => r.stage === s).length
+          const amt = rows.filter((r) => r.stage === s).reduce((a, r) => a + (r.expected_amount || 0), 0)
+          return (
+            <div key={s} style={{ flex: 1, minWidth: 96, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 2, background: CR_STAGE_COLOR[s], display: 'inline-block' }} />
+                <span style={{ fontSize: 10, fontWeight: 600, color: '#6b7280' }}>{s}</span>
+              </div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2D52', marginTop: 3 }}>{n}</div>
+              <div style={{ fontSize: 10, color: '#9ca3af' }}>{crUsd(amt)}</div>
+            </div>
+          )
+        })}
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading pipeline…</div>
+      ) : rows.length === 0 ? (
+        <div style={{ background: '#fff', border: '1px dashed #d1d5db', borderRadius: 12, padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>💰</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No prospects yet</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Add your first Fund IV prospect to start tracking the raise.</div>
+        </div>
+      ) : (
+        <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: '#f9fafb', textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase' as const, letterSpacing: '.4px' }}>
+                  <th style={{ padding: '10px 12px' }}>Prospect</th>
+                  <th style={{ padding: '10px 12px' }}>Stage</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Expected</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Prob</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right' }}>Weighted</th>
+                  <th style={{ padding: '10px 12px' }}>Owner</th>
+                  <th style={{ padding: '10px 12px' }}>Next step</th>
+                  <th style={{ padding: '10px 12px' }}>Last touch</th>
+                  <th style={{ padding: '10px 12px' }} />
+                </tr>
+              </thead>
+              <tbody>
+                {sorted.map((r) => {
+                  const days = crDaysSince(r.last_touch)
+                  const stale = days != null && days > 21 && r.stage !== 'Funded'
+                  return (
+                    <tr key={r.id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ fontWeight: 600, color: '#111827' }}>{r.prospect}</div>
+                        <div style={{ fontSize: 11, color: '#9ca3af' }}>{r.channel}</div>
+                      </td>
+                      <td style={{ padding: '10px 12px' }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: CR_STAGE_COLOR[r.stage] }}>
+                          <span style={{ width: 8, height: 8, borderRadius: 2, background: CR_STAGE_COLOR[r.stage] }} />{r.stage}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 600 }}>{crUsd(r.expected_amount || 0)}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#6b7280' }}>{r.probability}%</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', color: '#0e7490', fontWeight: 600 }}>{crUsd((r.expected_amount || 0) * (r.probability || 0) / 100)}</td>
+                      <td style={{ padding: '10px 12px', color: '#374151' }}>{r.owner || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: '#374151', maxWidth: 220 }}>{r.next_step || '—'}</td>
+                      <td style={{ padding: '10px 12px', color: stale ? '#b91c1c' : '#6b7280', whiteSpace: 'nowrap' }}>
+                        {r.last_touch ? `${r.last_touch}${days != null ? ` · ${days}d` : ''}` : '—'}
+                      </td>
+                      <td style={{ padding: '10px 12px', textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <button onClick={() => setEditing(r)} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#374151' }}>Edit</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div onClick={() => setEditing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 520, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 16 }}>{editing.id ? 'Edit prospect' : 'Add prospect'}</div>
+            {(() => {
+              const set = (k: keyof CRRow, v: unknown) => setEditing((p) => ({ ...p, [k]: v }))
+              const lbl = { fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px', marginBottom: 4, display: 'block' }
+              const inp = { width: '100%', boxSizing: 'border-box' as const, fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#111827' }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div><label style={lbl}>Prospect</label><input style={inp} value={editing.prospect || ''} onChange={(e) => set('prospect', e.target.value)} placeholder="Name / firm" /></div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Channel</label><select style={inp} value={editing.channel || 'Direct Fund IV LP'} onChange={(e) => set('channel', e.target.value)}>{CR_CHANNELS.map((c) => <option key={c}>{c}</option>)}</select></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Owner</label><select style={inp} value={editing.owner || ''} onChange={(e) => set('owner', e.target.value)}><option value="">—</option>{CR_OWNERS.map((o) => <option key={o}>{o}</option>)}</select></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Stage</label><select style={inp} value={editing.stage || 'Identified'} onChange={(e) => { const s = e.target.value; setEditing((p) => ({ ...p, stage: s, probability: CR_STAGE_PROB[s] ?? p?.probability ?? 10 })) }}>{CR_STAGES.map((s) => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ width: 90 }}><label style={lbl}>Prob %</label><input type="number" min={0} max={100} style={inp} value={editing.probability ?? 0} onChange={(e) => set('probability', Number(e.target.value))} /></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Expected amount ($)</label><input type="number" min={0} style={inp} value={editing.expected_amount ?? 0} onChange={(e) => set('expected_amount', Number(e.target.value))} /></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Last touch</label><input type="date" style={inp} value={editing.last_touch || ''} onChange={(e) => set('last_touch', e.target.value)} /></div>
+                  </div>
+                  <div><label style={lbl}>Next step</label><input style={inp} value={editing.next_step || ''} onChange={(e) => set('next_step', e.target.value)} placeholder="e.g. Send OM, schedule call" /></div>
+                  <div><label style={lbl}>Notes</label><textarea style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} value={editing.notes || ''} onChange={(e) => set('notes', e.target.value)} /></div>
+                  {err && <div style={{ fontSize: 12, color: '#b91c1c' }}>{err}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <div>{editing.id && <button onClick={() => remove(editing.id!)} style={{ background: 'none', border: 'none', color: '#b91c1c', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => setEditing(null)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={save} disabled={!editing.prospect?.trim() || saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !editing.prospect?.trim() || saving ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !editing.prospect?.trim() || saving ? 'default' : 'pointer' }}>{saving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
