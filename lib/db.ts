@@ -446,7 +446,7 @@ export async function getRecentAgentRuns(limit = 40) {
                CASE WHEN uploaded_by = 'sharepoint-sync' THEN '🔄' ELSE '📄' END, 'Knowledge Base'
         FROM uploaded_files
         UNION ALL
-        SELECT 'ir', 'IR email ' || COALESCE(action, 'processed'), 'success',
+        SELECT 'ir', 'IR email ' || COALESCE(NULLIF(split_part(action, '|', 1), ''), 'processed'), 'success',
                mailbox, processed_at, NULL, '📥', 'Investor Relations'
         FROM ir_processed_messages WHERE is_investor = true
         UNION ALL
