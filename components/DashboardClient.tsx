@@ -279,7 +279,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   // ─── Views ───────────────────────────────────────────────────────────────────
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView roleKey={roleKey} userName={userName} recentRuns={recentRuns} />,
+    dashboard: <DashboardView roleKey={roleKey} userName={userName} recentRuns={recentRuns} onNavigate={setCurrentView} />,
     inbox: (
       <InboxView
         inboxItems={inboxItems}
@@ -760,8 +760,20 @@ function timeAgo(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`
 }
 
-function RightRail({ recentRuns }: { recentRuns: any[] }) {
+// Map an activity row to the portal section it came from, for the "View in …" jump.
+function activityDest(run: any): { view: string; label: string } | null {
+  const name = run.agent_name as string | undefined
+  if (name === 'Learned Q&A' || name === 'IR Q&A Miner') return { view: 'ir-qa', label: 'Learned Q&A' }
+  if (name === 'Investor Relations') return { view: 'inbox', label: 'IR Inbox' }
+  if (name === 'Knowledge Base' || name === 'Saved Search') return { view: 'kb', label: 'Knowledge Base' }
+  if (name === 'Capital Raising') return { view: 'capital-raise', label: 'Capital Raising' }
+  if (name === 'Market Intelligence') return { view: 'output-files', label: 'Research Files' }
+  return null
+}
+
+function RightRail({ recentRuns, onNavigate }: { recentRuns: any[]; onNavigate?: (view: string) => void }) {
   const [tab, setTab] = useState<'activity' | 'queue'>('activity')
+  const [selected, setSelected] = useState<any | null>(null)
 
   const tabBtn = (t: 'activity' | 'queue', label: string) => (
     <button
@@ -792,7 +804,10 @@ function RightRail({ recentRuns }: { recentRuns: any[] }) {
                 const isErr = run.status === 'error'
                 const pfx = run.prefix ? PREFIX_BADGE[run.prefix as string] : null
                 return (
-                  <div key={i} style={{ display: 'flex', gap: 9, padding: '9px 12px', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start' }}>
+                  <div key={i} onClick={() => setSelected(run)} title="Click for details"
+                    style={{ display: 'flex', gap: 9, padding: '9px 12px', borderBottom: '1px solid #f3f4f6', alignItems: 'flex-start', cursor: 'pointer' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = '#f9fafb')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
                     <div style={{ width: 26, height: 26, borderRadius: 6, background: isErr ? '#fef2f2' : '#f0f9fa', border: `1px solid ${isErr ? '#fecaca' : '#a5f3fc'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0, marginTop: 1 }}>
                       {agent.icon}
                     </div>
@@ -822,11 +837,59 @@ function RightRail({ recentRuns }: { recentRuns: any[] }) {
           </div>
         )}
       </div>
+
+      {selected && (() => {
+        const agent = selected.icon ? { icon: selected.icon, name: selected.agent_name ?? '' } : (AGENT_LABEL[selected.agent_id] ?? { icon: '🤖', name: selected.agent_id })
+        const wfLabel = WF_LABEL[selected.workflow_id] ?? selected.workflow_id
+        const isErr = selected.status === 'error'
+        const dest = activityDest(selected)
+        let when = ''
+        try { when = new Date(selected.created_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) } catch { when = String(selected.created_at ?? '') }
+        return (
+          <div onClick={() => setSelected(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+            <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 460, maxWidth: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <div style={{ width: 34, height: 34, borderRadius: 8, background: isErr ? '#fef2f2' : '#f0f9fa', border: `1px solid ${isErr ? '#fecaca' : '#a5f3fc'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, flexShrink: 0 }}>{agent.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2D52' }}>{wfLabel}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280' }}>{agent.name}</div>
+                </div>
+                <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#9ca3af', fontSize: 18, cursor: 'pointer', lineHeight: 1 }}>✕</button>
+              </div>
+
+              {selected.summary && (
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.4px', color: '#9ca3af', marginBottom: 4 }}>Details</div>
+                  <div style={{ fontSize: 13, color: '#111827', lineHeight: 1.5, wordBreak: 'break-word' }}>{selected.summary}</div>
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 20, marginBottom: dest || onNavigate ? 16 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.4px', color: '#9ca3af', marginBottom: 4 }}>When</div>
+                  <div style={{ fontSize: 12, color: '#374151' }}>{when}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.4px', color: '#9ca3af', marginBottom: 4 }}>Status</div>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: isErr ? '#dc2626' : '#059669' }}>{isErr ? 'Error' : 'Success'}</span>
+                </div>
+              </div>
+
+              {dest && onNavigate && (
+                <button onClick={() => { onNavigate(dest.view); setSelected(null) }}
+                  style={{ width: '100%', padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+                  View in {dest.label} →
+                </button>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
 
-function DashboardView({ roleKey, userName, recentRuns }: { roleKey: RoleKey; userName: string; recentRuns: any[] }) {
+function DashboardView({ roleKey, userName, recentRuns, onNavigate }: { roleKey: RoleKey; userName: string; recentRuns: any[]; onNavigate?: (view: string) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -999,7 +1062,7 @@ function DashboardView({ roleKey, userName, recentRuns }: { roleKey: RoleKey; us
       </div>
 
       {/* Right Rail — Activity / Queue */}
-      <RightRail recentRuns={recentRuns} />
+      <RightRail recentRuns={recentRuns} onNavigate={onNavigate} />
     </div>
   )
 }
