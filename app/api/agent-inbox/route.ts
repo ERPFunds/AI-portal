@@ -16,7 +16,7 @@ import {
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
-import { markMessageProcessed } from "@/lib/db";
+import { markMessageProcessed, logAgentRun } from "@/lib/db";
 import { draftLpOutreach, type LpOutreachInput } from "@/lib/agents/ir/lp-outreach";
 
 export const dynamic = "force-dynamic";
@@ -389,6 +389,7 @@ export async function POST(req: NextRequest) {
           await logReplyNote({ contactEmail: to, subject, note, nextStep, sentDate: new Date().toISOString() });
         } catch { /* non-fatal */ }
       }
+      try { await logAgentRun({ agentId: "ir", workflowId: "ir-reply", status: "success", summary: `Reply sent to ${to} — ${subject}`.slice(0, 200) }); } catch { /* best-effort */ }
       return NextResponse.json({ ok: true, sentFrom: sendFrom });
     } catch (e) {
       return NextResponse.json({ error: `Send failed: ${String(e).slice(0, 200)}` }, { status: 500 });
@@ -466,6 +467,8 @@ export async function POST(req: NextRequest) {
         owner: ownerOf([sendFrom]),
       });
     } catch { /* non-fatal */ }
+    // Feed the AI Command Center activity log.
+    try { await logAgentRun({ agentId: "ir", workflowId: "ir-reply", status: "success", summary: `Reply sent to ${detail.to[0] ?? ""} — ${detail.subject}`.slice(0, 200) }); } catch { /* best-effort */ }
 
     // Workflow #3: AI-driven note from what was actually sent, logged to the Salesforce contact(s).
     let note = "note-skip(no SF creds)";

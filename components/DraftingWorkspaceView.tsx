@@ -64,7 +64,7 @@ function SenderChip({ email }: { email: string | null }) {
   )
 }
 
-type DocType = 'freeform' | 'om-section' | 'lp-memo' | 'deal-summary' | 'email-draft' | 'market-brief'
+type DocType = 'freeform' | 'om-section' | 'lp-memo' | 'deal-summary' | 'email-draft' | 'market-brief' | 'newsletter'
 
 const DOC_TYPES: { id: DocType; label: string; icon: string; placeholder: string }[] = [
   {
@@ -232,7 +232,7 @@ export default function DraftingWorkspaceView() {
         body: JSON.stringify({
           docType,
           prompt: prompt.trim(),
-          sources: [...(useKb ? ['kb'] : []), ...(useNews ? ['news'] : [])],
+          sources: useKb ? ['kb'] : [],
           kbFileIds: [...selectedKbFileIds],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',

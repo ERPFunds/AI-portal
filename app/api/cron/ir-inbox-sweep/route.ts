@@ -17,7 +17,7 @@ import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-r
 import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
 import { saveDraftWithAttachments } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
-import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
+import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun } from "@/lib/db";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
@@ -280,6 +280,16 @@ async function handleMailbox(
       isInvestor: true,
       action: actions.join("|"),
     });
+    // Feed the AI Command Center activity log.
+    try {
+      const who = `${verdict.contact.firstName ?? ""} ${verdict.contact.lastName}`.trim() || fromAddr;
+      await logAgentRun({
+        agentId: "ir",
+        workflowId: route === "escalate" ? "ir-escalate" : "ir-draft",
+        status: "success",
+        summary: `${route === "escalate" ? "Escalated" : "Drafted reply for"} ${who} — ${m.subject}`.slice(0, 200),
+      });
+    } catch { /* logging is best-effort */ }
     details.push(`INVESTOR ${m.fromAddress} → ${actions.join(", ")}`);
   }
 

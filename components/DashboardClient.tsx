@@ -737,6 +737,9 @@ const WF_LABEL: Record<string, string> = {
   'attachment-filer':        'Attachment Filer',
   'dialogue-logger':         'Dialogue Log',
   'lp-onboarding':           'LP Onboarding',
+  'ir-draft':                'IR Draft',
+  'ir-escalate':             'IR Escalation',
+  'ir-reply':                'Reply Sent',
 }
 
 const PREFIX_BADGE: Record<string, { label: string; bg: string; color: string; border: string }> = {
