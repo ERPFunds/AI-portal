@@ -22,10 +22,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const q: string = (body.q ?? "").toString().trim();
   if (!q) return NextResponse.json({ error: "query required" }, { status: 400 });
+  // Optional category scoping (e.g. SOP-only search). null/absent = across the whole embedded KB.
+  const categories: string[] | null = Array.isArray(body.categories) && body.categories.length ? body.categories.map(String) : null;
 
   let chunks;
   try {
-    chunks = await retrieveChunks(q, null, 10); // null = across the whole embedded KB
+    chunks = await retrieveChunks(q, categories, 10);
   } catch (e) {
     return NextResponse.json({ error: `Search failed: ${String(e).slice(0, 200)}` }, { status: 500 });
   }

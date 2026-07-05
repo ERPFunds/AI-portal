@@ -12,8 +12,10 @@ export const maxDuration = 300;
 const SYNC_MAP: { folder: string; category: string }[] = [
   { folder: "Investor Relations", category: "Investor Relations (SharePoint)" },
   { folder: "ERP Funds IV", category: "Capital KB" },
+  { folder: "SOPs/Claude Training and Assets", category: "Claude Training and Assets" },
+  { folder: "SOPs/Agent Working Guides", category: "Agent Working Guides" },
 ];
-const MAX_DEPTH = 3;
+const MAX_DEPTH = 4;
 
 interface SPFile { name: string; mimeType: string | null; downloadUrl: string | null; id: string }
 
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
         else if (item.folder && depth < MAX_DEPTH) await walk([...pathSegments, String(item.name)], depth + 1);
       }
     }
-    try { await walk([folder], 1); } catch (e) { errors.push(`${folder}: walk ${String(e).slice(0, 80)}`); }
+    try { await walk(folder.split("/"), 1); } catch (e) { errors.push(`${folder}: walk ${String(e).slice(0, 80)}`); }
 
     for (const f of files) {
       const row = rowByName.get(f.name);

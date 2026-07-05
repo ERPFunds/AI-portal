@@ -14,9 +14,11 @@ const anthropic = new Anthropic();
 const SYNC_MAP: { folder: string; category: string }[] = [
   { folder: "Investor Relations", category: "Investor Relations (SharePoint)" },
   { folder: "ERP Funds IV", category: "Capital KB" },
+  { folder: "SOPs/Claude Training and Assets", category: "Claude Training and Assets" },
+  { folder: "SOPs/Agent Working Guides", category: "Agent Working Guides" },
 ];
 const SYNC_TAG = "sharepoint-sync"; // uploaded_by marker for sync-managed rows
-const MAX_DEPTH = 3;
+const MAX_DEPTH = 4;
 const REFRESH_WINDOW_MS = 8 * 24 * 60 * 60 * 1000; // re-upload if a row expires within 8 days
 const EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 
@@ -80,7 +82,7 @@ async function runSync(dryRun: boolean): Promise<{ status: number; body: any }> 
         }
       }
     }
-    await walk([spFolder], 1);
+    await walk(spFolder.split("/"), 1);
 
     // ── Existing KB rows for this category (proven Supabase-client path) ──────────
     const { data: existingData, error: readErr } = await supabase

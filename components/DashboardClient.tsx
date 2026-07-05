@@ -6332,6 +6332,60 @@ function SopGeneratorModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   )
 }
 
+const SOP_SEARCH_CATEGORIES = ['Claude Training and Assets', 'Agent Working Guides', 'Dashboard & Portal How-Tos']
+
+function SOPSemanticSearch() {
+  const [q, setQ] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [res, setRes] = useState<{ answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
+  const [err, setErr] = useState('')
+
+  const run = async () => {
+    if (!q.trim() || loading) return
+    setLoading(true); setErr(''); setRes(null)
+    try {
+      const r = await fetch('/api/kb/search', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ q: q.trim(), categories: SOP_SEARCH_CATEGORIES }) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Search failed'); return }
+      setRes(d)
+    } catch (e) { setErr(String(e)) } finally { setLoading(false) }
+  }
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ position: 'relative', flex: 1 }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14, pointerEvents: 'none' }}>💬</span>
+          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') run() }}
+            placeholder="Ask how to do something — e.g. 'how do I handle an IR escalation?' or 'what tone for the newsletter?'"
+            style={{ width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '10px 12px 10px 34px', border: '1px solid #e5e7eb', borderRadius: 8, outline: 'none', background: '#fff', color: '#111827' }} />
+        </div>
+        <button onClick={run} disabled={!q.trim() || loading}
+          style={{ padding: '10px 18px', borderRadius: 8, border: 'none', background: !q.trim() || loading ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !q.trim() || loading ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
+          {loading ? 'Searching…' : 'Ask SOPs'}
+        </button>
+      </div>
+      {err && <div style={{ marginTop: 10, fontSize: 12, color: '#b91c1c' }}>{err}</div>}
+      {res && (
+        <div style={{ marginTop: 12, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px' }}>
+          <div style={{ fontSize: 13, color: '#111827', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{res.answer}</div>
+          {res.sources.length > 0 && (
+            <div style={{ marginTop: 12, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>From these guides</div>
+              {res.sources.map((s, i) => (
+                <div key={i} style={{ marginBottom: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#0e7490' }}>📄 {s.filename}{s.category ? ` · ${s.category}` : ''}</div>
+                  <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.45, marginTop: 2 }}>{s.snippet}…</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SOPsView() {
   const [query, setQuery] = useState('')
   const [genOpen, setGenOpen] = useState(false)
@@ -6350,6 +6404,7 @@ function SOPsView() {
         <span style={{ fontSize: 13 }}>📌</span>
         <span style={{ fontSize: 12, color: '#92400e' }}>SOPs here cover two things: <strong>how to work with each AI agent</strong> (submitting tasks, reviewing outputs, escalation handling) and <strong>how to update portal dashboards</strong> (data entry, view configuration, connections). They are also indexed into agent knowledge bases so agents follow the same procedures.</span>
       </div>
+      <SOPSemanticSearch />
       <div style={{ position: 'relative', marginBottom: 16 }}>
         <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', fontSize: 13, color: '#9ca3af' }}>🔍</span>
         <input
