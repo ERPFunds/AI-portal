@@ -60,11 +60,11 @@ const FEEDS = [
 ];
 
 const APIFY_QUERIES = [
-  "Permian Basin industrial real estate sale 2025",
-  "Midland Odessa industrial warehouse lease sale",
+  "Permian Basin industrial real estate sale 2026",
+  "Midland Odessa industrial warehouse lease sale 2026",
   "Permian Basin service yard industrial outdoor storage",
-  "Texas industrial CRE submarket absorption vacancy 2025",
-  "West Texas industrial sale comp 2025",
+  "Texas industrial CRE submarket absorption vacancy 2026",
+  "West Texas industrial sale comp 2026",
 ];
 
 // Must match at least one geographic keyword — topic-only keywords are not sufficient
