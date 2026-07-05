@@ -28,6 +28,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '🧾', label: 'Accounting',          view: 'accounting' },
     { section: 'Admin' },
     { icon: '✍️', label: 'Signing Queue',       view: 'signing-queue' },
+    { icon: '🪪', label: 'Contact Capture',      view: 'contact-capture' },
     { section: 'Platform' },
     { icon: '📚', label: 'Knowledge Base',      view: 'kb' },
     { icon: '📋', label: 'SOPs',                view: 'sops' },

@@ -331,6 +331,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     acquisition: <AcquisitionView />,
     'acquisition-checklist': <AcquisitionChecklistView />,
     'signing-queue': <SigningQueueView />,
+    'contact-capture': <ContactCaptureView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
     fundperf: <StubView title="Fund Performance" icon="📈" desc="Detailed fund-level IRR, cash-on-cash, and waterfall analysis" />,
@@ -4488,6 +4489,91 @@ function AcquisitionChecklistView() {
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Admin · Contact Auto-Capture (Agent 3 · WF10) ──────────────────────────────
+
+type CapturedContact = {
+  name: string; company: string; email: string; phone: string
+  category: 'Broker' | 'Vendor' | 'Advisor' | 'Other'
+  source: string; confidence: 'High' | 'Medium' | 'Low'; status: 'Needs review' | 'Added'
+}
+
+const CAPTURED_CONTACTS: CapturedContact[] = [
+  { name: 'Ryan Delgado',    company: 'Stream Realty Partners',   email: 'rdelgado@streamrealty.com',   phone: '(432) 555-0142', category: 'Broker',  source: 'Re: Odessa industrial listing · Today 10:22 AM', confidence: 'High',   status: 'Needs review' },
+  { name: 'Tanya Brooks',    company: 'Gulf Coast Environmental',  email: 'tbrooks@gcenv.com',           phone: '(321) 555-0198', category: 'Vendor',  source: 'Phase I report — 1201 Cidco Rd · Today 9:05 AM',  confidence: 'High',   status: 'Needs review' },
+  { name: 'David Okafor',    company: 'Okafor Tax Advisory',       email: 'david@okafortax.com',         phone: '(214) 555-0177', category: 'Advisor', source: 'Fund IV K-1 timing question · Yesterday 3:41 PM',  confidence: 'Medium', status: 'Needs review' },
+  { name: 'Priya Nair',      company: 'CBRE',                      email: 'priya.nair@cbre.com',         phone: '(432) 555-0110', category: 'Broker',  source: 'Comps for Permian submarket · Yesterday 1:12 PM', confidence: 'High',   status: 'Needs review' },
+  { name: 'Marcus Feldman',  company: 'Feldman Title & Escrow',    email: 'mfeldman@feldmantitle.com',   phone: '(321) 555-0163', category: 'Vendor',  source: 'Title commitment — Kermit Hwy · Jul 2, 4:18 PM',  confidence: 'Medium', status: 'Added' },
+  { name: 'Ellen Ross',      company: '(unknown — Gmail)',         email: 'ellen.ross82@gmail.com',      phone: '—',              category: 'Other',   source: 'Intro / networking · Jul 1, 11:50 AM',            confidence: 'Low',    status: 'Needs review' },
+]
+
+const categoryTone: Record<CapturedContact['category'], 'blue' | 'yellow' | 'green' | 'gray'> = {
+  Broker: 'blue', Vendor: 'yellow', Advisor: 'green', Other: 'gray',
+}
+const confidenceTone: Record<CapturedContact['confidence'], 'green' | 'yellow' | 'red'> = {
+  High: 'green', Medium: 'yellow', Low: 'red',
+}
+
+function ContactCaptureView() {
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }
+  const td: React.CSSProperties = { padding: '11px 14px', fontSize: 12, color: '#374151', borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' }
+  const pending = CAPTURED_CONTACTS.filter(c => c.status === 'Needs review').length
+  const cards: { label: string; value: string | number }[] = [
+    { label: 'Pending review', value: pending },
+    { label: 'Added to Salesforce this week', value: 9 },
+    { label: 'Auto-categorized', value: '94%' },
+    { label: 'Duplicates skipped', value: 12 },
+  ]
+  return (
+    <div>
+      <div className="page-header"><h2>🪪 Contact Auto-Capture</h2><p>When email arrives from a sender not yet in Salesforce, the agent parses the signature and stages a categorized contact record — brokers, vendors, and advisors outside the LP/capital-raise flow — for one-click confirmation</p></div>
+      <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF10 · Generic Contact Auto-Capture (lower priority)" />
+      <SourceBar source="Outlook · Email signature parser → Salesforce" agents="Executive Assistant Agent" synced="Live — on inbound from unknown sender" link="Open in Salesforce ↗" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, margin: '16px 0' }}>
+        {cards.map(c => (
+          <div key={c.label} className="card" style={{ margin: 0, padding: '14px 16px' }}>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D2D52' }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{c.label}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>{['Contact', 'Company', 'Category', 'Phone', 'Detected in', 'Confidence', ''].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {CAPTURED_CONTACTS.map((c, i) => (
+              <tr key={i}>
+                <td style={td}>
+                  <div style={{ fontWeight: 600, color: '#111827' }}>{c.name}</div>
+                  <div style={{ fontSize: 11, color: '#9ca3af' }}>{c.email}</div>
+                </td>
+                <td style={td}>{c.company}</td>
+                <td style={td}><StatusPill label={c.category} tone={categoryTone[c.category]} /></td>
+                <td style={{ ...td, whiteSpace: 'nowrap' }}>{c.phone}</td>
+                <td style={{ ...td, color: '#9ca3af' }}>{c.source}</td>
+                <td style={td}><StatusPill label={c.confidence} tone={confidenceTone[c.confidence]} /></td>
+                <td style={{ ...td, textAlign: 'right', whiteSpace: 'nowrap' }}>
+                  {c.status === 'Added'
+                    ? <StatusPill label="✓ In Salesforce" tone="green" />
+                    : (
+                      <span style={{ display: 'inline-flex', gap: 6 }}>
+                        <button style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: '#0D2D52', border: 'none', borderRadius: 6, padding: '5px 12px', cursor: 'pointer' }}>Add to Salesforce</button>
+                        <button style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '5px 10px', cursor: 'pointer' }}>Dismiss</button>
+                      </span>
+                    )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   )
