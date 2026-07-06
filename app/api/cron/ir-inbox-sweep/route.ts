@@ -30,12 +30,19 @@ const SUB_DRAFTS = "Forwarded Drafts"; // routine — a draft reply is prepared 
 const TOP_PER_MAILBOX = 25;
 
 // Comma-separated list of mailboxes to sweep, e.g. "mberry@erpfunds.com,wmeyer@erpfunds.com".
-// Empty by default so nothing runs until explicitly configured.
+// Empty by default so nothing runs until explicitly configured. Once active, BOTH IR leads'
+// inboxes (Meghan + William) are always swept so each gets their own drafts.
 function sweepMailboxes(): string[] {
-  return (process.env.IR_SWEEP_MAILBOXES || "")
+  const configured = (process.env.IR_SWEEP_MAILBOXES || "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  if (configured.length === 0) return []; // safe default: dormant until configured
+  const seen = new Set(configured.map((m) => m.toLowerCase()));
+  for (const required of ["mberry@erpfunds.com", "wmeyer@erpfunds.com"]) {
+    if (!seen.has(required)) { configured.push(required); seen.add(required); }
+  }
+  return configured;
 }
 
 // Is "now" within 8am–8pm Central Time? (handles CDT/CST via the IANA zone)
