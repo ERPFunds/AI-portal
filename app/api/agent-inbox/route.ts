@@ -53,6 +53,7 @@ export interface AgentInboxItem {
   owner: "Meghan" | "William" | null; // which IR lead's thread this belongs to
   originalReceivedISO: string | null;  // when the inbound email this draft replies to arrived
   sentBody?: string;                    // full body for a sent reply (folderKind === "sent")
+  mailbox: string;                      // the mailbox this item lives in (for send/read actions)
 }
 
 // Which IR lead a message belongs to, from its recipients (the mailbox the investor wrote to).
@@ -99,10 +100,12 @@ function statusForFolder(kind: AgentInboxItem["folderKind"]): ItemStatus {
 function toItem(
   m: MailItem,
   folderPath: string,
-  kind: AgentInboxItem["folderKind"]
+  kind: AgentInboxItem["folderKind"],
+  mailbox: string = TEAM_MAILBOX
 ): AgentInboxItem {
   const isDraft = kind === "draft" || m.isDraft;
   return {
+    mailbox,
     id: m.id,
     from: m.fromAddress,
     fromName: m.fromName,
@@ -133,7 +136,8 @@ export async function GET(req: NextRequest) {
   const messageId = req.nextUrl.searchParams.get("message");
   if (messageId) {
     try {
-      const m = await getMessageBody(TEAM_MAILBOX, messageId);
+      const mb = req.nextUrl.searchParams.get("mailbox") || TEAM_MAILBOX;
+      const m = await getMessageBody(mb, messageId);
       return NextResponse.json({ id: messageId, subject: m.subject, to: m.to, body: m.bodyText });
     } catch (err) {
       return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -146,8 +150,9 @@ export async function GET(req: NextRequest) {
   const originalOf = req.nextUrl.searchParams.get("original");
   if (originalOf) {
     try {
-      const draft = await getMessageBody(TEAM_MAILBOX, originalOf);
-      const searchMailboxes = [TEAM_MAILBOX, SEND_AS_MAILBOX].filter((v, i, a) => a.indexOf(v) === i);
+      const draftMailbox = req.nextUrl.searchParams.get("mailbox") || TEAM_MAILBOX;
+      const draft = await getMessageBody(draftMailbox, originalOf);
+      const searchMailboxes = [draftMailbox, TEAM_MAILBOX, SEND_AS_MAILBOX].filter((v, i, a) => a.indexOf(v) === i);
       const mine = new Set(searchMailboxes.map((a) => a.toLowerCase()));
       type Hit = { id: string; subject: string; from: string; fromName: string | null; receivedDateTime: string };
       let hit: Hit | null = null;
@@ -251,14 +256,23 @@ export async function GET(req: NextRequest) {
     const draftMonths = Math.min(Math.max(Number(process.env.IR_DRAFTS_MONTHS) || 3, 1), 24);
     const draftsSince = new Date();
     draftsSince.setMonth(draftsSince.getMonth() - draftMonths);
-    const drafts = await listFolderMessagesSince(
-      TEAM_MAILBOX,
-      "drafts",
-      draftsSince.toISOString().split(".")[0] + "Z",
-      "lastModifiedDateTime",
-      DRAFTS_TOP
-    );
-    drafts.forEach((m) => items.push(toItem(m, "Drafts", "draft")));
+    // Drafts now live in each IR lead's OWN mailbox (threaded replies created there), so read Drafts
+    // across all of them (team@ kept for any legacy drafts). Owner falls back to the mailbox.
+    const draftMailboxes = (process.env.IR_DRAFT_MAILBOXES || `${SEND_AS_MAILBOX},wmeyer@erpfunds.com,${TEAM_MAILBOX}`)
+      .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const draftSinceIso = draftsSince.toISOString().split(".")[0] + "Z";
+    let draftTotal = 0;
+    for (const mb of draftMailboxes) {
+      try {
+        const drafts = await listFolderMessagesSince(mb, "drafts", draftSinceIso, "lastModifiedDateTime", DRAFTS_TOP);
+        for (const m of drafts) {
+          const it = toItem(m, "Drafts", "draft", mb);
+          if (!it.owner) it.owner = mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
+          items.push(it);
+          draftTotal++;
+        }
+      } catch { /* skip a mailbox we can't read */ }
+    }
 
     // Attribute each draft to an IR lead (Meghan/William) + surface when the email it replies to
     // arrived, by matching the draft's conversation to the inbound message in the synced folders.
@@ -319,6 +333,7 @@ export async function GET(req: NextRequest) {
           owner: (r.owner as "Meghan" | "William" | null) ?? null,
           originalReceivedISO: null,
           sentBody: (r.body as string) || "",
+          mailbox: (r.from_mailbox as string) || TEAM_MAILBOX,
         });
         sentCount++;
       }
@@ -330,7 +345,7 @@ export async function GET(req: NextRequest) {
       folders,
       items,
       itemCount: items.length,
-      draftCount: drafts.length,
+      draftCount: draftTotal,
       needsReviewCount: items.filter((i) => i.status === "needs-review").length,
       syncedAt: new Date().toISOString(),
       diagnostics,
@@ -353,7 +368,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string;
-    ai?: boolean; context?: LpOutreachInput;
+    ai?: boolean; context?: LpOutreachInput; mailbox?: string;
   };
   try {
     body = await req.json();
@@ -423,9 +438,11 @@ export async function POST(req: NextRequest) {
     const htmlBody = text
       ? text.split(/\n{2,}/).map((p) => `<p>${p.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</p>`).join("")
       : "<p></p>";
-    // Tag the signer so the draft sorts to Meghan/William in the IR Inbox (default Meghan).
+    // Tag the signer so the draft sorts to Meghan/William in the IR Inbox (default Meghan), and put
+    // it in that person's OWN Drafts (mberry@/wmeyer@) so it shows in their Outlook.
     const signer = body.from === "William" ? "William" : "Meghan";
-    const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: TEAM_MAILBOX, subject, htmlBody, categories: [`IR: ${signer}`] });
+    const draftMailbox = signer === "William" ? "wmeyer@erpfunds.com" : SEND_AS_MAILBOX;
+    const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: draftMailbox, subject, htmlBody, categories: [`IR: ${signer}`] });
     if (!r.success) return NextResponse.json({ error: r.message || "Draft failed" }, { status: 500 });
     return NextResponse.json({ ok: true, draftId: r.draftId });
   }
@@ -507,11 +524,11 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    // Read the draft's recipients/subject/body. The reply is SENT AS a person's own mailbox
-    // (default mberry@) — not from the team hub where it was triaged/drafted — so it comes from
-    // Meghan. We compose a fresh message (edited text wins over the draft body), then remove the
-    // now-obsolete team@ draft.
-    const detail = await getMessageBody(TEAM_MAILBOX, body.id);
+    // The draft lives in the IR lead's own mailbox (or team@ for legacy drafts) — read it from
+    // there. The reply is SENT AS a person's own mailbox (default mberry@). We compose a fresh
+    // message (edited text wins over the draft body), then remove the now-obsolete draft.
+    const draftMailbox = body.mailbox || TEAM_MAILBOX;
+    const detail = await getMessageBody(draftMailbox, body.id);
     if (!detail.to.length) {
       return NextResponse.json({ error: "Draft has no recipient" }, { status: 400 });
     }
@@ -519,8 +536,8 @@ export async function POST(req: NextRequest) {
     const content = typeof body.body === "string" && body.body.trim() ? body.body : detail.bodyText;
 
     await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text" });
-    // Clean up the draft that lived in the team hub (best-effort).
-    try { await deleteMessage(TEAM_MAILBOX, body.id); } catch { /* leave it if delete fails */ }
+    // Clean up the draft where it lived (best-effort).
+    try { await deleteMessage(draftMailbox, body.id); } catch { /* leave it if delete fails */ }
 
     // Drop a faithful copy into team@'s Sent Items so BOTH the app and team@ Outlook show what
     // Meghan and William send (the live send saved to the sender's own Sent; team@ is the shared view).

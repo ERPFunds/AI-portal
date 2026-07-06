@@ -15,10 +15,10 @@ import {
   deleteMessage,
   deleteFolder,
 } from "@/lib/agents/ir/graph-mailbox";
-import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
+import { createReplyDraft } from "@/lib/agents/ir/graph-mail";
 import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
 import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
-import { saveDraftWithAttachments } from "@/lib/agents/ir/draft-attachments";
+import { addAttachmentsToDraft } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
 import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun } from "@/lib/db";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
@@ -236,6 +236,10 @@ async function handleMailbox(
     //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
     try {
       let newDraftId: string | null = null;
+      const cats = [`IR: ${signer.split(" ")[0]}`];
+      // Create the reply as a THREADED draft in THIS mailbox (Meghan's for mberry@, William's for
+      // wmeyer@) — created against the original BEFORE it's filed (step 4) — so it shows in their
+      // own Outlook Drafts with the original email beneath it.
       if (triage.isDueDiligence) {
         const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
         const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody });
@@ -244,33 +248,23 @@ async function handleMailbox(
           const bytes = await getAnthropicFileBytes(a.fileId);
           if (bytes) atts.push({ filename: a.filename, mimeType: a.mimeType || "application/octet-stream", bytes });
         }
-        const r = await saveDraftWithAttachments({
-          mailboxEmail: TEAM_INBOX,
-          toEmail: fromAddr,
-          subject: dd.draftSubject,
-          htmlBody: dd.draftHtml || triage.draftHtml,
-          attachments: atts,
-          categories: [`IR: ${signer.split(" ")[0]}`],
-        });
+        const r = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: dd.draftHtml || triage.draftHtml, categories: cats });
         newDraftId = r.draftId;
-        actions.push(`dd-drafted(${r.attached.length} attached${r.failed.length ? `, ${r.failed.length} failed` : ""})`);
+        if (r.draftId && atts.length) {
+          const att = await addAttachmentsToDraft(mailbox, r.draftId, atts);
+          actions.push(`dd-drafted(${att.attached.length} attached${att.failed.length ? `, ${att.failed.length} failed` : ""})`);
+        } else actions.push(r.success ? "dd-drafted" : `draft-fail(${(r.message || "").slice(0, 40)})`);
       } else {
-        const d = await saveDraftToOutlook({
-          toEmail: fromAddr,
-          mailboxEmail: TEAM_INBOX,
-          subject: triage.draftSubject || `Re: ${m.subject}`,
-          htmlBody: triage.draftHtml,
-          categories: [`IR: ${signer.split(" ")[0]}`],
-        });
+        const d = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: triage.draftHtml, categories: cats });
         newDraftId = d.draftId;
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
       }
-      // Escalation drafts go into the Escalate folder so they sit with the escalation, not the
-      // general Drafts queue. (Routine drafts stay in Drafts, awaiting approval.)
+      // Escalation drafts sit with the escalation (moved into THIS mailbox's Escalate folder — still
+      // threaded). Routine drafts stay in this mailbox's Drafts, awaiting review/send.
       if (route === "escalate" && newDraftId) {
-        if (teamEscalateFolderId === undefined) teamEscalateFolderId = await ensureSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
-        if (teamEscalateFolderId) {
-          try { await moveMessage(TEAM_INBOX, newDraftId, teamEscalateFolderId); actions.push("draft→escalate"); }
+        if (escalateFolderId === undefined) escalateFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_ESCALATE);
+        if (escalateFolderId) {
+          try { await moveMessage(mailbox, newDraftId, escalateFolderId); actions.push("draft→escalate"); }
           catch (e) { actions.push(`draft-move-fail(${String(e).slice(0, 40)})`); }
         }
       }

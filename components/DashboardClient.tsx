@@ -1236,6 +1236,7 @@ interface AgentInboxItem {
   owner?: 'Meghan' | 'William' | null
   originalReceivedISO?: string | null
   sentBody?: string
+  mailbox?: string
 }
 interface AgentInboxFolder { name: string; kind: AgentInboxItem['folderKind']; count: number }
 interface AgentInboxResponse {
@@ -1397,7 +1398,7 @@ function InboxView({
       const res = await fetch('/api/agent-inbox', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'send', id: item.id, body: draftEdit, from }),
+        body: JSON.stringify({ action: 'send', id: item.id, body: draftEdit, from, mailbox: item.mailbox }),
       })
       const json = await res.json()
       if (!res.ok) { setSendMsg(`Send failed: ${json.error || res.status}`) }
@@ -1500,7 +1501,7 @@ function InboxView({
     if (selected?.folderKind === 'sent') { setBodyCache((c) => ({ ...c, [id]: selected.sentBody ?? '' })); return }
     let cancelled = false
     setBodyLoading(true)
-    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}`)
+    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}${selected?.mailbox ? `&mailbox=${encodeURIComponent(selected.mailbox)}` : ''}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [id]: d.body })) })
       .catch(() => {})
@@ -1524,7 +1525,7 @@ function InboxView({
     const id = selected?.id
     if (!selected?.isDraft || !id || originalCache[id] !== undefined) return
     let cancelled = false
-    fetch(`/api/agent-inbox?original=${encodeURIComponent(id)}`)
+    fetch(`/api/agent-inbox?original=${encodeURIComponent(id)}${selected.mailbox ? `&mailbox=${encodeURIComponent(selected.mailbox)}` : ''}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (!cancelled) setOriginalCache((c) => ({ ...c, [id]: d?.original ?? null })) })
       .catch(() => { if (!cancelled) setOriginalCache((c) => ({ ...c, [id]: null })) })

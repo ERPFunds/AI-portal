@@ -47,10 +47,22 @@ export async function saveDraftWithAttachments(params: {
   const draftId: string = draft.id;
   const webLink: string | null = draft.webLink ?? null;
 
+  const { attached, failed } = await addAttachmentsToDraft(params.mailboxEmail, draftId, params.attachments);
+  return { draftId, webLink, attached, failed };
+}
+
+/** Attach files to an existing draft (inline under ~3MB, upload session above). Non-fatal per file. */
+export async function addAttachmentsToDraft(
+  mailboxEmail: string,
+  draftId: string,
+  attachments: DraftAttachment[]
+): Promise<{ attached: string[]; failed: string[] }> {
+  const t = await token();
+  const base = `${GRAPH}/users/${encodeURIComponent(mailboxEmail)}`;
   const attached: string[] = [];
   const failed: string[] = [];
 
-  for (const a of params.attachments) {
+  for (const a of attachments) {
     try {
       if (a.bytes.length <= INLINE_LIMIT) {
         const r = await fetch(`${base}/messages/${draftId}/attachments`, {
@@ -91,5 +103,5 @@ export async function saveDraftWithAttachments(params: {
       failed.push(a.filename);
     }
   }
-  return { draftId, webLink, attached, failed };
+  return { attached, failed };
 }
