@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { generatePermianMondayBrief } from "@/lib/agents/workflows/permian-merged-briefs";
-import { logAgentRun, getSeenNewsletterArticleUrls, recordNewsletterRun } from "@/lib/db";
+import { logAgentRun, getSeenNewsletterArticleUrls, archiveBrief } from "@/lib/db";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 export const maxDuration = 300;
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     const { subject, htmlBody, summary, newsItems } = await generatePermianMondayBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     saveNewsletterToSharePoint({ market: "Permian", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
-    recordNewsletterRun({ agentName: "permian-weekly", subject, articles: newsItems.map(n => ({ url: n.link, title: n.title, source: n.source, pubDate: n.pubDate })) }).catch(() => {});
+    archiveBrief({ agentName: "permian-weekly", subject, html: htmlBody, narrative: summary, macro: {}, news: newsItems }).catch(() => {});
     logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
     return NextResponse.json({ success: emailResult.success, period, market, subject, articles: newsItems.length });
   } catch (err) {

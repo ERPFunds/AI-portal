@@ -15,6 +15,7 @@ const AGENT_LABELS: Record<string, string> = {
   "brevard-fund-landscape":   "Brevard Fund Landscape",
   "brevard-vacancy":          "Brevard Vacancy Report",
   "permian-brief":            "Permian Weekly Market Update",
+  "permian-weekly":           "Permian Weekly Market Update",
   "permian-submarket-watch":  "Permian Submarket Watch",
   "permian-fund-landscape":   "Permian Fund Landscape",
   "permian-vacancy":          "Permian Vacancy Report",

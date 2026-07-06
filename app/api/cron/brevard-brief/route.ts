@@ -1,7 +1,7 @@
 ﻿import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { generateBrevardMondayBrief } from "@/lib/agents/workflows/brevard-merged-briefs";
-import { logAgentRun, getSeenNewsletterArticleUrls, recordNewsletterRun } from "@/lib/db";
+import { logAgentRun, getSeenNewsletterArticleUrls, archiveBrief } from "@/lib/db";
 import { saveNewsletterToSharePoint } from "@/lib/agents/file-handler";
 
 export const maxDuration = 300;
@@ -67,7 +67,7 @@ export async function GET(request: Request) {
     const { subject, htmlBody, summary, newsItems } = await generateBrevardMondayBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
-    recordNewsletterRun({ agentName: "brevard-weekly", subject, articles: newsItems.map(n => ({ url: n.link, title: n.title, source: n.source, pubDate: n.pubDate })) }).catch(() => {});
+    archiveBrief({ agentName: "brevard-weekly", subject, html: htmlBody, narrative: summary, macro: {}, news: newsItems }).catch(() => {});
     logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
     return NextResponse.json({ success: emailResult.success, period, market, subject, articles: newsItems.length });
   } catch (err) {
