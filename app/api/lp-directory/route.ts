@@ -339,7 +339,15 @@ export async function GET(req: NextRequest) {
       const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
       const laLog: string[] = [];
       for (const lp of lps) {
-        const emails = lpEmails.get(lp) ?? ([lp.email?.toLowerCase().trim()].filter(Boolean) as string[]);
+        // Match on every email we know for the row: the SF-derived set (Fund IV) PLUS the schedule
+        // email and the resolvedEmail. For DST/1031 rows resolvedEmail is usually the broker/advisor
+        // rep's address (direct investor emails barely exist) — brokers do email the IR mailboxes, so
+        // this is how those rows get a "last interaction" (via their broker) instead of staying blank.
+        const emails = Array.from(new Set([
+          ...(lpEmails.get(lp) ?? []),
+          (lp.email || "").toLowerCase().trim(),
+          (lp.resolvedEmail || "").toLowerCase().trim(),
+        ].filter(Boolean)));
         const names = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter(isFullName);
         const entityKey = norm(lp.investor || "");
         let best: Interaction | null = null;
