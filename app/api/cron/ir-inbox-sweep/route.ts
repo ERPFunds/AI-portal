@@ -70,16 +70,18 @@ async function logToSalesforce(payload: {
 async function handleMailbox(
   mailbox: string,
   dryRun: boolean,
-  opts?: { sinceIso?: string; max?: number }
+  opts?: { sinceIso?: string; max?: number; reimport?: boolean }
 ): Promise<{ mailbox: string; scanned: number; fresh: number; investor: number; details: string[] }> {
   const details: string[] = [];
   const messages = opts?.sinceIso
     ? await listInboxMessagesSince(mailbox, opts.sinceIso, opts.max ?? 250)
     : await listInboxMessages(mailbox, TOP_PER_MAILBOX);
-  const fresh = await filterUnprocessedMessageIds(
-    mailbox,
-    messages.map((m) => m.id)
-  );
+  // Normally skip anything already in the dedup ledger. `reimport` bypasses that so a message
+  // that was marked processed but never successfully filed/drafted gets another pass. (Emails
+  // already filed have moved out of the Inbox, so this only re-touches ones still sitting here.)
+  const fresh = opts?.reimport
+    ? new Set(messages.map((m) => m.id))
+    : await filterUnprocessedMessageIds(mailbox, messages.map((m) => m.id));
   // oldest first so the dedup ledger fills in chronological order
   const todo = messages.filter((m) => fresh.has(m.id)).reverse();
 
@@ -309,11 +311,12 @@ export async function GET(req: NextRequest) {
   // Historical catch-up: scan the Inbox back this many months (paginated past the live cap).
   const sinceMonths = Math.min(Number(params.get("sinceMonths")) || 0, 24);
   const max = Math.min(Math.max(Number(params.get("max")) || 60, 1), 300);
-  let opts: { sinceIso: string; max: number } | undefined;
+  const reimport = params.get("reimport") === "1"; // ignore the dedup ledger (re-process already-seen)
+  let opts: { sinceIso: string; max: number; reimport: boolean } | undefined;
   if (sinceMonths > 0) {
     const since = new Date();
     since.setMonth(since.getMonth() - sinceMonths);
-    opts = { sinceIso: since.toISOString().split(".")[0] + "Z", max };
+    opts = { sinceIso: since.toISOString().split(".")[0] + "Z", max, reimport };
   }
 
   if (!force && process.env.IR_SWEEP_ENABLED !== "true") {

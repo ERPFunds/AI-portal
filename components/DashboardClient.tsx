@@ -1220,6 +1220,7 @@ function InboxView({
   const [draftEditId, setDraftEditId] = useState<string | null>(null)
   const [backfilling, setBackfilling] = useState(false)
   const [backfillMsg, setBackfillMsg] = useState<string | null>(null)
+  const [reimport, setReimport] = useState(false)
 
   const load = React.useCallback(async () => {
     setLoading(true)
@@ -1242,18 +1243,22 @@ function InboxView({
   }, [load])
 
   async function backfill(dryRun: boolean) {
-    if (!dryRun && !window.confirm('Import the last month of investor emails from mberry@ and wmeyer@ into team@’s Investor Relations folders? This files real emails (kept unread) and prepares drafts.')) return
+    if (!dryRun && !window.confirm(
+      (reimport
+        ? 'RE-IMPORT: re-process the last month of investor emails from mberry@ and wmeyer@ even if already seen. Emails still in the Inbox may get a fresh draft. Continue?'
+        : 'Import the last month of investor emails from mberry@ and wmeyer@ into team@’s Investor Relations folders? This files real emails (kept unread) and prepares drafts.')
+    )) return
     setBackfilling(true); setBackfillMsg(null)
     try {
       const res = await fetch('/api/agent-inbox/backfill', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ months: 1, dryRun }),
+        body: JSON.stringify({ months: 1, dryRun, reimport }),
       })
       const j = await res.json()
       if (!res.ok || j.error) { setBackfillMsg('Backfill failed: ' + (j.error || res.status)); return }
       if (j.skipped) { setBackfillMsg('Sweep skipped: ' + j.skipped); return }
       const results: Array<{ mailbox: string; scanned?: number; investor?: number; error?: string }> = j.results ?? []
-      const summ = results.map((r) => r.error ? `${r.mailbox}: error` : `${r.mailbox}: ${r.investor ?? 0} investor / ${r.scanned ?? 0} scanned`).join('  ·  ')
+      const summ = results.map((r) => r.error ? `${r.mailbox}: ${r.error}` : `${r.mailbox}: ${r.investor ?? 0} investor / ${r.scanned ?? 0} scanned`).join('  ·  ')
       setBackfillMsg((dryRun ? 'Preview (nothing filed) — ' : 'Imported — ') + (summ || 'no messages found'))
       if (!dryRun) load()
     } catch (e) {
@@ -1406,6 +1411,10 @@ function InboxView({
           <button className="btn btn-ghost" onClick={() => backfill(false)} disabled={backfilling} title="Triage the last month of investor emails from mberry@ and wmeyer@ into team@'s IR folders" style={{ whiteSpace: 'nowrap' }}>
             {backfilling ? '⏳ Working…' : '⇩ Import last month'}
           </button>
+          <label title="Re-process emails even if the sweep already recorded them (use when a prior import found nothing but the emails weren't actually filed)" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6b7280', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+            <input type="checkbox" checked={reimport} onChange={(e) => setReimport(e.target.checked)} />
+            Re-import already-seen
+          </label>
           <button className="btn btn-ghost" onClick={purgeDocusign} disabled={backfilling} title="Delete DocuSign notification emails from the team@ and mberry@ inboxes (recoverable — moves to Deleted Items)" style={{ whiteSpace: 'nowrap' }}>
             🗑 Clear DocuSign
           </button>
