@@ -2110,6 +2110,15 @@ function LpDirectoryView() {
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
   const DST_GROUP = 'DST / 1031'
+  // Fund IV hard commitments so far (manual — extend as LPs formally commit). Blank for every other
+  // Fund IV LP (those are targets, not yet committed). DST/1031 rows are closed/funded, so their
+  // schedule amount IS the committed amount.
+  const FUND_IV_COMMITTED_RULES: { match: RegExp; usd: number }[] = [{ match: /erp gp iv/i, usd: 2_700_000 }]
+  const committedUsdFor = (lp: LpRecord): number | null => {
+    if (lp.group === DST_GROUP) return lp.commitmentUsd > 0 ? lp.commitmentUsd : null
+    for (const r of FUND_IV_COMMITTED_RULES) if (r.match.test(lp.investor)) return r.usd
+    return null
+  }
   // Fund IV = every schedule section except the DST/1031 book.
   const inFundView = (lp: LpRecord) =>
     fundView === 'All' || (fundView === DST_GROUP ? lp.group === DST_GROUP : lp.group !== DST_GROUP)
@@ -2506,9 +2515,8 @@ function LpDirectoryView() {
         const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
         const fundIvTarget = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
-        // Hard-committed to Fund IV so far (manual figure — currently the ERP GP IV commitment of
-        // $2.7M). Update as additional LPs formally commit; the target above is the full schedule.
-        const fundIvCommittedSoFar = 2_700_000
+        // Hard-committed to Fund IV so far = sum of the known commitments (currently ERP GP IV $2.7M).
+        const fundIvCommittedSoFar = FUND_IV_COMMITTED_RULES.reduce((s, r) => s + r.usd, 0)
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
@@ -2548,7 +2556,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Reach Out', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2620,11 +2628,16 @@ function LpDirectoryView() {
                         })()}
                       </td>
 
-                      {/* Commitment */}
+                      {/* Target — the commitment-schedule amount (editable) */}
                       <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
                         {isEditing
                           ? <input value={ev.commitment} onChange={e => setEditValues(v => ({ ...v, commitment: e.target.value }))} placeholder="$1M" style={{ ...inputStyle, width: 80 }} />
                           : lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : lp.commitment || '—'}
+                      </td>
+
+                      {/* Committed — hard commitment so far; blank for most Fund IV LPs (targets, not yet committed) */}
+                      <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
+                        {(() => { const c = committedUsdFor(lp); return c != null ? fmtUsd(c) : <span style={{ color: '#d1d5db', fontWeight: 400 }}>—</span> })()}
                       </td>
 
                       {/* Last Interaction — from IR agent logs or Salesforce */}
