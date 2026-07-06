@@ -568,10 +568,20 @@ async function sfUpdate(objectType: string, id: string, fields: Record<string, u
   return { ok: false, detail: `${res.status} ${res.status === 403 || res.status === 401 ? "(integration user lacks edit rights)" : ""} ${txt}`.trim() };
 }
 
+async function sfCreate(objectType: string, fields: Record<string, unknown>): Promise<{ ok: boolean; id?: string; detail?: string }> {
+  const res = await sfFetch(`/sobjects/${objectType}`, { method: "POST", body: JSON.stringify(fields) });
+  const txt = await res.text().catch(() => "");
+  if (res.ok) { try { return { ok: true, id: JSON.parse(txt).id }; } catch { return { ok: true }; } }
+  return { ok: false, detail: `${res.status} ${res.status === 403 || res.status === 401 ? "(integration user lacks create rights)" : ""} ${txt.slice(0, 200)}`.trim() };
+}
+
+// Which Opportunity StageName means "committed". Default to the org's won stage; override via env.
+const COMMITTED_STAGE = process.env.SF_COMMITTED_STAGE || "Closed Won";
+
 export async function applyLpEditToSalesforce(params: {
   investor: string;
   contact?: string;
-  edits: { email?: string; phone?: string; notes?: string; commitmentUsd?: number; brokerFirm?: string; brokerContact?: string };
+  edits: { email?: string; phone?: string; notes?: string; commitmentUsd?: number; committedUsd?: number; brokerFirm?: string; brokerContact?: string };
 }): Promise<SfWriteResult[]> {
   if (!salesforceConfigured()) return [{ field: "salesforce", status: "skipped", detail: "not configured" }];
   const { investor, contact, edits } = params;
@@ -603,8 +613,8 @@ export async function applyLpEditToSalesforce(params: {
       }
     }
 
-    // Commitment + Broker need the LP's single Opportunity
-    const needOpp = edits.commitmentUsd !== undefined || (edits.brokerFirm ?? "") !== "" || (edits.brokerContact ?? "") !== "";
+    // Commitment + Committed + Broker need the LP's single Opportunity
+    const needOpp = edits.commitmentUsd !== undefined || edits.committedUsd !== undefined || (edits.brokerFirm ?? "") !== "" || (edits.brokerContact ?? "") !== "";
     let oppId: string | null = null;
     let oppCount = 0;
     if (needOpp && accountId) {
@@ -617,6 +627,23 @@ export async function applyLpEditToSalesforce(params: {
     if (edits.commitmentUsd !== undefined) {
       if (!oppId) out.push({ field: "commitment", status: "skipped", detail: oppSkip });
       else { const r = await sfUpdate("Opportunity", oppId, { Amount: edits.commitmentUsd }); out.push(r.ok ? { field: "commitment", status: "updated" } : { field: "commitment", status: "error", detail: r.detail }); }
+    }
+
+    // Committed: mark the LP's Opportunity as committed (Amount = committed, Stage = committed stage).
+    // If the LP has NO Opportunity yet, CREATE one on their Account (per user choice). Needs a
+    // uniquely-matched Account.
+    if (edits.committedUsd !== undefined) {
+      if (!accountId) out.push({ field: "committed", status: "skipped", detail: `LP account not uniquely matched (${accts.length})` });
+      else if (oppId) {
+        const r = await sfUpdate("Opportunity", oppId, { Amount: edits.committedUsd, StageName: COMMITTED_STAGE });
+        out.push(r.ok ? { field: "committed", status: "updated", detail: `Amount + stage → ${COMMITTED_STAGE}` } : { field: "committed", status: "error", detail: r.detail });
+      } else if (oppCount === 0) {
+        const closeDate = new Date().toISOString().slice(0, 10);
+        const c = await sfCreate("Opportunity", { Name: `${investor} - Fund IV Commitment`.slice(0, 120), AccountId: accountId, Amount: edits.committedUsd, StageName: COMMITTED_STAGE, CloseDate: closeDate });
+        out.push(c.ok ? { field: "committed", status: "updated", detail: `created Opportunity (${COMMITTED_STAGE})` } : { field: "committed", status: "error", detail: c.detail });
+      } else {
+        out.push({ field: "committed", status: "skipped", detail: `${oppCount} opportunities for this LP — commit ambiguous` });
+      }
     }
 
     if ((edits.brokerFirm ?? "") !== "") {

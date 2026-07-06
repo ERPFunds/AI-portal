@@ -2121,6 +2121,7 @@ interface LpRecord {
   sfAdvisorFirm: string | null; sfAdvisorContact: string | null;
   brokerFirm: string; brokerContact: string;
   resolvedEmail: string | null;
+  committedUsd?: number | null;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -2147,7 +2148,7 @@ const COMMIT_TYPE_BG: Record<string, string> = {
 interface LpEditState {
   commitment: string; commitType: string; contact: string;
   email: string; phone: string; notes: string; date: string;
-  brokerFirm: string; brokerContact: string;
+  brokerFirm: string; brokerContact: string; committed: string;
 }
 const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verbal', 'TBD']
 
@@ -2158,15 +2159,8 @@ function LpDirectoryView() {
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
   const DST_GROUP = 'DST / 1031'
-  // Fund IV hard commitments so far (manual — extend as LPs formally commit). Blank for every other
-  // Fund IV LP (those are targets, not yet committed). DST/1031 rows are closed/funded, so their
-  // schedule amount IS the committed amount.
-  const FUND_IV_COMMITTED_RULES: { match: RegExp; usd: number }[] = [{ match: /erp gp iv/i, usd: 2_700_000 }]
-  const committedUsdFor = (lp: LpRecord): number | null => {
-    if (lp.group === DST_GROUP) return lp.commitmentUsd > 0 ? lp.commitmentUsd : null
-    for (const r of FUND_IV_COMMITTED_RULES) if (r.match.test(lp.investor)) return r.usd
-    return null
-  }
+  // Committed amount comes from the server (`lp.committedUsd`) — portal-stored, blank for uncommitted
+  // Fund IV targets; DST/1031 rows show their funded amount.
   // Fund IV = every schedule section except the DST/1031 book.
   const inFundView = (lp: LpRecord) =>
     fundView === 'All' || (fundView === DST_GROUP ? lp.group === DST_GROUP : lp.group !== DST_GROUP)
@@ -2174,7 +2168,7 @@ function LpDirectoryView() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [editingRow, setEditingRow] = React.useState<string | null>(null)
-  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '', brokerFirm: '', brokerContact: '' })
+  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '', brokerFirm: '', brokerContact: '', committed: '' })
   const [saving, setSaving] = React.useState(false)
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
@@ -2267,7 +2261,7 @@ function LpDirectoryView() {
 
   function startEdit(lp: LpRecord) {
     setEditingRow(lp.investor)
-    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact })
+    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact, committed: lp.committedUsd != null ? String(lp.committedUsd) : '' })
     setSaveMsg(null)
   }
   function cancelEdit() { setEditingRow(null); setSaveMsg(null) }
@@ -2291,6 +2285,7 @@ function LpDirectoryView() {
           lps: prev.lps.map(lp => lp.investor === investor ? {
             ...lp, ...editValues,
             commitmentUsd: parseLpUsd(editValues.commitment),
+            committedUsd: editValues.committed.trim() ? parseLpUsd(editValues.committed) : null,
           } : lp),
         } : prev)
         setEditingRow(null)
@@ -2564,7 +2559,7 @@ function LpDirectoryView() {
         const fundIvTarget = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         // Hard-committed to Fund IV so far = sum of the known commitments (currently ERP GP IV $2.7M).
-        const fundIvCommittedSoFar = FUND_IV_COMMITTED_RULES.reduce((s, r) => s + r.usd, 0)
+        const fundIvCommittedSoFar = fundIvLps.reduce((s, lp) => s + (lp.committedUsd ?? 0), 0)
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
@@ -2683,9 +2678,11 @@ function LpDirectoryView() {
                           : lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : lp.commitment || '—'}
                       </td>
 
-                      {/* Committed — hard commitment so far; blank for most Fund IV LPs (targets, not yet committed) */}
+                      {/* Committed — hard commitment so far; editable → syncs to Salesforce (Amount + committed stage) */}
                       <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
-                        {(() => { const c = committedUsdFor(lp); return c != null ? fmtUsd(c) : <span style={{ color: '#d1d5db', fontWeight: 400 }}>—</span> })()}
+                        {isEditing
+                          ? <input value={ev.committed} onChange={e => setEditValues(v => ({ ...v, committed: e.target.value }))} placeholder="$2.7M" style={{ ...inputStyle, width: 80 }} />
+                          : (lp.committedUsd != null ? fmtUsd(lp.committedUsd) : <span style={{ color: '#d1d5db', fontWeight: 400 }}>—</span>)}
                       </td>
 
                       {/* Last Interaction — from IR agent logs or Salesforce */}

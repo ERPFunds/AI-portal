@@ -53,6 +53,7 @@ export interface LpRecord {
   brokerFirm: string;
   brokerContact: string;
   resolvedEmail: string | null; // best-known email (schedule → SF contact → past correspondence)
+  committedUsd?: number | null;  // hard-committed so far (portal-stored; blank for uncommitted targets)
 }
 
 interface LpUpdateBody {
@@ -66,6 +67,7 @@ interface LpUpdateBody {
   date?: string;
   brokerFirm?: string;
   brokerContact?: string;
+  committed?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -374,6 +376,20 @@ export async function GET(req: NextRequest) {
       console.log("[lp-lastint]", JSON.stringify({ samples: laLog }).slice(0, 1800));
     } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }
 
+    // Committed amounts (portal-stored). Blank for uncommitted Fund IV targets; DST/1031 rows are
+    // closed deals so their commitment IS the committed amount.
+    try {
+      const { data: committedRows } = await supabase.from("lp_committed").select("investor_key, committed_usd");
+      const committedMap = new Map<string, number>();
+      for (const r of (committedRows ?? []) as { investor_key: string; committed_usd: number }[]) {
+        committedMap.set(r.investor_key, Number(r.committed_usd));
+      }
+      for (const lp of lps) {
+        const override = committedMap.get(lp.investor.toLowerCase().trim());
+        lp.committedUsd = override != null ? override : (lp.group === "DST / 1031" && lp.commitmentUsd > 0 ? lp.commitmentUsd : null);
+      }
+    } catch { /* non-fatal: no committed overlay */ }
+
     // Collect ordered unique groups (preserves sheet order)
     const groups: string[] = [];
     for (const lp of lps) {
@@ -440,9 +456,26 @@ export async function PATCH(req: NextRequest) {
       if (body.date         !== undefined) target.date         = body.date;
       if (body.brokerFirm   !== undefined) target.brokerFirm   = body.brokerFirm;
       if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
+      if (body.committed    !== undefined) target.committedUsd  = body.committed.trim() ? parseDollar(body.committed) : null;
       await writeLpCache(supabase, data);
     }
   } catch { /* cache update is best-effort */ }
+
+  // Persist the committed amount in the durable store (survives the weekly rebuild).
+  if (body.committed !== undefined) {
+    const key = body.investor.trim().toLowerCase();
+    const usd = body.committed.trim() ? parseDollar(body.committed) : 0;
+    try {
+      if (usd > 0) {
+        await supabase.from("lp_committed").upsert(
+          { investor_key: key, investor: body.investor.trim(), committed_usd: usd, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() },
+          { onConflict: "investor_key" }
+        );
+      } else {
+        await supabase.from("lp_committed").delete().eq("investor_key", key);
+      }
+    } catch { /* non-fatal */ }
+  }
 
   // Write the edit to Salesforce (non-fatal; per-field report returned).
   let salesforce: SfWriteResult[] = [];
@@ -455,6 +488,7 @@ export async function PATCH(req: NextRequest) {
         phone: body.phone,
         notes: body.notes,
         commitmentUsd: body.commitment !== undefined ? parseDollar(body.commitment) : undefined,
+        committedUsd: body.committed !== undefined && body.committed.trim() ? parseDollar(body.committed) : undefined,
         brokerFirm: body.brokerFirm,
         brokerContact: body.brokerContact,
       },
