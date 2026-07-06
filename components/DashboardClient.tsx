@@ -751,6 +751,36 @@ const PREFIX_BADGE: Record<string, { label: string; bg: string; color: string; b
   WRITE:    { label: 'WRITE',    bg: '#f0fdf4', color: '#166534', border: '#bbf7d0' },
 }
 
+// Estimated analyst-minutes saved per completed run, by workflow. Tune these to calibrate the
+// "Est. time saved" KPI on the Command Center. Unknown workflows fall back to DEFAULT_MIN_PER_RUN.
+const DEFAULT_MIN_PER_RUN = 25
+const WORKFLOW_MINUTES: Record<string, number> = {
+  'weekly-market-update':   45,
+  'submarket-brief':        40,
+  'fund-competitor-brief':  40,
+  'submarket-intelligence': 30,
+  'competitor-intelligence':30,
+  'market-update-digest':   30,
+  'lp-ready-summary':       35,
+  'sub-sector-deep-dive':   60,
+  'sale-comps-pull':        35,
+  'deck-builder':           120,
+  'om-writer':              150,
+  'om-editor':              90,
+  'update-pipeline-comps':  25,
+  'update-buyer-list':      20,
+  'ir-draft':               20,
+  'ir-reply':               15,
+  'ir-escalate':            10,
+  'lp-onboarding':          60,
+  'attachment-filer':       5,
+  'dialogue-logger':        8,
+  'email-escalation':       10,
+}
+function minutesForWorkflow(id?: string): number {
+  return (id && WORKFLOW_MINUTES[id]) || DEFAULT_MIN_PER_RUN
+}
+
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime()
   const mins = Math.floor(diff / 60000)
@@ -1023,14 +1053,16 @@ function DashboardView({ roleKey, userName, recentRuns, agentStats, onNavigate }
   const activeAgents = AGENTS.filter((a) => a.status === 'active').length
   const errCount = recentRuns.filter((r) => r.status === 'error').length
   const successRate = recentRuns.length ? Math.round((1 - errCount / recentRuns.length) * 100) : null
-  const AVG_MIN_PER_RUN = 25
-  const timeSavedHrs = Math.round((runsWeek * AVG_MIN_PER_RUN) / 60)
+  // Per-run minutes weighted by the actual workflow mix in the activity feed (see WORKFLOW_MINUTES).
+  const feedMinutes = recentRuns.map((r) => minutesForWorkflow(r.workflow_id))
+  const avgMin = feedMinutes.length ? Math.round(feedMinutes.reduce((s, m) => s + m, 0) / feedMinutes.length) : DEFAULT_MIN_PER_RUN
+  const timeSavedHrs = Math.round((runsWeek * avgMin) / 60)
   const kpis: { label: string; value: string | number; sub: string }[] = [
     { label: 'Runs · 7d',       value: runsWeek,                                        sub: 'across all agents' },
     { label: 'Runs today',      value: runsToday,                                       sub: 'since midnight' },
     { label: 'Active agents',   value: `${activeAgents}/${totalAgents}`,                sub: 'configured & on' },
     { label: 'Success rate',    value: successRate === null ? '—' : `${successRate}%`,   sub: `${errCount} error${errCount !== 1 ? 's' : ''} · 7d` },
-    { label: 'Est. time saved', value: `~${timeSavedHrs}h`,                             sub: `≈${AVG_MIN_PER_RUN} min/run` },
+    { label: 'Est. time saved', value: `~${timeSavedHrs}h`,                             sub: `≈${avgMin} min/run avg` },
   ]
 
   return (
