@@ -58,6 +58,8 @@ async function logToSalesforce(payload: {
   snippet: string;
   receivedDate: string;
   sourceMailbox: string;
+  company?: string;
+  title?: string;
 }): Promise<string> {
   if (!salesforceConfigured()) return "sf-skip(no SF creds)";
   try {
@@ -209,6 +211,8 @@ async function handleMailbox(
         snippet: bodyText.slice(0, 500),
         receivedDate: m.receivedDateTime,
         sourceMailbox: mailbox,
+        company: verdict.contact.company ?? undefined,
+        title: verdict.contact.title ?? undefined,
       })
     );
 

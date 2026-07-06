@@ -705,13 +705,21 @@ export async function createContact(p: {
   firstName: string;
   lastName: string;
   email: string;
+  company?: string;
+  title?: string;
 }): Promise<string> {
+  const descParts = [
+    p.company ? `Company: ${p.company}` : "",
+    "Auto-created from an inbound investor/broker email (ERP IR agent).",
+  ].filter(Boolean);
   const res = await sfFetch(`/sobjects/Contact`, {
     method: "POST",
     body: JSON.stringify({
       FirstName: p.firstName || undefined,
       LastName: p.lastName || "Unknown",
       Email: p.email,
+      Title: p.title || undefined,
+      Description: descParts.join("\n"),
       LeadSource: "Inbound Email",
     }),
   });
@@ -792,11 +800,13 @@ export async function logCorrespondence(p: {
   snippet: string;
   receivedDate: string;
   sourceMailbox: string;
+  company?: string;
+  title?: string;
 }): Promise<string> {
   let contactId = await findContactByEmail(p.investorEmail);
   let created = false;
   if (!contactId) {
-    contactId = await createContact({ firstName: p.firstName, lastName: p.lastName, email: p.investorEmail });
+    contactId = await createContact({ firstName: p.firstName, lastName: p.lastName, email: p.investorEmail, company: p.company, title: p.title });
     created = true;
   }
   const activityDate = (p.receivedDate || new Date().toISOString()).slice(0, 10);
