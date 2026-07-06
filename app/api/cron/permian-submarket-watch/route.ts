@@ -69,9 +69,10 @@ const APIFY_QUERIES = [
 
 // Must match at least one geographic keyword — topic-only keywords are not sufficient
 const GEO_KEYWORDS = [
-  "permian", "midland", "odessa", "west texas",
-  "permian basin", "permian cre", "midland tx", "midland, tx",
-  "odessa tx", "odessa, tx", "ector county", "andrews texas",
+  "permian", "west texas", "permian basin", "permian cre",
+  "midland tx", "midland, tx", "midland texas", "midland-odessa",
+  "odessa tx", "odessa, tx", "odessa texas",
+  "ector county", "andrews texas",
 ];
 
 const TOPIC_KEYWORDS = [

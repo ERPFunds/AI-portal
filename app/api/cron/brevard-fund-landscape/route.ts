@@ -89,9 +89,16 @@ interface NewsItem {
   summary?: string;
 }
 
+const RE_ANCHORS = [
+  "real estate", "industrial", "warehouse", "logistics", "reit",
+  "cre", "net lease", "commercial property", "storage", "distribution",
+];
+
 function isFundRelevant(item: NewsItem): boolean {
   const text = `${item.title} ${item.summary ?? ""}`.toLowerCase();
-  return FUND_KEYWORDS.some((kw) => text.includes(kw));
+  const hasFund = FUND_KEYWORDS.some((kw) => text.includes(kw));
+  const hasRE   = RE_ANCHORS.some((kw) => text.includes(kw));
+  return hasFund && hasRE;
 }
 
 async function fetchFundNews(): Promise<NewsItem[]> {
