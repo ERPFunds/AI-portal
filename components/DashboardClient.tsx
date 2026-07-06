@@ -6781,8 +6781,6 @@ function CapitalRaiseView() {
           <h2>Capital Raising</h2>
           <p>Fund IV raise pipeline — prospects moving from first contact through funded, with a probability-weighted forecast</p>
         </div>
-        <button onClick={() => setEditing({ stage: 'Identified', channel: 'Direct Fund IV LP', probability: 10, expected_amount: 0 })}
-          style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add prospect</button>
       </div>
 
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
