@@ -547,6 +547,16 @@ export async function deleteMessage(mailbox: string, messageId: string): Promise
   if (!res.ok) throw new Error(`Graph delete ${res.status}: ${await res.text()}`);
 }
 
+/** Delete a mail folder (and its contents) — moves it to Deleted Items. */
+export async function deleteFolder(mailbox: string, folderId: string): Promise<void> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${encodeURIComponent(folderId)}`,
+    { method: "DELETE", headers: { Authorization: `Bearer ${t}` } }
+  );
+  if (!res.ok) throw new Error(`Graph delete folder ${res.status}: ${await res.text()}`);
+}
+
 /** Forward a message to a recipient, with an optional comment, sent as the mailbox. */
 export async function forwardMessage(
   mailbox: string,
