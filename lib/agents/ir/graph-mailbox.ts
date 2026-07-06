@@ -10,6 +10,7 @@ export interface InboxMessage {
   fromName: string | null;
   bodyPreview: string;
   receivedDateTime: string;
+  recipients: string[]; // To + CC addresses (lowercased) — used to route ownership
 }
 
 async function token(): Promise<string> {
@@ -23,31 +24,41 @@ export async function listInboxMessages(mailbox: string, top = 25): Promise<Inbo
   const t = await token();
   const url =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/inbox/messages` +
-    `?$select=id,internetMessageId,subject,from,bodyPreview,receivedDateTime` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime` +
     `&$orderby=receivedDateTime desc&$top=${top}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
   });
   if (!res.ok) throw new Error(`Graph list inbox ${res.status}: ${await res.text()}`);
   const data = await res.json();
-  return (data.value || []).map(
-    (m: {
-      id: string;
-      internetMessageId?: string;
-      subject?: string;
-      bodyPreview?: string;
-      receivedDateTime: string;
-      from?: { emailAddress?: { address?: string; name?: string } };
-    }): InboxMessage => ({
-      id: m.id,
-      internetMessageId: m.internetMessageId ?? null,
-      subject: m.subject || "",
-      fromAddress: m.from?.emailAddress?.address || "",
-      fromName: m.from?.emailAddress?.name ?? null,
-      bodyPreview: m.bodyPreview || "",
-      receivedDateTime: m.receivedDateTime,
-    })
-  );
+  return (data.value || []).map((m: RawGraphMessage): InboxMessage => toInboxMessage(m));
+}
+
+type RawGraphMessage = {
+  id: string;
+  internetMessageId?: string;
+  subject?: string;
+  bodyPreview?: string;
+  receivedDateTime: string;
+  from?: { emailAddress?: { address?: string; name?: string } };
+  toRecipients?: { emailAddress?: { address?: string } }[];
+  ccRecipients?: { emailAddress?: { address?: string } }[];
+};
+
+function toInboxMessage(m: RawGraphMessage): InboxMessage {
+  const recips = [...(m.toRecipients || []), ...(m.ccRecipients || [])]
+    .map((r) => (r.emailAddress?.address || "").toLowerCase().trim())
+    .filter(Boolean);
+  return {
+    id: m.id,
+    internetMessageId: m.internetMessageId ?? null,
+    subject: m.subject || "",
+    fromAddress: m.from?.emailAddress?.address || "",
+    fromName: m.from?.emailAddress?.name ?? null,
+    bodyPreview: m.bodyPreview || "",
+    receivedDateTime: m.receivedDateTime,
+    recipients: recips,
+  };
 }
 
 export interface MailFolder {
@@ -145,6 +156,9 @@ export async function listFolderMessages(
       toRecipients: (m.toRecipients || [])
         .map((r) => r.emailAddress?.address || "")
         .filter(Boolean),
+      recipients: (m.toRecipients || [])
+        .map((r) => (r.emailAddress?.address || "").toLowerCase().trim())
+        .filter(Boolean),
     })
   );
 }
@@ -202,6 +216,7 @@ export async function listFolderMessagesSince(
         conversationId: m.conversationId ?? null,
         categories: m.categories ?? [],
         toRecipients: (m.toRecipients || []).map((r) => r.emailAddress?.address || "").filter(Boolean),
+        recipients: (m.toRecipients || []).map((r) => (r.emailAddress?.address || "").toLowerCase().trim()).filter(Boolean),
       });
       if (out.length >= max) break;
     }
@@ -219,7 +234,7 @@ export async function listInboxMessagesSince(mailbox: string, sinceIso: string, 
   const out: InboxMessage[] = [];
   let url: string | null =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/inbox/messages` +
-    `?$select=id,internetMessageId,subject,from,bodyPreview,receivedDateTime` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime` +
     `&$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}` +
     `&$orderby=receivedDateTime desc&$top=50`;
   while (url && out.length < max) {
@@ -228,23 +243,8 @@ export async function listInboxMessagesSince(mailbox: string, sinceIso: string, 
     });
     if (!res.ok) throw new Error(`Graph list inbox since ${res.status}: ${await res.text()}`);
     const data = await res.json();
-    for (const m of (data.value || []) as {
-      id: string;
-      internetMessageId?: string;
-      subject?: string;
-      bodyPreview?: string;
-      receivedDateTime: string;
-      from?: { emailAddress?: { address?: string; name?: string } };
-    }[]) {
-      out.push({
-        id: m.id,
-        internetMessageId: m.internetMessageId ?? null,
-        subject: m.subject || "",
-        fromAddress: m.from?.emailAddress?.address || "",
-        fromName: m.from?.emailAddress?.name ?? null,
-        bodyPreview: m.bodyPreview || "",
-        receivedDateTime: m.receivedDateTime,
-      });
+    for (const m of (data.value || []) as RawGraphMessage[]) {
+      out.push(toInboxMessage(m));
       if (out.length >= max) break;
     }
     url = data["@odata.nextLink"] || null;

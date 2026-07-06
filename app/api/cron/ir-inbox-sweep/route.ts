@@ -94,10 +94,14 @@ async function handleMailbox(
   let teamEscalateFolderId: string | null | undefined;
   let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
-  // Draft/sign-off owner = whose mailbox this is (William signs William's, Meghan signs the rest).
-  const signer = mailbox.toLowerCase().includes("wmeyer") ? "William Meyer" : "Meghan Berry";
+  const sourceIsWilliam = mailbox.toLowerCase().includes("wmeyer");
 
   for (const m of todo) {
+    // Draft/sign-off owner: William if this is his mailbox OR he's a To/CC recipient (route by
+    // recipient); otherwise Meghan. Per-message so a William thread in Meghan's inbox sorts to him.
+    const signer = (sourceIsWilliam || (m.recipients || []).some((a) => a.includes("wmeyer@")))
+      ? "William Meyer"
+      : "Meghan Berry";
     // Unwrap forwarded IR emails (e.g. forwarded into team@) so we classify the ORIGINAL
     // investor + their message, not the internal person who forwarded it.
     let fromAddr = m.fromAddress;
