@@ -6,11 +6,14 @@ import {
   listInboxMessagesSince,
   resolveSubfolderId,
   ensureSubfolderId,
+  resolveFolderId,
+  listChildFolders,
   moveMessage,
   setMessageRead,
   getMessageMime,
   importMimeMessage,
   deleteMessage,
+  deleteFolder,
 } from "@/lib/agents/ir/graph-mailbox";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
@@ -326,6 +329,25 @@ async function handleMailbox(
   return { mailbox, scanned: messages.length, fresh: todo.length, investor: investorCount, details };
 }
 
+// Self-heal: delete stray EMPTY IR subfolders in the team hub (e.g. "IR Escalations",
+// "IR Forward Drafts") left over from earlier naming — keeps the canonical Escalate / Forwarded
+// Drafts. Never touches a folder that still has messages, or the canonical two.
+async function cleanupStrayTeamFolders(): Promise<string[]> {
+  const removed: string[] = [];
+  try {
+    const irId = await resolveFolderId(TEAM_INBOX, IR_FOLDER);
+    if (!irId) return removed;
+    for (const c of await listChildFolders(TEAM_INBOX, irId)) {
+      const nm = c.displayName.toLowerCase();
+      if (nm === "escalate" || nm === "forwarded drafts") continue; // canonical
+      if (!/escalat|draft/.test(nm)) continue;                       // unrelated folder
+      if (c.totalItemCount > 0) continue;                            // has messages — leave it
+      try { await deleteFolder(TEAM_INBOX, c.id); removed.push(c.displayName); } catch { /* ignore */ }
+    }
+  } catch { /* non-fatal */ }
+  return removed;
+}
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
@@ -361,6 +383,13 @@ export async function GET(req: NextRequest) {
   if (mailboxes.length === 0) {
     console.log("[ir-sweep] skipped: no mailboxes configured (set IR_SWEEP_MAILBOXES)");
     return NextResponse.json({ skipped: "no mailboxes configured (set IR_SWEEP_MAILBOXES)" });
+  }
+
+  // Self-heal duplicate/stray IR subfolders in the team hub before triaging.
+  let strayRemoved: string[] = [];
+  if (!dryRun) {
+    strayRemoved = await cleanupStrayTeamFolders();
+    if (strayRemoved.length) console.log("[ir-sweep] removed stray folders", JSON.stringify(strayRemoved));
   }
 
   const results = [];
