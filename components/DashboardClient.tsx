@@ -1921,6 +1921,11 @@ function FinancialView() {
           </div>
         </div>
       </div>
+
+      {/* Capital Raising — Fund IV raise pipeline, embedded in the Investment Dashboard */}
+      <div style={{ marginTop: 28, borderTop: '2px solid #eef2f7', paddingTop: 4 }}>
+        <CapitalRaiseView />
+      </div>
     </div>
   )
 }

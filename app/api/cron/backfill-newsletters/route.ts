@@ -67,11 +67,11 @@ export async function GET(req: NextRequest) {
 
   let fetched = 0;
   while (nextLink && fetched < 200) {
-    const res = await fetch(nextLink, {
+    const res: Response = await fetch(nextLink, {
       headers: { Authorization: `Bearer ${token}` },
     });
     if (!res.ok) break;
-    const page = await res.json();
+    const page: { value?: unknown[]; ["@odata.nextLink"]?: string } = await res.json();
     const messages: any[] = page.value ?? [];
 
     for (const msg of messages) {
