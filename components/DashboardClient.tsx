@@ -2504,13 +2504,17 @@ function LpDirectoryView() {
         const allLps = data ? data.lps : []
         const fundIvLps = allLps.filter(lp => lp.group !== DST_GROUP)
         const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
-        const fundIvCommitted = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
+        const fundIvTarget = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
+        // Hard-committed to Fund IV so far (manual figure — currently the ERP GP IV commitment of
+        // $2.7M). Update as additional LPs formally commit; the target above is the full schedule.
+        const fundIvCommittedSoFar = 2_700_000
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
-              { label: 'Fund IV Committed', value: loading ? '…' : data ? fmtUsd(fundIvCommitted) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
+              { label: 'Fund IV Target', value: loading ? '…' : data ? fmtUsd(fundIvTarget) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
+              { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Committed so far (incl. ERP GP)' },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
               { label: 'Called (Fund IV)',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: 'Capital called to date' },
               { label: 'Distributions (Fund IV)',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: 'Paid to investors' },
