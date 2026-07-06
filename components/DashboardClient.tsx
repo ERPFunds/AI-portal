@@ -1498,7 +1498,8 @@ function InboxView({
   React.useEffect(() => {
     const id = selected?.id
     if (!id || bodyCache[id] !== undefined) return
-    if (selected?.folderKind === 'sent') { setBodyCache((c) => ({ ...c, [id]: selected.sentBody ?? '' })); return }
+    // App-logged sent items carry their body inline; mailbox Sent Items (incl. Outlook-sent) load it via ?message=.
+    if (selected?.folderKind === 'sent' && selected.sentBody) { setBodyCache((c) => ({ ...c, [id]: selected.sentBody ?? '' })); return }
     let cancelled = false
     setBodyLoading(true)
     fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}${selected?.mailbox ? `&mailbox=${encodeURIComponent(selected.mailbox)}` : ''}`)

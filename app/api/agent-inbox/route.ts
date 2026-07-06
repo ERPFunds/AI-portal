@@ -307,38 +307,31 @@ export async function GET(req: NextRequest) {
       if (draftCounts[who]) folders.push({ name: `Drafts · ${who}`, kind: "draft", count: draftCounts[who] });
     }
 
-    // 3) Sent replies — logged when a draft is approved & sent through the portal.
+    // 3) Sent — read each IR lead's Sent Items directly, so this captures replies sent from
+    //    OUTLOOK (not just ones sent through the app; app-sends also land in Sent Items). Skip
+    //    purely-internal mail. Body loads on demand via ?message=&mailbox.
     let sentCount = 0;
-    try {
-      const { data: sent } = await supabase
-        .from("ir_sent")
-        .select("id, sent_at, from_mailbox, to_email, subject, body, owner")
-        .order("sent_at", { ascending: false })
-        .limit(100);
-      for (const r of (sent ?? [])) {
-        items.push({
-          id: `sent:${r.id}`,
-          from: (r.from_mailbox as string) || "",
-          fromName: (r.owner as string) || null,
-          to: r.to_email ? [r.to_email as string] : [],
-          subject: (r.subject as string) || "",
-          preview: ((r.body as string) || "").replace(/\s+/g, " ").trim().slice(0, 140),
-          receivedISO: r.sent_at as string,
-          folder: "Sent",
-          folderKind: "sent",
-          status: "handled",
-          isDraft: false,
-          webLink: null,
-          conversationId: null,
-          owner: (r.owner as "Meghan" | "William" | null) ?? null,
-          originalReceivedISO: null,
-          sentBody: (r.body as string) || "",
-          mailbox: (r.from_mailbox as string) || TEAM_MAILBOX,
-        });
-        sentCount++;
-      }
-      if (sentCount) folders.push({ name: "Sent", kind: "sent", count: sentCount });
-    } catch { /* non-fatal: no Sent section if the table is unavailable */ }
+    const sentMailboxes = (process.env.IR_SENT_MAILBOXES || `${SEND_AS_MAILBOX},wmeyer@erpfunds.com`)
+      .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
+    const sentSeen = new Set<string>();
+    for (const mb of sentMailboxes) {
+      const owner: "Meghan" | "William" | null = mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
+      try {
+        const sent = await listFolderMessages(mb, "sentitems", 60);
+        for (const m of sent) {
+          const recips = m.toRecipients ?? [];
+          if (recips.length && recips.every((a) => a.toLowerCase().endsWith("@erpfunds.com"))) continue; // internal-only
+          if (sentSeen.has(m.internetMessageId || m.id)) continue;
+          sentSeen.add(m.internetMessageId || m.id);
+          const it = toItem(m, "Sent", "sent", mb);
+          it.status = "handled";
+          it.owner = owner;
+          items.push(it);
+          sentCount++;
+        }
+      } catch { /* skip a mailbox we can't read */ }
+    }
+    if (sentCount) folders.push({ name: "Sent", kind: "sent", count: sentCount });
 
     return NextResponse.json({
       mailbox: TEAM_MAILBOX,
