@@ -1330,9 +1330,15 @@ function InboxView({
     item.originalReceivedISO || (item.isDraft ? findOriginalFor(item)?.receivedISO ?? null : item.receivedISO)
   const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
 
+  // "Awaiting reply" = an investor email we owe a response to: an escalation (needs a human reply)
+  // or a prepared draft not yet sent. Sent items and plain filed threads are excluded.
+  const awaitingReply = (item: AgentInboxItem) => item.folderKind === 'escalate' || item.isDraft
+  const awaitingCount = items.filter(awaitingReply).length
+
   const filtered = items.filter((item) => {
     if (folderFilter !== 'All' && item.folder !== folderFilter) return false
     if (ownerFilter !== 'All' && ownerFor(item) !== ownerFilter) return false
+    if (inboxStatusFilter === 'awaiting') return awaitingReply(item)
     if (inboxStatusFilter === 'handled') return item.status === 'handled'
     if (inboxStatusFilter === 'review') return item.status === 'needs-review'
     return true
@@ -1383,7 +1389,7 @@ function InboxView({
   const subtitle = error
     ? `Sync error — ${data?.mailbox ?? 'team@erpfunds.com'}`
     : data
-      ? `${data.itemCount} message${data.itemCount !== 1 ? 's' : ''} · ${data.draftCount} draft${data.draftCount !== 1 ? 's' : ''} awaiting approval · synced from ${data.mailbox}`
+      ? `${data.itemCount} message${data.itemCount !== 1 ? 's' : ''} · ${awaitingCount} awaiting reply · ${data.draftCount} draft${data.draftCount !== 1 ? 's' : ''} awaiting approval · synced from ${data.mailbox}`
       : 'Syncing Investor Relations mailbox…'
 
   return (
@@ -1442,7 +1448,7 @@ function InboxView({
             <div>
               <div className="filter-label" style={{ marginBottom: 5 }}>Status</div>
               <div className="pill-row">
-                {[['all', 'All'], ['review', 'Needs Review'], ['handled', 'Handled']].map(([val, label]) => (
+                {[['all', 'All'], ['awaiting', `Awaiting reply${awaitingCount ? ` (${awaitingCount})` : ''}`], ['review', 'Needs Review'], ['handled', 'Handled']].map(([val, label]) => (
                   <div key={val} className={`pill ${inboxStatusFilter === val ? 'active' : ''}`} onClick={() => { setInboxStatusFilter(val); setSelectedInboxIdx(0) }}>{label}</div>
                 ))}
               </div>
