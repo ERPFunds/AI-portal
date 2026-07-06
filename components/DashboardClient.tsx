@@ -1336,6 +1336,15 @@ function InboxView({
   const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
 
   const [irTab, setIrTab] = React.useState<'inbox' | 'qa'>('inbox')
+  const [qaPending, setQaPending] = React.useState<number | null>(null)
+
+  // Pending Learned Q&A count for the tab badge (independent of the Q&A tab being open).
+  React.useEffect(() => {
+    fetch('/api/ir-qa?status=pending')
+      .then(r => r.json())
+      .then(d => setQaPending(Array.isArray(d.items) ? d.items.length : 0))
+      .catch(() => {})
+  }, [])
 
   // "Awaiting reply" = an investor email we owe a response to: an escalation (needs a human reply)
   // or a prepared draft not yet sent. Sent items and plain filed threads are excluded.
@@ -1430,7 +1439,7 @@ function InboxView({
 
       {/* Tabs: the mail queue and the Learned Q&A review live together */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
-        {([['inbox', `📥 Inbox${awaitingCount ? ` · ${awaitingCount}` : ''}`], ['qa', '💬 Learned Q&A']] as const).map(([val, label]) => (
+        {([['inbox', `📥 Inbox${awaitingCount ? ` · ${awaitingCount}` : ''}`], ['qa', `💬 Learned Q&A${qaPending ? ` · ${qaPending}` : ''}`]] as const).map(([val, label]) => (
           <button key={val} onClick={() => setIrTab(val)}
             style={{ fontSize: 13, fontWeight: irTab === val ? 700 : 500, color: irTab === val ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: `2px solid ${irTab === val ? '#0e7490' : 'transparent'}`, padding: '8px 14px', marginBottom: -1, cursor: 'pointer' }}>
             {label}
