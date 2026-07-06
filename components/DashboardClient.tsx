@@ -1410,19 +1410,6 @@ function InboxView({
     }
   }
 
-  async function mergeFolders() {
-    if (!window.confirm('Merge duplicate IR subfolders? Moves any messages from "IR Escalations" / "IR Forward Drafts" into the canonical Escalate / Forwarded Drafts, then deletes the empty duplicates.')) return
-    setBackfilling(true); setBackfillMsg(null)
-    try {
-      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'merge-ir-folders' }) })
-      const j = await res.json()
-      if (!res.ok || j.error) { setBackfillMsg('Merge failed: ' + (j.error || res.status)); return }
-      setBackfillMsg(j.merged?.length ? j.merged.join(' · ') : 'No duplicate folders found')
-      load()
-    } catch (e) { setBackfillMsg('Merge failed: ' + String(e)) }
-    finally { setBackfilling(false) }
-  }
-
   async function deleteDraft(item: AgentInboxItem) {
     if (!item.isDraft) return
     if (!window.confirm(`Delete this draft to ${item.to.join(', ') || 'the recipient'}?\n\nThe AI won't send it. It moves to Deleted Items (recoverable in Outlook).`)) return
@@ -1562,9 +1549,6 @@ function InboxView({
           </label>
           <button className="btn btn-ghost" onClick={purgeDocusign} disabled={backfilling} title="Delete DocuSign notification emails from the team@ and mberry@ inboxes (recoverable — moves to Deleted Items)" style={{ whiteSpace: 'nowrap' }}>
             🗑 Clear DocuSign
-          </button>
-          <button className="btn btn-ghost" onClick={mergeFolders} disabled={backfilling} title="Merge duplicate IR subfolders (IR Escalations / IR Forward Drafts) into the canonical Escalate / Forwarded Drafts" style={{ whiteSpace: 'nowrap' }}>
-            🗂 Merge folders
           </button>
           <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
             {loading ? '↻ Syncing…' : '↻ Sync now'}

@@ -11,8 +11,6 @@ import {
   sendMailAs,
   deleteMessage,
   importMimeMessage,
-  moveMessage,
-  deleteFolder,
   type MailItem,
 } from "@/lib/agents/ir/graph-mailbox";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
@@ -220,10 +218,6 @@ export async function GET(req: NextRequest) {
       // Subfolders (Escalate, Forwarded Drafts, anything else the user created)
       const children = await listChildFolders(TEAM_MAILBOX, irFolderId);
       diagnostics.subfolders = children.map((c) => c.displayName);
-      console.log("[ir-folders]", JSON.stringify({
-        parentId: irFolderId,
-        children: children.map((c) => ({ name: c.displayName, id: c.id.slice(-12), items: c.totalItemCount })),
-      }));
       // Merge subfolders that share a display name — some team@ mailboxes ended up with duplicate
       // "Escalate" / "Forwarded Drafts" folders, which otherwise show as duplicate pills. Group by
       // normalized name, pull messages from every matching folder, and dedupe by message id.
@@ -367,35 +361,6 @@ export async function POST(req: NextRequest) {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
-  }
-
-  // Merge duplicate IR subfolders: keep the canonical "Escalate" / "Forwarded Drafts", move any
-  // messages out of stray duplicates (e.g. "IR Escalations", "IR Forward Drafts") into them, delete the dupes.
-  if (body.action === "merge-ir-folders") {
-    try {
-      const irId = await resolveFolderId(TEAM_MAILBOX, IR_FOLDER);
-      if (!irId) return NextResponse.json({ error: `No "${IR_FOLDER}" folder in ${TEAM_MAILBOX}` }, { status: 404 });
-      const children = await listChildFolders(TEAM_MAILBOX, irId);
-      const canonEsc = children.find((c) => c.displayName.toLowerCase() === "escalate");
-      const canonDrafts = children.find((c) => c.displayName.toLowerCase() === "forwarded drafts");
-      const results: string[] = [];
-      for (const c of children) {
-        const nm = c.displayName.toLowerCase();
-        if (nm === "escalate" || nm === "forwarded drafts") continue; // canonical — keep
-        const target = /escalat/.test(nm) ? canonEsc : /draft/.test(nm) ? canonDrafts : null;
-        if (!target) continue; // not a recognized duplicate — leave untouched
-        let moved = 0;
-        if (c.totalItemCount > 0) {
-          const msgs = await listFolderMessages(TEAM_MAILBOX, c.id, 200);
-          for (const m of msgs) { try { await moveMessage(TEAM_MAILBOX, m.id, target.id); moved++; } catch { /* skip */ } }
-        }
-        try { await deleteFolder(TEAM_MAILBOX, c.id); results.push(`"${c.displayName}" → merged into "${target.displayName}" (${moved} moved), deleted`); }
-        catch (e) { results.push(`"${c.displayName}": delete failed — ${String(e).slice(0, 60)}`); }
-      }
-      return NextResponse.json({ ok: true, merged: results });
-    } catch (e) {
-      return NextResponse.json({ error: String(e).slice(0, 200) }, { status: 500 });
-    }
   }
 
   // Delete a draft so the AI never sends it (moves it to Deleted Items — recoverable in Outlook).
