@@ -212,13 +212,12 @@ async function handleMailbox(
       })
     );
 
-    // 3) prepare a draft reply ONLY for the routine (Forwarded Drafts) route. Escalations get NO
-    //    draft — if the AI can't answer substantively it escalates, and the human handles it from
-    //    the Escalate folder (no filler "thanks, flagging this for review" replies).
+    // 3) prepare a draft reply for BOTH routes. Escalations now get a best-effort draft too — the
+    //    human reviews/edits/sends or deletes it — but the escalation draft is filed into the
+    //    Escalate folder (rather than the general Drafts queue) so it sits with the escalation.
     //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
-    if (route !== "draft") {
-      actions.push("escalate-no-draft");
-    } else try {
+    try {
+      let newDraftId: string | null = null;
       if (triage.isDueDiligence) {
         const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
         const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody });
@@ -235,6 +234,7 @@ async function handleMailbox(
           attachments: atts,
           categories: [`IR: ${signer.split(" ")[0]}`],
         });
+        newDraftId = r.draftId;
         actions.push(`dd-drafted(${r.attached.length} attached${r.failed.length ? `, ${r.failed.length} failed` : ""})`);
       } else {
         const d = await saveDraftToOutlook({
@@ -244,7 +244,17 @@ async function handleMailbox(
           htmlBody: triage.draftHtml,
           categories: [`IR: ${signer.split(" ")[0]}`],
         });
+        newDraftId = d.draftId;
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+      }
+      // Escalation drafts go into the Escalate folder so they sit with the escalation, not the
+      // general Drafts queue. (Routine drafts stay in Drafts, awaiting approval.)
+      if (route === "escalate" && newDraftId) {
+        if (teamEscalateFolderId === undefined) teamEscalateFolderId = await ensureSubfolderId(TEAM_INBOX, IR_FOLDER, SUB_ESCALATE);
+        if (teamEscalateFolderId) {
+          try { await moveMessage(TEAM_INBOX, newDraftId, teamEscalateFolderId); actions.push("draft→escalate"); }
+          catch (e) { actions.push(`draft-move-fail(${String(e).slice(0, 40)})`); }
+        }
       }
     } catch (e) {
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);

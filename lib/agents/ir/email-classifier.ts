@@ -83,7 +83,7 @@ Rules:
 - All drafts are saved for review — the IR team approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
 - Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
-- If you cannot answer substantively from the Q&A reference or approved answers — i.e., the best you could do is a filler acknowledgment, a "thanks, noted", or an "I'm flagging this for review" message — then set isEscalation=true and return an EMPTY string for draftHtml. Only write a draft when you can give a genuinely useful, substantive reply. NEVER write placeholder or acknowledgment-only drafts.
+- ALWAYS write your best draft reply in draftHtml — never leave it empty. If the email needs the fund manager's attention or you lack the information to answer confidently, set isEscalation=true so it's filed for human review, but STILL provide a genuine best-effort draft the reviewer can edit and send (draw on the Q&A reference / approved answers where relevant). Avoid pure filler ("thanks, noted") — write the most useful reply you can even when escalating.
 
 Return a JSON object with exactly these fields:
 {
