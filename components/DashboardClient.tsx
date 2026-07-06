@@ -1438,7 +1438,7 @@ function InboxView({
         ))}
       </div>
 
-      {irTab === 'qa' ? <QaReviewView /> : (<>
+      {irTab === 'qa' ? <QaReviewView embedded /> : (<>
       {backfillMsg && (
         <div style={{ fontSize: 12, color: /failed/i.test(backfillMsg) ? '#b91c1c' : '#0e7490', background: /failed|skipped/i.test(backfillMsg) ? '#fef2f2' : '#f0f9fa', border: `1px solid ${/failed|skipped/i.test(backfillMsg) ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
           {backfillMsg}
@@ -4311,7 +4311,7 @@ function qaBtn(color: string, bg = '#fff', border = '#e5e7eb'): React.CSSPropert
   return { fontSize: 11, fontWeight: 600, padding: '5px 12px', borderRadius: 6, cursor: 'pointer', color, background: bg, border: `1px solid ${border}` }
 }
 
-function QaReviewView() {
+function QaReviewView({ embedded = false }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<'pending' | 'approved' | 'rejected'>('pending')
   const [items, setItems] = useState<QaItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -4337,10 +4337,12 @@ function QaReviewView() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2>Learned Q&amp;A</h2>
-        <p>Q&amp;A the agent learned from sent investor replies. Approve an entry to add it to the IR drafter&apos;s knowledge.</p>
-      </div>
+      {!embedded && (
+        <div className="page-header">
+          <h2>Learned Q&amp;A</h2>
+          <p>Q&amp;A the agent learned from sent investor replies. Approve an entry to add it to the IR drafter&apos;s knowledge.</p>
+        </div>
+      )}
       <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
         {(['pending', 'approved', 'rejected'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', textTransform: 'capitalize', border: tab === t ? '1px solid #0ea5e9' : '1px solid #e5e7eb', background: tab === t ? '#f0f9ff' : '#fff', color: tab === t ? '#0369a1' : '#6b7280' }}>{t}</button>
