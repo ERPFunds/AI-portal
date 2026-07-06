@@ -1335,6 +1335,8 @@ function InboxView({
     item.originalReceivedISO || (item.isDraft ? findOriginalFor(item)?.receivedISO ?? null : item.receivedISO)
   const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
 
+  const [irTab, setIrTab] = React.useState<'inbox' | 'qa'>('inbox')
+
   // "Awaiting reply" = an investor email we owe a response to: an escalation (needs a human reply)
   // or a prepared draft not yet sent. Sent items and plain filed threads are excluded.
   const awaitingReply = (item: AgentInboxItem) => item.folderKind === 'escalate' || item.isDraft
@@ -1401,9 +1403,10 @@ function InboxView({
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
-          <h2>Agent Inbox</h2>
-          <p>{subtitle}</p>
+          <h2>IR Inbox</h2>
+          <p>{irTab === 'inbox' ? subtitle : 'Q&A the agent learned from sent replies — approve an entry to feed the IR drafter'}</p>
         </div>
+        {irTab === 'inbox' && (
         <div style={{ display: 'flex', gap: 8, flexShrink: 0, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn btn-ghost" onClick={() => backfill(true)} disabled={backfilling} title="Preview what the last month of investor emails from mberry@ and wmeyer@ would triage — files nothing" style={{ whiteSpace: 'nowrap' }}>
             {backfilling ? '⏳ Working…' : '👁 Preview import (1mo)'}
@@ -1422,7 +1425,20 @@ function InboxView({
             {loading ? '↻ Syncing…' : '↻ Sync now'}
           </button>
         </div>
+        )}
       </div>
+
+      {/* Tabs: the mail queue and the Learned Q&A review live together */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
+        {([['inbox', `📥 Inbox${awaitingCount ? ` · ${awaitingCount}` : ''}`], ['qa', '💬 Learned Q&A']] as const).map(([val, label]) => (
+          <button key={val} onClick={() => setIrTab(val)}
+            style={{ fontSize: 13, fontWeight: irTab === val ? 700 : 500, color: irTab === val ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: `2px solid ${irTab === val ? '#0e7490' : 'transparent'}`, padding: '8px 14px', marginBottom: -1, cursor: 'pointer' }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {irTab === 'qa' ? <QaReviewView /> : (<>
       {backfillMsg && (
         <div style={{ fontSize: 12, color: /failed/i.test(backfillMsg) ? '#b91c1c' : '#0e7490', background: /failed|skipped/i.test(backfillMsg) ? '#fef2f2' : '#f0f9fa', border: `1px solid ${/failed|skipped/i.test(backfillMsg) ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
           {backfillMsg}
@@ -1597,6 +1613,7 @@ function InboxView({
           )}
         </div>
       </div>
+      </>)}
     </div>
   )
 }
