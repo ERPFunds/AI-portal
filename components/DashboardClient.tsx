@@ -279,7 +279,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   // ─── Views ───────────────────────────────────────────────────────────────────
 
   const views: Record<string, React.ReactNode> = {
-    dashboard: <DashboardView roleKey={roleKey} userName={userName} recentRuns={recentRuns} onNavigate={setCurrentView} />,
+    dashboard: <DashboardView roleKey={roleKey} userName={userName} recentRuns={recentRuns} agentStats={agentStats} onNavigate={setCurrentView} />,
     inbox: (
       <InboxView
         inboxItems={inboxItems}
@@ -310,6 +310,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     leasing: <LeasingView />,
     fincontrols: <FinControlsView />,
     accounting: <AccountingView />,
+    'daily-priorities': <DailyPrioritiesView />,
     kb: <KnowledgeBaseView />,
     sops: <SOPsView />,
     'market-research': <MarketResearchView />,
@@ -771,11 +772,25 @@ function activityDest(run: any): { view: string; label: string } | null {
   return null
 }
 
-function RightRail({ recentRuns, onNavigate }: { recentRuns: any[]; onNavigate?: (view: string) => void }) {
-  const [tab, setTab] = useState<'activity' | 'queue'>('activity')
+function RightRail({ recentRuns, agentStats, onNavigate }: { recentRuns: any[]; agentStats: Record<string, { runs: number; last: string | null }>; onNavigate?: (view: string) => void }) {
+  const [tab, setTab] = useState<'activity' | 'queue' | 'agents'>('activity')
   const [selected, setSelected] = useState<any | null>(null)
 
-  const tabBtn = (t: 'activity' | 'queue', label: string) => (
+  // Per-agent leaderboard: prefer 7d run stats; fall back to counting the recent-activity feed.
+  const recentByAgent: Record<string, { count: number; last: string | null }> = {}
+  for (const r of recentRuns) {
+    const id = r.agent_id as string | undefined
+    if (!id) continue
+    const e = recentByAgent[id] ?? { count: 0, last: null }
+    e.count++
+    if (!e.last || new Date(r.created_at) > new Date(e.last)) e.last = r.created_at
+    recentByAgent[id] = e
+  }
+  const agentRows = AGENTS
+    .map((a) => ({ a, runs: agentStats[a.id]?.runs ?? recentByAgent[a.id]?.count ?? 0, last: agentStats[a.id]?.last ?? recentByAgent[a.id]?.last ?? null }))
+    .sort((x, y) => y.runs - x.runs)
+
+  const tabBtn = (t: 'activity' | 'queue' | 'agents', label: string) => (
     <button
       onClick={() => setTab(t)}
       style={{ flex: 1, padding: '7px 0', fontSize: 11, fontWeight: tab === t ? 700 : 400, color: tab === t ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: tab === t ? '2px solid #0e7490' : '2px solid transparent', cursor: 'pointer' }}
@@ -786,6 +801,7 @@ function RightRail({ recentRuns, onNavigate }: { recentRuns: any[]; onNavigate?:
     <div className="ai-queue">
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
         {tabBtn('activity', 'Activity')}
+        {tabBtn('agents', 'Agents')}
         {tabBtn('queue', 'Queue')}
       </div>
 
@@ -830,6 +846,24 @@ function RightRail({ recentRuns, onNavigate }: { recentRuns: any[]; onNavigate?:
               })}
             </div>
           )
+        ) : tab === 'agents' ? (
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {agentRows.map(({ a, runs, last }) => (
+              <div key={a.id} style={{ display: 'flex', gap: 9, padding: '9px 12px', borderBottom: '1px solid #f3f4f6', alignItems: 'center' }}>
+                <div style={{ width: 26, height: 26, borderRadius: 6, background: '#f0f9fa', border: '1px solid #a5f3fc', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0 }}>{a.icon}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.name}</div>
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 1, display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: a.status === 'active' ? '#3DAE7A' : '#d1d5db', display: 'inline-block', flexShrink: 0 }} />
+                    {a.status === 'active' ? 'Active' : 'Idle'} · {a.auto} autonomy · {last ? timeAgo(last) : 'no runs'}
+                  </div>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52', flexShrink: 0, textAlign: 'right' }}>
+                  {runs}<span style={{ fontSize: 9, fontWeight: 400, color: '#9ca3af' }}> runs</span>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, gap: 10, padding: 20, color: '#9ca3af' }}>
             <div style={{ fontSize: 24 }}>✓</div>
@@ -889,7 +923,7 @@ function RightRail({ recentRuns, onNavigate }: { recentRuns: any[]; onNavigate?:
   )
 }
 
-function DashboardView({ roleKey, userName, recentRuns, onNavigate }: { roleKey: RoleKey; userName: string; recentRuns: any[]; onNavigate?: (view: string) => void }) {
+function DashboardView({ roleKey, userName, recentRuns, agentStats, onNavigate }: { roleKey: RoleKey; userName: string; recentRuns: any[]; agentStats: Record<string, { runs: number; last: string | null }>; onNavigate?: (view: string) => void }) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -980,8 +1014,39 @@ function DashboardView({ roleKey, userName, recentRuns, onNavigate }: { roleKey:
 
   const firstName = userName.split(' ')[0]
 
+  // ── AI KPI strip (data: getAgentRunStats 7d + recent_activity feed; time-saved is an estimate) ──
+  const statsRuns = Object.values(agentStats).reduce((s, v) => s + (v?.runs ?? 0), 0)
+  const runsWeek = statsRuns > 0 ? statsRuns : recentRuns.length
+  const todayStr = new Date().toDateString()
+  const runsToday = recentRuns.filter((r) => { try { return new Date(r.created_at).toDateString() === todayStr } catch { return false } }).length
+  const totalAgents = AGENTS.length
+  const activeAgents = AGENTS.filter((a) => a.status === 'active').length
+  const errCount = recentRuns.filter((r) => r.status === 'error').length
+  const successRate = recentRuns.length ? Math.round((1 - errCount / recentRuns.length) * 100) : null
+  const AVG_MIN_PER_RUN = 25
+  const timeSavedHrs = Math.round((runsWeek * AVG_MIN_PER_RUN) / 60)
+  const kpis: { label: string; value: string | number; sub: string }[] = [
+    { label: 'Runs · 7d',       value: runsWeek,                                        sub: 'across all agents' },
+    { label: 'Runs today',      value: runsToday,                                       sub: 'since midnight' },
+    { label: 'Active agents',   value: `${activeAgents}/${totalAgents}`,                sub: 'configured & on' },
+    { label: 'Success rate',    value: successRate === null ? '—' : `${successRate}%`,   sub: `${errCount} error${errCount !== 1 ? 's' : ''} · 7d` },
+    { label: 'Est. time saved', value: `~${timeSavedHrs}h`,                             sub: `≈${AVG_MIN_PER_RUN} min/run` },
+  ]
+
   return (
-    <div className="ai-center">
+    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 52px)', overflow: 'hidden' }}>
+      {/* KPI strip */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 1, background: '#e5e7eb', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
+        {kpis.map((k) => (
+          <div key={k.label} style={{ background: '#fff', padding: '11px 18px' }}>
+            <div style={{ fontSize: 10, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.5px', color: '#9ca3af' }}>{k.label}</div>
+            <div style={{ fontSize: 22, fontWeight: 700, color: '#0D2D52', marginTop: 2, lineHeight: 1.1 }}>{k.value}</div>
+            <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{k.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ai-center" style={{ height: 'auto', flex: 1, minHeight: 0 }}>
       {/* Center Feed */}
       <div className="ai-main">
         <div className="ai-feed-header">
@@ -1061,8 +1126,9 @@ function DashboardView({ roleKey, userName, recentRuns, onNavigate }: { roleKey:
         </div>
       </div>
 
-      {/* Right Rail — Activity / Queue */}
-      <RightRail recentRuns={recentRuns} onNavigate={onNavigate} />
+      {/* Right Rail — Activity / Queue / Agents */}
+      <RightRail recentRuns={recentRuns} agentStats={agentStats} onNavigate={onNavigate} />
+      </div>
     </div>
   )
 }
@@ -2203,16 +2269,11 @@ function LpDirectoryView() {
   const badge = (s: string) => (
     <span style={{ fontSize: 10, fontWeight: 600, color: COMMIT_TYPE_COLOR[s] ?? '#6b7280', background: COMMIT_TYPE_BG[s] ?? '#f3f4f6', border: `1px solid ${COMMIT_TYPE_COLOR[s] ?? '#e5e7eb'}22`, borderRadius: 5, padding: '2px 7px' }}>{s || 'TBD'}</span>
   )
-  const sfCell = (val: string | number | null, fmt?: (v: number) => string, source: 'SF' | 'Yardi' = 'SF') => {
-    const badge = source === 'Yardi'
-      ? { bg: '#fef3c7', color: '#92400e', title: 'Yardi (manual for now — API expected fall)' }
-      : { bg: '#f3f4f6', color: '#9ca3af', title: 'From Salesforce' }
-    return (
-      <td style={{ padding: '11px 14px', color: '#d1d5db', fontSize: 11 }}>
-        {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title={badge.title}>— <span style={{ fontSize: 9, background: badge.bg, color: badge.color, borderRadius: 3, padding: '1px 4px', fontWeight: 600 }}>{source}</span></span>}
-      </td>
-    )
-  }
+  const sfCell = (val: string | number | null, fmt?: (v: number) => string) => (
+    <td style={{ padding: '11px 14px', color: '#d1d5db', fontSize: 11 }}>
+      {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title="Not yet available">—</span>}
+    </td>
+  )
   const inputStyle: React.CSSProperties = { fontSize: 12, border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 7px', width: '100%', outline: 'none', background: '#fafafa' }
 
   const syncedLabel = data
@@ -2451,8 +2512,8 @@ function LpDirectoryView() {
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
               { label: 'Fund IV Committed', value: loading ? '…' : data ? fmtUsd(fundIvCommitted) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
-              { label: 'Called to Date',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
-              { label: 'Distributions',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: <span style={{ fontSize: 10, color: '#9ca3af' }}>Via Yardi <span style={{ background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span></span> as unknown as string },
+              { label: 'Called (Fund IV)',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: 'Capital called to date' },
+              { label: 'Distributions (Fund IV)',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: 'Paid to investors' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
                 <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
@@ -2486,7 +2547,6 @@ function LpDirectoryView() {
                   {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Commitment', 'Last Interaction', 'Reach Out', 'Called', 'Distributions', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
-                      {(h === 'Called' || h === 'Distributions') && <span style={{ marginLeft: 4, background: '#fef3c7', color: '#92400e', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>Yardi</span>}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
                     </th>
                   ))}
@@ -2597,8 +2657,8 @@ function LpDirectoryView() {
                       </td>
 
                       {/* Salesforce columns */}
-                      {sfCell(lp.sfCalled, fmtUsd, 'Yardi')}
-                      {sfCell(lp.sfDistributions, fmtUsd, 'Yardi')}
+                      {sfCell(lp.sfCalled, fmtUsd)}
+                      {sfCell(lp.sfDistributions, fmtUsd)}
 
                       {/* Notes */}
                       <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11, maxWidth: 200 }}>
@@ -3957,6 +4017,199 @@ function AccountingView() {
       <div className="page-header"><h2>Accounting Operations</h2><p>Agent-surfaced AP queue, reconciliation status, and close checklist — all data lives in Yardi</p></div>
       <SourceBar source="Yardi Voyager (AP · AR · GL · Bank Rec)" agents="Accounting Operations · Financial Controls" synced="Today 8:00 AM (nightly batch)" link="Open in Yardi ↗" />
       <EmptyDataView source="Yardi Voyager" message="AP queue and close checklist will appear here once Yardi is connected" />
+    </div>
+  )
+}
+
+// ─── Daily Priorities (Finance & Admin) ──────────────────────────────────────────
+
+const DP_CATEGORIES = ['Deposit Review', 'Payment Application', 'Check Approval', 'Invoice Approval', 'Overdue Notice', 'Approval (above threshold)', 'Document Signing', 'Expense Report', 'Deadline', 'Other']
+const DP_PRIORITIES = ['High', 'Medium', 'Low']
+const DP_STATUSES = ['Open', 'In Progress', 'Blocked', 'Done']
+const DP_OWNERS = ['Meghan', 'Cassandra', 'Sylvia', 'Carla', 'Pippy']
+const DP_PRIO_COLOR: Record<string, string> = { High: '#dc2626', Medium: '#f59e0b', Low: '#9ca3af' }
+const DP_STATUS_COLOR: Record<string, string> = { Open: '#6b7280', 'In Progress': '#0ea5e9', Blocked: '#b91c1c', Done: '#10b981' }
+const DP_PRIO_RANK: Record<string, number> = { High: 0, Medium: 1, Low: 2 }
+
+type DPRow = { id: string; title: string; reason: string | null; category: string; priority: string; status: string; owner: string | null; amount: number | null; entity: string | null; due_date: string | null; source: string | null; link: string | null; notes: string | null; created_by: string | null; completed_at: string | null; created_at: string; updated_at: string }
+
+const dpUsd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 1)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
+
+function DailyPrioritiesView() {
+  const [rows, setRows] = useState<DPRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [editing, setEditing] = useState<Partial<DPRow> | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  const [showDone, setShowDone] = useState(false)
+
+  const load = async () => {
+    setLoading(true)
+    try {
+      const r = await fetch('/api/daily-priorities')
+      const d = await r.json()
+      if (r.ok) setRows(d.items ?? [])
+    } catch { /* ignore */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
+
+  const save = async () => {
+    if (!editing || !editing.title?.trim() || saving) return
+    setSaving(true); setErr('')
+    try {
+      const method = editing.id ? 'PATCH' : 'POST'
+      const r = await fetch('/api/daily-priorities', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Save failed'); return }
+      setEditing(null); await load()
+    } catch (e) { setErr(String(e)) } finally { setSaving(false) }
+  }
+
+  const remove = async (id: string) => {
+    setRows((prev) => prev.filter((x) => x.id !== id))
+    setEditing(null)
+    try { await fetch(`/api/daily-priorities?id=${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch { /* ignore */ }
+  }
+
+  const setStatus = async (row: DPRow, status: string) => {
+    setRows((prev) => prev.map((x) => x.id === row.id ? { ...x, status } : x))
+    try { await fetch('/api/daily-priorities', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: row.id, status }) }) } catch { /* ignore */ }
+    finally { await load() }
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  const open = rows.filter((r) => r.status !== 'Done')
+  const done = rows.filter((r) => r.status === 'Done')
+  const overdue = open.filter((r) => r.due_date && r.due_date < today)
+  const dueToday = open.filter((r) => r.due_date === today)
+  const completedToday = done.filter((r) => r.completed_at && r.completed_at.slice(0, 10) === today)
+
+  const sortedOpen = [...open].sort((a, b) =>
+    (DP_PRIO_RANK[a.priority] - DP_PRIO_RANK[b.priority]) ||
+    ((a.due_date || '9999-99-99') < (b.due_date || '9999-99-99') ? -1 : 1))
+
+  const kpi = (label: string, value: string, color?: string) => (
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', flex: 1, minWidth: 130 }}>
+      <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px' }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: color || '#0D2D52', marginTop: 4 }}>{value}</div>
+    </div>
+  )
+
+  const renderItem = (r: DPRow) => {
+    const isDone = r.status === 'Done'
+    const isOverdue = !isDone && r.due_date && r.due_date < today
+    return (
+      <div key={r.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: '#fff', border: '1px solid #e5e7eb', borderLeft: `3px solid ${DP_PRIO_COLOR[r.priority] || '#9ca3af'}`, borderRadius: 10, padding: '12px 14px' }}>
+        <button
+          onClick={() => setStatus(r, isDone ? 'Open' : 'Done')}
+          title={isDone ? 'Mark open' : 'Mark done'}
+          style={{ flexShrink: 0, width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${isDone ? '#10b981' : '#d1d5db'}`, background: isDone ? '#10b981' : '#fff', color: '#fff', cursor: 'pointer', fontSize: 12, lineHeight: 1, marginTop: 1 }}>
+          {isDone ? '✓' : ''}
+        </button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: isDone ? '#9ca3af' : '#111827', textDecoration: isDone ? 'line-through' : 'none' }}>{r.title}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: DP_PRIO_COLOR[r.priority], background: `${DP_PRIO_COLOR[r.priority]}14`, borderRadius: 5, padding: '1px 7px' }}>{r.priority}</span>
+            <span style={{ fontSize: 10, color: '#6b7280', background: '#f3f4f6', borderRadius: 5, padding: '1px 7px' }}>{r.category}</span>
+            {r.status !== 'Open' && r.status !== 'Done' && <span style={{ fontSize: 10, fontWeight: 600, color: DP_STATUS_COLOR[r.status] }}>{r.status}</span>}
+          </div>
+          {r.reason && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 3 }}>{r.reason}</div>}
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 6, fontSize: 11, color: '#9ca3af' }}>
+            {r.owner && <span>👤 {r.owner}</span>}
+            {r.due_date && <span style={{ color: isOverdue ? '#b91c1c' : '#9ca3af', fontWeight: isOverdue ? 600 : 400 }}>📅 {r.due_date}{isOverdue ? ' · overdue' : r.due_date === today ? ' · today' : ''}</span>}
+            {r.amount != null && r.amount > 0 && <span>{dpUsd(r.amount)}{r.entity ? ` · ${r.entity}` : ''}</span>}
+            {r.amount == null && r.entity && <span>{r.entity}</span>}
+            {r.link && <a href={r.link} target="_blank" rel="noreferrer" style={{ color: '#0e7490' }}>doc ↗</a>}
+            {r.source && <span style={{ fontStyle: 'italic' }}>via {r.source}</span>}
+          </div>
+        </div>
+        <button onClick={() => setEditing(r)} style={{ flexShrink: 0, background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#374151' }}>Edit</button>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
+        <div>
+          <h2>Daily Priorities</h2>
+          <p>Finance &amp; admin action queue — what needs attention today, ranked top-first. Manually managed now; agent-fed as Yardi, banking, and approval workflows come online.</p>
+        </div>
+        <button onClick={() => setEditing({ category: 'Other', priority: 'Medium', status: 'Open' })}
+          style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add priority</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        {kpi('Open', String(open.length))}
+        {kpi('Due Today', String(dueToday.length), dueToday.length ? '#0e7490' : undefined)}
+        {kpi('Overdue', String(overdue.length), overdue.length ? '#b91c1c' : undefined)}
+        {kpi('Done Today', String(completedToday.length), '#10b981')}
+      </div>
+
+      {loading ? (
+        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading priorities…</div>
+      ) : open.length === 0 ? (
+        <div style={{ background: '#fff', border: '1px dashed #d1d5db', borderRadius: 12, padding: 40, textAlign: 'center' }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>✅</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Nothing open</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Add a priority to start the day&apos;s list.</div>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {sortedOpen.map(renderItem)}
+        </div>
+      )}
+
+      {done.length > 0 && (
+        <div style={{ marginTop: 18 }}>
+          <button onClick={() => setShowDone((s) => !s)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: '#6b7280', padding: 0 }}>
+            {showDone ? '▾' : '▸'} Completed ({done.length})
+          </button>
+          {showDone && <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>{done.map(renderItem)}</div>}
+        </div>
+      )}
+
+      {editing && (
+        <div onClick={() => setEditing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 540, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 16 }}>{editing.id ? 'Edit priority' : 'Add priority'}</div>
+            {(() => {
+              const set = (k: keyof DPRow, v: unknown) => setEditing((p) => ({ ...p, [k]: v }))
+              const lbl = { fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px', marginBottom: 4, display: 'block' }
+              const inp = { width: '100%', boxSizing: 'border-box' as const, fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#111827' }
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div><label style={lbl}>Task</label><input style={inp} value={editing.title || ''} onChange={(e) => set('title', e.target.value)} placeholder="What needs to be done" /></div>
+                  <div><label style={lbl}>Reason</label><input style={inp} value={editing.reason || ''} onChange={(e) => set('reason', e.target.value)} placeholder="One line — why it matters / what's flagged" /></div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Category</label><select style={inp} value={editing.category || 'Other'} onChange={(e) => set('category', e.target.value)}>{DP_CATEGORIES.map((c) => <option key={c}>{c}</option>)}</select></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Priority</label><select style={inp} value={editing.priority || 'Medium'} onChange={(e) => set('priority', e.target.value)}>{DP_PRIORITIES.map((p) => <option key={p}>{p}</option>)}</select></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Status</label><select style={inp} value={editing.status || 'Open'} onChange={(e) => set('status', e.target.value)}>{DP_STATUSES.map((s) => <option key={s}>{s}</option>)}</select></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Owner</label><select style={inp} value={editing.owner || ''} onChange={(e) => set('owner', e.target.value)}><option value="">—</option>{DP_OWNERS.map((o) => <option key={o}>{o}</option>)}</select></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Due date</label><input type="date" style={inp} value={editing.due_date || ''} onChange={(e) => set('due_date', e.target.value)} /></div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 12 }}>
+                    <div style={{ flex: 1 }}><label style={lbl}>Amount</label><input type="number" style={inp} value={editing.amount ?? ''} onChange={(e) => set('amount', e.target.value)} placeholder="0" /></div>
+                    <div style={{ flex: 1 }}><label style={lbl}>Entity</label><input style={inp} value={editing.entity || ''} onChange={(e) => set('entity', e.target.value)} placeholder="Fund / entity" /></div>
+                  </div>
+                  <div><label style={lbl}>Supporting link</label><input style={inp} value={editing.link || ''} onChange={(e) => set('link', e.target.value)} placeholder="Yardi / DocuSign / doc URL" /></div>
+                  <div><label style={lbl}>Notes</label><textarea style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} value={editing.notes || ''} onChange={(e) => set('notes', e.target.value)} /></div>
+                  {err && <div style={{ fontSize: 12, color: '#b91c1c' }}>{err}</div>}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                    <div>{editing.id && <button onClick={() => remove(editing.id!)} style={{ background: 'none', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
+                    <div style={{ display: 'flex', gap: 10 }}>
+                      <button onClick={() => setEditing(null)} style={{ background: 'none', border: '1px solid #d1d5db', color: '#374151', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+                      <button onClick={save} disabled={saving || !editing.title?.trim()} style={{ border: 'none', background: '#0D2D52', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving || !editing.title?.trim() ? .6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
