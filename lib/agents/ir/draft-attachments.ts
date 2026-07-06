@@ -27,6 +27,7 @@ export async function saveDraftWithAttachments(params: {
   subject: string;
   htmlBody: string;
   attachments: DraftAttachment[];
+  categories?: string[];
 }): Promise<{ draftId: string; webLink: string | null; attached: string[]; failed: string[] }> {
   const t = await token();
   const base = `${GRAPH}/users/${encodeURIComponent(params.mailboxEmail)}`;
@@ -38,6 +39,7 @@ export async function saveDraftWithAttachments(params: {
       subject: params.subject,
       body: { contentType: "HTML", content: params.htmlBody },
       toRecipients: [{ emailAddress: { address: params.toEmail } }],
+      ...(params.categories?.length ? { categories: params.categories } : {}),
     }),
   });
   if (!createRes.ok) throw new Error(`Graph create draft ${createRes.status}: ${(await createRes.text()).slice(0, 200)}`);

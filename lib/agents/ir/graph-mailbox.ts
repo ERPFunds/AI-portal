@@ -65,6 +65,7 @@ export interface MailItem extends InboxMessage {
   isDraft: boolean;
   lastModifiedDateTime: string | null;
   conversationId: string | null;
+  categories: string[];
 }
 
 /** List a folder's immediate child folders (id, name, counts). */
@@ -107,7 +108,7 @@ export async function listFolderMessages(
   const t = await token();
   const url =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folderIdOrWellKnown}/messages` +
-    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft,conversationId` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft,conversationId,categories` +
     `&$orderby=${encodeURIComponent(orderBy)}&$top=${top}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
@@ -125,6 +126,7 @@ export async function listFolderMessages(
       webLink?: string;
       isDraft?: boolean;
       conversationId?: string;
+      categories?: string[];
       from?: { emailAddress?: { address?: string; name?: string } };
       toRecipients?: { emailAddress?: { address?: string } }[];
     }): MailItem => ({
@@ -139,6 +141,7 @@ export async function listFolderMessages(
       webLink: m.webLink ?? null,
       isDraft: m.isDraft ?? false,
       conversationId: m.conversationId ?? null,
+      categories: m.categories ?? [],
       toRecipients: (m.toRecipients || [])
         .map((r) => r.emailAddress?.address || "")
         .filter(Boolean),
@@ -162,7 +165,7 @@ export async function listFolderMessagesSince(
   const out: MailItem[] = [];
   let url: string | null =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folderIdOrWellKnown}/messages` +
-    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft,conversationId` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,bodyPreview,receivedDateTime,lastModifiedDateTime,webLink,isDraft,conversationId,categories` +
     `&$filter=${encodeURIComponent(`${dateField} ge ${sinceIso}`)}` +
     `&$orderby=${encodeURIComponent(`${dateField} desc`)}&$top=50`;
   while (url && out.length < max) {
@@ -181,6 +184,7 @@ export async function listFolderMessagesSince(
       webLink?: string;
       isDraft?: boolean;
       conversationId?: string;
+      categories?: string[];
       from?: { emailAddress?: { address?: string; name?: string } };
       toRecipients?: { emailAddress?: { address?: string } }[];
     }[]) {
@@ -196,6 +200,7 @@ export async function listFolderMessagesSince(
         webLink: m.webLink ?? null,
         isDraft: m.isDraft ?? false,
         conversationId: m.conversationId ?? null,
+        categories: m.categories ?? [],
         toRecipients: (m.toRecipients || []).map((r) => r.emailAddress?.address || "").filter(Boolean),
       });
       if (out.length >= max) break;

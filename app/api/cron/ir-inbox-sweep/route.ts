@@ -233,6 +233,7 @@ async function handleMailbox(
           subject: dd.draftSubject,
           htmlBody: dd.draftHtml || triage.draftHtml,
           attachments: atts,
+          categories: [`IR: ${signer.split(" ")[0]}`],
         });
         actions.push(`dd-drafted(${r.attached.length} attached${r.failed.length ? `, ${r.failed.length} failed` : ""})`);
       } else {
@@ -241,6 +242,7 @@ async function handleMailbox(
           mailboxEmail: TEAM_INBOX,
           subject: triage.draftSubject || `Re: ${m.subject}`,
           htmlBody: triage.draftHtml,
+          categories: [`IR: ${signer.split(" ")[0]}`],
         });
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
       }

@@ -11,6 +11,7 @@ export async function saveDraftToOutlook(params: {
   mailboxEmail: string;
   subject: string;
   htmlBody: string;
+  categories?: string[];
 }): Promise<DraftResult> {
   let token: string | null;
   try {
@@ -35,6 +36,7 @@ export async function saveDraftToOutlook(params: {
         subject: params.subject,
         body: { contentType: "HTML", content: params.htmlBody },
         toRecipients: [{ emailAddress: { address: params.toEmail } }],
+        ...(params.categories?.length ? { categories: params.categories } : {}),
       }),
     }
   );

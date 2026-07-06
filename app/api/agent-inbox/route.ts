@@ -61,6 +61,17 @@ function ownerOf(addrs: string[]): "Meghan" | "William" | null {
   return null;
 }
 
+// Drafts are tagged with the signer at creation via an Outlook category ("IR: Meghan" / "IR: William"),
+// so a draft's owner is known reliably without matching it back to an inbound email.
+function ownerFromCategories(cats: string[]): "Meghan" | "William" | null {
+  for (const c of cats) {
+    const n = c.toLowerCase();
+    if (n.includes("william")) return "William";
+    if (n.includes("meghan")) return "Meghan";
+  }
+  return null;
+}
+
 export interface AgentInboxFolder {
   name: string; // display path
   kind: AgentInboxItem["folderKind"];
@@ -103,7 +114,7 @@ function toItem(
     isDraft,
     webLink: m.webLink,
     conversationId: m.conversationId,
-    owner: isDraft ? null : ownerOf(m.toRecipients),
+    owner: isDraft ? ownerFromCategories(m.categories) : ownerOf(m.toRecipients),
     originalReceivedISO: isDraft ? null : m.receivedDateTime,
   };
 }
@@ -205,12 +216,30 @@ export async function GET(req: NextRequest) {
         parentId: irFolderId,
         children: children.map((c) => ({ name: c.displayName, id: c.id.slice(-12), items: c.totalItemCount })),
       }));
+      // Merge subfolders that share a display name — some team@ mailboxes ended up with duplicate
+      // "Escalate" / "Forwarded Drafts" folders, which otherwise show as duplicate pills. Group by
+      // normalized name, pull messages from every matching folder, and dedupe by message id.
+      const byName = new Map<string, { name: string; kind: AgentInboxItem["folderKind"]; ids: string[] }>();
       for (const child of children) {
-        const path = `${IR_FOLDER} / ${child.displayName}`;
-        const kind = folderKind(child.displayName);
-        const msgs = await listFolderMessages(TEAM_MAILBOX, child.id, PER_FOLDER);
-        msgs.forEach((m) => items.push(toItem(m, path, kind)));
-        folders.push({ name: path, kind, count: msgs.length });
+        const key = child.displayName.trim().toLowerCase();
+        const g = byName.get(key);
+        if (g) g.ids.push(child.id);
+        else byName.set(key, { name: child.displayName, kind: folderKind(child.displayName), ids: [child.id] });
+      }
+      for (const g of byName.values()) {
+        const path = `${IR_FOLDER} / ${g.name}`;
+        const seen = new Set<string>();
+        let count = 0;
+        for (const fid of g.ids) {
+          const msgs = await listFolderMessages(TEAM_MAILBOX, fid, PER_FOLDER);
+          for (const m of msgs) {
+            if (seen.has(m.id)) continue;
+            seen.add(m.id);
+            items.push(toItem(m, path, g.kind));
+            count++;
+          }
+        }
+        folders.push({ name: path, kind: g.kind, count });
       }
     }
 
@@ -226,8 +255,7 @@ export async function GET(req: NextRequest) {
       "lastModifiedDateTime",
       DRAFTS_TOP
     );
-    drafts.forEach((m) => items.push(toItem(m, "Drafts (awaiting approval)", "draft")));
-    folders.push({ name: "Drafts (awaiting approval)", kind: "draft", count: drafts.length });
+    drafts.forEach((m) => items.push(toItem(m, "Drafts", "draft")));
 
     // Attribute each draft to an IR lead (Meghan/William) + surface when the email it replies to
     // arrived, by matching the draft's conversation to the inbound message in the synced folders.
@@ -244,9 +272,22 @@ export async function GET(req: NextRequest) {
       if (!it.isDraft || !it.conversationId) continue;
       const inbound = inboundByConversation.get(it.conversationId);
       if (inbound) {
-        it.owner = inbound.owner;
+        if (!it.owner) it.owner = inbound.owner; // keep the category-derived owner when present
         it.originalReceivedISO = inbound.receivedISO;
       }
+    }
+
+    // Divide the drafts queue by IR lead (Meghan / William) instead of one lump. Drafts we can't
+    // attribute fall under "Unassigned". Each becomes its own folder/pill in the inbox.
+    const draftCounts: Record<string, number> = {};
+    for (const it of items) {
+      if (!it.isDraft) continue;
+      const who = it.owner ?? "Unassigned";
+      it.folder = `Drafts · ${who}`;
+      draftCounts[who] = (draftCounts[who] ?? 0) + 1;
+    }
+    for (const who of ["Meghan", "William", "Unassigned"]) {
+      if (draftCounts[who]) folders.push({ name: `Drafts · ${who}`, kind: "draft", count: draftCounts[who] });
     }
 
     // 3) Sent replies — logged when a draft is approved & sent through the portal.
