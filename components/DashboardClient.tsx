@@ -2197,7 +2197,7 @@ function LpDirectoryView() {
     if (!compose || !compose.to.trim()) { setEmailMsg({ ok: false, text: 'Enter a recipient email.' }); return }
     setComposeBusy('draft')
     try {
-      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create-draft', to: compose.to.trim(), subject: compose.subject, body: compose.body }) })
+      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create-draft', to: compose.to.trim(), from: compose.from, subject: compose.subject, body: compose.body }) })
       const j = await res.json()
       if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Draft failed: ${j.error || res.status}` }); return }
       setEmailMsg({ ok: true, text: `Draft saved to the IR Inbox for ${compose.to}.` }); setCompose(null)

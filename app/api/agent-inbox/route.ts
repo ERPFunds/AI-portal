@@ -116,7 +116,8 @@ function toItem(
     isDraft,
     webLink: m.webLink,
     conversationId: m.conversationId,
-    owner: isDraft ? ownerFromCategories(m.categories) : ownerOf(m.toRecipients),
+    // Drafts always sort to an IR lead: use the signer category, else default to Meghan (primary IR lead).
+    owner: isDraft ? (ownerFromCategories(m.categories) ?? "Meghan") : ownerOf(m.toRecipients),
     originalReceivedISO: isDraft ? null : m.receivedDateTime,
   };
 }
@@ -422,7 +423,9 @@ export async function POST(req: NextRequest) {
     const htmlBody = text
       ? text.split(/\n{2,}/).map((p) => `<p>${p.replace(/</g, "&lt;").replace(/\n/g, "<br>")}</p>`).join("")
       : "<p></p>";
-    const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: TEAM_MAILBOX, subject, htmlBody });
+    // Tag the signer so the draft sorts to Meghan/William in the IR Inbox (default Meghan).
+    const signer = body.from === "William" ? "William" : "Meghan";
+    const r = await saveDraftToOutlook({ toEmail: to, mailboxEmail: TEAM_MAILBOX, subject, htmlBody, categories: [`IR: ${signer}`] });
     if (!r.success) return NextResponse.json({ error: r.message || "Draft failed" }, { status: 500 });
     return NextResponse.json({ ok: true, draftId: r.draftId });
   }
