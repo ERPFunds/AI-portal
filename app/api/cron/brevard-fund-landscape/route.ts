@@ -171,7 +171,6 @@ export async function GET(request: Request) {
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: "error", market: "brevard", durationMs: Date.now() - startMs, errorMessage: "No articles found — skipping send" }).catch(() => {});
       return NextResponse.json({ message: "No fund landscape articles found this week — skipping send." });
     }
 
