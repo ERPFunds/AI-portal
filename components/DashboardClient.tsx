@@ -2575,7 +2575,7 @@ function LpDirectoryView() {
                       <td style={{ padding: '11px 14px' }}>
                         {(() => {
                           const isDst = lp.group === 'DST / 1031'
-                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isDst ? '#fef3c7' : '#eff6ff', color: isDst ? '#92400e' : '#1d4ed8', whiteSpace: 'nowrap' }}>{isDst ? 'DST / 1031' : 'Fund IV LP'}</span>
+                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isDst ? '#fef3c7' : '#eff6ff', color: isDst ? '#92400e' : '#1d4ed8', whiteSpace: 'nowrap' }}>{isDst ? 'DST / 1031' : 'Fund IV LP Target'}</span>
                         })()}
                       </td>
 
