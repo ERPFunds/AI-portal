@@ -1311,6 +1311,26 @@ function InboxView({
     }
   }
 
+  async function deleteDraft(item: AgentInboxItem) {
+    if (!item.isDraft) return
+    if (!window.confirm(`Delete this draft to ${item.to.join(', ') || 'the recipient'}?\n\nThe AI won't send it. It moves to Deleted Items (recoverable in Outlook).`)) return
+    setSendingId(item.id)
+    setSendMsg(null)
+    try {
+      const res = await fetch('/api/agent-inbox', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'delete-draft', id: item.id }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) { setSendMsg(`Delete failed: ${json.error || res.status}`) }
+      else { setSendMsg('Draft deleted ✓'); setSelectedInboxIdx(0); await load() }
+    } catch (e) {
+      setSendMsg(`Delete failed: ${String(e)}`)
+    } finally {
+      setSendingId(null)
+    }
+  }
+
   const items = data?.items ?? []
   const folders = data?.folders ?? []
 
@@ -1600,6 +1620,16 @@ function InboxView({
                       onClick={() => approveAndSend(selected)}
                     >
                       {sendingId === selected.id ? '⏳ Sending…' : '✓ Approve & Send'}
+                    </button>
+                  )}
+                  {selected.isDraft && (
+                    <button
+                      disabled={sendingId === selected.id}
+                      onClick={() => deleteDraft(selected)}
+                      title="Delete this draft so the AI won't send it"
+                      style={{ fontSize: 12, fontWeight: 600, background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 7, padding: '7px 14px', cursor: sendingId === selected.id ? 'wait' : 'pointer' }}
+                    >
+                      🗑 Delete draft
                     </button>
                   )}
                   {selected.webLink && (

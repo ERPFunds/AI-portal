@@ -358,6 +358,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  // Delete a draft so the AI never sends it (moves it to Deleted Items — recoverable in Outlook).
+  if (body.action === "delete-draft") {
+    if (!body.id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    try {
+      await deleteMessage(TEAM_MAILBOX, body.id);
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      return NextResponse.json({ error: `Delete failed: ${String(e).slice(0, 150)}` }, { status: 500 });
+    }
+  }
+
   // Create a new draft in the team hub (surfaces in the IR Inbox for review/send). Used by the
   // "Email" button in the LP directory to start an outreach to an investor. With ai:true it
   // AI-drafts a tailored outreach from the LP context; otherwise it uses the given subject/body.
