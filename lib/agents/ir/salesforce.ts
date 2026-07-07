@@ -733,6 +733,45 @@ export async function seedFundIvOpportunities(
   return out;
 }
 
+export interface SeedAccountResult {
+  targets: number;
+  created: { investor: string; accountId: string; oppCreated: boolean }[];
+  skippedExists: string[]; // an Account already matched (ambiguous or present) — not created
+  errors: { investor: string; error: string }[];
+}
+
+/**
+ * For Fund IV target LPs with NO Salesforce Account, create the Account AND a Proposal Opportunity
+ * (Amount = target). Only creates when zero Accounts match the name (never on an ambiguous/duplicate
+ * match). dryRun reports what it would do.
+ */
+export async function createAccountsAndOpportunities(
+  targets: { investor: string; amountUsd: number }[],
+  stage: string,
+  dryRun: boolean
+): Promise<SeedAccountResult> {
+  const out: SeedAccountResult = { targets: targets.length, created: [], skippedExists: [], errors: [] };
+  if (!salesforceConfigured()) { out.errors.push({ investor: "-", error: "Salesforce not configured" }); return out; }
+  const closeDate = new Date().toISOString().slice(0, 10);
+  for (const t of targets) {
+    try {
+      const accts = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(t.investor)}'`);
+      if (accts.length > 0) { out.skippedExists.push(t.investor); continue; } // already exists / ambiguous
+      if (dryRun) { out.created.push({ investor: t.investor, accountId: "(would create)", oppCreated: false }); continue; }
+      const acc = await sfCreate("Account", { Name: t.investor });
+      if (!acc.ok || !acc.id) { out.errors.push({ investor: t.investor, error: `account create: ${acc.detail}` }); continue; }
+      const oppFields: Record<string, unknown> = { Name: `${t.investor} - Fund IV Commitment`.slice(0, 120), AccountId: acc.id, StageName: stage, CloseDate: closeDate };
+      if (t.amountUsd > 0) oppFields.Amount = t.amountUsd;
+      const opp = await sfCreate("Opportunity", oppFields);
+      out.created.push({ investor: t.investor, accountId: acc.id, oppCreated: opp.ok });
+      if (!opp.ok) out.errors.push({ investor: t.investor, error: `account made, opp failed: ${opp.detail}` });
+    } catch (e) {
+      out.errors.push({ investor: t.investor, error: String(e).slice(0, 120) });
+    }
+  }
+  return out;
+}
+
 /** Read-only: break down the existing Opportunities on the given Accounts by Fund, stage, and year. */
 export async function opportunityFundBreakdown(accountIds: string[]): Promise<{ byFund: { fund: string; count: number; stages: string; years: string }[]; sample: Record<string, unknown>[] }> {
   if (!salesforceConfigured() || !accountIds.length) return { byFund: [], sample: [] };

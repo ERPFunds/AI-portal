@@ -1049,8 +1049,6 @@ function DashboardView({ roleKey, userName, recentRuns, agentStats, onNavigate }
   const runsWeek = statsRuns > 0 ? statsRuns : recentRuns.length
   const todayStr = new Date().toDateString()
   const runsToday = recentRuns.filter((r) => { try { return new Date(r.created_at).toDateString() === todayStr } catch { return false } }).length
-  const totalAgents = AGENTS.length
-  const activeAgents = AGENTS.filter((a) => a.status === 'active').length
   const errCount = recentRuns.filter((r) => r.status === 'error').length
   const successRate = recentRuns.length ? Math.round((1 - errCount / recentRuns.length) * 100) : null
   // Per-run minutes weighted by the actual workflow mix in the activity feed (see WORKFLOW_MINUTES).
@@ -1060,7 +1058,6 @@ function DashboardView({ roleKey, userName, recentRuns, agentStats, onNavigate }
   const kpis: { label: string; value: string | number; sub: string }[] = [
     { label: 'Runs · 7d',       value: runsWeek,                                        sub: 'across all agents' },
     { label: 'Runs today',      value: runsToday,                                       sub: 'since midnight' },
-    { label: 'Active agents',   value: `${activeAgents}/${totalAgents}`,                sub: 'configured & on' },
     { label: 'Success rate',    value: successRate === null ? '—' : `${successRate}%`,   sub: `${errCount} error${errCount !== 1 ? 's' : ''} · 7d` },
     { label: 'Est. time saved', value: `~${timeSavedHrs}h`,                             sub: `≈${avgMin} min/run avg` },
   ]

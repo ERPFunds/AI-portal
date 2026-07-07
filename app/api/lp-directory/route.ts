@@ -6,6 +6,7 @@ import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
 import { salesforceConfigured, fetchLpSalesforceData, applyLpEditToSalesforce, type LpSfFieldMap, type SfWriteResult } from "@/lib/agents/ir/salesforce";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
+import { logSalesforceActivity } from "@/lib/agents/ir/activity-log";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -536,6 +537,12 @@ export async function PATCH(req: NextRequest) {
       },
     });
   } catch (e) { salesforce = [{ field: "salesforce", status: "error", detail: String(e).slice(0, 200) }]; }
+
+  // Note the Salesforce change in the AI Command Center activity feed (best-effort).
+  const updatedFields = salesforce.filter((w) => w.status === "updated").map((w) => w.field);
+  if (updatedFields.length) {
+    try { await logSalesforceActivity(`Updated ${updatedFields.join(", ")}`, body.investor); } catch { /* best-effort */ }
+  }
 
   return NextResponse.json({ success: true, investor: body.investor, salesforce });
 }
