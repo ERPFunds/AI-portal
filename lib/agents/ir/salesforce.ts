@@ -733,6 +733,30 @@ export async function seedFundIvOpportunities(
   return out;
 }
 
+/** Read-only: break down the existing Opportunities on the given Accounts by Fund, stage, and year. */
+export async function opportunityFundBreakdown(accountIds: string[]): Promise<{ byFund: { fund: string; count: number; stages: string; years: string }[]; sample: Record<string, unknown>[] }> {
+  if (!salesforceConfigured() || !accountIds.length) return { byFund: [], sample: [] };
+  const rows: Record<string, unknown>[] = [];
+  for (let i = 0; i < accountIds.length; i += 200) {
+    const idList = accountIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
+    const q = `SELECT Account.Name, Fund__r.Name, StageName, CloseDate, Amount, Type FROM Opportunity WHERE AccountId IN (${idList})`;
+    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+    if (res.ok) rows.push(...(((await res.json()).records ?? []) as Record<string, unknown>[]));
+  }
+  const m = new Map<string, { count: number; stages: Set<string>; years: Set<string> }>();
+  for (const o of rows) {
+    const fund = (o.Fund__r as { Name?: unknown } | null)?.Name != null ? String((o.Fund__r as { Name?: unknown }).Name) : "(no fund)";
+    const g = m.get(fund) ?? { count: 0, stages: new Set<string>(), years: new Set<string>() };
+    g.count++;
+    if (o.StageName) g.stages.add(String(o.StageName));
+    if (o.CloseDate) g.years.add(String(o.CloseDate).slice(0, 4));
+    m.set(fund, g);
+  }
+  const byFund = [...m.entries()].map(([fund, g]) => ({ fund, count: g.count, stages: [...g.stages].join("/"), years: [...g.years].sort().join(",") })).sort((a, b) => b.count - a.count);
+  const sample = rows.slice(0, 12).map((o) => ({ acct: (o.Account as { Name?: unknown } | null)?.Name ?? null, fund: (o.Fund__r as { Name?: unknown } | null)?.Name ?? null, stage: o.StageName, close: o.CloseDate, amount: o.Amount, type: o.Type }));
+  return { byFund, sample };
+}
+
 /**
  * Diagnostic probe: given the LP company names + emails from the schedule, report how the data
  * lines up with Salesforce — Contact email matches vs Account NAME matches — plus the available
