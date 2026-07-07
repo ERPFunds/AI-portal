@@ -2180,7 +2180,7 @@ function AddLpModal({ onClose, onAdded }: { onClose: () => void; onAdded: (lp: L
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
       <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 560, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 4 }}>Add LP</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 4 }}>Add Investor</div>
         <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>Creates the investor in Salesforce (Account + Opportunity) and adds them to the directory.</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div><label style={lbl}>Investor / entity name</label><input style={inp} value={f.investor} onChange={e => set('investor', e.target.value)} placeholder="e.g. Smith Family Trust" /></div>
@@ -2448,7 +2448,7 @@ function LpDirectoryView() {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setShowAddLp(true)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add LP</button>
+            <button onClick={() => setShowAddLp(true)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add Investor</button>
             <button className="btn btn-ghost" onClick={exportCsv} disabled={!data} style={{ whiteSpace: 'nowrap' }}>
               ⬇ Export to Excel
             </button>
@@ -4401,6 +4401,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
   const [dragging, setDragging] = useState(false)
   const [hover, setHover] = useState(false)
   const [open, setOpen] = useState(false)
+  const [viewing, setViewing] = useState<UploadedFileRecord | null>(null)
 
   const fetchDocs = async () => {
     try {
@@ -4443,6 +4444,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
         transform: hover ? 'translateY(-1px)' : 'none',
       }}
     >
+      {viewing && <DocViewerModal doc={viewing} onClose={() => setViewing(null)} />}
       <div
         onClick={() => setOpen((o) => !o)}
         style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}
@@ -4485,7 +4487,7 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
           {docs.map((d) => (
             <div key={d.file_id} className="doc-item">
               <span style={{ fontSize: 14 }}>📄</span>
-              <span style={{ fontSize: 12, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+              <span onClick={() => setViewing(d)} title="Open" style={{ fontSize: 12, color: '#0e7490', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: 'underline' }}>{d.filename}</span>
               <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
             </div>
           ))}
@@ -6782,6 +6784,7 @@ function UploadedFilesCard({ query = '' }: { query?: string }) {
   const [tag, setTag] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  const [viewing, setViewing] = useState<UploadedFileRecord | null>(null)
   const [collapsedTags, setCollapsedTags] = useState<Set<string>>(new Set())
 
   const fetchFiles = async () => {
@@ -6829,6 +6832,7 @@ function UploadedFilesCard({ query = '' }: { query?: string }) {
 
   return (
     <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start', opacity: q && visible.length === 0 ? 0.5 : 1 }}>
+      {viewing && <DocViewerModal doc={viewing} onClose={() => setViewing(null)} />}
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
         <Caret open={expanded} />
         <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
@@ -6885,7 +6889,7 @@ function UploadedFilesCard({ query = '' }: { query?: string }) {
                         <div key={f.file_id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 10px', background: '#f8fafc', borderRadius: 6, border: '1px solid #e5e7eb' }}>
                           <span style={{ fontSize: 13, flexShrink: 0 }}>📄</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.filename}</div>
+                            <div onClick={() => setViewing(f)} title="Open" style={{ fontSize: 11, fontWeight: 600, color: '#0e7490', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: 'underline' }}>{f.filename}</div>
                             <div style={{ fontSize: 10, color: '#9ca3af' }}>
                               {fmtBytes(f.size_bytes)}{f.project_tag ? ` · ${f.project_tag}` : ''}
                             </div>
@@ -6924,6 +6928,46 @@ const SOP_CATEGORIES = [
   { icon: '📊', label: 'Dashboard & Portal How-Tos',    desc: 'Step-by-step instructions for updating portal views: rent roll, capital calls, leasing pipeline, work orders, connections, and agent config' },
 ]
 
+// Opens a stored document (SOP, KB doc, or uploaded file) and shows its extracted text.
+function DocViewerModal({ doc, onClose }: { doc: UploadedFileRecord; onClose: () => void }) {
+  const [state, setState] = useState<'loading' | 'done' | 'empty' | 'error'>('loading')
+  const [markdown, setMarkdown] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`/api/files/${doc.file_id}`)
+        if (cancelled) return
+        if (res.status === 404) { setState('empty'); return }
+        if (!res.ok) { setState('error'); return }
+        const data = await res.json()
+        if (cancelled) return
+        setMarkdown(data.markdown ?? '')
+        setState(data.markdown ? 'done' : 'empty')
+      } catch { if (!cancelled) setState('error') }
+    })()
+    return () => { cancelled = true }
+  }, [doc.file_id])
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,45,82,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 760, boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0D2D52', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {doc.filename}</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+        <div style={{ padding: 20, maxHeight: '70vh', overflowY: 'auto' }}>
+          {state === 'loading' && <div style={{ fontSize: 12, color: '#9ca3af' }}>Loading…</div>}
+          {state === 'error' && <div style={{ fontSize: 12, color: '#b91c1c' }}>Couldn't load this document.</div>}
+          {state === 'empty' && <div style={{ fontSize: 12, color: '#9ca3af', lineHeight: 1.6 }}>No readable text is available for this file yet. Text is extracted automatically after upload (and by a nightly backfill) — check back shortly, or re-upload if this file is older.</div>}
+          {state === 'done' && <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.6, color: '#111827' }}>{markdown}</pre>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function SOPCategoryCard({ cat, query = '', reloadKey = 0 }: { cat: { icon: string; label: string; desc: string }; query?: string; reloadKey?: number }) {
   const [docs, setDocs] = useState<UploadedFileRecord[]>([])
   const [loading, setLoading] = useState(true)
@@ -6931,6 +6975,7 @@ function SOPCategoryCard({ cat, query = '', reloadKey = 0 }: { cat: { icon: stri
   const [dragging, setDragging] = useState(false)
   const [open, setOpen] = useState(false)
   const [subfolder, setSubfolder] = useState('')
+  const [viewing, setViewing] = useState<UploadedFileRecord | null>(null)
   const [collapsedTags, setCollapsedTags] = useState<Set<string>>(new Set())
 
   const fetchDocs = async () => {
@@ -6972,6 +7017,7 @@ function SOPCategoryCard({ cat, query = '', reloadKey = 0 }: { cat: { icon: stri
 
   return (
     <div className="card" style={{ margin: 0, display: 'flex', flexDirection: 'column', gap: 8, alignSelf: 'start', opacity: q && visible.length === 0 ? 0.5 : 1 }}>
+      {viewing && <DocViewerModal doc={viewing} onClose={() => setViewing(null)} />}
       <div onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }}>
         <Caret open={expanded} />
         <div style={{ width: 36, height: 36, borderRadius: 8, background: '#f3f4f6', border: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
@@ -7032,7 +7078,7 @@ function SOPCategoryCard({ cat, query = '', reloadKey = 0 }: { cat: { icon: stri
                       {g.files.map((d) => (
                         <div key={d.file_id} className="doc-item">
                           <span style={{ fontSize: 13 }}>📄</span>
-                          <span style={{ fontSize: 11, color: '#374151', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</span>
+                          <span onClick={() => setViewing(d)} title="Open" style={{ fontSize: 11, color: '#0e7490', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', cursor: 'pointer', textDecoration: 'underline' }}>{d.filename}</span>
                           <button className="doc-item-remove" onClick={() => removeDoc(d.file_id)} title="Remove">✕</button>
                         </div>
                       ))}
