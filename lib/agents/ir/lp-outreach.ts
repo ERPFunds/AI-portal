@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
 
 const client = new Anthropic();
 
@@ -53,13 +54,16 @@ Rules:
 - For any account, document, K-1/tax, statement, or distribution question, direct them to Tracy Doyle (tdoyle@erpfunds.com).
 - Sign off as "${signer}" only — no title, department, or "Investor Relations" line under the name.
 - This is a DRAFT for ${signer} to review and edit before sending — leave it easy to personalize.
+- Follow the approved IR Q&A sources below for how ERP describes itself and handles recurring questions; never contradict them.
 
 Return ONLY a JSON object: {"subject": "...", "body": "...plain text with \\n line breaks..."}.`;
+
+  const grounding = await getIrQaGrounding();
 
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 1200,
-    system: [{ type: "text" as const, text: system }],
+    system: [{ type: "text" as const, text: system + grounding }],
     messages: [{ role: "user", content: `Draft the outreach email for this investor:\n${context}` }],
   });
 

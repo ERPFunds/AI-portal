@@ -1,6 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { getIrQaReferenceText } from "@/lib/agents/ir/qa-reference";
-import { getApprovedQaForPrompt } from "@/lib/agents/ir/qa-store";
+import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
 
 const client = new Anthropic();
 
@@ -54,18 +53,9 @@ export async function classifyInvestorEmail(params: {
   signAs?: string;
 }): Promise<EmailClassification> {
   const signer = params.signAs || "Meghan Berry";
-  // Reference the team-maintained IR Q&A doc (SOP section) on every draft, so replies
-  // follow the current approved answers. Non-fatal if the doc is unavailable.
-  let faqContext = FAQ_CONTEXT;
-  try {
-    const ref = await getIrQaReferenceText();
-    if (ref) faqContext = `${FAQ_CONTEXT}\n\n=== IR Q&A Reference (authoritative — follow this when answering investor questions) ===\n${ref}`;
-  } catch { /* fall back to base FAQ if the reference doc is unavailable */ }
-  // Plus any Q&A the IR team has approved on the review page (Workflow 5).
-  try {
-    const approved = await getApprovedQaForPrompt();
-    if (approved) faqContext += `\n\n=== Recently approved Q&A (reviewed by the IR team) ===\n${approved}`;
-  } catch { /* non-fatal */ }
+  // Ground every draft on the SOP sources — the IR Q&A Reference doc + approved Learned Q&A — so
+  // replies follow the current approved answers. Non-fatal if a source is unavailable.
+  const faqContext = FAQ_CONTEXT + (await getIrQaGrounding());
 
   const msg = await client.messages.create({
     model: "claude-opus-4-7",

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getDocText } from "@/lib/agents/ir/markdown-store";
 import { retrieveChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
 
 const client = new Anthropic();
 
@@ -70,16 +71,19 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
     }
   }
 
+  const grounding = await getIrQaGrounding();
+
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
     max_tokens: 2000,
     system: [{ type: "text" as const, text:
-`You are ERP Industrials' Investor Relations agent drafting a reply (from Meghan Berry's office) to an investor/broker DUE-DILIGENCE inquiry. Use ONLY the fund documents provided.
+`You are ERP Industrials' Investor Relations agent drafting a reply (from Meghan Berry's office) to an investor/broker DUE-DILIGENCE inquiry. Answer from the fund documents provided, and follow the approved IR Q&A sources below for how ERP handles recurring questions.
 
 Return ONLY a JSON object: { "draftSubject": string, "draftHtml": string, "attach": string[] }.
 - draftHtml: a warm, professional HTML email answering each due-diligence question, grounded in the documents, citing the source document name in parentheses. If something isn't in the documents, say it will be provided separately rather than guessing. NEVER invent or estimate figures — quote them exactly with their source.
+- Follow the IR Q&A Reference / approved Learned Q&A for standard handling (e.g. account/document/K-1/distribution questions route to Tracy Doyle, tdoyle@erpfunds.com). Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, or logging in.
 - attach: exact filenames (from the AVAILABLE FILES list) of the source documents relevant to these questions, to attach to the reply. Use exact strings from the list; [] if none apply.
-- The draft is saved for Meghan's review — she sends it. Do not claim it has already been sent.` }],
+- The draft is saved for Meghan's review — she sends it. Do not claim it has already been sent.${grounding}` }],
     messages: [{ role: "user", content:
 `From: ${params.from}\nSubject: ${params.subject}\n\nInquiry:\n${params.body}\n\n=== AVAILABLE FILES (attach by exact filename) ===\n${fileList}\n\n=== FUND DOCUMENTS ===\n${sections.join("\n\n")}` }],
   });
