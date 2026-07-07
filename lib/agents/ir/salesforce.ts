@@ -733,6 +733,42 @@ export async function seedFundIvOpportunities(
   return out;
 }
 
+/**
+ * Add a NEW Fund IV Proposal Opportunity to Fund IV target Accounts that don't yet have one —
+ * WITHOUT touching their existing (prior-fund) Opportunities. Dedup: skips an Account that already
+ * has an Opp named "… Fund IV Commitment". dryRun reports what it would create.
+ */
+export async function addFundIvProposalOpps(
+  targets: { investor: string; crmId: string | null; amountUsd: number }[],
+  stage: string,
+  dryRun: boolean
+): Promise<SeedOppResult> {
+  const out: SeedOppResult = { targets: targets.length, created: [], skippedHasOpp: [], skippedNoAccount: [], errors: [] };
+  if (!salesforceConfigured()) { out.errors.push({ investor: "-", error: "Salesforce not configured" }); return out; }
+  const closeDate = new Date().toISOString().slice(0, 10);
+  for (const t of targets) {
+    try {
+      let accountId = t.crmId;
+      if (!accountId) {
+        const accts = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(t.investor)}'`);
+        accountId = accts.length === 1 ? String(accts[0].Id) : null;
+      }
+      if (!accountId) { out.skippedNoAccount.push(t.investor); continue; }
+      const opps = await sfQuery(`SELECT Id, Name FROM Opportunity WHERE AccountId = '${accountId}'`);
+      if (opps.some((o) => String(o.Name ?? "").toLowerCase().includes("fund iv commitment"))) { out.skippedHasOpp.push(t.investor); continue; }
+      if (dryRun) { out.created.push(t.investor); continue; }
+      const fields: Record<string, unknown> = { Name: `${t.investor} - Fund IV Commitment`.slice(0, 120), AccountId: accountId, StageName: stage, CloseDate: closeDate };
+      if (t.amountUsd > 0) fields.Amount = t.amountUsd;
+      const c = await sfCreate("Opportunity", fields);
+      if (c.ok) out.created.push(t.investor);
+      else out.errors.push({ investor: t.investor, error: c.detail || "create failed" });
+    } catch (e) {
+      out.errors.push({ investor: t.investor, error: String(e).slice(0, 120) });
+    }
+  }
+  return out;
+}
+
 export interface SeedAccountResult {
   targets: number;
   created: { investor: string; accountId: string; oppCreated: boolean }[];
