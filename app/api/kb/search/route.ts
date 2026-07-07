@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   const seen = new Set<string>();
   const sources = chunks
     .filter((c) => (seen.has(c.filename) ? false : (seen.add(c.filename), true)))
-    .map((c) => ({ filename: c.filename, category: c.category, similarity: Math.round(c.similarity * 100) / 100, snippet: c.content.slice(0, 300) }));
+    .map((c) => ({ file_id: c.file_id, filename: c.filename, category: c.category, similarity: Math.round(c.similarity * 100) / 100, snippet: c.content.slice(0, 300) }));
 
   return NextResponse.json({ answer, sources });
 }

@@ -2393,16 +2393,18 @@ function LpDirectoryView() {
   function exportCsv() {
     if (!data) return
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Group', 'Investor', 'Commitment', 'Type / Stage', 'Primary Contact', 'Broker / Advisor Firm', 'Broker / Advisor Rep', 'Email', 'Phone', 'Last Interaction', 'Notes']
+    const cols = ['Group', 'Investor', 'Type', 'Stage', 'Target', 'Committed', 'Primary Contact', 'Broker / Advisor Firm', 'Broker / Advisor Rep', 'Email', 'Phone', 'Last Interaction', 'Notes']
     const lines = data.lps.map(lp => [
       lp.group,
       lp.investor,
-      lp.commitment,
-      lp.commitType || lp.sfLpType || '',
+      lp.group === 'DST / 1031' ? 'DST / 1031' : 'Fund IV LP',
+      lp.sfStage || '',
+      lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : (lp.commitment || ''),
+      lp.committedUsd != null ? fmtUsd(lp.committedUsd) : '',
       lp.contact || lp.sfBrokerContact || '',
       lp.brokerFirm || lp.sfAdvisorFirm || '',
       lp.brokerContact || lp.sfAdvisorContact || '',
-      lp.email,
+      lp.resolvedEmail || lp.email || '',
       lp.phone,
       lp.lastInteraction ? `${lp.lastInteraction.date} · ${lp.lastInteraction.note}` : '',
       lp.notes,
@@ -4503,15 +4505,16 @@ function KBCategoryCard({ kb }: { kb: { icon: string; label: string; desc: strin
 function KBSearchBox() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
-  const [res, setRes] = useState<{ answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
+  const [res, setRes] = useState<{ answer: string; sources: { file_id?: string; filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
   const [err, setErr] = useState('')
   const [lastQ, setLastQ] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
-  type SavedItem = { id: string; query: string; answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[]; saved_by: string | null; saved_at: string }
+  type SavedItem = { id: string; query: string; answer: string; sources: { file_id?: string; filename: string; category: string | null; similarity: number; snippet: string }[]; saved_by: string | null; saved_at: string }
   const [savedList, setSavedList] = useState<SavedItem[]>([])
   const [showSaved, setShowSaved] = useState(false)
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<{ file_id: string; filename: string } | null>(null)
 
   const loadSaved = async () => {
     try {
@@ -4553,6 +4556,7 @@ function KBSearchBox() {
 
   return (
     <div style={{ marginBottom: 20 }}>
+      {viewing && <DocViewerModal doc={viewing} onClose={() => setViewing(null)} />}
       <div style={{ display: 'flex', gap: 8 }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: 14, pointerEvents: 'none' }}>🔍</span>
@@ -4580,7 +4584,7 @@ function KBSearchBox() {
               <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>Sources</div>
               {res.sources.map((s, i) => (
                 <div key={i} style={{ marginBottom: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: '#0e7490' }}>📄 {s.filename}{s.category ? ` · ${s.category}` : ''}</div>
+                  <div onClick={s.file_id ? () => setViewing({ file_id: s.file_id!, filename: s.filename }) : undefined} title={s.file_id ? 'Open document' : undefined} style={{ fontSize: 11, fontWeight: 600, color: '#0e7490', cursor: s.file_id ? 'pointer' : 'default', textDecoration: s.file_id ? 'underline' : 'none' }}>📄 {s.filename}{s.category ? ` · ${s.category}` : ''}</div>
                   <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.45, marginTop: 2 }}>{s.snippet}…</div>
                 </div>
               ))}
@@ -4619,7 +4623,7 @@ function KBSearchBox() {
                             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase' as const, letterSpacing: '.5px', color: '#9ca3af', marginBottom: 6 }}>Sources</div>
                             {s.sources.map((src, i) => (
                               <div key={i} style={{ marginBottom: 8 }}>
-                                <div style={{ fontSize: 11, fontWeight: 600, color: '#0e7490' }}>📄 {src.filename}{src.category ? ` · ${src.category}` : ''}</div>
+                                <div onClick={src.file_id ? () => setViewing({ file_id: src.file_id!, filename: src.filename }) : undefined} title={src.file_id ? 'Open document' : undefined} style={{ fontSize: 11, fontWeight: 600, color: '#0e7490', cursor: src.file_id ? 'pointer' : 'default', textDecoration: src.file_id ? 'underline' : 'none' }}>📄 {src.filename}{src.category ? ` · ${src.category}` : ''}</div>
                                 <div style={{ fontSize: 11, color: '#6b7280', lineHeight: 1.45, marginTop: 2 }}>{src.snippet}…</div>
                               </div>
                             ))}
@@ -6929,7 +6933,7 @@ const SOP_CATEGORIES = [
 ]
 
 // Opens a stored document (SOP, KB doc, or uploaded file) and shows its extracted text.
-function DocViewerModal({ doc, onClose }: { doc: UploadedFileRecord; onClose: () => void }) {
+function DocViewerModal({ doc, onClose }: { doc: { file_id: string; filename: string }; onClose: () => void }) {
   const [state, setState] = useState<'loading' | 'done' | 'empty' | 'error'>('loading')
   const [markdown, setMarkdown] = useState('')
 
@@ -7451,7 +7455,7 @@ const SOP_SEARCH_CATEGORIES = ['Claude Training and Assets', 'Agent Working Guid
 function SOPSemanticSearch() {
   const [q, setQ] = useState('')
   const [loading, setLoading] = useState(false)
-  const [res, setRes] = useState<{ answer: string; sources: { filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
+  const [res, setRes] = useState<{ answer: string; sources: { file_id?: string; filename: string; category: string | null; similarity: number; snippet: string }[] } | null>(null)
   const [err, setErr] = useState('')
 
   const run = async () => {
