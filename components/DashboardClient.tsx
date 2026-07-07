@@ -1640,13 +1640,20 @@ function InboxView({
                 </div>
               )
             })}
-            {!loading && filtered.length === 0 && !error && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
-                <div style={{ fontSize: 28 }}>📭</div>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>All clear</div>
-                <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.5, maxWidth: 220 }}>No Investor Relations messages or drafts to review right now</div>
-              </div>
-            )}
+            {!loading && filtered.length === 0 && !error && (() => {
+              const isSent = folderFilter === 'Sent' || inboxStatusFilter === 'handled'
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
+                  <div style={{ fontSize: 28 }}>{isSent ? '📤' : '📭'}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#6b7280' }}>{isSent ? 'No sent replies yet' : 'All clear'}</div>
+                  <div style={{ fontSize: 12, textAlign: 'center', lineHeight: 1.5, maxWidth: 240 }}>
+                    {isSent
+                      ? 'Agent-drafted replies that Meghan or William send will appear here once the first one goes out.'
+                      : 'No Investor Relations messages or drafts to review right now'}
+                  </div>
+                </div>
+              )
+            })()}
             {error && (
               <div style={{ padding: 20, color: '#9ca3af', fontSize: 12, lineHeight: 1.6 }}>
                 <div style={{ fontWeight: 600, color: '#E55A4E', marginBottom: 6 }}>Couldn’t sync the mailbox</div>

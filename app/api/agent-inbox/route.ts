@@ -408,7 +408,9 @@ export async function GET(req: NextRequest) {
       }
     } catch { /* skip DB merge on error */ }
 
-    if (sentCount) folders.push({ name: "Sent", kind: "sent", count: sentCount });
+    // Always surface the Sent folder as a placeholder — even at 0 — so it's discoverable and
+    // populates as replies are sent.
+    folders.push({ name: "Sent", kind: "sent", count: sentCount });
 
     return NextResponse.json({
       mailbox: TEAM_MAILBOX,
