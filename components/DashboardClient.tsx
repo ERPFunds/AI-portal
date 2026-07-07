@@ -2204,7 +2204,7 @@ function AddLpModal({ onClose, onAdded }: { onClose: () => void; onAdded: (lp: L
           {err && <div style={{ fontSize: 12, color: '#b91c1c' }}>{err}</div>}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
             <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-            <button onClick={save} disabled={!f.investor.trim() || saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !f.investor.trim() || saving ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !f.investor.trim() || saving ? 'default' : 'pointer' }}>{saving ? 'Adding…' : 'Add LP'}</button>
+            <button onClick={save} disabled={!f.investor.trim() || saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !f.investor.trim() || saving ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !f.investor.trim() || saving ? 'default' : 'pointer' }}>{saving ? 'Adding…' : 'Add Investor'}</button>
           </div>
         </div>
       </div>
