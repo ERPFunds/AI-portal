@@ -688,6 +688,51 @@ export async function applyLpEditToSalesforce(params: {
   return out;
 }
 
+export interface SeedOppResult {
+  targets: number;
+  created: string[];        // in dryRun, these are the ones that WOULD be created
+  skippedHasOpp: string[];  // already have an Opportunity (left untouched)
+  skippedNoAccount: string[]; // no uniquely-matched Salesforce Account
+  errors: { investor: string; error: string }[];
+}
+
+/**
+ * One-time bulk seed: create a Salesforce Opportunity (StageName = `stage`, Amount = target) for each
+ * Fund IV target LP that has a uniquely-matched Account and NO existing Opportunity. Never touches an
+ * LP that already has an Opportunity (so it won't reopen closed deals or duplicate). dryRun reports
+ * what it would do without writing.
+ */
+export async function seedFundIvOpportunities(
+  targets: { investor: string; crmId: string | null; amountUsd: number }[],
+  stage: string,
+  dryRun: boolean
+): Promise<SeedOppResult> {
+  const out: SeedOppResult = { targets: targets.length, created: [], skippedHasOpp: [], skippedNoAccount: [], errors: [] };
+  if (!salesforceConfigured()) { out.errors.push({ investor: "-", error: "Salesforce not configured" }); return out; }
+  const closeDate = new Date().toISOString().slice(0, 10);
+  for (const t of targets) {
+    try {
+      let accountId = t.crmId;
+      if (!accountId) {
+        const accts = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(t.investor)}'`);
+        accountId = accts.length === 1 ? String(accts[0].Id) : null;
+      }
+      if (!accountId) { out.skippedNoAccount.push(t.investor); continue; }
+      const opps = await sfQuery(`SELECT Id FROM Opportunity WHERE AccountId = '${accountId}'`);
+      if (opps.length > 0) { out.skippedHasOpp.push(t.investor); continue; }
+      if (dryRun) { out.created.push(t.investor); continue; }
+      const fields: Record<string, unknown> = { Name: `${t.investor} - Fund IV Commitment`.slice(0, 120), AccountId: accountId, StageName: stage, CloseDate: closeDate };
+      if (t.amountUsd > 0) fields.Amount = t.amountUsd;
+      const c = await sfCreate("Opportunity", fields);
+      if (c.ok) out.created.push(t.investor);
+      else out.errors.push({ investor: t.investor, error: c.detail || "create failed" });
+    } catch (e) {
+      out.errors.push({ investor: t.investor, error: String(e).slice(0, 120) });
+    }
+  }
+  return out;
+}
+
 /**
  * Diagnostic probe: given the LP company names + emails from the schedule, report how the data
  * lines up with Salesforce — Contact email matches vs Account NAME matches — plus the available
