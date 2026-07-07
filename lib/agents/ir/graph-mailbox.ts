@@ -562,13 +562,15 @@ export async function deleteMessage(mailbox: string, messageId: string): Promise
  */
 export async function findMessageByInternetId(
   mailbox: string,
-  internetMessageId: string
+  internetMessageId: string,
+  folder?: string
 ): Promise<{ id: string; parentFolderId: string | null } | null> {
   const t = await token();
   const filter = `internetMessageId eq '${internetMessageId.replace(/'/g, "''")}'`;
-  const url =
-    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
-    `?$select=id,parentFolderId&$filter=${encodeURIComponent(filter)}&$top=1`;
+  const base = folder
+    ? `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${encodeURIComponent(folder)}/messages`
+    : `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages`;
+  const url = `${base}?$select=id,parentFolderId&$filter=${encodeURIComponent(filter)}&$top=1`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
   if (!res.ok) throw new Error(`Graph find-by-internetId ${res.status}: ${await res.text()}`);
   const data = await res.json();

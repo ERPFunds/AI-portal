@@ -378,9 +378,12 @@ async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: stri
     if (wantedIds.length === 0) return out;
     for (const iid of wantedIds) {
       try {
-        // Look the message up directly by internetMessageId (any folder, incl. Deleted Items) so
-        // the huge Deleted Items volume doesn't matter. Move it back to the Inbox.
-        const found = await findMessageByInternetId(mailbox, iid);
+        // Look the message up directly by internetMessageId so the huge Deleted Items volume doesn't
+        // matter. Check Deleted Items first (where soft-deletes land), then fall back to a
+        // whole-mailbox lookup. Move whatever we find back to the Inbox.
+        const found =
+          (await findMessageByInternetId(mailbox, iid, "deleteditems")) ||
+          (await findMessageByInternetId(mailbox, iid));
         if (!found) continue;
         out.found++;
         await moveMessage(mailbox, found.id, "inbox");
