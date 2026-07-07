@@ -4,7 +4,7 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
 import { getLpLastInteractions } from "@/lib/db";
-import { salesforceConfigured, fetchLpSalesforceData, applyLpEditToSalesforce, type LpSfFieldMap, type SfWriteResult } from "@/lib/agents/ir/salesforce";
+import { salesforceConfigured, fetchLpSalesforceData, applyLpEditToSalesforce, addLpToSalesforce, type LpSfFieldMap, type SfWriteResult } from "@/lib/agents/ir/salesforce";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 import { logSalesforceActivity } from "@/lib/agents/ir/activity-log";
 
@@ -545,4 +545,81 @@ export async function PATCH(req: NextRequest) {
   }
 
   return NextResponse.json({ success: true, investor: body.investor, salesforce });
+}
+
+// ── POST — add a brand-new LP (creates the Salesforce Account + Opportunity, adds it to the cache) ──
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const body = await req.json().catch(() => ({}));
+  const investor = (body.investor ?? "").toString().trim();
+  if (!investor) return NextResponse.json({ error: "Investor name is required" }, { status: 400 });
+
+  const isDst = body.channel === "DST" || body.group === "DST / 1031";
+  const group = isDst ? "DST / 1031" : "Fund IV";
+  const commitmentUsd = body.commitment ? parseDollar(String(body.commitment)) : 0;
+  const committedUsd = body.committed && String(body.committed).trim() ? parseDollar(String(body.committed)) : null;
+  const stage = (body.stage ?? "").toString().trim() || (isDst ? "" : "Proposal");
+
+  // Create the LP in Salesforce (Account + Opportunity) — best-effort.
+  let sfCrmId: string | null = null;
+  let sfStage: string | null = stage || null;
+  let sfDetail = "skipped (SF not configured)";
+  if (salesforceConfigured()) {
+    const r = await addLpToSalesforce({ investor, amountUsd: commitmentUsd, stage: stage || "Proposal" });
+    sfCrmId = r.accountId;
+    sfDetail = r.detail;
+    if (r.oppCreated && !stage) sfStage = "Proposal";
+    try { await logSalesforceActivity("Added LP (Account + opportunity)", investor); } catch { /* best-effort */ }
+  }
+
+  const rec: LpRecord = {
+    investor,
+    commitment: commitmentUsd > 0 ? `$${Math.round(commitmentUsd).toLocaleString("en-US")}` : (body.commitment ? String(body.commitment) : ""),
+    commitmentUsd,
+    commitType: "",
+    contact: (body.contact ?? "").toString(),
+    email: (body.email ?? "").toString(),
+    phone: (body.phone ?? "").toString(),
+    date: "",
+    notes: (body.notes ?? "").toString(),
+    group,
+    lastInteraction: null,
+    sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId,
+    sfBrokerCompany: null, sfBrokerContact: null,
+    sfAdvisorFirm: (body.brokerFirm ?? "").toString() || null,
+    sfAdvisorContact: (body.brokerContact ?? "").toString() || null,
+    brokerFirm: (body.brokerFirm ?? "").toString(),
+    brokerContact: (body.brokerContact ?? "").toString(),
+    resolvedEmail: (body.email ?? "").toString() || null,
+    committedUsd,
+    sfStage,
+  };
+
+  // Add to the cached snapshot so it shows immediately (before the next full Sync).
+  try {
+    const cached = await readLpCache(supabase);
+    const data = cached?.data as ({ lps?: LpRecord[]; groups?: string[]; lpCount?: number; dstCount?: number } & Record<string, unknown>) | undefined;
+    if (data && Array.isArray(data.lps)) {
+      data.lps.push(rec);
+      data.lpCount = data.lps.length;
+      if (isDst) data.dstCount = (data.dstCount ?? 0) + 1;
+      if (Array.isArray(data.groups) && !data.groups.includes(group)) data.groups.push(group);
+      await writeLpCache(supabase, data);
+    }
+  } catch { /* cache add is best-effort */ }
+
+  // Persist a committed amount if given.
+  if (committedUsd && committedUsd > 0) {
+    try {
+      await supabase.from("lp_committed").upsert(
+        { investor_key: investor.toLowerCase(), investor, committed_usd: committedUsd, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() },
+        { onConflict: "investor_key" }
+      );
+    } catch { /* non-fatal */ }
+  }
+
+  return NextResponse.json({ success: true, lp: rec, sfCrmId, sfDetail });
 }

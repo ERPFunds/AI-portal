@@ -2153,11 +2153,71 @@ const STAGE_COLOR: Record<string, { bg: string; color: string }> = {
   'Closed Lost': { bg: '#fef2f2', color: '#b91c1c' },
 }
 
+function AddLpModal({ onClose, onAdded }: { onClose: () => void; onAdded: (lp: LpRecord) => void }) {
+  const [f, setF] = React.useState({ investor: '', channel: 'Fund IV', contact: '', email: '', phone: '', commitment: '', committed: '', stage: 'Proposal', brokerFirm: '', brokerContact: '', notes: '' })
+  const [saving, setSaving] = React.useState(false)
+  const [err, setErr] = React.useState('')
+  const set = (k: keyof typeof f, v: string) => setF(p => ({ ...p, [k]: v }))
+  const isDst = f.channel === 'DST'
+
+  const save = async () => {
+    if (!f.investor.trim() || saving) return
+    setSaving(true); setErr('')
+    try {
+      const r = await fetch('/api/lp-directory', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...f, channel: isDst ? 'DST' : 'Fund IV' }),
+      })
+      const d = await r.json()
+      if (!r.ok || d.error) { setErr(d.error || 'Add failed'); return }
+      onAdded(d.lp as LpRecord)
+    } catch (e) { setErr(String(e)) } finally { setSaving(false) }
+  }
+
+  const lbl: React.CSSProperties = { fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.4px', marginBottom: 4, display: 'block' }
+  const inp: React.CSSProperties = { width: '100%', boxSizing: 'border-box', fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#111827' }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 560, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 4 }}>Add LP</div>
+        <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 16 }}>Creates the investor in Salesforce (Account + Opportunity) and adds them to the directory.</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div><label style={lbl}>Investor / entity name</label><input style={inp} value={f.investor} onChange={e => set('investor', e.target.value)} placeholder="e.g. Smith Family Trust" /></div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}><label style={lbl}>Type</label><select style={inp} value={f.channel} onChange={e => set('channel', e.target.value)}><option value="Fund IV">Fund IV LP</option><option value="DST">DST / 1031</option></select></div>
+            <div style={{ flex: 1 }}><label style={lbl}>Stage</label><select style={inp} value={f.stage} onChange={e => set('stage', e.target.value)}>{SF_OPP_STAGES.map(s => <option key={s}>{s}</option>)}</select></div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}><label style={lbl}>Target commitment ($)</label><input style={inp} value={f.commitment} onChange={e => set('commitment', e.target.value)} placeholder="$500,000" /></div>
+            <div style={{ flex: 1 }}><label style={lbl}>Committed ($, optional)</label><input style={inp} value={f.committed} onChange={e => set('committed', e.target.value)} placeholder="blank if not yet committed" /></div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}><label style={lbl}>Primary contact</label><input style={inp} value={f.contact} onChange={e => set('contact', e.target.value)} /></div>
+            <div style={{ flex: 1 }}><label style={lbl}>Email</label><input style={inp} value={f.email} onChange={e => set('email', e.target.value)} /></div>
+          </div>
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div style={{ flex: 1 }}><label style={lbl}>Broker / advisor firm</label><input style={inp} value={f.brokerFirm} onChange={e => set('brokerFirm', e.target.value)} /></div>
+            <div style={{ flex: 1 }}><label style={lbl}>Broker / advisor rep</label><input style={inp} value={f.brokerContact} onChange={e => set('brokerContact', e.target.value)} /></div>
+          </div>
+          <div><label style={lbl}>Notes</label><textarea style={{ ...inp, minHeight: 54, resize: 'vertical' }} value={f.notes} onChange={e => set('notes', e.target.value)} /></div>
+          {err && <div style={{ fontSize: 12, color: '#b91c1c' }}>{err}</div>}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 4 }}>
+            <button onClick={onClose} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#374151', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
+            <button onClick={save} disabled={!f.investor.trim() || saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !f.investor.trim() || saving ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !f.investor.trim() || saving ? 'default' : 'pointer' }}>{saving ? 'Adding…' : 'Add LP'}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
   const [fundView, setFundView] = React.useState<'All' | 'Fund IV' | 'DST / 1031'>('All')
   const [stageFilter, setStageFilter] = React.useState<string>('All')
+  const [showAddLp, setShowAddLp] = React.useState(false)
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
   const DST_GROUP = 'DST / 1031'
@@ -2376,6 +2436,11 @@ function LpDirectoryView() {
 
   return (
     <div>
+      {showAddLp && <AddLpModal onClose={() => setShowAddLp(false)} onAdded={(lp) => {
+        setData(prev => prev ? { ...prev, lps: [...prev.lps, lp], lpCount: (prev.lpCount ?? prev.lps.length) + 1, dstCount: lp.group === 'DST / 1031' ? (prev.dstCount ?? 0) + 1 : prev.dstCount } : prev)
+        setShowAddLp(false)
+        setSaveMsg({ ok: true, text: `Added ${lp.investor}${lp.sfCrmId ? ' (created in Salesforce)' : ''}.` })
+      }} />}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div>
           <h2>LP Directory</h2>
@@ -2383,6 +2448,7 @@ function LpDirectoryView() {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => setShowAddLp(true)} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add LP</button>
             <button className="btn btn-ghost" onClick={exportCsv} disabled={!data} style={{ whiteSpace: 'nowrap' }}>
               ⬇ Export to Excel
             </button>
@@ -3678,22 +3744,19 @@ function RentRollView() {
   )
 }
 
-const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, backflow_last: null, elevator_last: null, crane_last: null }
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, crane_last: null }
 
-type InspKey = 'quicklook_last' | 'hvac_last' | 'fire_last' | 'backflow_last' | 'elevator_last' | 'crane_last'
+type InspKey = 'quicklook_last' | 'hvac_last' | 'fire_last' | 'crane_last'
 const INSP_TYPES: { key: InspKey; label: string; bg: string; color: string; craneOnly?: boolean }[] = [
   { key: 'quicklook_last', label: '🔍 Quicklook', bg: '#f0fdfa', color: '#0d9488' },
   { key: 'hvac_last',      label: '❄️ HVAC',      bg: '#eff6ff', color: '#2563eb' },
   { key: 'fire_last',      label: '🔥 Fire',      bg: '#fff7ed', color: '#ea580c' },
-  { key: 'backflow_last',  label: '🚰 Backflow',  bg: '#eff6ff', color: '#0369a1' },
-  { key: 'elevator_last',  label: '🛗 Elevator',  bg: '#faf5ff', color: '#7e22ce' },
   { key: 'crane_last',     label: '🏗️ Crane',     bg: '#fffbeb', color: '#b45309', craneOnly: true },
 ]
 
 function WorkOrdersView() {
   const [search, setSearch] = React.useState('')
   const [flagOnly, setFlagOnly] = React.useState(false)
-  const [sel, setSel] = React.useState<Record<number, string>>({}) // per-row selected inspection type
   const [syncing, setSyncing] = React.useState(false)
 
   const [rows, setRows] = React.useState<WorkOrder[]>([])
@@ -3710,8 +3773,8 @@ function WorkOrdersView() {
   }
   React.useEffect(() => { load() }, [])
 
-  const anyDate = (w: WorkOrder) => w.quicklook_last || w.hvac_last || w.fire_last || w.backflow_last || w.elevator_last || w.crane_last
-  const latest = (w: WorkOrder) => [w.quicklook_last, w.hvac_last, w.fire_last, w.backflow_last, w.elevator_last, w.crane_last].filter(Boolean).sort().slice(-1)[0] ?? ''
+  const anyDate = (w: WorkOrder) => w.quicklook_last || w.hvac_last || w.fire_last || w.crane_last
+  const latest = (w: WorkOrder) => [w.quicklook_last, w.hvac_last, w.fire_last, w.crane_last].filter(Boolean).sort().slice(-1)[0] ?? ''
 
   async function saveDraft() {
     if (!draft) return
@@ -3791,6 +3854,7 @@ function WorkOrdersView() {
     const cols: [string, (w: WorkOrder) => any][] = [
       ['Property', w => w.address], ['Tenant', w => w.tenant],
       ['Quicklook Last', w => w.quicklook_last], ['HVAC Last', w => w.hvac_last], ['Fire Last', w => w.fire_last],
+      ['Crane Last', w => w.has_crane ? w.crane_last : ''],
       ['Status', w => (w.flag && !anyDate(w)) ? w.flag : ''],
     ]
     const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
@@ -3808,7 +3872,7 @@ function WorkOrdersView() {
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div><h2>Inspections</h2><p>One row per property — pick an inspection type to see its last date · <span style={{ color: '#16a34a' }}>editable</span></p></div>
+        <div><h2>Inspections</h2><p>One row per property — each inspection type in its own column · <span style={{ color: '#16a34a' }}>editable</span></p></div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={syncWithProperties} disabled={syncing} title="Pull current tenant names and vacancies from the Properties tab"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: syncing ? .6 : 1 }}>
@@ -3849,32 +3913,32 @@ function WorkOrdersView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Property', 'Tenant', 'Inspection Type', 'Last Done', ''].map((h, i) => (
+              {['Property', 'Tenant', ...INSP_TYPES.map(t => t.label), ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {filtered.map(w => {
-              const opts = INSP_TYPES.filter(t => !t.craneOnly || w.has_crane)
-              const selKey = (sel[w.id] ?? 'quicklook_last') as InspKey
-              const typ = INSP_TYPES.find(t => t.key === selKey)!
-              const dateVal = w[selKey]
+              const needsFirst = !!(w.flag && !anyDate(w))
               return (
                 <tr key={w.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                  <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827' }}>{w.address}</td>
+                  <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827' }}>
+                    <div>{w.address}</div>
+                    {needsFirst && <div style={{ marginTop: 3 }}><span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🚩 {w.flag}</span></div>}
+                  </td>
                   <td style={{ padding: '9px 12px', color: '#374151', maxWidth: 220 }}>{w.tenant}</td>
-                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                    <select value={selKey} onChange={e => setSel(s => ({ ...s, [w.id]: e.target.value }))}
-                      style={{ fontSize: 12, fontWeight: 600, padding: '3px 6px', borderRadius: 6, border: `1px solid ${typ.color}33`, background: typ.bg, color: typ.color, cursor: 'pointer' }}>
-                      {opts.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-                    </select>
-                  </td>
-                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                    {dateVal ? <span style={{ color: '#374151', fontWeight: 500 }}>{fmtDate(dateVal)}</span>
-                      : (w.flag && !anyDate(w)) ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }}>🚩 {w.flag}</span>
-                      : <span style={{ color: '#d1d5db' }}>— not recorded</span>}
-                  </td>
+                  {INSP_TYPES.map(t => {
+                    const na = t.craneOnly && !w.has_crane
+                    const v = w[t.key]
+                    return (
+                      <td key={t.key} style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                        {na ? <span style={{ color: '#d1d5db' }}>n/a</span>
+                          : v ? <span style={{ color: '#374151', fontWeight: 500 }}>{fmtDate(v)}</span>
+                          : <span style={{ color: '#d1d5db' }}>—</span>}
+                      </td>
+                    )
+                  })}
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <button onClick={() => { setDraft({ ...w }); setIsNew(false) }}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
@@ -3897,8 +3961,6 @@ function WorkOrdersView() {
           <MField label="🔍 Quicklook — last done"><input type="date" style={mInput} value={draft.quicklook_last ?? ''} onChange={e => upd({ quicklook_last: e.target.value || null })} /></MField>
           <MField label="❄️ HVAC — last done"><input type="date" style={mInput} value={draft.hvac_last ?? ''} onChange={e => upd({ hvac_last: e.target.value || null })} /></MField>
           <MField label="🔥 Fire — last done"><input type="date" style={mInput} value={draft.fire_last ?? ''} onChange={e => upd({ fire_last: e.target.value || null })} /></MField>
-          <MField label="🚰 Backflow — last done"><input type="date" style={mInput} value={draft.backflow_last ?? ''} onChange={e => upd({ backflow_last: e.target.value || null })} /></MField>
-          <MField label="🛗 Elevator — last done"><input type="date" style={mInput} value={draft.elevator_last ?? ''} onChange={e => upd({ elevator_last: e.target.value || null })} /></MField>
           {draft.has_crane && (
             <MField label="🏗️ Crane — last done"><input type="date" style={mInput} value={draft.crane_last ?? ''} onChange={e => upd({ crane_last: e.target.value || null })} /></MField>
           )}

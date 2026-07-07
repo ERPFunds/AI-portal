@@ -734,6 +734,30 @@ export async function seedFundIvOpportunities(
 }
 
 /**
+ * Add a brand-new LP to Salesforce: find-or-create the Account by name, then create an Opportunity
+ * (StageName = stage, Amount = target). Used by the LP directory "Add LP" button.
+ */
+export async function addLpToSalesforce(params: { investor: string; amountUsd: number; stage: string }): Promise<{ accountId: string | null; oppCreated: boolean; detail: string }> {
+  if (!salesforceConfigured()) return { accountId: null, oppCreated: false, detail: "Salesforce not configured" };
+  try {
+    const accts = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(params.investor)}'`);
+    let accountId = accts.length >= 1 ? String(accts[0].Id) : null;
+    if (!accountId) {
+      const acc = await sfCreate("Account", { Name: params.investor });
+      if (!acc.ok || !acc.id) return { accountId: null, oppCreated: false, detail: `account create: ${acc.detail}` };
+      accountId = acc.id;
+    }
+    const closeDate = new Date().toISOString().slice(0, 10);
+    const fields: Record<string, unknown> = { Name: `${params.investor} - Fund IV Commitment`.slice(0, 120), AccountId: accountId, StageName: params.stage, CloseDate: closeDate };
+    if (params.amountUsd > 0) fields.Amount = params.amountUsd;
+    const opp = await sfCreate("Opportunity", fields);
+    return { accountId, oppCreated: opp.ok, detail: opp.ok ? "created" : (opp.detail || "opp failed") };
+  } catch (e) {
+    return { accountId: null, oppCreated: false, detail: String(e).slice(0, 150) };
+  }
+}
+
+/**
  * Add a NEW Fund IV Proposal Opportunity to Fund IV target Accounts that don't yet have one —
  * WITHOUT touching their existing (prior-fund) Opportunities. Dedup: skips an Account that already
  * has an Opp named "… Fund IV Commitment". dryRun reports what it would create.
