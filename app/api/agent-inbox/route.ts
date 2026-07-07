@@ -274,6 +274,12 @@ export async function GET(req: NextRequest) {
       mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
     const pushDraft = (m: MailItem, mb: string) => {
       if (draftSeen.has(m.id)) return;
+      // Only AGENT-created IR drafts belong in this queue. They always carry an "IR: Meghan/William"
+      // Outlook category (stamped at creation). This filters out personal drafts sitting in the leads'
+      // Drafts folder — expense reports, replies to colleagues like kcordova, etc.
+      if (!(m.categories ?? []).some((c) => /^ir:/i.test(c.trim()))) return;
+      // Never surface a draft addressed TO an IR lead (internal notes to Meghan/William).
+      if (addressedToLead(m.toRecipients)) return;
       draftSeen.add(m.id);
       const it = toItem(m, "Drafts", "draft", mb);
       if (!it.owner) it.owner = ownerForMailbox(mb);
