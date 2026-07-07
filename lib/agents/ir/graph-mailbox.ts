@@ -555,6 +555,27 @@ export async function deleteMessage(mailbox: string, messageId: string): Promise
   if (!res.ok) throw new Error(`Graph delete ${res.status}: ${await res.text()}`);
 }
 
+/**
+ * Find a message ANYWHERE in the mailbox (any folder, incl. Deleted Items) by its RFC
+ * internetMessageId. Returns its current id + parent folder id, or null if not found. Uses a
+ * server-side $filter so it isn't limited by folder size/paging.
+ */
+export async function findMessageByInternetId(
+  mailbox: string,
+  internetMessageId: string
+): Promise<{ id: string; parentFolderId: string | null } | null> {
+  const t = await token();
+  const filter = `internetMessageId eq '${internetMessageId.replace(/'/g, "''")}'`;
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
+    `?$select=id,parentFolderId&$filter=${encodeURIComponent(filter)}&$top=1`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${t}` } });
+  if (!res.ok) throw new Error(`Graph find-by-internetId ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  const m = (data.value || [])[0];
+  return m ? { id: m.id as string, parentFolderId: (m.parentFolderId as string) ?? null } : null;
+}
+
 /** Delete a mail folder (and its contents) — moves it to Deleted Items. */
 export async function deleteFolder(mailbox: string, folderId: string): Promise<void> {
   const t = await token();

@@ -4,7 +4,7 @@ import { classifyInvestorEmail } from "@/lib/agents/ir/email-classifier";
 import {
   listInboxMessages,
   listInboxMessagesSince,
-  listFolderMessages,
+  findMessageByInternetId,
   resolveSubfolderId,
   ensureSubfolderId,
   resolveFolderId,
@@ -370,25 +370,23 @@ async function cleanupStrayTeamFolders(): Promise<string[]> {
 // back to the Inbox. Precise — only touches messages WE deleted, identified by the internetMessageId
 // in the processed ledger, so mail the user deleted themselves is left alone. Idempotent: each
 // restored message's ledger row flips to "restored-docusign" so it's never retried.
-async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: string; wanted: number; scanned: number; matched: number; restored: number; error?: string; sampleWanted?: string[]; sampleSeen?: string[] }> {
-  const out = { mailbox, wanted: 0, scanned: 0, matched: 0, restored: 0 } as { mailbox: string; wanted: number; scanned: number; matched: number; restored: number; error?: string; sampleWanted?: string[]; sampleSeen?: string[] };
+async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: string; wanted: number; found: number; restored: number; error?: string }> {
+  const out = { mailbox, wanted: 0, found: 0, restored: 0 } as { mailbox: string; wanted: number; found: number; restored: number; error?: string };
   try {
     const wantedIds = await getDeletedDocusignInternetIds(mailbox);
     out.wanted = wantedIds.length;
-    out.sampleWanted = wantedIds.slice(0, 3);
     if (wantedIds.length === 0) return out;
-    const wanted = new Set(wantedIds);
-    const deleted = await listFolderMessages(mailbox, "deleteditems", 250);
-    out.scanned = deleted.length;
-    out.sampleSeen = deleted.slice(0, 5).map((m) => m.internetMessageId || "(none)");
-    for (const m of deleted) {
-      if (!m.internetMessageId || !wanted.has(m.internetMessageId)) continue;
-      out.matched++;
+    for (const iid of wantedIds) {
       try {
-        await moveMessage(mailbox, m.id, "inbox");
-        await markDocusignRestored(mailbox, m.internetMessageId);
+        // Look the message up directly by internetMessageId (any folder, incl. Deleted Items) so
+        // the huge Deleted Items volume doesn't matter. Move it back to the Inbox.
+        const found = await findMessageByInternetId(mailbox, iid);
+        if (!found) continue;
+        out.found++;
+        await moveMessage(mailbox, found.id, "inbox");
+        await markDocusignRestored(mailbox, iid);
         out.restored++;
-      } catch (e) { out.error = `move-fail: ${String(e).slice(0, 120)}`; }
+      } catch (e) { out.error = `${String(e).slice(0, 140)}`; }
     }
     return out;
   } catch (e) {
