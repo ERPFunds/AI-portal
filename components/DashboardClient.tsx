@@ -2396,7 +2396,12 @@ function LpDirectoryView() {
                 ? 'Salesforce not connected'
                 : data.sfError
                   ? `SF error: ${data.sfError}`
-                  : `${data.sfMatched ?? 0} of ${data.lpCount} LPs matched in Salesforce${data.dstCount ? ` · +${data.dstCount} DST/1031 investors` : ''}`}
+                  : (() => {
+                      const fundIv = data.lps.filter(l => l.group !== 'DST / 1031')
+                      const matched = fundIv.filter(l => l.sfCrmId).length
+                      const dst = data.dstCount ?? data.lps.filter(l => l.group === 'DST / 1031').length
+                      return `${matched} of ${fundIv.length} Fund IV LPs in Salesforce${dst ? ` · +${dst} DST/1031 investors` : ''}`
+                    })()}
             </div>
           )}
         </div>
