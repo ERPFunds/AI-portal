@@ -370,24 +370,30 @@ async function cleanupStrayTeamFolders(): Promise<string[]> {
 // back to the Inbox. Precise — only touches messages WE deleted, identified by the internetMessageId
 // in the processed ledger, so mail the user deleted themselves is left alone. Idempotent: each
 // restored message's ledger row flips to "restored-docusign" so it's never retried.
-async function restoreDeletedDocusigns(mailbox: string): Promise<number> {
+async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: string; wanted: number; scanned: number; matched: number; restored: number; error?: string; sampleWanted?: string[]; sampleSeen?: string[] }> {
+  const out = { mailbox, wanted: 0, scanned: 0, matched: 0, restored: 0 } as { mailbox: string; wanted: number; scanned: number; matched: number; restored: number; error?: string; sampleWanted?: string[]; sampleSeen?: string[] };
   try {
     const wantedIds = await getDeletedDocusignInternetIds(mailbox);
-    if (wantedIds.length === 0) return 0;
+    out.wanted = wantedIds.length;
+    out.sampleWanted = wantedIds.slice(0, 3);
+    if (wantedIds.length === 0) return out;
     const wanted = new Set(wantedIds);
     const deleted = await listFolderMessages(mailbox, "deleteditems", 250);
-    let restored = 0;
+    out.scanned = deleted.length;
+    out.sampleSeen = deleted.slice(0, 5).map((m) => m.internetMessageId || "(none)");
     for (const m of deleted) {
       if (!m.internetMessageId || !wanted.has(m.internetMessageId)) continue;
+      out.matched++;
       try {
         await moveMessage(mailbox, m.id, "inbox");
         await markDocusignRestored(mailbox, m.internetMessageId);
-        restored++;
-      } catch { /* skip one we can't move */ }
+        out.restored++;
+      } catch (e) { out.error = `move-fail: ${String(e).slice(0, 120)}`; }
     }
-    return restored;
-  } catch {
-    return 0;
+    return out;
+  } catch (e) {
+    out.error = String(e).slice(0, 160);
+    return out;
   }
 }
 
@@ -436,12 +442,14 @@ export async function GET(req: NextRequest) {
   }
 
   const results = [];
+  const docusignRestore = [];
   for (const mailbox of mailboxes) {
     try {
       // Release any DocuSigns we previously deleted back to this mailbox's Inbox first.
       if (!dryRun) {
-        const restored = await restoreDeletedDocusigns(mailbox);
-        if (restored) console.log(`[ir-sweep] restored ${restored} deleted DocuSign(s) to ${mailbox} Inbox`);
+        const r = await restoreDeletedDocusigns(mailbox);
+        docusignRestore.push(r);
+        if (r.restored) console.log(`[ir-sweep] restored ${r.restored} deleted DocuSign(s) to ${mailbox} Inbox`);
       }
       results.push(await handleMailbox(mailbox, dryRun, opts));
     } catch (e) {
@@ -451,5 +459,5 @@ export async function GET(req: NextRequest) {
   console.log("[ir-sweep] ran", JSON.stringify(results.map((r) => "scanned" in r
     ? { mailbox: r.mailbox, scanned: r.scanned, fresh: r.fresh, investor: r.investor, sample: r.details.slice(0, 4) }
     : r)));
-  return NextResponse.json({ ok: true, dryRun, ranAt: new Date().toISOString(), results });
+  return NextResponse.json({ ok: true, dryRun, ranAt: new Date().toISOString(), docusignRestore, results });
 }
