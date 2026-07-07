@@ -2307,11 +2307,6 @@ function LpDirectoryView() {
   const badge = (s: string) => (
     <span style={{ fontSize: 10, fontWeight: 600, color: COMMIT_TYPE_COLOR[s] ?? '#6b7280', background: COMMIT_TYPE_BG[s] ?? '#f3f4f6', border: `1px solid ${COMMIT_TYPE_COLOR[s] ?? '#e5e7eb'}22`, borderRadius: 5, padding: '2px 7px' }}>{s || 'TBD'}</span>
   )
-  const sfCell = (val: string | number | null, fmt?: (v: number) => string) => (
-    <td style={{ padding: '11px 14px', color: '#d1d5db', fontSize: 11 }}>
-      {val !== null ? (typeof val === 'number' && fmt ? fmt(val) : String(val)) : <span title="Not yet available">—</span>}
-    </td>
-  )
   const inputStyle: React.CSSProperties = { fontSize: 12, border: '1px solid #d1d5db', borderRadius: 4, padding: '4px 7px', width: '100%', outline: 'none', background: '#fafafa' }
 
   const syncedLabel = data
@@ -2534,15 +2529,10 @@ function LpDirectoryView() {
         const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
-        const anyCalled = visibleLps.some(lp => lp.sfCalled != null)
-        const anyDistrib = visibleLps.some(lp => lp.sfDistributions != null)
-        const calledToDate = visibleLps.reduce((s, lp) => s + (lp.sfCalled ?? 0), 0)
-        const distributions = visibleLps.reduce((s, lp) => s + (lp.sfDistributions ?? 0), 0)
         // Fund-level commitment totals — computed across ALL LPs, independent of the active filter.
         const allLps = data ? data.lps : []
         const fundIvLps = allLps.filter(lp => lp.group !== DST_GROUP)
         const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
-        const fundIvTarget = fundIvLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         // Hard-committed to Fund IV so far = sum of the known commitments (currently ERP GP IV $2.7M).
         const fundIvCommittedSoFar = fundIvLps.reduce((s, lp) => s + (lp.committedUsd ?? 0), 0)
@@ -2550,11 +2540,8 @@ function LpDirectoryView() {
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
-              { label: 'Fund IV Target', value: loading ? '…' : data ? fmtUsd(fundIvTarget) : '—', sub: `${fundIvLps.length} Fund IV LPs` },
               { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Committed so far (incl. ERP GP)' },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
-              { label: 'Called (Fund IV)',  value: loading ? '…' : anyCalled ? fmtUsd(calledToDate) : '—', sub: 'Capital called to date' },
-              { label: 'Distributions (Fund IV)',   value: loading ? '…' : anyDistrib ? fmtUsd(distributions) : '—', sub: 'Paid to investors' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
                 <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
@@ -2585,7 +2572,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Called', 'Distributions', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2703,10 +2690,6 @@ function LpDirectoryView() {
                           return <span style={{ fontSize: 10, fontWeight: 600, color: '#16a34a', background: '#f0fdf4', borderRadius: 20, padding: '2px 8px' }} title={`Last contact ${days} days ago`}>Recent</span>
                         })()}
                       </td>
-
-                      {/* Salesforce columns */}
-                      {sfCell(lp.sfCalled, fmtUsd)}
-                      {sfCell(lp.sfDistributions, fmtUsd)}
 
                       {/* Notes */}
                       <td style={{ padding: '11px 14px', color: '#6b7280', fontSize: 11, maxWidth: 200 }}>
