@@ -329,51 +329,87 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // Last Interaction: most recent email in the IR mailboxes (mberry/wmeyer/team) with the LP.
-    // SF Contact.Email is empty for these LPs, so we match by the LP's REAL primary-contact name
-    // (the schedule contact + the SF primary contact) against the sender/recipient display names.
-    // We deliberately do NOT match on the entity/trust name or the fuzzy broker rep — those
-    // cross-attributed unrelated people (e.g. a shared first name). Overrides IR-log when newer.
+    // Last Interaction: most-recent email in the IR mailboxes with the LP. Two signals:
+    //  • EMAIL — the LP's direct/broker email; NOT de-conflicted (a broker email legitimately maps
+    //    to every LP that broker represents).
+    //  • NAME — entity-name token overlap (≥2 significant tokens) or an exact contact/rep name;
+    //    DE-CONFLICTED so each email goes to its single best-matching LP (entity match beats a bare
+    //    contact match). This is what sends e.g. a "Diane Brown" email to the Brown trust that bears
+    //    her name rather than an unrelated trust she merely administers.
     type Interaction = import("@/lib/agents/ir/mailbox-interactions").Interaction;
     try {
       const { byEmail, byName } = await interactionsPromise;
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
-      const isFullName = (n: string) => n.split(" ").filter((w) => w.length >= 2).length >= 2;
-      const laLog: string[] = [];
-      for (const lp of lps) {
-        // Match on every email we know for the row: the SF-derived set (Fund IV) PLUS the schedule
-        // email and the resolvedEmail. For DST/1031 rows resolvedEmail is usually the broker/advisor
-        // rep's address (direct investor emails barely exist) — brokers do email the IR mailboxes, so
-        // this is how those rows get a "last interaction" (via their broker) instead of staying blank.
-        const emails = Array.from(new Set([
-          ...(lpEmails.get(lp) ?? []),
-          (lp.email || "").toLowerCase().trim(),
-          (lp.resolvedEmail || "").toLowerCase().trim(),
-        ].filter(Boolean)));
-        const names = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter(isFullName);
-        const entityKey = norm(lp.investor || "");
-        let best: Interaction | null = null;
-        let via = "";
-        const consider = (it: Interaction | undefined, tag: string) => {
-          if (it && (!best || new Date(it.date).getTime() > new Date(best.date).getTime())) { best = it; via = tag; }
-        };
-        // Match ONLY on precise signals — the LP's direct email or an EXACT contact/entity name.
-        // (Fuzzy token matching was removed: it cross-attributed the wrong person's emails.)
-        for (const e of emails) consider(byEmail[e], "email");
-        for (const n of new Set(names)) consider(byName[n], n);
-        if (entityKey) consider(byName[entityKey], "entity");
-        if (best && (!lp.lastInteraction || new Date((best as Interaction).date).getTime() > new Date(lp.lastInteraction.date).getTime())) {
-          const b = best as Interaction;
-          const dir = b.direction === "sent" ? "Sent to" : "From";
-          const who = b.counterparty ? ` ${b.counterparty}` : "";
-          const subj = b.subject ? ` · ${b.subject}` : "";
-          const prev = b.preview ? ` — ${b.preview.slice(0, 140)}` : "";
-          lp.lastInteraction = { date: b.date, note: `${dir}${who}${subj}${prev} (${b.mailbox})`, source: "email" };
-          if (!lp.resolvedEmail && b.counterpartyEmail) lp.resolvedEmail = b.counterpartyEmail;
-          if (laLog.length < 15) laLog.push(`${lp.investor} <=[${via}]= ${b.direction} ${b.counterparty}`);
-        }
+      const STOP = new Set(["the", "and", "of", "for", "trust", "trustee", "trustees", "family", "revocable", "irrevocable", "living", "dated", "estate", "llc", "lp", "llp", "inc", "co", "company", "corp", "corporation", "partnership", "partners", "fund", "funds", "properties", "property", "associates", "holdings", "group", "investments", "investment", "capital", "ira", "fbo", "custodian", "roth", "sep", "account"]);
+      const toks = (s: string) => new Set(norm(s).split(" ").filter((w) => w.length >= 3 && !STOP.has(w) && !/^\d+$/.test(w)));
+      const keyOf = (it: Interaction) => `${it.date}|${(it.counterpartyEmail || it.counterparty || "").toLowerCase()}|${it.subject}`;
+      const newer = (a: Interaction, b: Interaction) => new Date(a.date).getTime() > new Date(b.date).getTime();
+
+      // Unique interactions + precomputed counterparty tokens.
+      const uniq = new Map<string, { key: string; it: Interaction; toks: Set<string>; cpNorm: string }>();
+      for (const it of [...Object.values(byEmail), ...Object.values(byName)]) {
+        const key = keyOf(it);
+        if (!uniq.has(key)) uniq.set(key, { key, it, toks: toks(it.counterparty || ""), cpNorm: norm(it.counterparty || "") });
       }
-      console.log("[lp-lastint]", JSON.stringify({ samples: laLog }).slice(0, 1800));
+      const interactions = [...uniq.values()];
+
+      const emailsFor = (lp: LpRecord) => new Set([
+        ...(lpEmails.get(lp) ?? []),
+        (lp.email || "").toLowerCase().trim(),
+        (lp.resolvedEmail || "").toLowerCase().trim(),
+      ].filter(Boolean));
+
+      // 1) EMAIL matches (per LP; not de-conflicted).
+      const emailBest = new Map<number, Interaction>();
+      lps.forEach((lp, idx) => {
+        for (const e of emailsFor(lp)) {
+          const it = byEmail[e];
+          if (it) { const ex = emailBest.get(idx); if (!ex || newer(it, ex)) emailBest.set(idx, it); }
+        }
+      });
+
+      // 2) NAME matches (de-conflicted): each interaction → its single best LP.
+      const claim = new Map<string, { idx: number; score: number }>();
+      lps.forEach((lp, idx) => {
+        const entToks = toks(lp.investor || "");
+        const contactNorms = [lp.contact, lp.sfBrokerContact].map((n) => norm(n || "")).filter((n) => n.split(" ").length >= 2);
+        for (const rec of interactions) {
+          let strength = 0, shared = 0, maxLen = 0;
+          for (const t of rec.toks) if (entToks.has(t)) { shared++; if (t.length > maxLen) maxLen = t.length; }
+          if (shared >= 2 && maxLen >= 4) strength = 2;              // entity-name overlap
+          else if (contactNorms.includes(rec.cpNorm)) strength = 1;  // exact contact/rep name
+          if (!strength) continue;
+          const score = strength * 100 + shared;
+          const cur = claim.get(rec.key);
+          if (!cur || score > cur.score) claim.set(rec.key, { idx, score });
+        }
+      });
+      const nameBest = new Map<number, Interaction>();
+      for (const rec of interactions) {
+        const c = claim.get(rec.key);
+        if (!c) continue;
+        const ex = nameBest.get(c.idx);
+        if (!ex || newer(rec.it, ex)) nameBest.set(c.idx, rec.it);
+      }
+
+      // 3) Combine — most recent of the LP's email match and its won name match; override IR-log if newer.
+      const laLog: string[] = [];
+      lps.forEach((lp, idx) => {
+        const cands = [emailBest.get(idx), nameBest.get(idx)].filter(Boolean) as Interaction[];
+        let best: Interaction | null = null;
+        for (const c of cands) if (!best || newer(c, best)) best = c;
+        const curMs = lp.lastInteraction ? new Date(lp.lastInteraction.date).getTime() : 0;
+        if (best && new Date(best.date).getTime() > curMs) {
+          const dir = best.direction === "sent" ? "Sent to" : "From";
+          const who = best.counterparty ? ` ${best.counterparty}` : "";
+          const subj = best.subject ? ` · ${best.subject}` : "";
+          const prev = best.preview ? ` — ${best.preview.slice(0, 140)}` : "";
+          lp.lastInteraction = { date: best.date, note: `${dir}${who}${subj}${prev} (${best.mailbox})`, source: "email" };
+          if (!lp.resolvedEmail && best.counterpartyEmail) lp.resolvedEmail = best.counterpartyEmail;
+          if (laLog.length < 15) laLog.push(`${lp.investor} <= ${best.direction} ${best.counterparty}`);
+        }
+      });
+      console.log("[lp-lastint]", JSON.stringify({ withInt: lps.filter((l) => l.lastInteraction).length, samples: laLog }).slice(0, 1800));
     } catch { /* non-fatal: mailbox scan unavailable leaves lastInteraction as-is */ }
 
     // Committed amounts (portal-stored). Blank for uncommitted Fund IV targets; DST/1031 rows are
