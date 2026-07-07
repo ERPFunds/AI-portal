@@ -4,6 +4,7 @@ import { getDocText } from "@/lib/agents/ir/markdown-store";
 import { retrieveChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
+import { stripMimecastNoise } from "@/lib/agents/ir/sanitize-email";
 
 const client = new Anthropic();
 
@@ -17,7 +18,7 @@ export async function getMessageBodyText(mailbox: string, messageId: string): Pr
   );
   if (!res.ok) return "";
   const d = await res.json();
-  return (d.body?.content || "").slice(0, 8000);
+  return stripMimecastNoise(d.body?.content || "").slice(0, 8000);
 }
 
 // Due-diligence answers are grounded ONLY on these fund-document KB folders.

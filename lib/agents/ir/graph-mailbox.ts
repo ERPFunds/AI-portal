@@ -1,4 +1,5 @@
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { stripMimecastNoise } from "@/lib/agents/ir/sanitize-email";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
 
@@ -59,7 +60,7 @@ function toInboxMessage(m: RawGraphMessage): InboxMessage {
     subject: m.subject || "",
     fromAddress: m.from?.emailAddress?.address || "",
     fromName: m.from?.emailAddress?.name ?? null,
-    bodyPreview: m.bodyPreview || "",
+    bodyPreview: stripMimecastNoise(m.bodyPreview || ""),
     receivedDateTime: m.receivedDateTime,
     recipients: recips,
     toRecipients: toOnly,
@@ -151,7 +152,7 @@ export async function listFolderMessages(
       subject: m.subject || "",
       fromAddress: m.from?.emailAddress?.address || "",
       fromName: m.from?.emailAddress?.name ?? null,
-      bodyPreview: m.bodyPreview || "",
+      bodyPreview: stripMimecastNoise(m.bodyPreview || ""),
       receivedDateTime: m.receivedDateTime,
       lastModifiedDateTime: m.lastModifiedDateTime ?? null,
       webLink: m.webLink ?? null,
@@ -213,7 +214,7 @@ export async function listFolderMessagesSince(
         subject: m.subject || "",
         fromAddress: m.from?.emailAddress?.address || "",
         fromName: m.from?.emailAddress?.name ?? null,
-        bodyPreview: m.bodyPreview || "",
+        bodyPreview: stripMimecastNoise(m.bodyPreview || ""),
         receivedDateTime: m.receivedDateTime,
         lastModifiedDateTime: m.lastModifiedDateTime ?? null,
         webLink: m.webLink ?? null,
@@ -467,7 +468,7 @@ export async function getMessageBody(
     to: (m.toRecipients || [])
       .map((r: { emailAddress?: { address?: string } }) => r.emailAddress?.address || "")
       .filter(Boolean),
-    bodyText: m.body?.content || "",
+    bodyText: stripMimecastNoise(m.body?.content || ""),
     conversationId: m.conversationId ?? null,
     from: m.from?.emailAddress?.address || "",
     fromName: m.from?.emailAddress?.name ?? null,
