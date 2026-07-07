@@ -256,16 +256,36 @@ export async function GET(req: NextRequest) {
       .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
     const draftSinceIso = draftsSince.toISOString().split(".")[0] + "Z";
     let draftTotal = 0;
+    const draftSeen = new Set<string>();
+    const ownerForMailbox = (mb: string): "Meghan" | "William" | null =>
+      mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
+    const pushDraft = (m: MailItem, mb: string) => {
+      if (draftSeen.has(m.id)) return;
+      draftSeen.add(m.id);
+      const it = toItem(m, "Drafts", "draft", mb);
+      if (!it.owner) it.owner = ownerForMailbox(mb);
+      items.push(it);
+      draftTotal++;
+    };
     for (const mb of draftMailboxes) {
+      // a) the well-known Drafts folder (legacy / unfiled drafts)
       try {
         const drafts = await listFolderMessagesSince(mb, "drafts", draftSinceIso, "lastModifiedDateTime", DRAFTS_TOP);
-        for (const m of drafts) {
-          const it = toItem(m, "Drafts", "draft", mb);
-          if (!it.owner) it.owner = mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
-          items.push(it);
-          draftTotal++;
+        for (const m of drafts) pushDraft(m, mb);
+      } catch { /* skip */ }
+      // b) drafts filed into this mailbox's IR subfolders (Forwarded Drafts / Escalate), where they
+      //    now sit alongside the inbound email — include only the draft messages.
+      try {
+        const irId = await resolveFolderId(mb, IR_FOLDER);
+        if (irId) {
+          const kids = await listChildFolders(mb, irId);
+          for (const k of kids) {
+            if (!/escalat|draft/i.test(k.displayName)) continue;
+            const msgs = await listFolderMessages(mb, k.id, PER_FOLDER);
+            for (const m of msgs) if (m.isDraft) pushDraft(m, mb);
+          }
         }
-      } catch { /* skip a mailbox we can't read */ }
+      } catch { /* skip */ }
     }
 
     // Attribute each draft to an IR lead (Meghan/William) + surface when the email it replies to

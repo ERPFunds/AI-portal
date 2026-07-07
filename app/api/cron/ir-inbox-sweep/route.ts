@@ -259,12 +259,20 @@ async function handleMailbox(
         newDraftId = d.draftId;
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
       }
-      // Escalation drafts sit with the escalation (moved into THIS mailbox's Escalate folder — still
-      // threaded). Routine drafts stay in this mailbox's Drafts, awaiting review/send.
-      if (route === "escalate" && newDraftId) {
-        if (escalateFolderId === undefined) escalateFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_ESCALATE);
-        if (escalateFolderId) {
-          try { await moveMessage(mailbox, newDraftId, escalateFolderId); actions.push("draft→escalate"); }
+      // File the draft into THIS mailbox's IR subfolder — the SAME one the inbound original lands in
+      // (Escalate for escalations, Forwarded Drafts for routine) — so the inbound email and its draft
+      // reply sit together in her Investor Relations folder (both still threaded).
+      if (newDraftId) {
+        let draftDest: string | null | undefined;
+        if (route === "escalate") {
+          if (escalateFolderId === undefined) escalateFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_ESCALATE);
+          draftDest = escalateFolderId;
+        } else {
+          if (draftsFolderId === undefined) draftsFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_DRAFTS);
+          draftDest = draftsFolderId;
+        }
+        if (draftDest) {
+          try { await moveMessage(mailbox, newDraftId, draftDest); actions.push(`draft→${route === "escalate" ? "escalate" : "forwarded-drafts"}`); }
           catch (e) { actions.push(`draft-move-fail(${String(e).slice(0, 40)})`); }
         }
       }
