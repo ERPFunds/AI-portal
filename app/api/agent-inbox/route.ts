@@ -362,6 +362,52 @@ export async function GET(req: NextRequest) {
         }
       } catch { /* skip a mailbox we can't read */ }
     }
+
+    // 3b) Merge the app-send log (ir_sent). Every reply sent through the portal is recorded here with
+    //     its full body, independent of whether the Outlook "IR:" category survived — so portal sends
+    //     always appear even if the Sent Items scan above misses them. Dedupe against Outlook-sourced
+    //     sent items by normalized subject + recipient.
+    const normSentKey = (subj: string, to: string) =>
+      `${(subj || "").toLowerCase().replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "").trim()}|${(to || "").toLowerCase().trim()}`;
+    const sentKeys = new Set(
+      items.filter((i) => i.folderKind === "sent").map((i) => normSentKey(i.subject, i.to[0] ?? ""))
+    );
+    try {
+      const sentSince = new Date();
+      sentSince.setMonth(sentSince.getMonth() - 6);
+      const { data: logged } = await supabase
+        .from("ir_sent")
+        .select("id, sent_at, from_mailbox, to_email, subject, body, owner")
+        .gte("sent_at", sentSince.toISOString())
+        .order("sent_at", { ascending: false })
+        .limit(200);
+      for (const r of (logged ?? []) as { id: string; sent_at: string; from_mailbox: string; to_email: string; subject: string; body: string | null; owner: string | null }[]) {
+        const key = normSentKey(r.subject, r.to_email);
+        if (sentKeys.has(key)) continue;
+        sentKeys.add(key);
+        items.push({
+          mailbox: r.from_mailbox,
+          id: `sent:${r.id}`,
+          from: r.from_mailbox,
+          fromName: r.owner,
+          to: [r.to_email],
+          subject: r.subject,
+          preview: (r.body || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 200),
+          receivedISO: r.sent_at,
+          folder: "Sent",
+          folderKind: "sent",
+          status: "handled",
+          isDraft: false,
+          webLink: null,
+          conversationId: null,
+          owner: r.owner === "William" ? "William" : r.owner === "Meghan" ? "Meghan" : null,
+          originalReceivedISO: null,
+          sentBody: r.body ?? "",
+        });
+        sentCount++;
+      }
+    } catch { /* skip DB merge on error */ }
+
     if (sentCount) folders.push({ name: "Sent", kind: "sent", count: sentCount });
 
     return NextResponse.json({
