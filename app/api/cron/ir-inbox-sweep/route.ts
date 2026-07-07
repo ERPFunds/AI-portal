@@ -4,7 +4,6 @@ import { classifyInvestorEmail } from "@/lib/agents/ir/email-classifier";
 import {
   listInboxMessages,
   listInboxMessagesSince,
-  listFolderMessages,
   findMessageByInternetId,
   resolveSubfolderId,
   ensureSubfolderId,
@@ -371,22 +370,12 @@ async function cleanupStrayTeamFolders(): Promise<string[]> {
 // back to the Inbox. Precise — only touches messages WE deleted, identified by the internetMessageId
 // in the processed ledger, so mail the user deleted themselves is left alone. Idempotent: each
 // restored message's ledger row flips to "restored-docusign" so it's never retried.
-async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: string; wanted: number; found: number; restored: number; error?: string; selfTest?: unknown }> {
-  const out = { mailbox, wanted: 0, found: 0, restored: 0 } as { mailbox: string; wanted: number; found: number; restored: number; error?: string; selfTest?: unknown };
+async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: string; wanted: number; found: number; restored: number; error?: string }> {
+  const out = { mailbox, wanted: 0, found: 0, restored: 0 } as { mailbox: string; wanted: number; found: number; restored: number; error?: string };
   try {
     const wantedIds = await getDeletedDocusignInternetIds(mailbox);
     out.wanted = wantedIds.length;
     if (wantedIds.length === 0) return out;
-
-    // Self-test: does the internetMessageId filter round-trip against a message we KNOW is in
-    // Deleted Items? If yes → the filter works and the DocuSigns are genuinely gone (purged). If
-    // no → the filter itself is the problem. (Diagnostic; removed once resolved.)
-    try {
-      const sample = await listFolderMessages(mailbox, "deleteditems", 1);
-      const testId = sample[0]?.internetMessageId || null;
-      const hit = testId ? await findMessageByInternetId(mailbox, testId, "deleteditems") : null;
-      out.selfTest = { testId, filterWorks: Boolean(hit) };
-    } catch (e) { out.selfTest = { selfTestError: String(e).slice(0, 120) }; }
     for (const iid of wantedIds) {
       try {
         // Look the message up directly by internetMessageId so the huge Deleted Items volume doesn't
