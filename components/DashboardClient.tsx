@@ -2160,6 +2160,7 @@ function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
   const [fundView, setFundView] = React.useState<'All' | 'Fund IV' | 'DST / 1031'>('All')
+  const [stageFilter, setStageFilter] = React.useState<string>('All')
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
   const DST_GROUP = 'DST / 1031'
@@ -2512,6 +2513,39 @@ function LpDirectoryView() {
         </div>
       )}
 
+      {/* Stage filter — view by Salesforce Opportunity stage */}
+      {data && (() => {
+        const scoped = data.lps.filter(lp => inFundView(lp))
+        const stageCount = (s: string) => s === 'All' ? scoped.length : s === 'None' ? scoped.filter(lp => !lp.sfStage).length : scoped.filter(lp => lp.sfStage === s).length
+        const present = SF_OPP_STAGES.filter(s => scoped.some(lp => lp.sfStage === s))
+        const hasNone = scoped.some(lp => !lp.sfStage)
+        const options = ['All', ...present, ...(hasNone ? ['None'] : [])]
+        if (present.length === 0) return null // no stages to filter by yet
+        return (
+          <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginRight: 2 }}>Stage:</span>
+            {options.map(s => {
+              const isActive = stageFilter === s
+              const c = s === 'All' || s === 'None' ? { bg: '#eef2ff', color: '#4338ca', border: '#c7d2fe' } : { bg: STAGE_COLOR[s]?.bg ?? '#f3f4f6', color: STAGE_COLOR[s]?.color ?? '#6b7280', border: '#e5e7eb' }
+              return (
+                <button key={s} onClick={() => setStageFilter(s)}
+                  style={{
+                    fontSize: 12, fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#fff' : c.color,
+                    background: isActive ? '#4338ca' : c.bg,
+                    border: `1px solid ${isActive ? '#4338ca' : c.border}`,
+                    borderRadius: 20, padding: '5px 14px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 6,
+                  }}>
+                  {s === 'None' ? 'No stage' : s}
+                  <span style={{ fontSize: 10, fontWeight: 600, color: isActive ? '#e0e7ff' : '#9ca3af' }}>{stageCount(s)}</span>
+                </button>
+              )
+            })}
+          </div>
+        )
+      })()}
+
       {/* Group view tabs — section headers in the Excel sheet, scoped to the selected fund */}
       {data && data.groups.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
@@ -2545,7 +2579,7 @@ function LpDirectoryView() {
 
       {/* Summary metrics — scoped to the selected group */}
       {(() => {
-        const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp))
+        const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp) && (stageFilter === 'All' || (stageFilter === 'None' ? !lp.sfStage : lp.sfStage === stageFilter)))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
         const fundIvVisible = visibleLps.length - dstVisible
         // Fund-level commitment totals — computed across ALL LPs, independent of the active filter.
@@ -2600,7 +2634,7 @@ function LpDirectoryView() {
                 </tr>
               </thead>
               <tbody>
-                {data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp)).sort((a, b) => sortStale ? staleScore(b) - staleScore(a) : 0).map((lp, i) => {
+                {data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp) && (stageFilter === 'All' || (stageFilter === 'None' ? !lp.sfStage : lp.sfStage === stageFilter))).sort((a, b) => sortStale ? staleScore(b) - staleScore(a) : 0).map((lp, i) => {
                   const isEditing = editingRow === lp.investor
                   const ev = editValues
                   return (
