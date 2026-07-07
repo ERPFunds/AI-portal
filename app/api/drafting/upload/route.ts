@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { parseOfficeAsync } from "officeparser";
+import { parseBytes } from "@/lib/agents/ir/markdown-store";
 
 export const maxDuration = 60;
 
@@ -36,11 +36,7 @@ export async function POST(req: NextRequest) {
 
   let text = "";
   try {
-    if (/text|markdown|json|csv/.test(mimeType) || /\.(txt|md|csv|json)$/i.test(filename)) {
-      text = buf.toString("utf-8");
-    } else {
-      text = await parseOfficeAsync(buf);
-    }
+    text = await parseBytes(buf, filename, mimeType);
   } catch (err) {
     return NextResponse.json({ error: `Could not extract text: ${String(err)}` }, { status: 422 });
   }
