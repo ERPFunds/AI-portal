@@ -175,6 +175,7 @@ export interface LpSfData {
   advisorContact: string | null;  // broker/advisor rep
   contactEmail: string | null;    // LP primary contact's email (for last-interaction matching)
   advisorEmail: string | null;    // broker/advisor rep's email
+  stage: string | null;           // the LP Opportunity's StageName (SF sales stage)
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -351,6 +352,7 @@ export async function fetchLpSalesforceData(
         advisorContact: null,
         contactEmail: null,
         advisorEmail: null,
+        stage: null,
       };
       idToKey[id] = key;
       matched++;
@@ -369,7 +371,7 @@ export async function fetchLpSalesforceData(
   for (let i = 0; i < accIds.length; i += 200) {
     const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     try {
-      const oq = `SELECT AccountId, Type, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
+      const oq = `SELECT AccountId, Type, StageName, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
       const ores = await sfFetch(`/query?q=${encodeURIComponent(oq)}`);
       if (!ores.ok) { console.log("[lp-opp] query", ores.status, (await ores.text()).slice(0, 150)); continue; }
       for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
@@ -378,6 +380,7 @@ export async function fetchLpSalesforceData(
         const row = byName[idToKey[String(o.AccountId)] ?? ""];
         if (!row) continue;
         if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
+        if (!row.stage && o.StageName != null && String(o.StageName).trim()) row.stage = String(o.StageName);
         const firm = rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r) || rel(o.Partner_Broker_Dealer__r);
         const repName = rel(o.Partner_Advisor_Contact__r);
         const repEmail = (o.Partner_Advisor_Contact__r as { Email?: unknown } | null)?.Email;
@@ -581,7 +584,7 @@ const COMMITTED_STAGE = process.env.SF_COMMITTED_STAGE || "Closed Won";
 export async function applyLpEditToSalesforce(params: {
   investor: string;
   contact?: string;
-  edits: { email?: string; phone?: string; notes?: string; commitmentUsd?: number; committedUsd?: number; brokerFirm?: string; brokerContact?: string };
+  edits: { email?: string; phone?: string; notes?: string; commitmentUsd?: number; committedUsd?: number; stage?: string; brokerFirm?: string; brokerContact?: string };
 }): Promise<SfWriteResult[]> {
   if (!salesforceConfigured()) return [{ field: "salesforce", status: "skipped", detail: "not configured" }];
   const { investor, contact, edits } = params;
@@ -613,8 +616,8 @@ export async function applyLpEditToSalesforce(params: {
       }
     }
 
-    // Commitment + Committed + Broker need the LP's single Opportunity
-    const needOpp = edits.commitmentUsd !== undefined || edits.committedUsd !== undefined || (edits.brokerFirm ?? "") !== "" || (edits.brokerContact ?? "") !== "";
+    // Commitment + Committed + Stage + Broker need the LP's single Opportunity
+    const needOpp = edits.commitmentUsd !== undefined || edits.committedUsd !== undefined || (edits.stage ?? "") !== "" || (edits.brokerFirm ?? "") !== "" || (edits.brokerContact ?? "") !== "";
     let oppId: string | null = null;
     let oppCount = 0;
     if (needOpp && accountId) {
@@ -643,6 +646,22 @@ export async function applyLpEditToSalesforce(params: {
         out.push(c.ok ? { field: "committed", status: "updated", detail: `created Opportunity (${COMMITTED_STAGE})` } : { field: "committed", status: "error", detail: c.detail });
       } else {
         out.push({ field: "committed", status: "skipped", detail: `${oppCount} opportunities for this LP — commit ambiguous` });
+      }
+    }
+
+    // Stage: set the LP Opportunity's StageName directly (mimics changing the stage in Salesforce).
+    // Creates an Opportunity if none exists (so the stage can be tracked), like the committed write.
+    if ((edits.stage ?? "") !== "") {
+      if (!accountId) out.push({ field: "stage", status: "skipped", detail: `LP account not uniquely matched (${accts.length})` });
+      else if (oppId) {
+        const r = await sfUpdate("Opportunity", oppId, { StageName: edits.stage });
+        out.push(r.ok ? { field: "stage", status: "updated", detail: `stage → ${edits.stage}` } : { field: "stage", status: "error", detail: r.detail });
+      } else if (oppCount === 0) {
+        const closeDate = new Date().toISOString().slice(0, 10);
+        const c = await sfCreate("Opportunity", { Name: `${investor} - Fund IV Commitment`.slice(0, 120), AccountId: accountId, StageName: edits.stage, CloseDate: closeDate });
+        out.push(c.ok ? { field: "stage", status: "updated", detail: `created Opportunity (${edits.stage})` } : { field: "stage", status: "error", detail: c.detail });
+      } else {
+        out.push({ field: "stage", status: "skipped", detail: `${oppCount} opportunities for this LP — stage ambiguous` });
       }
     }
 

@@ -2115,6 +2115,7 @@ interface LpRecord {
   brokerFirm: string; brokerContact: string;
   resolvedEmail: string | null;
   committedUsd?: number | null;
+  sfStage?: string | null;
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -2141,9 +2142,19 @@ const COMMIT_TYPE_BG: Record<string, string> = {
 interface LpEditState {
   commitment: string; commitType: string; contact: string;
   email: string; phone: string; notes: string; date: string;
-  brokerFirm: string; brokerContact: string; committed: string;
+  brokerFirm: string; brokerContact: string; committed: string; stage: string;
 }
 const COMMIT_TYPE_OPTIONS = ['Soft Circle', 'Hard Commit', 'Signed Docs', 'Verbal', 'TBD']
+// Salesforce Opportunity stages (this org's picklist) — the Stage column mirrors these.
+const SF_OPP_STAGES = ['Qualification', 'Needs Analysis', 'Proposal', 'Negotiation', 'Closed Won', 'Closed Lost']
+const STAGE_COLOR: Record<string, { bg: string; color: string }> = {
+  'Qualification': { bg: '#f3f4f6', color: '#6b7280' },
+  'Needs Analysis': { bg: '#eff6ff', color: '#1d4ed8' },
+  'Proposal': { bg: '#eef2ff', color: '#4338ca' },
+  'Negotiation': { bg: '#fffbeb', color: '#b45309' },
+  'Closed Won': { bg: '#ecfdf5', color: '#047857' },
+  'Closed Lost': { bg: '#fef2f2', color: '#b91c1c' },
+}
 
 function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
@@ -2161,7 +2172,7 @@ function LpDirectoryView() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [editingRow, setEditingRow] = React.useState<string | null>(null)
-  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '', brokerFirm: '', brokerContact: '', committed: '' })
+  const [editValues, setEditValues] = React.useState<LpEditState>({ commitment: '', commitType: '', contact: '', email: '', phone: '', notes: '', date: '', brokerFirm: '', brokerContact: '', committed: '', stage: '' })
   const [saving, setSaving] = React.useState(false)
   const [saveMsg, setSaveMsg] = React.useState<{ ok: boolean; text: string } | null>(null)
   const [syncing, setSyncing] = React.useState(false)
@@ -2254,7 +2265,7 @@ function LpDirectoryView() {
 
   function startEdit(lp: LpRecord) {
     setEditingRow(lp.investor)
-    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact, committed: lp.committedUsd != null ? String(lp.committedUsd) : '' })
+    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact, committed: lp.committedUsd != null ? String(lp.committedUsd) : '', stage: lp.sfStage || '' })
     setSaveMsg(null)
   }
   function cancelEdit() { setEditingRow(null); setSaveMsg(null) }
@@ -2279,6 +2290,7 @@ function LpDirectoryView() {
             ...lp, ...editValues,
             commitmentUsd: parseLpUsd(editValues.commitment),
             committedUsd: editValues.committed.trim() ? parseLpUsd(editValues.committed) : null,
+            sfStage: editValues.stage || null,
           } : lp),
         } : prev)
         setEditingRow(null)
@@ -2579,7 +2591,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'Stage', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2612,6 +2624,20 @@ function LpDirectoryView() {
                           const isDst = lp.group === 'DST / 1031'
                           return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isDst ? '#fef3c7' : '#eff6ff', color: isDst ? '#92400e' : '#1d4ed8', whiteSpace: 'nowrap' }}>{isDst ? 'DST / 1031' : 'Fund IV LP Target'}</span>
                         })()}
+                      </td>
+
+                      {/* Stage — the LP Opportunity's Salesforce stage (editable → writes StageName back to SF) */}
+                      <td style={{ padding: '11px 14px' }}>
+                        {isEditing ? (
+                          <select value={ev.stage} onChange={e => setEditValues(v => ({ ...v, stage: e.target.value }))} style={{ ...inputStyle, width: 130 }}>
+                            <option value="">—</option>
+                            {SF_OPP_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                            {ev.stage && !SF_OPP_STAGES.includes(ev.stage) && <option value={ev.stage}>{ev.stage}</option>}
+                          </select>
+                        ) : lp.sfStage ? (() => {
+                          const c = STAGE_COLOR[lp.sfStage] ?? { bg: '#f3f4f6', color: '#6b7280' }
+                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, whiteSpace: 'nowrap' }}>{lp.sfStage}</span>
+                        })() : <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>}
                       </td>
 
                       {/* LP Primary Contact — the LP's own contact + firm, from Salesforce (read-only) */}

@@ -54,6 +54,7 @@ export interface LpRecord {
   brokerContact: string;
   resolvedEmail: string | null; // best-known email (schedule → SF contact → past correspondence)
   committedUsd?: number | null;  // hard-committed so far (portal-stored; blank for uncommitted targets)
+  sfStage?: string | null;       // the LP Opportunity's Salesforce StageName
 }
 
 interface LpUpdateBody {
@@ -68,6 +69,7 @@ interface LpUpdateBody {
   brokerFirm?: string;
   brokerContact?: string;
   committed?: string;
+  stage?: string;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -296,6 +298,7 @@ export async function GET(req: NextRequest) {
           lp.sfBrokerContact = sf.brokerContact;
           lp.sfAdvisorFirm = sf.advisorFirm;
           lp.sfAdvisorContact = sf.advisorContact;
+          lp.sfStage = sf.stage;
           if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
@@ -315,6 +318,7 @@ export async function GET(req: NextRequest) {
             date: "", notes: "",
             group: "DST / 1031",
             lastInteraction: null,
+            sfStage: d.stage,
             sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
@@ -493,6 +497,7 @@ export async function PATCH(req: NextRequest) {
       if (body.brokerFirm   !== undefined) target.brokerFirm   = body.brokerFirm;
       if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
       if (body.committed    !== undefined) target.committedUsd  = body.committed.trim() ? parseDollar(body.committed) : null;
+      if (body.stage        !== undefined) target.sfStage       = body.stage || null;
       await writeLpCache(supabase, data);
     }
   } catch { /* cache update is best-effort */ }
@@ -525,6 +530,7 @@ export async function PATCH(req: NextRequest) {
         notes: body.notes,
         commitmentUsd: body.commitment !== undefined ? parseDollar(body.commitment) : undefined,
         committedUsd: body.committed !== undefined && body.committed.trim() ? parseDollar(body.committed) : undefined,
+        stage: body.stage,
         brokerFirm: body.brokerFirm,
         brokerContact: body.brokerContact,
       },
