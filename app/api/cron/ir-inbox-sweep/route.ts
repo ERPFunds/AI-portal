@@ -4,6 +4,7 @@ import { classifyInvestorEmail } from "@/lib/agents/ir/email-classifier";
 import {
   listInboxMessages,
   listInboxMessagesSince,
+  listFolderMessages,
   resolveSubfolderId,
   ensureSubfolderId,
   resolveFolderId,
@@ -12,7 +13,6 @@ import {
   setMessageRead,
   getMessageMime,
   importMimeMessage,
-  deleteMessage,
   deleteFolder,
 } from "@/lib/agents/ir/graph-mailbox";
 import { createReplyDraft } from "@/lib/agents/ir/graph-mail";
@@ -20,7 +20,7 @@ import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-r
 import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
 import { addAttachmentsToDraft } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
-import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun } from "@/lib/db";
+import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun, getDeletedDocusignInternetIds, markDocusignRestored } from "@/lib/db";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
@@ -126,22 +126,20 @@ async function handleMailbox(
       }
     }
 
-    // DocuSign automated notifications: delete them (moves to Deleted Items, recoverable) so they
-    // don't clutter the inbox, then record it. Never pulled into the IR inbox.
+    // DocuSign automated notifications: leave them in the inbox (never delete/move them — they're
+    // the investor's own signing mail), but never draft a reply to them. Just mark processed so we
+    // skip them on future sweeps.
     if (/docusign/i.test(fromAddr) || /docusign/i.test(m.fromAddress)) {
-      let action = "ignored-docusign";
       if (!dryRun) {
-        try { await deleteMessage(mailbox, m.id); action = "deleted-docusign"; }
-        catch (e) { action = `docusign-del-fail(${String(e).slice(0, 40)})`; }
         await markMessageProcessed({
           mailbox,
           messageId: m.id,
           internetMessageId: m.internetMessageId,
           isInvestor: false,
-          action,
+          action: "ignored-docusign",
         });
       }
-      details.push(`${dryRun ? "IGNORE" : "DELETE"} ${fromAddr || m.fromAddress} — DocuSign notification`);
+      details.push(`IGNORE ${fromAddr || m.fromAddress} — DocuSign notification (left in inbox, no draft)`);
       continue;
     }
 
@@ -368,6 +366,31 @@ async function cleanupStrayTeamFolders(): Promise<string[]> {
   return removed;
 }
 
+// Recovery: DocuSign notifications the sweep previously DELETED (moved to Deleted Items) get moved
+// back to the Inbox. Precise — only touches messages WE deleted, identified by the internetMessageId
+// in the processed ledger, so mail the user deleted themselves is left alone. Idempotent: each
+// restored message's ledger row flips to "restored-docusign" so it's never retried.
+async function restoreDeletedDocusigns(mailbox: string): Promise<number> {
+  try {
+    const wantedIds = await getDeletedDocusignInternetIds(mailbox);
+    if (wantedIds.length === 0) return 0;
+    const wanted = new Set(wantedIds);
+    const deleted = await listFolderMessages(mailbox, "deleteditems", 250);
+    let restored = 0;
+    for (const m of deleted) {
+      if (!m.internetMessageId || !wanted.has(m.internetMessageId)) continue;
+      try {
+        await moveMessage(mailbox, m.id, "inbox");
+        await markDocusignRestored(mailbox, m.internetMessageId);
+        restored++;
+      } catch { /* skip one we can't move */ }
+    }
+    return restored;
+  } catch {
+    return 0;
+  }
+}
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get("authorization");
   const isCron = authHeader === `Bearer ${process.env.CRON_SECRET}`;
@@ -415,6 +438,11 @@ export async function GET(req: NextRequest) {
   const results = [];
   for (const mailbox of mailboxes) {
     try {
+      // Release any DocuSigns we previously deleted back to this mailbox's Inbox first.
+      if (!dryRun) {
+        const restored = await restoreDeletedDocusigns(mailbox);
+        if (restored) console.log(`[ir-sweep] restored ${restored} deleted DocuSign(s) to ${mailbox} Inbox`);
+      }
       results.push(await handleMailbox(mailbox, dryRun, opts));
     } catch (e) {
       results.push({ mailbox, error: String(e) });

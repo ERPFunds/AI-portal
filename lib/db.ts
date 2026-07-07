@@ -397,6 +397,23 @@ export async function markMessageProcessed(params: {
   `;
 }
 
+/** internetMessageIds of DocuSign notifications the sweep previously DELETED in this mailbox. */
+export async function getDeletedDocusignInternetIds(mailbox: string): Promise<string[]> {
+  const { rows } = await sql`
+    SELECT internet_message_id FROM ir_processed_messages
+    WHERE mailbox = ${mailbox} AND action = 'deleted-docusign' AND internet_message_id IS NOT NULL
+  `;
+  return rows.map((r) => r.internet_message_id as string);
+}
+
+/** Flag a previously-deleted DocuSign as restored so it isn't retried on the next sweep. */
+export async function markDocusignRestored(mailbox: string, internetMessageId: string): Promise<void> {
+  await sql`
+    UPDATE ir_processed_messages SET action = 'restored-docusign'
+    WHERE mailbox = ${mailbox} AND internet_message_id = ${internetMessageId} AND action = 'deleted-docusign'
+  `;
+}
+
 // ── agent_runs — unified run log for all agents ───────────────────────────────
 
 export async function logAgentRun(params: {
