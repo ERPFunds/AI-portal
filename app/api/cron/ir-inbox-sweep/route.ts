@@ -145,6 +145,24 @@ async function handleMailbox(
       continue;
     }
 
+    // Mail addressed DIRECTLY to an IR lead (To: Meghan or William) is their personal
+    // correspondence — they handle it themselves. The agent only triages shared-inbox traffic
+    // (To: team@ / the investor-facing address), which lands in their inbox as list members.
+    // Skip anything with an IR lead on the To line so it never enters the IR inbox or drafter.
+    if ((m.toRecipients || []).some((a) => a.includes("mberry@") || a.includes("wmeyer@"))) {
+      if (!dryRun) {
+        await markMessageProcessed({
+          mailbox,
+          messageId: m.id,
+          internetMessageId: m.internetMessageId,
+          isInvestor: false,
+          action: "ignored-direct-to-lead",
+        });
+      }
+      details.push(`IGNORE ${fromAddr || m.fromAddress} — addressed directly to IR lead (To: Meghan/William)`);
+      continue;
+    }
+
     const verdict = await classifyInquiry({ from: fromAddr, subject: m.subject, body: bodyText });
     if (!verdict.isInvestorInquiry) {
       if (!dryRun) {

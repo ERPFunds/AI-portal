@@ -62,6 +62,16 @@ function ownerOf(addrs: string[]): "Meghan" | "William" | null {
   return null;
 }
 
+// Mail addressed directly to an IR lead (To: Meghan or William) is their personal correspondence —
+// it's excluded from the IR inbox/drafter. Only shared-inbox traffic (To: team@ / investor-facing
+// address) is surfaced. Applies to inbound messages; drafts (To: the investor) are never affected.
+function addressedToLead(toAddrs: string[]): boolean {
+  return toAddrs.some((a) => {
+    const s = a.toLowerCase();
+    return s.includes("mberry@") || s.includes("wmeyer@");
+  });
+}
+
 // Drafts are tagged with the signer at creation via an Outlook category ("IR: Meghan" / "IR: William"),
 // so a draft's owner is known reliably without matching it back to an inbound email.
 function ownerFromCategories(cats: string[]): "Meghan" | "William" | null {
@@ -211,7 +221,8 @@ export async function GET(req: NextRequest) {
 
     if (irFolderId) {
       // Parent folder messages
-      const parentMsgs = await listFolderMessages(TEAM_MAILBOX, irFolderId, PER_FOLDER);
+      const parentMsgs = (await listFolderMessages(TEAM_MAILBOX, irFolderId, PER_FOLDER))
+        .filter((m) => m.isDraft || !addressedToLead(m.toRecipients));
       parentMsgs.forEach((m) => items.push(toItem(m, IR_FOLDER, "ir")));
       folders.push({ name: IR_FOLDER, kind: "ir", count: parentMsgs.length });
 
@@ -236,6 +247,8 @@ export async function GET(req: NextRequest) {
           const msgs = await listFolderMessages(TEAM_MAILBOX, fid, PER_FOLDER);
           for (const m of msgs) {
             if (seen.has(m.id)) continue;
+            // Skip inbound mail addressed directly to an IR lead; keep drafts (To: the investor).
+            if (!m.isDraft && addressedToLead(m.toRecipients)) continue;
             seen.add(m.id);
             items.push(toItem(m, path, g.kind));
             count++;

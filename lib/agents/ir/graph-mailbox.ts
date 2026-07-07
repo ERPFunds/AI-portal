@@ -11,6 +11,7 @@ export interface InboxMessage {
   bodyPreview: string;
   receivedDateTime: string;
   recipients: string[]; // To + CC addresses (lowercased) — used to route ownership
+  toRecipients: string[]; // To addresses only (lowercased) — used to detect mail addressed directly to an IR lead
 }
 
 async function token(): Promise<string> {
@@ -46,9 +47,12 @@ type RawGraphMessage = {
 };
 
 function toInboxMessage(m: RawGraphMessage): InboxMessage {
-  const recips = [...(m.toRecipients || []), ...(m.ccRecipients || [])]
+  const toOnly = (m.toRecipients || [])
     .map((r) => (r.emailAddress?.address || "").toLowerCase().trim())
     .filter(Boolean);
+  const recips = [...toOnly, ...(m.ccRecipients || [])
+    .map((r) => (r.emailAddress?.address || "").toLowerCase().trim())
+    .filter(Boolean)];
   return {
     id: m.id,
     internetMessageId: m.internetMessageId ?? null,
@@ -58,6 +62,7 @@ function toInboxMessage(m: RawGraphMessage): InboxMessage {
     bodyPreview: m.bodyPreview || "",
     receivedDateTime: m.receivedDateTime,
     recipients: recips,
+    toRecipients: toOnly,
   };
 }
 
