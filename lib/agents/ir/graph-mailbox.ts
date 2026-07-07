@@ -520,7 +520,7 @@ export async function sendDraftMessage(mailbox: string, messageId: string): Prom
 /** Send a NEW message as `mailbox` (e.g. mberry@) — used to reply from a person's own address. */
 export async function sendMailAs(
   mailbox: string,
-  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML"; bcc?: string[] }
+  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML"; bcc?: string[]; categories?: string[] }
 ): Promise<void> {
   const t = await token();
   const message: Record<string, unknown> = {
@@ -529,6 +529,8 @@ export async function sendMailAs(
     toRecipients: p.to.map((a) => ({ emailAddress: { address: a } })),
   };
   if (p.bcc && p.bcc.length) message.bccRecipients = p.bcc.map((a) => ({ emailAddress: { address: a } }));
+  // Tag the Sent Items copy so the IR Inbox "Sent" tab can show only agent-assisted replies.
+  if (p.categories && p.categories.length) message.categories = p.categories;
   const res = await fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/sendMail`, {
     method: "POST",
     headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },

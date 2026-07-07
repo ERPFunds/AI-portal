@@ -304,22 +304,26 @@ export async function GET(req: NextRequest) {
     // 3) Sent — read each IR lead's Sent Items directly, so this captures replies sent from
     //    OUTLOOK (not just ones sent through the app; app-sends also land in Sent Items). Skip
     //    purely-internal mail. Body loads on demand via ?message=&mailbox.
+    //    Only include messages the AGENT helped draft — identified by the "IR:" Outlook category we
+    //    stamp on every AI draft (and on app-sent copies). Sending a tagged draft from Outlook keeps
+    //    the category on the Sent copy, so this tracks Outlook-sent agent replies too.
     let sentCount = 0;
     const sentMailboxes = (process.env.IR_SENT_MAILBOXES || `${SEND_AS_MAILBOX},wmeyer@erpfunds.com`)
       .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
     const sentSeen = new Set<string>();
+    const irTag = /^ir:/i;
     for (const mb of sentMailboxes) {
-      const owner: "Meghan" | "William" | null = mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null;
       try {
-        const sent = await listFolderMessages(mb, "sentitems", 60);
+        const sent = await listFolderMessages(mb, "sentitems", 100);
         for (const m of sent) {
-          const recips = m.toRecipients ?? [];
-          if (recips.length && recips.every((a) => a.toLowerCase().endsWith("@erpfunds.com"))) continue; // internal-only
+          const cats = m.categories ?? [];
+          if (!cats.some((c) => irTag.test(c.trim()))) continue; // not agent-drafted
           if (sentSeen.has(m.internetMessageId || m.id)) continue;
           sentSeen.add(m.internetMessageId || m.id);
           const it = toItem(m, "Sent", "sent", mb);
           it.status = "handled";
-          it.owner = owner;
+          it.owner = cats.some((c) => /william/i.test(c)) ? "William" : cats.some((c) => /meghan/i.test(c)) ? "Meghan"
+            : (mb.includes("wmeyer") ? "William" : mb.includes("mberry") ? "Meghan" : null);
           items.push(it);
           sentCount++;
         }
@@ -429,7 +433,7 @@ export async function POST(req: NextRequest) {
     const sendFrom = body.from === "William" ? "wmeyer@erpfunds.com" : SEND_AS_MAILBOX;
     const senderName = body.from === "William" ? "William Meyer" : "Meghan Berry";
     try {
-      await sendMailAs(sendFrom, { to: [to], subject, content, contentType: "Text" });
+      await sendMailAs(sendFrom, { to: [to], subject, content, contentType: "Text", categories: [`IR: ${body.from === "William" ? "William" : "Meghan"}`] });
       // team@ Sent copy (so it shows in team@ Outlook + the app Sent section)
       try {
         const mime = [
@@ -492,8 +496,9 @@ export async function POST(req: NextRequest) {
     }
     const sendFrom = body.from || SEND_AS_MAILBOX;
     const content = typeof body.body === "string" && body.body.trim() ? body.body : detail.bodyText;
+    const sendOwner = (body.from === "William" || sendFrom.includes("wmeyer")) ? "William" : "Meghan";
 
-    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text" });
+    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text", categories: [`IR: ${sendOwner}`] });
     // Clean up the draft where it lived (best-effort).
     try { await deleteMessage(draftMailbox, body.id); } catch { /* leave it if delete fails */ }
 
