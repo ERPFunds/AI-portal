@@ -1477,32 +1477,46 @@ function InboxView({
   })
   const selected = filtered[selectedInboxIdx]
 
-  // Fetch the full message body on open (the list only carries a short preview). Sent items carry
+  // The prepared reply draft for an inbound item. Escalations (and routine items) get a best-effort
+  // draft; surface it inline on the thread instead of only in the separate Drafts group. Matched by
+  // conversation, else by investor address + subject (mirror of findOriginalFor).
+  const findDraftFor = (inbound: AgentInboxItem | undefined): AgentInboxItem | undefined => {
+    if (!inbound || inbound.isDraft) return undefined
+    return items.find((it) => it.isDraft && (
+      (Boolean(it.conversationId) && it.conversationId === inbound.conversationId) ||
+      (it.to.some((a) => a.toLowerCase() === (inbound.from || '').toLowerCase()) && stripReSubj(it.subject) === stripReSubj(inbound.subject))
+    ))
+  }
+  const linkedDraft = selected && !selected.isDraft ? findDraftFor(selected) : undefined
+  // The draft to display / edit / send in the detail pane: the selected draft itself, or the draft
+  // linked to a selected inbound (e.g. an escalation's prepared reply).
+  const draftTarget = selected?.isDraft ? selected : linkedDraft
+
+  // Fetch the full message body on open (the list only carries a short preview) — for both the
+  // selected item AND its linked draft, so an escalation shows its prepared reply. Sent items carry
   // their body inline (their id is a DB row, not a Graph message id) — use it directly.
   React.useEffect(() => {
-    const id = selected?.id
-    if (!id || bodyCache[id] !== undefined) return
-    // App-logged sent items carry their body inline; mailbox Sent Items (incl. Outlook-sent) load it via ?message=.
-    if (selected?.folderKind === 'sent' && selected.sentBody) { setBodyCache((c) => ({ ...c, [id]: selected.sentBody ?? '' })); return }
+    const targets = [selected, draftTarget].filter((t): t is AgentInboxItem => Boolean(t) && bodyCache[(t as AgentInboxItem).id] === undefined)
+    if (targets.length === 0) return
     let cancelled = false
     setBodyLoading(true)
-    fetch(`/api/agent-inbox?message=${encodeURIComponent(id)}${selected?.mailbox ? `&mailbox=${encodeURIComponent(selected.mailbox)}` : ''}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [id]: d.body })) })
-      .catch(() => {})
-      .finally(() => { if (!cancelled) setBodyLoading(false) })
+    Promise.all(targets.map((t) => {
+      if (t.folderKind === 'sent' && t.sentBody) { setBodyCache((c) => ({ ...c, [t.id]: t.sentBody ?? '' })); return Promise.resolve() }
+      return fetch(`/api/agent-inbox?message=${encodeURIComponent(t.id)}${t.mailbox ? `&mailbox=${encodeURIComponent(t.mailbox)}` : ''}`)
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (!cancelled && d && typeof d.body === 'string') setBodyCache((c) => ({ ...c, [t.id]: d.body })) })
+        .catch(() => {})
+    })).finally(() => { if (!cancelled) setBodyLoading(false) })
     return () => { cancelled = true }
-  }, [selected?.id])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id, draftTarget?.id])  // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Seed the editable draft box once the full body loads for a newly-opened draft.
+  // Seed the editable draft box once the full body loads for the draft being shown.
   React.useEffect(() => {
-    const id = selected?.id
-    if (selected?.isDraft && id && bodyCache[id] !== undefined && draftEditId !== id) {
+    const id = draftTarget?.id
+    if (draftTarget && id && bodyCache[id] !== undefined && draftEditId !== id) {
       setDraftEdit(bodyCache[id]); setDraftEditId(id)
     }
-  }, [selected?.id, selected?.isDraft, bodyCache, draftEditId])
-
-  const selectedOwner = selected ? ownerFor(selected) : null
+  }, [draftTarget?.id, bodyCache, draftEditId])
 
   // For a draft, load the original inbound email it's replying to — resolved on the server via the
   // conversation (robust), not by matching subject/recipient against the loaded list.
@@ -1689,12 +1703,24 @@ function InboxView({
                     </div>
                   </div>
                 )}
-                <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
-                  <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
-                    {selected.isDraft ? `${original ? 'Your reply' : 'Draft'} to: ${selected.to.join(', ') || '—'} · sends from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'sent' ? `Sent to: ${selected.to.join(', ') || '—'} · from ${selected.from}` : `From: ${selected.from}`}
+                {/* Inbound email body (for any non-draft item: the escalate / IR thread / sent copy). */}
+                {!selected.isDraft && (
+                  <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+                      {selected.folderKind === 'sent' ? `Sent to: ${selected.to.join(', ') || '—'} · from ${selected.from}` : `From: ${selected.from}`}
+                    </div>
+                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                      {bodyCache[selected.id] ?? (bodyLoading ? 'Loading…' : (selected.preview || '(no preview available)'))}
+                    </div>
                   </div>
-                  {selected.isDraft ? (
-                    bodyLoading && bodyCache[selected.id] === undefined ? (
+                )}
+                {/* Prepared reply draft — the selected draft, or the draft linked to a selected inbound (escalations). */}
+                {draftTarget && (
+                  <div style={{ background: '#f8fafc', borderRadius: 8, padding: 14, marginBottom: 12, border: linkedDraft ? '1px solid #c7d2fe' : '1px solid #e5e7eb' }}>
+                    <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+                      {linkedDraft ? '✎ Prepared reply · ' : (original ? 'Your reply' : 'Draft') + ' '}to: {draftTarget.to.join(', ') || '—'} · sends from {OWNER_SEND_FROM[ownerFor(draftTarget) ?? 'Meghan']}
+                    </div>
+                    {bodyLoading && bodyCache[draftTarget.id] === undefined ? (
                       <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading draft…</div>
                     ) : (
                       <textarea
@@ -1703,41 +1729,37 @@ function InboxView({
                         spellCheck
                         style={{ width: '100%', minHeight: 260, fontSize: 13, lineHeight: 1.6, color: '#111827', border: '1px solid #d1d5db', borderRadius: 6, padding: '10px 12px', resize: 'vertical', fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box' }}
                       />
-                    )
-                  ) : (
-                    <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                      {bodyCache[selected.id] ?? (bodyLoading ? 'Loading…' : (selected.preview || '(no preview available)'))}
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="draft-panel">
                 <div className="draft-label">
                   <span className={`badge ${FOLDER_BADGE[selected.folderKind]}`} style={{ fontSize: 10 }}>{FOLDER_LABEL[selected.folderKind]}</span>
-                  {selected.isDraft ? `Review & edit the reply above, then send from ${OWNER_SEND_FROM[selectedOwner ?? 'Meghan']}` : selected.folderKind === 'sent' ? `Sent ${formatInboxTime(selected.receivedISO)}${selected.owner ? ` from ${OWNER_SEND_FROM[selected.owner]}` : ''}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention' : 'Review in Outlook'}
+                  {draftTarget ? `${selected.folderKind === 'escalate' ? 'Escalated — review the prepared reply above, then ' : 'Review & edit the reply above, then '}send from ${OWNER_SEND_FROM[ownerFor(draftTarget) ?? 'Meghan']}` : selected.folderKind === 'sent' ? `Sent ${formatInboxTime(selected.receivedISO)}${selected.owner ? ` from ${OWNER_SEND_FROM[selected.owner]}` : ''}` : selected.folderKind === 'escalate' ? 'Escalated — needs the fund manager’s attention (no draft prepared)' : 'Review in Outlook'}
                 </div>
                 <div className="draft-actions" style={{ alignItems: 'center' }}>
-                  {selected.isDraft && (
+                  {draftTarget && (
                     <button
                       className="btn btn-primary"
-                      disabled={sendingId === selected.id}
-                      onClick={() => approveAndSend(selected)}
+                      disabled={sendingId === draftTarget.id}
+                      onClick={() => approveAndSend(draftTarget)}
                     >
-                      {sendingId === selected.id ? '⏳ Sending…' : '✓ Approve & Send'}
+                      {sendingId === draftTarget.id ? '⏳ Sending…' : '✓ Approve & Send'}
                     </button>
                   )}
-                  {selected.isDraft && (
+                  {draftTarget && (
                     <button
-                      disabled={sendingId === selected.id}
-                      onClick={() => deleteDraft(selected)}
+                      disabled={sendingId === draftTarget.id}
+                      onClick={() => deleteDraft(draftTarget)}
                       title="Delete this draft so the AI won't send it"
-                      style={{ fontSize: 12, fontWeight: 600, background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 7, padding: '7px 14px', cursor: sendingId === selected.id ? 'wait' : 'pointer' }}
+                      style={{ fontSize: 12, fontWeight: 600, background: '#fff', color: '#dc2626', border: '1px solid #fca5a5', borderRadius: 7, padding: '7px 14px', cursor: sendingId === draftTarget.id ? 'wait' : 'pointer' }}
                     >
                       🗑 Delete draft
                     </button>
                   )}
-                  {selected.webLink && (
-                    <a className={`btn ${selected.isDraft ? 'btn-ghost' : 'btn-primary'}`} href={selected.webLink} target="_blank" rel="noopener noreferrer">↗ Open in Outlook</a>
+                  {(draftTarget ?? selected).webLink && (
+                    <a className={`btn ${draftTarget ? 'btn-ghost' : 'btn-primary'}`} href={(draftTarget ?? selected).webLink!} target="_blank" rel="noopener noreferrer">↗ Open in Outlook</a>
                   )}
                   {sendMsg && (
                     <span style={{ fontSize: 12, fontWeight: 600, color: sendMsg.startsWith('Sent') ? '#16a34a' : '#E55A4E' }}>{sendMsg}</span>
