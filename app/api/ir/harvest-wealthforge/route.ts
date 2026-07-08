@@ -9,24 +9,33 @@ export const maxDuration = 300;
 
 const MAILBOX = "wmeyer@erpfunds.com";
 
-interface Msg { id: string; subject: string; sentDateTime: string; to: string[]; body: string; folder: string }
+interface Msg { id: string; subject: string; sentDateTime: string; to: string[]; body: string; folder: string; hasAttachments: boolean }
 
 async function fetchFolder(token: string, folder: string): Promise<Msg[]> {
   const dateField = folder === "sentitems" ? "sentDateTime" : "lastModifiedDateTime";
   const url =
     `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(MAILBOX)}/mailFolders/${folder}/messages` +
-    `?$select=id,subject,sentDateTime,toRecipients,body&$orderby=${dateField} desc&$top=50`;
+    `?$select=id,subject,sentDateTime,toRecipients,body,hasAttachments&$orderby=${dateField} desc&$top=50`;
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.body-content-type="text"' } });
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.value || []).map((m: { id: string; subject?: string; sentDateTime?: string; toRecipients?: { emailAddress?: { address?: string } }[]; body?: { content?: string } }): Msg => ({
+  return (data.value || []).map((m: { id: string; subject?: string; sentDateTime?: string; toRecipients?: { emailAddress?: { address?: string } }[]; body?: { content?: string }; hasAttachments?: boolean }): Msg => ({
     id: m.id,
     subject: m.subject || "",
     sentDateTime: m.sentDateTime || "",
     to: (m.toRecipients || []).map((r) => (r.emailAddress?.address || "").toLowerCase()).filter(Boolean),
     body: m.body?.content || "",
     folder,
+    hasAttachments: !!m.hasAttachments,
   }));
+}
+
+async function listAttachments(token: string, id: string): Promise<string[]> {
+  const url = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(MAILBOX)}/messages/${encodeURIComponent(id)}/attachments?$select=name,contentType,size`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.value || []).map((a: { name?: string; size?: number }) => `${a.name || "?"} (${a.size ?? "?"}b)`);
 }
 
 export async function GET() {
@@ -38,7 +47,7 @@ export async function GET() {
     (m) => /wealthforge/i.test(m.subject) || m.to.some((a) => a.includes("wealthforge.com"))
   );
 
-  const out: { folder: string; subject: string; sentAt: string; bodyChars: number; extracted: number; sampleQuestions: string[] }[] = [];
+  const out: { folder: string; subject: string; sentAt: string; bodyChars: number; extracted: number; sampleQuestions: string[]; attachments: string[]; preview: string }[] = [];
   let inserted = 0;
   for (const m of matches) {
     const body = stripMimecastNoise(m.body).slice(0, 12000);
@@ -49,7 +58,8 @@ export async function GET() {
         pairs.map((p) => ({ question: p.question, answer: p.answer, category: p.category, sourceSubject: m.subject, sourceMailbox: MAILBOX, sourceSentAt: m.sentDateTime || new Date().toISOString() }))
       );
     }
-    out.push({ folder: m.folder, subject: m.subject, sentAt: m.sentDateTime, bodyChars: body.length, extracted: pairs.length, sampleQuestions: pairs.slice(0, 6).map((p) => p.question) });
+    const attachments = m.hasAttachments ? await listAttachments(token, m.id) : [];
+    out.push({ folder: m.folder, subject: m.subject, sentAt: m.sentDateTime, bodyChars: body.length, extracted: pairs.length, sampleQuestions: pairs.slice(0, 6).map((p) => p.question), attachments, preview: body.slice(0, 1600) });
   }
 
   return NextResponse.json({ matched: matches.length, insertedToLearnedQa: inserted, messages: out });
