@@ -112,17 +112,17 @@ async function handleMailbox(
     const signer = (sourceIsWilliam || (m.recipients || []).some((a) => a.includes("wmeyer@")))
       ? "William Meyer"
       : "Meghan Berry";
+    // Classify and draft from the FULL body — bodyPreview is Graph's ~255-char snippet, which
+    // hid everything below the fold (follow-up questions, amounts, the sender's signature).
+    let fromAddr = m.fromAddress;
+    let bodyText = (await getMessageBodyText(mailbox, m.id)) || m.bodyPreview;
     // Unwrap forwarded IR emails (e.g. forwarded into team@) so we classify the ORIGINAL
     // investor + their message, not the internal person who forwarded it.
-    let fromAddr = m.fromAddress;
-    let bodyText = m.bodyPreview;
     {
-      const uw = unwrapForward({ subject: m.subject, body: m.bodyPreview, from: m.fromAddress });
+      const uw = unwrapForward({ subject: m.subject, body: bodyText, from: m.fromAddress });
       if (uw.isForward) {
-        const full = await getMessageBodyText(mailbox, m.id);
-        const uw2 = unwrapForward({ subject: m.subject, body: full || m.bodyPreview, from: m.fromAddress });
-        fromAddr = uw2.originalFrom;
-        bodyText = uw2.content || m.bodyPreview;
+        fromAddr = uw.originalFrom;
+        bodyText = uw.content || bodyText;
       }
     }
 
@@ -244,9 +244,9 @@ async function handleMailbox(
       // wmeyer@) — created against the original BEFORE it's filed (step 4) — so it shows in their
       // own Outlook Drafts with the original email beneath it.
       if (triage.isDueDiligence) {
-        const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
+        // bodyText is already the full (unwrapped) body, fetched above for classification.
         const ddName = verdict.contact.fullName || [verdict.contact.firstName, verdict.contact.lastName].filter(Boolean).join(" ");
-        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody, contactName: ddName });
+        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: bodyText, contactName: ddName, signAs: signer });
         const atts: { filename: string; mimeType: string; bytes: Buffer }[] = [];
         for (const a of dd.attachments) {
           const bytes = await getAnthropicFileBytes(a.fileId);

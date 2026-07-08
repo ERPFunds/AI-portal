@@ -36,7 +36,8 @@ export interface DdReply {
  * and let the model pick which source files to attach. Returns an HTML draft + the resolved
  * attachment list (file_ids). The sweep saves this as an Outlook draft with attachments for review.
  */
-export async function buildDueDiligenceReply(params: { from: string; subject: string; body: string; contactName?: string }): Promise<DdReply> {
+export async function buildDueDiligenceReply(params: { from: string; subject: string; body: string; contactName?: string; signAs?: string }): Promise<DdReply> {
+  const signer = params.signAs || "Meghan Berry";
   const supabase = await createClient();
   const { data } = await supabase
     .from("uploaded_files")
@@ -78,14 +79,15 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
     model: "claude-opus-4-7",
     max_tokens: 8000,
     system: [{ type: "text" as const, text:
-`You are ERP Industrials' Investor Relations agent drafting a reply (from Meghan Berry's office) to an investor/broker DUE-DILIGENCE inquiry. Answer from the fund documents provided, and follow the approved IR Q&A sources below for how ERP handles recurring questions.
+`You are ERP Industrials' Investor Relations agent drafting a reply (from ${signer}'s office) to an investor/broker DUE-DILIGENCE inquiry. Answer from the fund documents provided, and follow the approved IR Q&A sources below for how ERP handles recurring questions.
 
 Return ONLY a JSON object: { "draftSubject": string, "draftHtml": string, "attach": string[] }.
 - draftHtml: a warm, professional HTML email answering each due-diligence question, grounded in the documents, citing the source document name in parentheses. If something isn't in the documents, say it will be provided separately rather than guessing. NEVER invent or estimate figures — quote them exactly with their source.
 - Address the greeting to the sender BY NAME using the provided recipient name (e.g. "Dear <first name>,"). Do NOT guess a name from the email handle — use the recipient name given, or the name in the email's signature; if neither is available, use a neutral greeting ("Hello,").
 - Follow the IR Q&A Reference / approved Learned Q&A for standard handling (e.g. account/document/K-1/distribution questions route to Tracy Doyle, tdoyle@erpfunds.com). Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, or logging in.
 - attach: exact filenames (from the AVAILABLE FILES list) of the source documents relevant to these questions, to attach to the reply. Use exact strings from the list; [] if none apply.
-- The draft is saved for Meghan's review — she sends it. Do not claim it has already been sent.${grounding}` }],
+- Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line under the name.
+- The draft is saved for ${signer}'s review — they send it. Do not claim it has already been sent.${grounding}` }],
     messages: [{ role: "user", content:
 `From: ${params.from}${params.contactName ? `\nRecipient name (address the reply to this person): ${params.contactName}` : ""}\nSubject: ${params.subject}\n\nInquiry:\n${params.body}\n\n=== AVAILABLE FILES (attach by exact filename) ===\n${fileList}\n\n=== FUND DOCUMENTS ===\n${sections.join("\n\n")}` }],
   });
