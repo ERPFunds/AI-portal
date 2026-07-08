@@ -245,7 +245,8 @@ async function handleMailbox(
       // own Outlook Drafts with the original email beneath it.
       if (triage.isDueDiligence) {
         const fullBody = (await getMessageBodyText(mailbox, m.id)) || bodyText;
-        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody });
+        const ddName = verdict.contact.fullName || [verdict.contact.firstName, verdict.contact.lastName].filter(Boolean).join(" ");
+        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: fullBody, contactName: ddName });
         const atts: { filename: string; mimeType: string; bytes: Buffer }[] = [];
         for (const a of dd.attachments) {
           const bytes = await getAnthropicFileBytes(a.fileId);
