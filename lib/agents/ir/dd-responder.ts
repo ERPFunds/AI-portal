@@ -76,7 +76,7 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
 
   const msg = await client.messages.create({
     model: "claude-opus-4-7",
-    max_tokens: 2000,
+    max_tokens: 8000,
     system: [{ type: "text" as const, text:
 `You are ERP Industrials' Investor Relations agent drafting a reply (from Meghan Berry's office) to an investor/broker DUE-DILIGENCE inquiry. Answer from the fund documents provided, and follow the approved IR Q&A sources below for how ERP handles recurring questions.
 
@@ -93,6 +93,17 @@ Return ONLY a JSON object: { "draftSubject": string, "draftHtml": string, "attac
   const m = text.match(/\{[\s\S]*\}/);
   let parsed: { draftSubject?: string; draftHtml?: string; attach?: string[] } = {};
   if (m) { try { parsed = JSON.parse(m[0]); } catch { /* keep defaults */ } }
+
+  // Salvage: a very long questionnaire can truncate the JSON so it won't parse — recover the
+  // draftHtml value (from `"draftHtml":"..."` to the end) so we never return an empty draft.
+  if (!parsed.draftHtml) {
+    const hm = text.match(/"draftHtml"\s*:\s*"([\s\S]*?)(?:"\s*,\s*"attach"|"\s*\}\s*$|$)/);
+    if (hm && hm[1]) {
+      parsed.draftHtml = hm[1].replace(/\\"/g, '"').replace(/\\n/g, "<br>").replace(/\\t/g, " ").replace(/\\\\/g, "\\");
+    } else if (text.trim() && !text.trim().startsWith("{")) {
+      parsed.draftHtml = text.trim(); // model answered as prose, not JSON
+    }
+  }
 
   const wanted = new Set((parsed.attach ?? []).map((s) => s.trim()));
   const attachments = avail

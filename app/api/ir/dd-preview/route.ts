@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       draftSubject: dd.draftSubject,
       draftHtml: dd.draftHtml,
+      usedDocCount: dd.usedDocCount,
       attachments: (dd.attachments ?? []).map((a) => a.filename),
     });
   } catch (e) {
