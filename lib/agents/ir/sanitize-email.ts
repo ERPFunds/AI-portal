@@ -32,6 +32,22 @@ function unwrapMimecastUrl(url: string): string {
   return "";
 }
 
+/**
+ * Strip Mimecast CyberGraph banners from an HTML body (used when quoting an original email into a
+ * reply draft). Removes the hidden `CGBNR…` tracking table/rows, the `CGBANNERINDICATOR` marker, and
+ * any cybergraph tracking anchors/images — these render as stray ALL-CAPS/garbled text in the quote.
+ */
+export function stripMimecastHtml(html: string): string {
+  if (!html) return html;
+  let h = html;
+  h = h.replace(/<table[^>]*\bid="?CGBNR[^>]*>[\s\S]*?<\/table>/gi, ""); // the CyberGraph banner table
+  h = h.replace(/<tr[^>]*\bid="?CGBNR[^>]*>[\s\S]*?<\/tr>/gi, "");        // stray CyberGraph rows
+  h = h.replace(/<a[^>]*mimecastcybergraph\.com[^>]*>[\s\S]*?<\/a>/gi, ""); // tracking links
+  h = h.replace(/<img[^>]*mimecastcybergraph\.com[^>]*>/gi, "");            // tracking pixels
+  h = h.replace(/CGBANNERINDICATOR/gi, "");
+  return h;
+}
+
 export function stripMimecastNoise(text: string): string {
   if (!text) return text;
   let t = text;

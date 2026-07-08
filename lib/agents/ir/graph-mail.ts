@@ -1,4 +1,5 @@
 import { getGraphToken } from "@/lib/agents/graph-token";
+import { stripMimecastHtml } from "@/lib/agents/ir/sanitize-email";
 
 export interface DraftResult {
   draftId: string | null;
@@ -74,7 +75,7 @@ export async function createReplyDraft(params: {
   if (!cr.ok) return { draftId: null, success: false, message: `createReply ${cr.status}: ${(await cr.text()).slice(0, 150)}` };
   const draft = await cr.json();
   const draftId: string = draft.id;
-  const quoted: string = draft.body?.content ?? "";
+  const quoted: string = stripMimecastHtml(draft.body?.content ?? "");
 
   // 2) put the AI reply ABOVE the quoted original (keep the quote so the reviewer sees the thread).
   const patch: Record<string, unknown> = { body: { contentType: "HTML", content: `${params.htmlBody}<br><br>${quoted}` } };
