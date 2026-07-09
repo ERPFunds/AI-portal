@@ -55,9 +55,10 @@ export async function POST(req: NextRequest) {
       case "email-escalation": {
         const classification = await classifyInvestorEmail({ from, subject, body });
 
-        // Save draft to Meghan's Outlook — never auto-send
-        let draftResult = { success: false, draftId: null as string | null, message: "Skipped (escalation)" };
-        if (!classification.isEscalation) {
+        // Save draft to Meghan's Outlook — never auto-send. Out-of-scope emails (legal / money
+        // movement) are never drafted; unanswerable ones (isEscalation) are left for a human.
+        let draftResult = { success: false, draftId: null as string | null, message: classification.isOutOfScope ? "Skipped (out of scope)" : "Skipped (escalation)" };
+        if (!classification.isEscalation && !classification.isOutOfScope) {
           draftResult = await saveDraftToOutlook({
             toEmail: from,
             mailboxEmail: TEAM_INBOX,

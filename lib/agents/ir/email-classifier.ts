@@ -20,6 +20,9 @@ export type EmailCategory =
 export interface EmailClassification {
   category: EmailCategory;
   isEscalation: boolean;
+  /** Legal/regulatory or money-movement (wire, bank details, redemption/withdrawal): the agent must
+   *  NOT draft or surface these at all — they are left entirely for the team to handle directly. */
+  isOutOfScope: boolean;
   escalationReason: string | null;
   lpName: string | null;
   isExistingLp: boolean;
@@ -52,13 +55,14 @@ There is NO investors@erpfunds.com address — it does not exist. NEVER give it 
 const OUTPUT_SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["category", "isEscalation", "escalationReason", "lpName", "isExistingLp", "isDueDiligence", "draftSubject", "draftHtml", "summary"],
+  required: ["category", "isEscalation", "isOutOfScope", "escalationReason", "lpName", "isExistingLp", "isDueDiligence", "draftSubject", "draftHtml", "summary"],
   properties: {
     category: {
       type: "string",
       enum: ["portal-access", "k1-tax-docs", "distribution-status", "general-faq", "escalation-complaint", "escalation-legal", "escalation-redemption", "escalation-new-inquiry", "escalation-other", "new-prospect", "attachment", "onboarding"],
     },
     isEscalation: { type: "boolean" },
+    isOutOfScope: { type: "boolean", description: "true for LEGAL/regulatory matters or MONEY-MOVEMENT (wire instructions, bank-account details/changes, redemption/withdrawal requests) — the agent must not draft or handle these at all" },
     escalationReason: { anyOf: [{ type: "string" }, { type: "null" }], description: "One short phrase saying WHY this needs a human (used as an Outlook tag), or null" },
     lpName: { anyOf: [{ type: "string" }, { type: "null" }] },
     isExistingLp: { type: "boolean" },
@@ -93,17 +97,19 @@ ${faqContext}
 
 Rules:
 - Identify repeat/FAQ questions vs. items needing escalation to a human
-- ESCALATION TEST — every draft is human-reviewed before sending, so routine (isEscalation=false) is the DEFAULT. Set isEscalation=true ONLY when a human must DECIDE something, not merely see the email:
-  (a) getting the reply wrong carries real risk: a complaint or unhappy investor, legal/regulatory matters, redemption or withdrawal requests, money movement or wire details, pricing/fee/commitment/side-letter negotiation; or
-  (b) the email asks something genuinely unanswerable from the approved sources here (and not simply routable to Tracy Doyle).
-- A FIRST-TIME PROSPECT — or a broker/RIA inquiring on behalf of one — asking for standard materials (deck, PPM, fund overview), an intro call, or due-diligence questions answerable from the approved sources is NOT an escalation: use category "new-prospect", isEscalation=false, and draft the standard reply. Escalate a prospect email only if it trips (a) or (b) above.
+- OUT OF SCOPE (isOutOfScope=true) — the agent must NEVER draft or handle these; they are left entirely for the team to deal with directly. Two kinds:
+  (1) LEGAL / regulatory matters: disputes, litigation, threats of legal action, subpoenas, regulatory inquiries, contract/side-letter legal terms.
+  (2) MONEY MOVEMENT: wire instructions or wire details, bank-account details or account changes, redemption / withdrawal / capital-return requests, or anything moving funds.
+  For these set isOutOfScope=true, isEscalation=false, and leave draftHtml EMPTY (""). Do not attempt an answer.
+- ESCALATION TEST — for everything NOT out of scope, routine (isEscalation=false) is the DEFAULT and you should DRAFT a reply. Set isEscalation=true ONLY when the email asks something genuinely UNANSWERABLE from the approved sources here (and not simply routable to Tracy Doyle) — i.e. we don't have the answer, so a human must handle it. Risk/sensitivity alone does NOT escalate — only "we can't answer it" does. Complaints, unhappy investors, and negotiation that are ANSWERABLE draft normally (a human still reviews before sending).
+- A FIRST-TIME PROSPECT — or a broker/RIA inquiring on behalf of one — asking for standard materials (deck, PPM, fund overview), an intro call, or due-diligence questions answerable from the approved sources is NOT an escalation: use category "new-prospect", isEscalation=false, and draft the standard reply. Escalate a prospect email only if it is genuinely unanswerable from the approved sources.
 - Draft responses in a warm, professional tone as if from ${signer}'s office
 - NEVER include specific financial figures you don't have — refer the investor to Tracy Doyle (tdoyle@erpfunds.com)
 - Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, a portal account, or logging in. Route every account/document/access/K-1/distribution question to Tracy Doyle (tdoyle@erpfunds.com)
 - All drafts are saved for review — the IR team approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
 - Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
-- ALWAYS write your best draft reply in draftHtml — never leave it empty. When an email trips the escalation test, set isEscalation=true so it's filed for human review, but STILL provide a genuine best-effort draft the reviewer can edit and send (draw on the Q&A reference / approved answers where relevant). Avoid pure filler ("thanks, noted") — write the most useful reply you can even when escalating.
+- Write your best draft reply in draftHtml for everything EXCEPT out-of-scope emails (legal / money-movement), where draftHtml must be "". When an email is unanswerable (isEscalation=true) it's filed for human review; still provide a genuine best-effort draft the reviewer can edit and send where you can (draw on the Q&A reference / approved answers), but never fabricate an answer you don't have. Avoid pure filler ("thanks, noted").
 - If a PRIOR THREAD is provided, read it: answer only what's still open, don't repeat what was already said, and keep the draft consistent with earlier replies in the thread.
 
 Field notes for the structured output:

@@ -191,6 +191,27 @@ async function handleMailbox(
       signAs: signer,
       threadContext: threadContext || undefined,
     });
+
+    // Out of scope: legal/regulatory or money-movement (wire instructions, bank details,
+    // redemption/withdrawal). The agent must NOT draft or surface these — leave the email in the
+    // mailbox untouched for the team to handle directly, and just mark it processed so we don't
+    // reconsider it. No draft, no team copy, no Salesforce log.
+    if (triage.isOutOfScope) {
+      if (!dryRun) {
+        await markMessageProcessed({
+          mailbox,
+          messageId: m.id,
+          internetMessageId: m.internetMessageId,
+          isInvestor: true,
+          action: "skipped-out-of-scope(legal/money)",
+        });
+      }
+      details.push(`SKIP ${fromAddr} — out of scope (legal / money movement), left for the team — ${m.subject}`);
+      continue;
+    }
+
+    // isEscalation now means "unanswerable from our sources" (a human must handle it). Answerable
+    // emails route to Forwarded Drafts as prepared replies; unanswerable ones route to Escalate.
     const route = triage.isEscalation ? "escalate" : "draft";
 
     // Outlook categories: owner tag always; new prospects get their own visibility tag (they
