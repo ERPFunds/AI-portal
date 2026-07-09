@@ -964,6 +964,126 @@ export async function createTask(p: {
   return data.id as string;
 }
 
+// ── Prior-fund contact reconciliation against Salesforce ────────────────────────
+// Compare the imported historical contacts (Fund II/III/IEP) to Salesforce and, optionally,
+// add what's missing: create the investor Account if absent, then create each missing Contact
+// (matched by email) under it, recording the prior fund(s) in the Contact Description. Read-only
+// unless { apply: true }. Account/Contact matching: Account by normalized Name, Contact by Email.
+export interface PriorReconcileEntity {
+  investor: string;
+  funds: string[];
+  contacts: { firstName: string; lastName: string; email: string; company: string }[];
+}
+export interface PriorReconcileReport {
+  entities: number;
+  accountsMatched: number;
+  accountsMissing: string[];
+  contactsTotal: number;
+  contactsMatched: number;
+  contactsMissing: { investor: string; name: string; email: string; accountExists: boolean }[];
+  applied?: { accountsCreated: number; contactsCreated: number; errors: string[] };
+}
+
+const reconNorm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+async function sfQueryInChunks(values: string[], build: (chunk: string[]) => string, size = 40): Promise<Record<string, unknown>[]> {
+  const out: Record<string, unknown>[] = [];
+  for (let i = 0; i < values.length; i += size) {
+    const recs = await sfQuery(build(values.slice(i, i + size)));
+    out.push(...recs);
+  }
+  return out;
+}
+
+export async function reconcilePriorContacts(entities: PriorReconcileEntity[], opts?: { apply?: boolean }): Promise<PriorReconcileReport> {
+  const emailsAll = [...new Set(entities.flatMap((e) => e.contacts.map((c) => c.email.toLowerCase().trim()).filter(Boolean)))];
+  const namesAll = [...new Set(entities.map((e) => e.investor))];
+
+  // Existing Accounts by normalized name.
+  const accRecs = await sfQueryInChunks(namesAll, (chunk) =>
+    `SELECT Id, Name FROM Account WHERE Name IN (${chunk.map((n) => `'${soql(n)}'`).join(",")})`);
+  const accByNorm = new Map<string, string>();
+  for (const a of accRecs) accByNorm.set(reconNorm(String(a.Name)), String(a.Id));
+
+  // Existing Contacts by email.
+  const conRecs = await sfQueryInChunks(emailsAll, (chunk) =>
+    `SELECT Id, Email FROM Contact WHERE Email IN (${chunk.map((e) => `'${soql(e)}'`).join(",")})`);
+  const conEmails = new Set<string>();
+  for (const c of conRecs) { const em = String(c.Email || "").toLowerCase().trim(); if (em) conEmails.add(em); }
+
+  const accountsMissing: string[] = [];
+  const contactsMissing: PriorReconcileReport["contactsMissing"] = [];
+  const seenMissingEmail = new Set<string>();
+  for (const e of entities) {
+    const accId = accByNorm.get(reconNorm(e.investor)) ?? null;
+    if (!accId) accountsMissing.push(e.investor);
+    for (const c of e.contacts) {
+      const em = c.email.toLowerCase().trim();
+      if (!em || conEmails.has(em) || seenMissingEmail.has(em)) continue;
+      seenMissingEmail.add(em);
+      contactsMissing.push({ investor: e.investor, name: [c.firstName, c.lastName].filter(Boolean).join(" ").trim(), email: c.email, accountExists: !!accId });
+    }
+  }
+
+  const report: PriorReconcileReport = {
+    entities: entities.length,
+    accountsMatched: entities.length - accountsMissing.length,
+    accountsMissing,
+    contactsTotal: emailsAll.length,
+    contactsMatched: emailsAll.length - seenMissingEmail.size,
+    contactsMissing,
+  };
+  if (!opts?.apply) return report;
+
+  // ── WRITE: create missing Accounts (as needed), then missing Contacts under them ──
+  const errors: string[] = [];
+  let accountsCreated = 0, contactsCreated = 0;
+  const ensureAccount = async (investor: string): Promise<string | null> => {
+    const key = reconNorm(investor);
+    const existing = accByNorm.get(key);
+    if (existing) return existing;
+    const r = await sfCreate("Account", { Name: investor });
+    if (r.ok && r.id) { accByNorm.set(key, r.id); accountsCreated++; return r.id; }
+    errors.push(`account "${investor}": ${r.detail ?? "create failed"}`);
+    return null;
+  };
+  // Fund labels per entity, for the Contact Description.
+  const fundsByNorm = new Map<string, string[]>();
+  for (const e of entities) fundsByNorm.set(reconNorm(e.investor), e.funds);
+  // Company per email (best-effort from the first entity that lists it).
+  const companyByEmail = new Map<string, string>();
+  const namePartsByEmail = new Map<string, { first: string; last: string; investor: string }>();
+  for (const e of entities) for (const c of e.contacts) {
+    const em = c.email.toLowerCase().trim(); if (!em) continue;
+    if (c.company && !companyByEmail.has(em)) companyByEmail.set(em, c.company);
+    if (!namePartsByEmail.has(em)) namePartsByEmail.set(em, { first: c.firstName, last: c.lastName, investor: e.investor });
+  }
+  for (const m of contactsMissing) {
+    const accId = await ensureAccount(m.investor);
+    const em = m.email.toLowerCase().trim();
+    const np = namePartsByEmail.get(em) ?? { first: "", last: "", investor: m.investor };
+    const funds = fundsByNorm.get(reconNorm(m.investor)) ?? [];
+    const desc = [
+      funds.length ? `Prior ERP fund(s): ${funds.join(", ")}` : "",
+      companyByEmail.get(em) ? `Company: ${companyByEmail.get(em)}` : "",
+      "Imported from the ERP Funds portal contact listing.",
+    ].filter(Boolean).join("\n");
+    const fields: Record<string, unknown> = {
+      FirstName: np.first || undefined,
+      LastName: np.last || m.name || "Unknown",
+      Email: m.email,
+      Description: desc,
+      LeadSource: "ERP Funds Contact Listing",
+    };
+    if (accId) fields.AccountId = accId;
+    const r = await sfCreate("Contact", fields);
+    if (r.ok) contactsCreated++;
+    else errors.push(`contact "${m.email}": ${r.detail ?? "create failed"}`);
+  }
+  report.applied = { accountsCreated, contactsCreated, errors: errors.slice(0, 50) };
+  return report;
+}
+
 /**
  * Log an AI-generated note about the REPLY that was sent to a contact (Workflow #3).
  * Find-or-create the Contact by recipient email, then log a completed Task whose Description
