@@ -16,6 +16,7 @@ import {
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
+import { textToArialHtml } from "@/lib/agents/ir/email-format";
 import { markMessageProcessed, logAgentRun } from "@/lib/db";
 import { draftLpOutreach, type LpOutreachInput } from "@/lib/agents/ir/lp-outreach";
 
@@ -546,13 +547,14 @@ export async function POST(req: NextRequest) {
     const sendFrom = body.from === "William" ? "wmeyer@erpfunds.com" : SEND_AS_MAILBOX;
     const senderName = body.from === "William" ? "William Meyer" : "Meghan Berry";
     try {
-      await sendMailAs(sendFrom, { to: [to], subject, content, contentType: "Text", categories: [`IR: ${body.from === "William" ? "William" : "Meghan"}`] });
+      const htmlContent = textToArialHtml(content);
+      await sendMailAs(sendFrom, { to: [to], subject, content: htmlContent, contentType: "HTML", categories: [`IR: ${body.from === "William" ? "William" : "Meghan"}`] });
       // team@ Sent copy (so it shows in team@ Outlook + the app Sent section)
       try {
         const mime = [
           `From: ${senderName} <${sendFrom}>`, `To: ${to}`, `Subject: ${subject}`,
           `Date: ${new Date().toUTCString()}`, "MIME-Version: 1.0",
-          "Content-Type: text/plain; charset=utf-8", "Content-Transfer-Encoding: 8bit", "", content,
+          "Content-Type: text/html; charset=utf-8", "Content-Transfer-Encoding: 8bit", "", htmlContent,
         ].join("\r\n");
         const copyId = await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
         try { await markMessageProcessed({ mailbox: TEAM_MAILBOX, messageId: copyId, internetMessageId: null, isInvestor: true, action: "sent-logged(app)" }); } catch { /* non-fatal */ }
@@ -617,7 +619,8 @@ export async function POST(req: NextRequest) {
     const content = typeof body.body === "string" && body.body.trim() ? body.body : detail.bodyText;
     const sendOwner = (body.from === "William" || sendFrom.includes("wmeyer")) ? "William" : "Meghan";
 
-    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content, contentType: "Text", categories: [`IR: ${sendOwner}`] });
+    const htmlContent = textToArialHtml(content);
+    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content: htmlContent, contentType: "HTML", categories: [`IR: ${sendOwner}`] });
     // Clean up the draft where it lived (best-effort).
     try { await deleteMessage(draftMailbox, body.id); } catch { /* leave it if delete fails */ }
 
@@ -631,10 +634,10 @@ export async function POST(req: NextRequest) {
         `Subject: ${detail.subject}`,
         `Date: ${new Date().toUTCString()}`,
         "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=utf-8",
+        "Content-Type: text/html; charset=utf-8",
         "Content-Transfer-Encoding: 8bit",
         "",
-        content,
+        htmlContent,
       ].join("\r\n");
       const copyId = await importMimeMessage(TEAM_MAILBOX, "sentitems", Buffer.from(mime, "utf-8").toString("base64"));
       // Mark this copy as already-logged so the sent-log cron (which scans team@ Sent for

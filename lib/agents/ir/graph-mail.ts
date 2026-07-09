@@ -1,5 +1,6 @@
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { stripMimecastHtml } from "@/lib/agents/ir/sanitize-email";
+import { wrapArial } from "@/lib/agents/ir/email-format";
 
 export interface DraftResult {
   draftId: string | null;
@@ -35,7 +36,7 @@ export async function saveDraftToOutlook(params: {
       },
       body: JSON.stringify({
         subject: params.subject,
-        body: { contentType: "HTML", content: params.htmlBody },
+        body: { contentType: "HTML", content: wrapArial(params.htmlBody) },
         toRecipients: [{ emailAddress: { address: params.toEmail } }],
         ...(params.categories?.length ? { categories: params.categories } : {}),
       }),
@@ -78,7 +79,7 @@ export async function createReplyDraft(params: {
   const quoted: string = stripMimecastHtml(draft.body?.content ?? "");
 
   // 2) put the AI reply ABOVE the quoted original (keep the quote so the reviewer sees the thread).
-  const patch: Record<string, unknown> = { body: { contentType: "HTML", content: `${params.htmlBody}<br><br>${quoted}` } };
+  const patch: Record<string, unknown> = { body: { contentType: "HTML", content: `${wrapArial(params.htmlBody)}<br><br>${quoted}` } };
   if (params.categories?.length) patch.categories = params.categories;
   const up = await fetch(`${base}/messages/${draftId}`, { method: "PATCH", headers: h, body: JSON.stringify(patch) });
   if (!up.ok) return { draftId, success: false, message: `patch draft ${up.status}: ${(await up.text()).slice(0, 150)}` };
