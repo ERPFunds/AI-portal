@@ -98,7 +98,12 @@ export default function DraftingWorkspaceView() {
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [savedUrl, setSavedUrl] = useState<string | null>(null)
   const [savedFolder, setSavedFolder] = useState('')
+  const [savedName, setSavedName] = useState('')
   const [saveError, setSaveError] = useState('')
+  // User-editable file name + destination folder (blank name / 'auto' folder = let the assistant choose).
+  const [saveName, setSaveName] = useState('')
+  const [saveFolderChoice, setSaveFolderChoice] = useState('auto')
+  const [saveFolderCustom, setSaveFolderCustom] = useState('')
   const [attachment, setAttachment] = useState<{ name: string; text: string; chars: number } | null>(null)
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -267,6 +272,17 @@ export default function DraftingWorkspaceView() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  // Resolve the folder choice into a path (or undefined = let the assistant choose).
+  const resolveFolder = (): string | undefined => {
+    if (saveFolderChoice === 'auto') return undefined
+    if (saveFolderChoice === 'custom') return saveFolderCustom.trim() || undefined
+    if (saveFolderChoice === 'drafting') {
+      const monthYear = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+      return `Drafting/${monthYear}`
+    }
+    return saveFolderChoice // 'ERP Funds IV'
+  }
+
   const save = async () => {
     if (!output.trim() || saveState === 'saving') return
     setSaveState('saving')
@@ -275,13 +291,20 @@ export default function DraftingWorkspaceView() {
       const res = await fetch('/api/drafting/save', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: output, docType, prompt: prompt.trim() }),
+        body: JSON.stringify({
+          content: output,
+          docType,
+          prompt: prompt.trim(),
+          title: saveName.trim() || undefined,
+          folder: resolveFolder(),
+        }),
       })
       const data = await res.json()
       if (data.saved) {
         setSaveState('saved')
         setSavedUrl(data.url ?? null)
         setSavedFolder(data.resolvedFolder ?? '')
+        setSavedName(data.filename ?? '')
       } else {
         setSaveState('error')
         setSaveError(data.message ?? 'Save failed')
@@ -300,6 +323,10 @@ export default function DraftingWorkspaceView() {
     setSaveState('idle')
     setSavedUrl(null)
     setSavedFolder('')
+    setSavedName('')
+    setSaveName('')
+    setSaveFolderChoice('auto')
+    setSaveFolderCustom('')
     setSaveError('')
   }
 
@@ -670,6 +697,43 @@ export default function DraftingWorkspaceView() {
               )}
             </div>
           </div>
+          {/* Save destination — name + folder are editable; blank name / Auto folder lets the
+              assistant pick. Shown above the draft so it's clear where "Save to SharePoint" lands. */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12, padding: '10px 12px', background: '#f9fafb', border: '1px solid #eef2f7', borderRadius: 8 }}>
+            <div style={{ flex: '1 1 240px', minWidth: 200 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>File name</label>
+              <input
+                value={saveName}
+                onChange={(e) => setSaveName(e.target.value)}
+                placeholder="Auto — the assistant names it"
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e5e7eb', borderRadius: 6, padding: '7px 10px', fontSize: 13, color: '#111827', outline: 'none' }}
+              />
+            </div>
+            <div style={{ flex: '1 1 200px', minWidth: 180 }}>
+              <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Folder</label>
+              <select
+                value={saveFolderChoice}
+                onChange={(e) => setSaveFolderChoice(e.target.value)}
+                style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e5e7eb', borderRadius: 6, padding: '7px 10px', fontSize: 13, color: '#111827', background: '#fff', outline: 'none' }}
+              >
+                <option value="auto">Auto — assistant chooses</option>
+                <option value="ERP Funds IV">ERP Funds IV</option>
+                <option value="drafting">Drafting / {new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</option>
+                <option value="custom">Custom folder…</option>
+              </select>
+            </div>
+            {saveFolderChoice === 'custom' && (
+              <div style={{ flex: '1 1 220px', minWidth: 180 }}>
+                <label style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', display: 'block', marginBottom: 4 }}>Folder path</label>
+                <input
+                  value={saveFolderCustom}
+                  onChange={(e) => setSaveFolderCustom(e.target.value)}
+                  placeholder="e.g. ERP Deal Pipelines/Odessa IOS"
+                  style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #e5e7eb', borderRadius: 6, padding: '7px 10px', fontSize: 13, color: '#111827', outline: 'none' }}
+                />
+              </div>
+            )}
+          </div>
           <textarea
             value={output}
             onChange={(e) => { setOutput(e.target.value); setOutputEdited(true) }}
@@ -696,11 +760,17 @@ export default function DraftingWorkspaceView() {
             </div>
           )}
           {saveState === 'saved' && (
-            <div style={{ marginTop: 10, fontSize: 13, color: '#16a34a' }}>
-              {savedFolder && <span style={{ color: '#6b7280' }}>{savedFolder} — </span>}
-              {savedUrl
-                ? <a href={savedUrl} target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8', textDecoration: 'underline' }}>Open in SharePoint</a>
-                : 'Saved to SharePoint'}
+            <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 8, fontSize: 13, color: '#166534' }}>
+              <div style={{ fontWeight: 600, marginBottom: 2 }}>✓ Saved to SharePoint</div>
+              <div style={{ color: '#3f6212' }}>
+                <span style={{ fontWeight: 600 }}>{savedName || 'document'}</span>
+                {savedFolder && <> in <span style={{ fontWeight: 600 }}>{savedFolder}</span></>}
+              </div>
+              {savedUrl && (
+                <a href={savedUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'inline-block', marginTop: 6, color: '#1d4ed8', textDecoration: 'underline', fontWeight: 600 }}>
+                  Open in SharePoint ↗
+                </a>
+              )}
             </div>
           )}
           {saveState === 'error' && saveError && (

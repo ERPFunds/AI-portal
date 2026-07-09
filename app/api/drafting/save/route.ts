@@ -75,21 +75,28 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { content, docType = "freeform", prompt = "" } = await req.json();
+  const { content, docType = "freeform", prompt = "", title: userTitle, folder: userFolder } = await req.json();
   if (!content?.trim()) return NextResponse.json({ error: "content required" }, { status: 400 });
 
   const dateStr = new Date().toISOString().split("T")[0];
   const monthYear = new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" });
 
-  const target = await extractSaveTarget(prompt, docType, monthYear);
+  // Honor a user-chosen name and/or folder; only ask the model to fill in whichever wasn't provided.
+  const hasTitle = typeof userTitle === "string" && userTitle.trim();
+  const hasFolder = typeof userFolder === "string" && userFolder.trim();
+  const auto = (hasTitle && hasFolder) ? null : await extractSaveTarget(prompt, docType, monthYear);
+  const title = (hasTitle ? userTitle.trim() : auto!.title).slice(0, 80);
+  const folder = hasFolder ? userFolder.trim().replace(/^\/+|\/+$/g, "") : auto!.folder;
 
-  const filename = `${toSlug(target.title)}-${dateStr}.docx`;
+  // A user-named file uses the name as-is (re-saving overwrites that same doc — expected when
+  // iterating). An auto-named file gets a date suffix so successive drafts don't collide.
+  const filename = hasTitle ? `${toSlug(title)}.docx` : `${toSlug(title)}-${dateStr}.docx`;
   const result = await saveToOneDrive({
     content,
     filename,
-    folder: target.folder,
-    title: target.title,
+    folder,
+    title,
   });
 
-  return NextResponse.json({ ...result, resolvedTitle: target.title, resolvedFolder: target.folder });
+  return NextResponse.json({ ...result, resolvedTitle: title, resolvedFolder: folder, filename });
 }
