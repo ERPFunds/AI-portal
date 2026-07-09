@@ -31,6 +31,29 @@ async function writeLpCache(sb: SupabaseServer, payload: unknown): Promise<void>
   } catch { /* cache write is best-effort */ }
 }
 
+// TEMP (email-functionality test): a throwaway LP so Meghan can send a test email from the LP
+// directory to mparad@erpfunds.com. Injected into every GET response (not persisted to the cache
+// or Salesforce). Remove this const + the withTestLp() calls to take it out.
+const TEST_LP: LpRecord = {
+  investor: "TEST — Michele Parad (email test)",
+  commitment: "—", commitmentUsd: 0, commitType: "", contact: "Michele Parad",
+  email: "mparad@erpfunds.com", phone: "", date: "", notes: "Temporary test row for the email button.",
+  group: "Fund IV", lastInteraction: null,
+  sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
+  sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
+  brokerFirm: "", brokerContact: "", resolvedEmail: "mparad@erpfunds.com", committedUsd: null, sfStage: null,
+};
+function withTestLp<T extends Record<string, unknown>>(payload: T): T {
+  try {
+    const lps = (payload as { lps?: unknown }).lps;
+    if (Array.isArray(lps) && !lps.some((l) => (l as LpRecord)?.investor === TEST_LP.investor)) {
+      const merged = [TEST_LP, ...lps];
+      return { ...payload, lps: merged, lpCount: merged.length };
+    }
+  } catch { /* leave payload unchanged on any shape mismatch */ }
+  return payload;
+}
+
 export interface LpRecord {
   investor: string;
   commitment: string;
@@ -174,7 +197,7 @@ export async function GET(req: NextRequest) {
   const refresh = isCron || req.nextUrl.searchParams.get("refresh") === "1";
   if (!refresh) {
     const cached = await readLpCache(supabase);
-    if (cached) return NextResponse.json({ ...cached.data, cachedAt: cached.updated_at, fromCache: true });
+    if (cached) return NextResponse.json(withTestLp({ ...cached.data, cachedAt: cached.updated_at, fromCache: true }));
   }
 
   try {
@@ -456,13 +479,13 @@ export async function GET(req: NextRequest) {
       sfError,
     };
     await writeLpCache(supabase, payload);
-    return NextResponse.json(payload);
+    return NextResponse.json(withTestLp(payload));
   } catch (err) {
     // Refresh failed (e.g. scan timed out) — fall back to the last good snapshot so the
     // directory (and its broker/last-interaction columns) never goes blank.
     const cached = await readLpCache(supabase);
     if (cached) {
-      return NextResponse.json({ ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) });
+      return NextResponse.json(withTestLp({ ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) }));
     }
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
