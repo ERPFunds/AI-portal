@@ -578,6 +578,37 @@ async function sfCreate(objectType: string, fields: Record<string, unknown>): Pr
   return { ok: false, detail: `${res.status} ${res.status === 403 || res.status === 401 ? "(integration user lacks create rights)" : ""} ${txt.slice(0, 200)}`.trim() };
 }
 
+async function sfDelete(objectType: string, id: string): Promise<{ ok: boolean; detail?: string }> {
+  const res = await sfFetch(`/sobjects/${objectType}/${id}`, { method: "DELETE" });
+  if (res.status === 204) return { ok: true };
+  return { ok: false, detail: `${res.status} ${res.status === 403 || res.status === 401 ? "(integration user lacks delete rights)" : ""} ${(await res.text().catch(() => "")).slice(0, 150)}`.trim() };
+}
+
+// Delete investor Account(s) by exact name, cascading their child Contacts + Opportunities to the
+// Salesforce Recycle Bin (recoverable ~15 days). Read-only preview unless { apply: true }.
+export interface AccountDeleteResult { name: string; accountId: string | null; contacts: number; opportunities: number; action: string }
+export async function deleteAccountsByName(names: string[], opts?: { apply?: boolean }): Promise<AccountDeleteResult[]> {
+  const out: AccountDeleteResult[] = [];
+  for (const name of names) {
+    const recs = await sfQuery(`SELECT Id FROM Account WHERE Name = '${soql(name)}'`);
+    if (!recs.length) { out.push({ name, accountId: null, contacts: 0, opportunities: 0, action: "not found — nothing to delete" }); continue; }
+    for (const acc of recs) {
+      const accId = String(acc.Id);
+      const contacts = await sfQuery(`SELECT Id FROM Contact WHERE AccountId = '${accId}'`);
+      const opps = await sfQuery(`SELECT Id FROM Opportunity WHERE AccountId = '${accId}'`);
+      if (!opts?.apply) {
+        out.push({ name, accountId: accId, contacts: contacts.length, opportunities: opps.length, action: `would delete account + ${contacts.length} contact(s)${opps.length ? ` + ${opps.length} opportunity(ies)` : ""}` });
+        continue;
+      }
+      for (const o of opps) await sfDelete("Opportunity", String(o.Id));
+      for (const c of contacts) await sfDelete("Contact", String(c.Id));
+      const r = await sfDelete("Account", accId);
+      out.push({ name, accountId: accId, contacts: contacts.length, opportunities: opps.length, action: r.ok ? `deleted account + ${contacts.length} contact(s)${opps.length ? ` + ${opps.length} opp(s)` : ""}` : `account delete failed: ${r.detail}` });
+    }
+  }
+  return out;
+}
+
 // Which Opportunity StageName means "committed". Default to the org's won stage; override via env.
 const COMMITTED_STAGE = process.env.SF_COMMITTED_STAGE || "Closed Won";
 
