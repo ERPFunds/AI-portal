@@ -1469,17 +1469,24 @@ function InboxView({
     return () => { cancelled = true; clearInterval(id) }
   }, [irTab])
 
-  // "Awaiting reply" = an investor email we owe a response to: an escalation (needs a human reply)
-  // or a prepared draft not yet sent. Sent items and plain filed threads are excluded.
+  // Two distinct kinds of item, kept apart in the UI:
+  //  • "Arrived"  — an investor email that came in and needs a human's eyes (escalations + inbound
+  //                 threads filed for review). NOT a draft, NOT a sent copy.
+  //  • "Drafts"   — a prepared reply the agent wrote, awaiting approval/send.
+  const isArrived = (item: AgentInboxItem) => !item.isDraft && item.folderKind !== 'sent'
+  const isDraftItem = (item: AgentInboxItem) => item.isDraft
+  const arrivedCount = items.filter(isArrived).length
+  const draftsCount = items.filter(isDraftItem).length
+  // "Awaiting reply" (the Inbox tab badge) = anything still needing action: an arrived email or a draft.
   const awaitingReply = (item: AgentInboxItem) => item.folderKind === 'escalate' || item.isDraft
   const awaitingCount = items.filter(awaitingReply).length
 
   const filtered = items.filter((item) => {
     if (folderFilter !== 'All' && item.folder !== folderFilter) return false
     if (ownerFilter !== 'All' && ownerFor(item) !== ownerFilter) return false
-    if (inboxStatusFilter === 'awaiting') return awaitingReply(item)
-    if (inboxStatusFilter === 'handled') return item.status === 'handled'
-    if (inboxStatusFilter === 'review') return item.status === 'needs-review'
+    if (inboxStatusFilter === 'arrived') return isArrived(item)
+    if (inboxStatusFilter === 'drafts') return isDraftItem(item)
+    if (inboxStatusFilter === 'handled' || inboxStatusFilter === 'sent') return item.folderKind === 'sent'
     return true
   })
   const selected = filtered[selectedInboxIdx]
@@ -1618,9 +1625,9 @@ function InboxView({
               </div>
             )}
             <div>
-              <div className="filter-label" style={{ marginBottom: 5 }}>Status</div>
+              <div className="filter-label" style={{ marginBottom: 5 }}>Show</div>
               <div className="pill-row">
-                {[['all', 'All'], ['awaiting', `Awaiting reply${awaitingCount ? ` (${awaitingCount})` : ''}`], ['review', 'Needs Review'], ['handled', 'Handled']].map(([val, label]) => (
+                {[['all', 'All'], ['arrived', `📨 Arrived${arrivedCount ? ` (${arrivedCount})` : ''}`], ['drafts', `✍️ Drafts${draftsCount ? ` (${draftsCount})` : ''}`], ['sent', 'Sent']].map(([val, label]) => (
                   <div key={val} className={`pill ${inboxStatusFilter === val ? 'active' : ''}`} onClick={() => { setInboxStatusFilter(val); setSelectedInboxIdx(0) }}>{label}</div>
                 ))}
               </div>
@@ -1659,7 +1666,7 @@ function InboxView({
               )
             })}
             {!loading && filtered.length === 0 && !error && (() => {
-              const isSent = folderFilter === 'Sent' || inboxStatusFilter === 'handled'
+              const isSent = folderFilter === 'Sent' || inboxStatusFilter === 'sent' || inboxStatusFilter === 'handled'
               return (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '48px 24px', gap: 10, color: '#9ca3af' }}>
                   <div style={{ fontSize: 28 }}>{isSent ? '📤' : '📭'}</div>

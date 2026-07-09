@@ -327,6 +327,28 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Collapse duplicate prepared drafts for the SAME thread down to the most recent one. The drafter
+    // can produce more than one reply for a thread (successive sweeps, or a re-draft), which otherwise
+    // shows as several identical-looking rows for the same investor/subject. Key by conversation, else
+    // by normalized subject + recipient; keep the most recently modified draft, drop the rest.
+    {
+      const stripSubj = (s: string) => (s || "").toLowerCase().replace(/^\s*((re|fw|fwd)\s*:\s*)+/i, "").trim();
+      const draftKey = (it: AgentInboxItem) =>
+        it.conversationId || `${stripSubj(it.subject)}|${(it.to[0] ?? "").toLowerCase()}`;
+      const latestByKey = new Map<string, AgentInboxItem>();
+      for (const it of items) {
+        if (!it.isDraft) continue;
+        const k = draftKey(it);
+        const prev = latestByKey.get(k);
+        if (!prev || (it.receivedISO || "") > (prev.receivedISO || "")) latestByKey.set(k, it);
+      }
+      const keep = new Set([...latestByKey.values()].map((it) => it.id));
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i].isDraft && !keep.has(items[i].id)) items.splice(i, 1);
+      }
+      draftTotal = keep.size;
+    }
+
     // Divide the drafts queue by IR lead (Meghan / William) instead of one lump. Drafts we can't
     // attribute fall under "Unassigned". Each becomes its own folder/pill in the inbox.
     const draftCounts: Record<string, number> = {};
