@@ -14,10 +14,25 @@ export async function getStoredMarkdown(fileId: string): Promise<string | null> 
   return (data?.markdown as string) ?? null;
 }
 
+/** Remove a file's stored text and embedding chunks. Call when a file is deleted or replaced,
+ *  so stale extractions can't linger and pollute Q&A / retrieval. */
+export async function purgeStoredDoc(fileId: string): Promise<void> {
+  const supabase = await createClient();
+  await supabase.from("document_markdown").delete().eq("file_id", fileId);
+  await supabase.from("document_chunks").delete().eq("file_id", fileId);
+}
+
 const MAX_PARSE_BYTES = 60_000_000; // skip parsing files larger than ~60 MB (avoid serverless OOM)
 
 function decodeXml(s: string): string {
   return s.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, "&");
+}
+
+// True when a string is really unparsed OOXML markup rather than document text. Clean extracted
+// text never contains OOXML namespaced tags (<a:…>, <p:…>, <w:…>); if several are present the
+// parse failed and dumped raw markup, which must not be stored (it poisons Q&A / retrieval).
+function looksLikeOoxml(s: string): boolean {
+  return ((s.match(/<\/?(?:a|p|w|a14|w14|c|xdr|pic|wp|dgm|m):[a-zA-Z]/g) || []).length) >= 5;
 }
 
 // DOCX: pull text runs from word/document.xml, one line per paragraph.
@@ -87,6 +102,10 @@ export async function extractAndStoreMarkdown(p: {
   try { text = await parseBytes(buf, p.filename, p.mimeType); } catch { text = ""; }
   const markdown = (text || "").replace(/\n{3,}/g, "\n\n").trim().slice(0, STORE_MAX);
   if (!markdown) return "";
+  if (looksLikeOoxml(markdown)) {
+    console.error(`extractAndStoreMarkdown: ${p.filename} produced OOXML markup, not text — discarding`);
+    return "";
+  }
 
   const supabase = await createClient();
   await supabase.from("document_markdown").upsert(

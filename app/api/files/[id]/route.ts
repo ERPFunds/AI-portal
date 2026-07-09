@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
+import { purgeStoredDoc } from "@/lib/agents/ir/markdown-store";
 
 const anthropic = new Anthropic();
 
@@ -53,6 +54,7 @@ export async function DELETE(
     const supabase = await createClient();
     const { error } = await supabase.from("uploaded_files").delete().eq("file_id", fileId);
     if (error) throw error;
+    await purgeStoredDoc(fileId); // also drop extracted text + embedding chunks
   } catch (error) {
     console.error("DB delete error:", error);
     return NextResponse.json({ error: "DB delete failed" }, { status: 500 });

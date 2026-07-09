@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
-import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
+import { extractAndStoreMarkdown, purgeStoredDoc } from "@/lib/agents/ir/markdown-store";
 import { embedAndStoreChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 
 export const dynamic = "force-dynamic";
@@ -149,6 +149,7 @@ async function runSync(dryRun: boolean): Promise<{ status: number; body: any }> 
     async function deleteRow(fileId: string) {
       try { await (anthropic.beta as any).files.delete(fileId); } catch { /* may already be gone */ }
       await supabase.from("uploaded_files").delete().eq("file_id", fileId);
+      await purgeStoredDoc(fileId); // drop stale extracted text + embedding chunks
     }
 
     for (const f of files) {
