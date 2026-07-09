@@ -2296,7 +2296,7 @@ function LpDirectoryView() {
     if (!window.confirm(`Send this email to ${compose.to} from ${compose.from} (${fromAddr})?\n\nThis sends immediately.`)) return
     setComposeBusy('send')
     try {
-      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-compose', to: compose.to.trim(), from: compose.from, subject: compose.subject, body: compose.body }) })
+      const res = await fetch('/api/agent-inbox', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'send-compose', to: compose.to.trim(), from: compose.from, subject: compose.subject, body: compose.body, contactName: compose.lp.contact || '' }) })
       const j = await res.json()
       if (!res.ok || j.error) { setEmailMsg({ ok: false, text: `Send failed: ${j.error || res.status}` }); return }
       setEmailMsg({ ok: true, text: `Sent to ${compose.to} from ${compose.from}.` }); setCompose(null)

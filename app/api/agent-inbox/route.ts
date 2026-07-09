@@ -446,7 +446,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string;
-    ai?: boolean; context?: LpOutreachInput; mailbox?: string;
+    ai?: boolean; context?: LpOutreachInput; mailbox?: string; contactName?: string;
   };
   try {
     body = await req.json();
@@ -538,7 +538,13 @@ export async function POST(req: NextRequest) {
       if (salesforceConfigured()) {
         try {
           const { note, nextStep } = await composeContactNote({ subject, sentReply: content });
-          await logReplyNote({ contactEmail: to, subject, note, nextStep, sentDate: new Date().toISOString() });
+          // Use the LP's contact name (from the compose popup) so a newly-created Contact is named
+          // properly instead of defaulting to the email handle.
+          const nm = (body.contactName || "").trim();
+          const parts = nm ? nm.split(/\s+/) : [];
+          const firstName = parts.length > 1 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
+          const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
+          await logReplyNote({ contactEmail: to, firstName, lastName, subject, note, nextStep, sentDate: new Date().toISOString() });
         } catch { /* non-fatal */ }
       }
       try { await logAgentRun({ agentId: "ir", workflowId: "ir-reply", status: "success", summary: `Reply sent to ${to} — ${subject}`.slice(0, 200) }); } catch { /* best-effort */ }
