@@ -64,12 +64,12 @@ export async function POST(req: NextRequest) {
             .from("briefs")
             .select("agent_name, subject, narrative, sent_at")
             .order("sent_at", { ascending: false })
-            .limit(6);
+            .limit(8);
 
           if (briefs?.length) {
             context += "\n\n--- Recent ERP Market Briefs (newsletters) ---\n";
             for (const b of briefs) {
-              const narr = (b.narrative as string | null)?.slice(0, 6000) ?? "";
+              const narr = (b.narrative as string | null)?.slice(0, 10000) ?? "";
               if (narr) {
                 const when = b.sent_at ? new Date(b.sent_at as string).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
                 context += `\n[${b.subject || b.agent_name}${when ? ` | ${when}` : ""}]\n${narr}\n`;
