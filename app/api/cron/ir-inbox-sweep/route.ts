@@ -192,9 +192,11 @@ async function handleMailbox(
     });
     const route = triage.isEscalation ? "escalate" : "draft";
 
-    // Outlook categories: owner tag always; escalations also get a tag naming WHY it was
-    // escalated (short classifier reason, falling back to the escalation category).
+    // Outlook categories: owner tag always; new prospects get their own visibility tag (they
+    // route as ROUTINE now — reviewed drafts, not escalations); escalations get a tag naming
+    // WHY they were escalated (short classifier reason, falling back to the escalation category).
     const cats = [`IR: ${signer.split(" ")[0]}`];
+    if (triage.category === "new-prospect") cats.push("New Prospect");
     if (route === "escalate") {
       const CAT_LABEL: Record<string, string> = {
         "escalation-complaint": "Complaint",
