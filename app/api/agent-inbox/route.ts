@@ -270,7 +270,7 @@ export async function GET(req: NextRequest) {
     draftsSince.setMonth(draftsSince.getMonth() - draftMonths);
     // Drafts now live in each IR lead's OWN mailbox (threaded replies created there), so read Drafts
     // across all of them (team@ kept for any legacy drafts). Owner falls back to the mailbox.
-    const draftMailboxes = (process.env.IR_DRAFT_MAILBOXES || `${SEND_AS_MAILBOX},wmeyer@erpfunds.com,${TEAM_MAILBOX}`)
+    const draftMailboxes = (process.env.IR_DRAFT_MAILBOXES || `${SEND_AS_MAILBOX},${TEAM_MAILBOX}`)
       .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
     const draftSinceIso = draftsSince.toISOString().split(".")[0] + "Z";
     let draftTotal = 0;
@@ -374,7 +374,7 @@ export async function GET(req: NextRequest) {
     //    stamp on every AI draft (and on app-sent copies). Sending a tagged draft from Outlook keeps
     //    the category on the Sent copy, so this tracks Outlook-sent agent replies too.
     let sentCount = 0;
-    const sentMailboxes = (process.env.IR_SENT_MAILBOXES || `${SEND_AS_MAILBOX},wmeyer@erpfunds.com`)
+    const sentMailboxes = (process.env.IR_SENT_MAILBOXES || `${SEND_AS_MAILBOX}`)
       .split(",").map((s) => s.trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i);
     const sentSeen = new Set<string>();
     const irTag = /^ir:/i;

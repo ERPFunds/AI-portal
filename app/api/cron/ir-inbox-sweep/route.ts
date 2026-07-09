@@ -35,9 +35,10 @@ const SUB_ESCALATE = "Escalate"; // high-stakes / needs the fund manager
 const SUB_DRAFTS = "Forwarded Drafts"; // routine — a draft reply is prepared for review
 const TOP_PER_MAILBOX = 25;
 
-// Comma-separated list of mailboxes to sweep, e.g. "mberry@erpfunds.com,wmeyer@erpfunds.com".
-// Empty by default so nothing runs until explicitly configured. Once active, BOTH IR leads'
-// inboxes (Meghan + William) are always swept so each gets their own drafts.
+// Comma-separated list of mailboxes to sweep, e.g. "mberry@erpfunds.com".
+// Empty by default so nothing runs until explicitly configured. Only Meghan's inbox is monitored
+// and drafted — William's inbox is intentionally NOT swept (no triage, no drafts). The Learned Q&A
+// miner (ir-qa-update) still reads William's sent items separately.
 function sweepMailboxes(): string[] {
   const configured = (process.env.IR_SWEEP_MAILBOXES || "")
     .split(",")
@@ -45,10 +46,9 @@ function sweepMailboxes(): string[] {
     .filter(Boolean);
   if (configured.length === 0) return []; // safe default: dormant until configured
   const seen = new Set(configured.map((m) => m.toLowerCase()));
-  for (const required of ["mberry@erpfunds.com", "wmeyer@erpfunds.com"]) {
-    if (!seen.has(required)) { configured.push(required); seen.add(required); }
-  }
-  return configured;
+  if (!seen.has("mberry@erpfunds.com")) configured.push("mberry@erpfunds.com");
+  // Never sweep William's inbox, even if it was configured.
+  return configured.filter((m) => !m.toLowerCase().includes("wmeyer@"));
 }
 
 // Is "now" within 8am–8pm Central Time? (handles CDT/CST via the IANA zone)
@@ -107,14 +107,10 @@ async function handleMailbox(
   let teamEscalateFolderId: string | null | undefined;
   let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
-  const sourceIsWilliam = mailbox.toLowerCase().includes("wmeyer");
 
   for (const m of todo) {
-    // Draft/sign-off owner: William if this is his mailbox OR he's a To/CC recipient (route by
-    // recipient); otherwise Meghan. Per-message so a William thread in Meghan's inbox sorts to him.
-    const signer = (sourceIsWilliam || (m.recipients || []).some((a) => a.includes("wmeyer@")))
-      ? "William Meyer"
-      : "Meghan Berry";
+    // All drafts are signed by / owned by Meghan — William's inbox isn't monitored or drafted.
+    const signer = "Meghan Berry";
     // Classify and draft from the FULL body — bodyPreview is Graph's ~255-char snippet, which
     // hid everything below the fold (follow-up questions, amounts, the sender's signature).
     let fromAddr = m.fromAddress;
