@@ -1455,12 +1455,19 @@ function InboxView({
   const [qaPending, setQaPending] = React.useState<number | null>(null)
 
   // Pending Learned Q&A count for the tab badge (independent of the Q&A tab being open).
+  // Refetch on mount, whenever the tab is switched (e.g. after approving items in the Q&A tab),
+  // and on a light interval so newly harvested Q&A show up without a full page reload.
   React.useEffect(() => {
-    fetch('/api/ir-qa?status=pending')
-      .then(r => r.json())
-      .then(d => setQaPending(Array.isArray(d.items) ? d.items.length : 0))
-      .catch(() => {})
-  }, [])
+    let cancelled = false
+    const refresh = () =>
+      fetch('/api/ir-qa?status=pending')
+        .then(r => r.json())
+        .then(d => { if (!cancelled) setQaPending(Array.isArray(d.items) ? d.items.length : 0) })
+        .catch(() => {})
+    refresh()
+    const id = setInterval(refresh, 45000)
+    return () => { cancelled = true; clearInterval(id) }
+  }, [irTab])
 
   // "Awaiting reply" = an investor email we owe a response to: an escalation (needs a human reply)
   // or a prepared draft not yet sent. Sent items and plain filed threads are excluded.
