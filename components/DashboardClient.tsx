@@ -2149,6 +2149,7 @@ interface LpRecord {
   resolvedEmail: string | null;
   committedUsd?: number | null;
   sfStage?: string | null;
+  priorFunds?: string[];
 }
 interface LpDirectoryData {
   lps: LpRecord[]; lpCount: number; totalCommittedUsd: number;
@@ -2251,17 +2252,21 @@ function AddLpModal({ onClose, onAdded }: { onClose: () => void; onAdded: (lp: L
 function LpDirectoryView() {
   const [tab] = React.useState<'lps'>('lps')
   const [groupView, setGroupView] = React.useState<string>('All')
-  const [fundView, setFundView] = React.useState<'All' | 'Fund IV' | 'DST / 1031'>('All')
+  const [fundView, setFundView] = React.useState<'All' | 'Fund IV' | 'DST / 1031' | 'Prior Funds'>('All')
   const [stageFilter, setStageFilter] = React.useState<string>('All')
   const [showAddLp, setShowAddLp] = React.useState(false)
   const [search, setSearch] = React.useState('')
   const [sortStale, setSortStale] = React.useState(false)
   const DST_GROUP = 'DST / 1031'
+  const PRIOR_GROUP = 'Prior Fund LPs'
   // Committed amount comes from the server (`lp.committedUsd`) — portal-stored, blank for uncommitted
   // Fund IV targets; DST/1031 rows show their funded amount.
-  // Fund IV = every schedule section except the DST/1031 book.
+  // Fund IV = every schedule section except the DST/1031 book AND the historical prior-fund contacts.
   const inFundView = (lp: LpRecord) =>
-    fundView === 'All' || (fundView === DST_GROUP ? lp.group === DST_GROUP : lp.group !== DST_GROUP)
+    fundView === 'All' ? true
+      : fundView === DST_GROUP ? lp.group === DST_GROUP
+      : fundView === 'Prior Funds' ? lp.group === PRIOR_GROUP
+      : (lp.group !== DST_GROUP && lp.group !== PRIOR_GROUP)
   const [data, setData] = React.useState<LpDirectoryData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -2429,11 +2434,12 @@ function LpDirectoryView() {
   function exportCsv() {
     if (!data) return
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Group', 'Investor', 'Type', 'Stage', 'Target', 'Committed', 'Primary Contact', 'Broker / Advisor Firm', 'Broker / Advisor Rep', 'Email', 'Phone', 'Last Interaction', 'Notes']
+    const cols = ['Group', 'Investor', 'Type', 'Prior Fund', 'Stage', 'Target', 'Committed', 'Primary Contact', 'Broker / Advisor Firm', 'Broker / Advisor Rep', 'Email', 'Phone', 'Last Interaction', 'Notes']
     const lines = data.lps.map(lp => [
       lp.group,
       lp.investor,
-      lp.group === 'DST / 1031' ? 'DST / 1031' : 'Fund IV LP',
+      lp.group === 'DST / 1031' ? 'DST / 1031' : lp.group === 'Prior Fund LPs' ? 'Prior Fund LP' : 'Fund IV LP',
+      (lp.priorFunds || []).join(', '),
       lp.sfStage || '',
       lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : (lp.commitment || ''),
       lp.committedUsd != null ? fmtUsd(lp.committedUsd) : '',
@@ -2589,19 +2595,20 @@ function LpDirectoryView() {
         </div>
       )}
 
-      {/* Fund type filter — Fund IV vs the DST / 1031 book */}
-      {data && data.groups.includes(DST_GROUP) && (
+      {/* Fund type filter — Fund IV vs the DST / 1031 book vs the historical prior-fund contacts */}
+      {data && (data.groups.includes(DST_GROUP) || data.groups.includes(PRIOR_GROUP)) && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
           <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', marginRight: 2 }}>Fund:</span>
-          {(['All', 'Fund IV', 'DST / 1031'] as const).map(f => {
+          {(['All', 'Fund IV', ...(data.groups.includes(DST_GROUP) ? ['DST / 1031'] : []), ...(data.groups.includes(PRIOR_GROUP) ? ['Prior Funds'] : [])] as const).map(f => {
             const isActive = fundView === f
-            const count = f === 'All' ? data.lps.length : f === DST_GROUP
-              ? data.lps.filter(lp => lp.group === DST_GROUP).length
-              : data.lps.filter(lp => lp.group !== DST_GROUP).length
+            const count = f === 'All' ? data.lps.length
+              : f === DST_GROUP ? data.lps.filter(lp => lp.group === DST_GROUP).length
+              : f === 'Prior Funds' ? data.lps.filter(lp => lp.group === PRIOR_GROUP).length
+              : data.lps.filter(lp => lp.group !== DST_GROUP && lp.group !== PRIOR_GROUP).length
             return (
               <button
                 key={f}
-                onClick={() => { setFundView(f); setGroupView('All') }}
+                onClick={() => { setFundView(f as typeof fundView); setGroupView('All') }}
                 style={{
                   fontSize: 12, fontWeight: isActive ? 700 : 500,
                   color: isActive ? '#fff' : '#374151',
@@ -2655,7 +2662,7 @@ function LpDirectoryView() {
       {/* Group view tabs — section headers in the Excel sheet, scoped to the selected fund */}
       {data && data.groups.length > 1 && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-          {['All', ...data.groups.filter(g => fundView === 'All' || (fundView === DST_GROUP ? g === DST_GROUP : g !== DST_GROUP))].map(g => {
+          {['All', ...data.groups.filter(g => fundView === 'All' ? true : fundView === DST_GROUP ? g === DST_GROUP : fundView === 'Prior Funds' ? g === PRIOR_GROUP : (g !== DST_GROUP && g !== PRIOR_GROUP))].map(g => {
             const isActive = groupView === g
             const groupLps = g === 'All'
               ? data.lps.filter(inFundView)
@@ -2732,7 +2739,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'Stage', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'Prior Fund', 'Stage', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2759,12 +2766,26 @@ function LpDirectoryView() {
                         )}
                       </td>
 
-                      {/* Type — Fund IV LP vs DST/1031 (derived from the group) */}
+                      {/* Type — Fund IV LP vs DST/1031 vs prior-fund contact (derived from the group) */}
                       <td style={{ padding: '11px 14px' }}>
                         {(() => {
                           const isDst = lp.group === 'DST / 1031'
-                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: isDst ? '#fef3c7' : '#eff6ff', color: isDst ? '#92400e' : '#1d4ed8', whiteSpace: 'nowrap' }}>{isDst ? 'DST / 1031' : 'Fund IV LP Target'}</span>
+                          const isPrior = lp.group === 'Prior Fund LPs'
+                          const style = isDst ? { background: '#fef3c7', color: '#92400e' } : isPrior ? { background: '#f3e8ff', color: '#7e22ce' } : { background: '#eff6ff', color: '#1d4ed8' }
+                          const label = isDst ? 'DST / 1031' : isPrior ? 'Prior Fund LP' : 'Fund IV LP Target'
+                          return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', ...style }}>{label}</span>
                         })()}
+                      </td>
+
+                      {/* Prior Fund — which prior ERP fund(s) this investor was part of (historical contact list) */}
+                      <td style={{ padding: '11px 14px' }}>
+                        {lp.priorFunds && lp.priorFunds.length ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+                            {lp.priorFunds.map(pf => (
+                              <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>
+                            ))}
+                          </div>
+                        ) : <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>}
                       </td>
 
                       {/* Stage — the LP Opportunity's Salesforce stage (editable → writes StageName back to SF) */}

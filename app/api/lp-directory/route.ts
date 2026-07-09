@@ -54,6 +54,99 @@ function withTestLp<T extends Record<string, unknown>>(payload: T): T {
   return payload;
 }
 
+// ── Prior-fund contacts overlay ────────────────────────────────────────────────
+// The historical Fund II / III / IEP investor-contact list (imported into `lp_prior_contacts`).
+// Layered onto the directory at serve time: matched investors get a `priorFunds` tag (+ a missing
+// email filled from the file); unmatched ones are appended as their own rows under "Prior Fund LPs".
+const PRIOR_FUND_GROUP = "Prior Fund LPs";
+interface PriorContactRow {
+  investor_name: string; fund_label: string;
+  first_name: string | null; last_name: string | null; email: string | null;
+  company: string | null; city: string | null; state: string | null; phone: string | null;
+}
+
+async function applyPriorContacts(sb: SupabaseServer, payload: Record<string, unknown>): Promise<void> {
+  let rows: PriorContactRow[] = [];
+  try {
+    const { data } = await sb.from("lp_prior_contacts")
+      .select("investor_name, fund_label, first_name, last_name, email, company, city, state, phone");
+    rows = (data ?? []) as PriorContactRow[];
+  } catch { return; }
+  if (!rows.length) return;
+  const lps = Array.isArray(payload.lps) ? (payload.lps as LpRecord[]) : [];
+  if (!lps.length) return;
+
+  const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+  // Aggregate the imported contacts by investor entity.
+  interface Agg { investor: string; funds: Set<string>; contacts: { name: string; email: string }[]; emails: string[]; company: string; phone: string; loc: string }
+  const byKey = new Map<string, Agg>();
+  for (const r of rows) {
+    const key = norm(r.investor_name);
+    if (!key) continue;
+    let a = byKey.get(key);
+    if (!a) { a = { investor: r.investor_name, funds: new Set(), contacts: [], emails: [], company: "", phone: "", loc: "" }; byKey.set(key, a); }
+    if (r.fund_label) a.funds.add(r.fund_label);
+    const nm = [r.first_name, r.last_name].filter(Boolean).join(" ").trim();
+    const em = (r.email || "").trim();
+    if (em && !a.emails.some((e) => e.toLowerCase() === em.toLowerCase())) a.emails.push(em);
+    if (nm || em) a.contacts.push({ name: nm, email: em });
+    if (!a.company && r.company) a.company = r.company;
+    if (!a.phone && r.phone) a.phone = r.phone;
+    if (!a.loc && (r.city || r.state)) a.loc = [r.city, r.state].filter(Boolean).join(", ");
+  }
+
+  // Index existing LPs by normalized name and by every known email.
+  const byName = new Map<string, LpRecord>();
+  const byEmail = new Map<string, LpRecord>();
+  for (const lp of lps) {
+    byName.set(norm(lp.investor), lp);
+    for (const e of [lp.email, lp.resolvedEmail].map((x) => (x || "").toLowerCase().trim()).filter(Boolean)) {
+      if (!byEmail.has(e)) byEmail.set(e, lp);
+    }
+  }
+
+  const groups: string[] = Array.isArray(payload.groups) ? [...(payload.groups as string[])] : [];
+  let annotated = 0, appended = 0;
+
+  for (const a of byKey.values()) {
+    const funds = [...a.funds].sort();
+    // Match to an existing LP by name first, then by any shared email.
+    let lp: LpRecord | null = byName.get(norm(a.investor)) ?? null;
+    if (!lp) { for (const e of a.emails) { const m = byEmail.get(e.toLowerCase()); if (m) { lp = m; break; } } }
+
+    if (lp) {
+      lp.priorFunds = Array.from(new Set([...(lp.priorFunds ?? []), ...funds])).sort();
+      if (!lp.resolvedEmail && a.emails.length) { lp.resolvedEmail = a.emails[0]; if (!lp.email) lp.email = a.emails[0]; }
+      annotated++;
+    } else {
+      const primary = a.contacts.find((c) => c.email) ?? a.contacts[0] ?? { name: "", email: "" };
+      const others = a.contacts.filter((c) => c !== primary && (c.name || c.email));
+      const otherNote = others.length
+        ? `Other contacts — ${others.map((c) => c.name ? `${c.name}${c.email ? ` <${c.email}>` : ""}` : c.email).join("; ")}`
+        : "";
+      lps.push({
+        investor: a.investor,
+        commitment: "", commitmentUsd: 0, commitType: "",
+        contact: primary.name, email: primary.email, phone: a.phone,
+        date: "", notes: [a.company ? `Company: ${a.company}` : "", a.loc ? `Location: ${a.loc}` : "", otherNote].filter(Boolean).join(" · "),
+        group: PRIOR_FUND_GROUP, lastInteraction: null,
+        sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
+        sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
+        brokerFirm: "", brokerContact: "",
+        resolvedEmail: primary.email || null, committedUsd: null, sfStage: null,
+        priorFunds: funds,
+      });
+      appended++;
+    }
+  }
+  if (appended && !groups.includes(PRIOR_FUND_GROUP)) groups.push(PRIOR_FUND_GROUP);
+  payload.lps = lps;
+  payload.lpCount = lps.length;
+  payload.groups = groups;
+  (payload as Record<string, unknown>).priorContacts = { annotated, appended, entities: byKey.size };
+}
+
 export interface LpRecord {
   investor: string;
   commitment: string;
@@ -79,6 +172,7 @@ export interface LpRecord {
   resolvedEmail: string | null; // best-known email (schedule → SF contact → past correspondence)
   committedUsd?: number | null;  // hard-committed so far (portal-stored; blank for uncommitted targets)
   sfStage?: string | null;       // the LP Opportunity's Salesforce StageName
+  priorFunds?: string[];         // which prior ERP funds this investor was part of (e.g. ["Fund II","Fund III"])
 }
 
 interface LpUpdateBody {
@@ -197,7 +291,11 @@ export async function GET(req: NextRequest) {
   const refresh = isCron || req.nextUrl.searchParams.get("refresh") === "1";
   if (!refresh) {
     const cached = await readLpCache(supabase);
-    if (cached) return NextResponse.json(withTestLp({ ...cached.data, cachedAt: cached.updated_at, fromCache: true }));
+    if (cached) {
+      const out = { ...cached.data, cachedAt: cached.updated_at, fromCache: true };
+      await applyPriorContacts(supabase, out);
+      return NextResponse.json(withTestLp(out));
+    }
   }
 
   try {
@@ -479,13 +577,17 @@ export async function GET(req: NextRequest) {
       sfError,
     };
     await writeLpCache(supabase, payload);
+    // Layer the prior-fund contacts onto the response (the cache stays SharePoint+SF only).
+    await applyPriorContacts(supabase, payload as unknown as Record<string, unknown>);
     return NextResponse.json(withTestLp(payload));
   } catch (err) {
     // Refresh failed (e.g. scan timed out) — fall back to the last good snapshot so the
     // directory (and its broker/last-interaction columns) never goes blank.
     const cached = await readLpCache(supabase);
     if (cached) {
-      return NextResponse.json(withTestLp({ ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) }));
+      const out = { ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) };
+      await applyPriorContacts(supabase, out);
+      return NextResponse.json(withTestLp(out));
     }
     return NextResponse.json({ error: String(err) }, { status: 500 });
   }
