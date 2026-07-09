@@ -3769,7 +3769,7 @@ function RentRollView() {
   )
 }
 
-const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, crane_last: null }
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, crane_last: null, insurance_expiry: null }
 
 type InspKey = 'quicklook_last' | 'hvac_last' | 'fire_last' | 'crane_last'
 const INSP_TYPES: { key: InspKey; label: string; bg: string; color: string; craneOnly?: boolean }[] = [
@@ -3880,6 +3880,7 @@ function WorkOrdersView() {
       ['Property', w => w.address], ['Tenant', w => w.tenant],
       ['Quicklook Last', w => w.quicklook_last], ['HVAC Last', w => w.hvac_last], ['Fire Last', w => w.fire_last],
       ['Crane Last', w => w.has_crane ? w.crane_last : ''],
+      ['Insurance COI Expiry', w => w.insurance_expiry],
       ['Status', w => (w.flag && !anyDate(w)) ? w.flag : ''],
     ]
     const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
@@ -3938,7 +3939,7 @@ function WorkOrdersView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Property', 'Tenant', ...INSP_TYPES.map(t => t.label), ''].map((h, i) => (
+              {['Property', 'Tenant', ...INSP_TYPES.map(t => t.label), '🛡️ Insurance COI', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -3964,6 +3965,16 @@ function WorkOrdersView() {
                       </td>
                     )
                   })}
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    {(() => {
+                      const s = w.insurance_expiry
+                      if (!s) return <span style={{ color: '#d1d5db' }}>—</span>
+                      const days = Math.round((new Date(s).getTime() - Date.now()) / 86_400_000)
+                      if (days < 0) return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca' }}>Expired {fmtDate(s)}</span>
+                      if (days <= 30) return <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: '#fffbeb', color: '#b45309', border: '1px solid #fde68a' }} title={`Expires in ${days} day${days !== 1 ? 's' : ''}`}>{fmtDate(s)}</span>
+                      return <span style={{ color: '#374151', fontWeight: 500 }}>{fmtDate(s)}</span>
+                    })()}
+                  </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
                     <button onClick={() => { setDraft({ ...w }); setIsNew(false) }}
                       style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600, marginRight: 6 }}>✎</button>
@@ -3989,6 +4000,7 @@ function WorkOrdersView() {
           {draft.has_crane && (
             <MField label="🏗️ Crane — last done"><input type="date" style={mInput} value={draft.crane_last ?? ''} onChange={e => upd({ crane_last: e.target.value || null })} /></MField>
           )}
+          <MField label="🛡️ Insurance Certificate — expires"><input type="date" style={mInput} value={draft.insurance_expiry ?? ''} onChange={e => upd({ insurance_expiry: e.target.value || null })} /></MField>
         </EditModal>
       )}
     </div>

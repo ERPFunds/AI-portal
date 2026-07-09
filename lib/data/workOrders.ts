@@ -8,6 +8,7 @@ export interface WorkOrder {
   backflow_last?: string | null
   elevator_last?: string | null
   crane_last?: string | null
+  insurance_expiry?: string | null
   has_crane?: boolean | null
   flag?: string | null
 }
