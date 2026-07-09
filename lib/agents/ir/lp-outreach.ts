@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
+import { appendSignatureText } from "@/lib/agents/ir/ir-signature";
 
 const client = new Anthropic();
 
@@ -52,7 +53,7 @@ Rules:
 - NEVER invent or imply specific figures — returns, distributions, valuations, dates, or performance you were not given. Speak only in general terms.
 - Investors have NO online portal or app. NEVER mention app.erpfunds.com, a portal, a "portal account", or logging in.
 - For any account, document, K-1/tax, statement, or distribution question, direct them to Tracy Doyle (tdoyle@erpfunds.com).
-- Sign off as "${signer}" only — no title, department, or "Investor Relations" line under the name.
+- Do NOT write any closing, sign-off, or signature (no "Best,", no name, no contact block) — end after the final sentence. The sender's signature is appended automatically.
 - This is a DRAFT for ${signer} to review and edit before sending — leave it easy to personalize.
 - Follow the approved IR Q&A sources below for how ERP describes itself and handles recurring questions; never contradict them.
 
@@ -72,6 +73,6 @@ Return ONLY a JSON object: {"subject": "...", "body": "...plain text with \\n li
   const parsed = jsonMatch ? (JSON.parse(jsonMatch[0]) as { subject?: string; body?: string }) : {};
   return {
     subject: (parsed.subject || `ERP Industrials — ${p.investor}`).trim(),
-    bodyText: (parsed.body || "").trim(),
+    bodyText: appendSignatureText((parsed.body || "").trim(), signer),
   };
 }

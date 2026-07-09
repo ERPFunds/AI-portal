@@ -5,6 +5,7 @@ import { retrieveChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
 import { stripMimecastNoise } from "@/lib/agents/ir/sanitize-email";
+import { appendSignatureHtml } from "@/lib/agents/ir/ir-signature";
 
 const client = new Anthropic();
 
@@ -99,7 +100,7 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
 - Address the greeting to the sender BY NAME using the provided recipient name (e.g. "Dear <first name>,"). Do NOT guess a name from the email handle — use the recipient name given, or the name in the email's signature; if neither is available, use a neutral greeting ("Hello,").
 - Follow the IR Q&A Reference / approved Learned Q&A for standard handling (e.g. account/document/K-1/distribution questions route to Tracy Doyle, tdoyle@erpfunds.com). Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, or logging in.
 - attach: exact filenames (from the AVAILABLE FILES list) of the source documents relevant to these questions, to attach to the reply. Use exact strings from the list; [] if none apply.
-- Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line under the name.
+- Do NOT write any closing, sign-off, or signature (no "Best,", no name, no title, no contact block) — end after the final sentence of the message body. The sender's signature is appended automatically.
 - The draft is saved for ${signer}'s review — they send it. Do not claim it has already been sent.${grounding}` }],
     messages: [{ role: "user", content:
 `From: ${params.from}${params.contactName ? `\nRecipient name (address the reply to this person): ${params.contactName}` : ""}\nSubject: ${params.subject}\n\nInquiry:\n${params.body}${params.threadContext ? `\n\n=== PRIOR THREAD (same conversation, oldest first — context only, reply to the inquiry above) ===\n${params.threadContext}` : ""}\n\n=== AVAILABLE FILES (attach by exact filename) ===\n${fileList}\n\n=== FUND DOCUMENTS ===\n${sections.join("\n\n")}` }],
@@ -128,7 +129,7 @@ export async function buildDueDiligenceReply(params: { from: string; subject: st
 
   return {
     draftSubject: parsed.draftSubject || `Re: ${params.subject}`,
-    draftHtml: parsed.draftHtml || "",
+    draftHtml: parsed.draftHtml ? appendSignatureHtml(parsed.draftHtml, signer) : "",
     attachments,
     usedDocCount: sections.length,
   };

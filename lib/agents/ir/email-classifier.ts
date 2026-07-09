@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getIrQaGrounding } from "@/lib/agents/ir/ir-grounding";
+import { appendSignatureHtml } from "@/lib/agents/ir/ir-signature";
 
 const client = new Anthropic();
 
@@ -108,7 +109,7 @@ Rules:
 - Investors have NO portal/app access — NEVER mention app.erpfunds.com, a portal, a portal account, or logging in. Route every account/document/access/K-1/distribution question to Tracy Doyle (tdoyle@erpfunds.com)
 - All drafts are saved for review — the IR team approves before sending. Never auto-send.
 - DST investors route to Tracy Doyle for operational questions
-- Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
+- Do NOT write any closing, sign-off, or signature (no "Best,", no name, no title, no contact block) — end the draft after the final sentence of the message body. The sender's signature is appended automatically (except when draftHtml is empty).
 - Write your best draft reply in draftHtml for everything EXCEPT out-of-scope emails (legal / money-movement), where draftHtml must be "". When an email is unanswerable (isEscalation=true) it's filed for human review; still provide a genuine best-effort draft the reviewer can edit and send where you can (draw on the Q&A reference / approved answers), but never fabricate an answer you don't have. Avoid pure filler ("thanks, noted").
 - If a PRIOR THREAD is provided, read it: answer only what's still open, don't repeat what was already said, and keep the draft consistent with earlier replies in the thread.
 
@@ -136,5 +137,11 @@ ${params.threadContext}` : ""}`,
   const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
   if (!text) throw new Error(`Empty classifier response (stop_reason=${msg.stop_reason})`);
   // output_config.format guarantees the text block is valid JSON matching OUTPUT_SCHEMA.
-  return JSON.parse(text) as EmailClassification;
+  const result = JSON.parse(text) as EmailClassification;
+  // Append the sender's exact signature ("Best," + block) — the model is told not to sign off.
+  // Skip when there's no draft (out-of-scope emails keep draftHtml empty).
+  if (result.draftHtml && result.draftHtml.trim()) {
+    result.draftHtml = appendSignatureHtml(result.draftHtml, signer);
+  }
+  return result;
 }
