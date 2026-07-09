@@ -11,9 +11,11 @@ import {
   listChildFolders,
   moveMessage,
   setMessageRead,
+  setMessageCategories,
   getMessageMime,
   importMimeMessage,
   deleteFolder,
+  listConversationMessagesWithBody,
 } from "@/lib/agents/ir/graph-mailbox";
 import { createReplyDraft } from "@/lib/agents/ir/graph-mail";
 import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-responder";
@@ -165,14 +167,45 @@ async function handleMailbox(
 
     investorCount++;
 
+    // Pull the rest of the Outlook conversation (prior messages, oldest first) so the drafter
+    // sees the FULL thread — what was already asked and answered — not just the newest email.
+    let threadContext = "";
+    try {
+      if (m.conversationId) {
+        const prior = (await listConversationMessagesWithBody(mailbox, m.conversationId, 15))
+          .filter((t) => t.id !== m.id && !t.isDraft && t.bodyText.trim())
+          .sort((a, b) => a.receivedDateTime.localeCompare(b.receivedDateTime))
+          .slice(-4); // last 4 prior messages is plenty of context without blowing up the prompt
+        threadContext = prior
+          .map((t) => `--- ${t.receivedDateTime} · ${t.fromName || t.from} <${t.from}> ---\n${t.bodyText.slice(0, 2000)}`)
+          .join("\n\n");
+      }
+    } catch { /* thread context is best-effort — draft from the single email if it fails */ }
+
     // Investor email: classify for routing + draft (escalate XOR forwarded-drafts).
     const triage = await classifyInvestorEmail({
       from: fromAddr,
       subject: m.subject,
       body: bodyText,
       signAs: signer,
+      threadContext: threadContext || undefined,
     });
     const route = triage.isEscalation ? "escalate" : "draft";
+
+    // Outlook categories: owner tag always; escalations also get a tag naming WHY it was
+    // escalated (short classifier reason, falling back to the escalation category).
+    const cats = [`IR: ${signer.split(" ")[0]}`];
+    if (route === "escalate") {
+      const CAT_LABEL: Record<string, string> = {
+        "escalation-complaint": "Complaint",
+        "escalation-legal": "Legal",
+        "escalation-redemption": "Redemption",
+        "escalation-new-inquiry": "New Inquiry",
+        "escalation-other": "Needs Review",
+      };
+      const reason = (triage.escalationReason || "").trim().replace(/\s+/g, " ");
+      cats.push(`Escalated: ${reason ? reason.slice(0, 40) : (CAT_LABEL[triage.category] ?? "Needs Review")}`);
+    }
 
     if (dryRun) {
       details.push(
@@ -210,6 +243,9 @@ async function handleMailbox(
         } catch (e) {
           actions.push(`team-copied(unread-fail:${String(e).slice(0, 40)})`);
         }
+        // Tag the team copy too (owner + escalation reason) so the Agent Inbox and Outlook
+        // both show why it's there.
+        try { await setMessageCategories(TEAM_INBOX, copyId, cats); } catch { /* best-effort */ }
       } else {
         actions.push(`team-copy-skip(no "${subName}" subfolder in ${TEAM_INBOX})`);
       }
@@ -238,51 +274,36 @@ async function handleMailbox(
     //    Escalate folder (rather than the general Drafts queue) so it sits with the escalation.
     //    Drafts land in team@erpfunds.com so they surface in the portal Agent Inbox for approval.
     try {
-      let newDraftId: string | null = null;
-      const cats = [`IR: ${signer.split(" ")[0]}`];
       // Create the reply as a THREADED draft in THIS mailbox (Meghan's for mberry@, William's for
       // wmeyer@) — created against the original BEFORE it's filed (step 4) — so it shows in their
-      // own Outlook Drafts with the original email beneath it.
+      // own Outlook Drafts with the original email beneath it. The draft STAYS in Drafts (per
+      // Meghan/William: no IR-subfolder move) — they review and send from their Drafts folder.
       if (triage.isDueDiligence) {
         // bodyText is already the full (unwrapped) body, fetched above for classification.
         const ddName = verdict.contact.fullName || [verdict.contact.firstName, verdict.contact.lastName].filter(Boolean).join(" ");
-        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: bodyText, contactName: ddName, signAs: signer });
+        const dd = await buildDueDiligenceReply({ from: fromAddr, subject: m.subject, body: bodyText, contactName: ddName, signAs: signer, threadContext: threadContext || undefined });
         const atts: { filename: string; mimeType: string; bytes: Buffer }[] = [];
         for (const a of dd.attachments) {
           const bytes = await getAnthropicFileBytes(a.fileId);
           if (bytes) atts.push({ filename: a.filename, mimeType: a.mimeType || "application/octet-stream", bytes });
+          else actions.push(`att-fetch-fail(${a.filename})`);
         }
         const r = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: dd.draftHtml || triage.draftHtml, categories: cats });
-        newDraftId = r.draftId;
         if (r.draftId && atts.length) {
           const att = await addAttachmentsToDraft(mailbox, r.draftId, atts);
-          actions.push(`dd-drafted(${att.attached.length} attached${att.failed.length ? `, ${att.failed.length} failed` : ""})`);
+          actions.push(`dd-drafted(${att.attached.length} attached${att.failed.length ? `, failed: ${att.failed.join("; ")}` : ""})`);
         } else actions.push(r.success ? "dd-drafted" : `draft-fail(${(r.message || "").slice(0, 40)})`);
       } else {
         const d = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: triage.draftHtml, categories: cats });
-        newDraftId = d.draftId;
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
-      }
-      // File the draft into THIS mailbox's IR subfolder — the SAME one the inbound original lands in
-      // (Escalate for escalations, Forwarded Drafts for routine) — so the inbound email and its draft
-      // reply sit together in her Investor Relations folder (both still threaded).
-      if (newDraftId) {
-        let draftDest: string | null | undefined;
-        if (route === "escalate") {
-          if (escalateFolderId === undefined) escalateFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_ESCALATE);
-          draftDest = escalateFolderId;
-        } else {
-          if (draftsFolderId === undefined) draftsFolderId = await resolveSubfolderId(mailbox, IR_FOLDER, SUB_DRAFTS);
-          draftDest = draftsFolderId;
-        }
-        if (draftDest) {
-          try { await moveMessage(mailbox, newDraftId, draftDest); actions.push(`draft→${route === "escalate" ? "escalate" : "forwarded-drafts"}`); }
-          catch (e) { actions.push(`draft-move-fail(${String(e).slice(0, 40)})`); }
-        }
       }
     } catch (e) {
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);
     }
+
+    // Tag the inbound original with the same categories (owner + escalation reason) — the tag
+    // survives the move in step 4, and shows even when the IR subfolders don't exist.
+    try { await setMessageCategories(mailbox, m.id, cats); actions.push("tagged"); } catch { /* best-effort */ }
 
     // 4) file into exactly ONE IR subfolder — Escalate XOR Forwarded Drafts (best-effort;
     //    needs Mail.ReadWrite). Per Meghan: filed emails must stay UNREAD so she can find

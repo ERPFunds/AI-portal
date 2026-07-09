@@ -46,11 +46,35 @@ CONTACTS:
 There is NO investors@erpfunds.com address — it does not exist. NEVER give it out. The only investor-support address is Tracy Doyle, tdoyle@erpfunds.com.
 `;
 
+// Structured-output schema: the API guarantees the response is valid JSON matching this shape,
+// so parsing can never fail (the old regex-extract-JSON approach broke on truncated output).
+const OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["category", "isEscalation", "escalationReason", "lpName", "isExistingLp", "isDueDiligence", "draftSubject", "draftHtml", "summary"],
+  properties: {
+    category: {
+      type: "string",
+      enum: ["portal-access", "k1-tax-docs", "distribution-status", "general-faq", "escalation-complaint", "escalation-legal", "escalation-redemption", "escalation-new-inquiry", "escalation-other", "attachment", "onboarding"],
+    },
+    isEscalation: { type: "boolean" },
+    escalationReason: { anyOf: [{ type: "string" }, { type: "null" }], description: "One short phrase saying WHY this needs a human (used as an Outlook tag), or null" },
+    lpName: { anyOf: [{ type: "string" }, { type: "null" }] },
+    isExistingLp: { type: "boolean" },
+    isDueDiligence: { type: "boolean" },
+    draftSubject: { type: "string" },
+    draftHtml: { type: "string" },
+    summary: { type: "string" },
+  },
+} as const;
+
 export async function classifyInvestorEmail(params: {
   from: string;
   subject: string;
   body: string;
   signAs?: string;
+  /** Prior messages in the same Outlook conversation (oldest first), for full-thread context. */
+  threadContext?: string;
 }): Promise<EmailClassification> {
   const signer = params.signAs || "Meghan Berry";
   // Ground every draft on the SOP sources — the IR Q&A Reference doc + approved Learned Q&A — so
@@ -58,8 +82,9 @@ export async function classifyInvestorEmail(params: {
   const faqContext = FAQ_CONTEXT + (await getIrQaGrounding());
 
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 1500,
+    model: "claude-opus-4-8",
+    max_tokens: 8000,
+    output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
     system: [{ type: "text" as const, text: `You are the IR agent for ERP Industrials, a private equity real estate firm focused on industrial assets in the Permian Basin and other markets.
 You classify inbound investor emails and draft responses for the IR team's review.
 
@@ -74,19 +99,13 @@ Rules:
 - DST investors route to Tracy Doyle for operational questions
 - Sign off as "${signer}" only — do NOT add an "Investor Relations" title or department line (no "Investor Relations", "IR", or "ERP Industrials Investor Relations" under the name)
 - ALWAYS write your best draft reply in draftHtml — never leave it empty. If the email needs the fund manager's attention or you lack the information to answer confidently, set isEscalation=true so it's filed for human review, but STILL provide a genuine best-effort draft the reviewer can edit and send (draw on the Q&A reference / approved answers where relevant). Avoid pure filler ("thanks, noted") — write the most useful reply you can even when escalating.
+- If a PRIOR THREAD is provided, read it: answer only what's still open, don't repeat what was already said, and keep the draft consistent with earlier replies in the thread.
 
-Return a JSON object with exactly these fields:
-{
-  "category": string (one of: portal-access | k1-tax-docs | distribution-status | general-faq | escalation-complaint | escalation-legal | escalation-redemption | escalation-new-inquiry | escalation-other),
-  "isEscalation": boolean,
-  "escalationReason": string or null,
-  "lpName": string or null (extracted name),
-  "isExistingLp": boolean,
-  "isDueDiligence": boolean (true if the sender is asking due-diligence questions about the fund / requesting fund details or documents to evaluate an investment),
-  "draftSubject": string,
-  "draftHtml": string (full HTML email ready for Meghan's Outlook drafts),
-  "summary": string (one sentence: what this email is and what action was taken)
-}`, cache_control: { type: "ephemeral" } }],
+Field notes for the structured output:
+- isDueDiligence: true if the sender is asking due-diligence questions about the fund / requesting fund details or documents to evaluate an investment
+- escalationReason: when escalating, a SHORT phrase (a few words) naming the reason — it is shown as an Outlook tag
+- draftHtml: full HTML email ready for the IR lead's Outlook drafts
+- summary: one sentence — what this email is and what action was taken`, cache_control: { type: "ephemeral" } }],
     messages: [
       {
         role: "user",
@@ -95,13 +114,16 @@ Return a JSON object with exactly these fields:
 From: ${params.from}
 Subject: ${params.subject}
 
-${params.body}`,
+${params.body}${params.threadContext ? `
+
+=== PRIOR THREAD (same conversation, oldest first — context only, reply to the email above) ===
+${params.threadContext}` : ""}`,
       },
     ],
   });
 
-  const text = msg.content[0].type === "text" ? msg.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON in classifier response");
-  return JSON.parse(jsonMatch[0]) as EmailClassification;
+  const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
+  if (!text) throw new Error(`Empty classifier response (stop_reason=${msg.stop_reason})`);
+  // output_config.format guarantees the text block is valid JSON matching OUTPUT_SCHEMA.
+  return JSON.parse(text) as EmailClassification;
 }

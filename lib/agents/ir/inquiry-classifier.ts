@@ -49,20 +49,37 @@ ALSO extract the sender's identity for a Salesforce contact. Read the From line 
 - lastName is REQUIRED and must never be empty (Salesforce requires it). If you can identify a real surname, use it. If you truly cannot determine a name (e.g., info@, no signature), fall back to a cleaned, capitalized version of the email local-part (the text before "@") as lastName, and set firstName to null.
 - Do not invent a name that isn't supported by the email. company/title only if clearly present in the signature.
 
-Return ONLY a JSON object with exactly these fields:
-{
-  "isInvestorInquiry": boolean,
-  "reason": string (one short sentence explaining the decision),
-  "senderType": one of "investor" | "prospective-investor" | "broker" | "ria-wealth-advisor" | "vendor-solicitation" | "internal" | "automated-newsletter" | "other",
-  "confidence": "high" | "medium" | "low",
-  "contact": {
-    "firstName": string or null,
-    "lastName": string (never empty — real surname, else cleaned email handle),
-    "fullName": string or null,
-    "company": string or null,
-    "title": string or null
-  }
-}`;
+Field notes:
+- reason: one short sentence explaining the decision
+- contact.lastName: never empty — real surname, else cleaned email handle`;
+
+// Structured-output schema — the API guarantees valid JSON matching this shape.
+const OUTPUT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: ["isInvestorInquiry", "reason", "senderType", "confidence", "contact"],
+  properties: {
+    isInvestorInquiry: { type: "boolean" },
+    reason: { type: "string" },
+    senderType: {
+      type: "string",
+      enum: ["investor", "prospective-investor", "broker", "ria-wealth-advisor", "vendor-solicitation", "internal", "automated-newsletter", "other"],
+    },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    contact: {
+      type: "object",
+      additionalProperties: false,
+      required: ["firstName", "lastName", "fullName", "company", "title"],
+      properties: {
+        firstName: { anyOf: [{ type: "string" }, { type: "null" }] },
+        lastName: { type: "string" },
+        fullName: { anyOf: [{ type: "string" }, { type: "null" }] },
+        company: { anyOf: [{ type: "string" }, { type: "null" }] },
+        title: { anyOf: [{ type: "string" }, { type: "null" }] },
+      },
+    },
+  },
+} as const;
 
 export async function classifyInquiry(params: {
   from: string;
@@ -70,8 +87,9 @@ export async function classifyInquiry(params: {
   body: string;
 }): Promise<InquiryClassification> {
   const msg = await client.messages.create({
-    model: "claude-opus-4-7",
-    max_tokens: 600,
+    model: "claude-opus-4-8",
+    max_tokens: 1000,
+    output_config: { format: { type: "json_schema", schema: OUTPUT_SCHEMA } },
     system: [{ type: "text" as const, text: SYSTEM, cache_control: { type: "ephemeral" } }],
     messages: [
       {
@@ -87,9 +105,9 @@ ${(params.body || "").slice(0, 6000)}`,
   });
 
   const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error("No JSON in inquiry-classifier response");
-  const result = JSON.parse(jsonMatch[0]) as InquiryClassification;
+  if (!text) throw new Error(`Empty inquiry-classifier response (stop_reason=${msg.stop_reason})`);
+  // output_config.format guarantees the text block is valid JSON matching OUTPUT_SCHEMA.
+  const result = JSON.parse(text) as InquiryClassification;
 
   // Normalize the contact block so every field is always a (possibly empty) string,
   // never null/undefined. Power Automate's Parse JSON validates the whole response

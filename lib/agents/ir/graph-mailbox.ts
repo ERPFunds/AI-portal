@@ -13,6 +13,7 @@ export interface InboxMessage {
   receivedDateTime: string;
   recipients: string[]; // To + CC addresses (lowercased) — used to route ownership
   toRecipients: string[]; // To addresses only (lowercased) — used to detect mail addressed directly to an IR lead
+  conversationId: string | null; // lets the sweep pull prior thread messages for drafting context
 }
 
 async function token(): Promise<string> {
@@ -26,7 +27,7 @@ export async function listInboxMessages(mailbox: string, top = 25): Promise<Inbo
   const t = await token();
   const url =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/inbox/messages` +
-    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime,conversationId` +
     `&$orderby=receivedDateTime desc&$top=${top}`;
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
@@ -42,6 +43,7 @@ type RawGraphMessage = {
   subject?: string;
   bodyPreview?: string;
   receivedDateTime: string;
+  conversationId?: string;
   from?: { emailAddress?: { address?: string; name?: string } };
   toRecipients?: { emailAddress?: { address?: string } }[];
   ccRecipients?: { emailAddress?: { address?: string } }[];
@@ -64,6 +66,7 @@ function toInboxMessage(m: RawGraphMessage): InboxMessage {
     receivedDateTime: m.receivedDateTime,
     recipients: recips,
     toRecipients: toOnly,
+    conversationId: m.conversationId ?? null,
   };
 }
 
@@ -240,7 +243,7 @@ export async function listInboxMessagesSince(mailbox: string, sinceIso: string, 
   const out: InboxMessage[] = [];
   let url: string | null =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/inbox/messages` +
-    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime` +
+    `?$select=id,internetMessageId,subject,from,toRecipients,ccRecipients,bodyPreview,receivedDateTime,conversationId` +
     `&$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}` +
     `&$orderby=receivedDateTime desc&$top=50`;
   while (url && out.length < max) {
@@ -511,6 +514,58 @@ export async function listConversationMessages(
       isDraft: m.isDraft ?? false,
     })
   );
+}
+
+/**
+ * List a conversation's messages WITH their full text bodies (Mimecast-stripped). Used to give
+ * the drafting agents the prior thread as context. Sorted client-side by the caller (Graph
+ * rejects $orderby combined with a conversationId filter).
+ */
+export async function listConversationMessagesWithBody(
+  mailbox: string,
+  conversationId: string,
+  top = 15
+): Promise<{ id: string; from: string; fromName: string | null; receivedDateTime: string; isDraft: boolean; bodyText: string }[]> {
+  const t = await token();
+  const url =
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
+    `?$filter=${encodeURIComponent(`conversationId eq '${conversationId.replace(/'/g, "''")}'`)}` +
+    `&$select=id,from,receivedDateTime,isDraft,body&$top=${top}`;
+  const res = await fetch(url, {
+    headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' },
+  });
+  if (!res.ok) throw new Error(`Graph list conversation bodies ${res.status}: ${await res.text()}`);
+  const data = await res.json();
+  return (data.value || []).map(
+    (m: {
+      id: string;
+      receivedDateTime: string;
+      isDraft?: boolean;
+      body?: { content?: string };
+      from?: { emailAddress?: { address?: string; name?: string } };
+    }) => ({
+      id: m.id,
+      from: m.from?.emailAddress?.address || "",
+      fromName: m.from?.emailAddress?.name ?? null,
+      receivedDateTime: m.receivedDateTime,
+      isDraft: m.isDraft ?? false,
+      bodyText: stripMimecastNoise(m.body?.content || ""),
+    })
+  );
+}
+
+/** Set the Outlook categories (tags) on a message. Overwrites the existing category list. */
+export async function setMessageCategories(mailbox: string, messageId: string, categories: string[]): Promise<void> {
+  const t = await token();
+  const res = await fetch(
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}`,
+    {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ categories }),
+    }
+  );
+  if (!res.ok) throw new Error(`Graph set categories ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
 /** Send an existing draft message (by id) from the mailbox. Irreversible — sends the email. */

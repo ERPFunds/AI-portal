@@ -99,8 +99,10 @@ export async function addAttachmentsToDraft(
         }
       }
       attached.push(a.filename);
-    } catch {
-      failed.push(a.filename);
+    } catch (e) {
+      // Keep the reason — e.g. Exchange rejects chunks once the message exceeds the org's
+      // max send size, and that should be readable in the sweep ledger.
+      failed.push(`${a.filename} [${String(e).slice(0, 60)}]`);
     }
   }
   return { attached, failed };
