@@ -2687,6 +2687,7 @@ function LpDirectoryView() {
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
               { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Committed so far (incl. ERP GP)' },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
+              { label: 'DST IV Committed', value: fmtUsd(0), sub: 'New DST offering — not yet open' },
             ].map(k => (
               <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
                 <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
