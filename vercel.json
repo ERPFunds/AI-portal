@@ -42,6 +42,10 @@
       "schedule": "0 */2 * * *"
     },
     {
+      "path": "/api/cron/ir-draft-outcomes",
+      "schedule": "45 */2 * * *"
+    },
+    {
       "path": "/api/cron/ir-sent-log",
       "schedule": "*/30 13-23,0-2 * * *"
     },

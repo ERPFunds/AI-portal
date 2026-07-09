@@ -23,6 +23,7 @@ import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
 import { addAttachmentsToDraft } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
 import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun, getDeletedDocusignInternetIds, markDocusignRestored } from "@/lib/db";
+import { insertDraftSnapshot } from "@/lib/agents/ir/corrections-store";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
@@ -280,6 +281,7 @@ async function handleMailbox(
       // wmeyer@) — created against the original BEFORE it's filed (step 4) — so it shows in their
       // own Outlook Drafts with the original email beneath it. The draft STAYS in Drafts (per
       // Meghan/William: no IR-subfolder move) — they review and send from their Drafts folder.
+      let draftedHtml: string | null = null;
       if (triage.isDueDiligence) {
         // bodyText is already the full (unwrapped) body, fetched above for classification.
         const ddName = verdict.contact.fullName || [verdict.contact.firstName, verdict.contact.lastName].filter(Boolean).join(" ");
@@ -291,13 +293,36 @@ async function handleMailbox(
           else actions.push(`att-fetch-fail(${a.filename})`);
         }
         const r = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: dd.draftHtml || triage.draftHtml, categories: cats });
+        if (r.success) draftedHtml = dd.draftHtml || triage.draftHtml;
         if (r.draftId && atts.length) {
           const att = await addAttachmentsToDraft(mailbox, r.draftId, atts);
           actions.push(`dd-drafted(${att.attached.length} attached${att.failed.length ? `, failed: ${att.failed.join("; ")}` : ""})`);
         } else actions.push(r.success ? "dd-drafted" : `draft-fail(${(r.message || "").slice(0, 40)})`);
       } else {
         const d = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: triage.draftHtml, categories: cats });
+        if (d.success) draftedHtml = triage.draftHtml;
         actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+      }
+      // Snapshot the draft for the draft-vs-sent learning loop (sending destroys the draft
+      // message, so the exact text must be captured NOW). Matched later by conversationId.
+      if (draftedHtml) {
+        try {
+          await insertDraftSnapshot({
+            mailbox,
+            signer,
+            conversationId: m.conversationId,
+            originalMessageId: m.id,
+            originalInternetMessageId: m.internetMessageId,
+            fromAddress: fromAddr,
+            subject: m.subject,
+            category: triage.category,
+            route,
+            isDd: triage.isDueDiligence,
+            draftHtml: draftedHtml,
+          });
+        } catch (e) {
+          actions.push(`snapshot-fail(${String(e).slice(0, 40)})`);
+        }
       }
     } catch (e) {
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);
