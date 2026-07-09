@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
+import { DRAFTING_SKILLS, getSkill, type DocType } from '@/lib/data/draftingSkills'
 
 // ── History constants (mirrors OutputFilesView) ────────────────────────────────
 
@@ -64,53 +65,6 @@ function SenderChip({ email }: { email: string | null }) {
   )
 }
 
-type DocType = 'freeform' | 'om-section' | 'lp-memo' | 'deal-summary' | 'email-draft' | 'market-brief' | 'newsletter'
-
-const DOC_TYPES: { id: DocType; label: string; icon: string; placeholder: string }[] = [
-  {
-    id: 'freeform',
-    label: 'Freeform',
-    icon: '💬',
-    placeholder: 'Research a market, summarize a topic, draft anything...',
-  },
-  {
-    id: 'om-section',
-    label: 'OM Section',
-    icon: '📄',
-    placeholder: 'Write the market overview section for a 45,000 SF industrial property in Midland, TX...',
-  },
-  {
-    id: 'lp-memo',
-    label: 'LP Memo',
-    icon: '📊',
-    placeholder: 'Draft a Q2 LP update covering fund performance, recent acquisitions, and market conditions...',
-  },
-  {
-    id: 'deal-summary',
-    label: 'Deal Summary',
-    icon: '🏭',
-    placeholder: 'Summarize the 23-acre service yard acquisition in Odessa: $2.1M, 100% occupied by oil field services tenant, 7.2% cap rate...',
-  },
-  {
-    id: 'email-draft',
-    label: 'Email Draft',
-    icon: '✉️',
-    placeholder: 'Draft a follow-up email to an LP who attended our Q2 update and asked about our Brevard deal pipeline...',
-  },
-  {
-    id: 'market-brief',
-    label: 'Market Brief',
-    icon: '📈',
-    placeholder: 'Write a brief on current industrial market conditions in Brevard County, focusing on vacancy trends and aerospace demand drivers...',
-  },
-  {
-    id: 'newsletter',
-    label: 'Newsletter',
-    icon: '📰',
-    placeholder: 'Edit the market narrative, rewrite the intro paragraph, summarize key takeaways, or draft a follow-up edition...',
-  },
-]
-
 const s = {
   card: {
     background: '#fff',
@@ -132,6 +86,7 @@ const s = {
 
 export default function DraftingWorkspaceView() {
   const [docType, setDocType] = useState<DocType>('freeform')
+  const [outlineSections, setOutlineSections] = useState<string[]>([])
   const [prompt, setPrompt] = useState('')
   const [useKb, setUseKb] = useState(true)
   const [useNewsletter, setUseNewsletter] = useState(false)
@@ -209,7 +164,21 @@ export default function DraftingWorkspaceView() {
       .finally(() => { setEditLogLoading(false); setDocLogLoading(false) })
   }, [])
 
-  const currentType = DOC_TYPES.find((d) => d.id === docType)!
+  const skill = getSkill(docType)
+  const currentType = skill
+
+  // On type change: reset the outline to this skill's default sections.
+  useEffect(() => {
+    setOutlineSections(skill.outline ?? [])
+  }, [docType]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Default grounding: pre-select KB files whose category matches the skill's defaults.
+  useEffect(() => {
+    if (!skill.defaultKbCategories?.length || kbFiles.length === 0) return
+    const cats = new Set(skill.defaultKbCategories)
+    const match = kbFiles.filter((f) => f.category && cats.has(f.category)).map((f) => f.file_id)
+    if (match.length) setSelectedKbFileIds(new Set(match))
+  }, [docType, kbFiles]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -247,6 +216,7 @@ export default function DraftingWorkspaceView() {
         body: JSON.stringify({
           docType,
           prompt: prompt.trim(),
+          outline: (skill.outline ?? []).filter((o) => outlineSections.includes(o)),
           sources: useKb ? ['kb'] : [],
           kbFileIds: [...selectedKbFileIds],
           attachmentText: attachment?.text ?? '',
@@ -287,7 +257,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useNewsletter, attachment, streaming])
+  }, [docType, prompt, useKb, useNewsletter, attachment, streaming, outlineSections, selectedKbFileIds, newsletters, selectedNewsletterId])
 
   const stop = () => abortRef.current?.abort()
 
@@ -378,13 +348,47 @@ export default function DraftingWorkspaceView() {
       <div style={s.card}>
         <span style={s.label}>Document Type</span>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {DOC_TYPES.map((dt) => (
+          {DRAFTING_SKILLS.map((dt) => (
             <button key={dt.id} style={typeBtn(docType === dt.id)} onClick={() => setDocType(dt.id)}>
               {dt.icon} {dt.label}
             </button>
           ))}
         </div>
       </div>
+
+      {/* Outline — sections this skill will write under; toggle to include/exclude */}
+      {skill.outline && skill.outline.length > 0 && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={{ ...s.label, marginBottom: 0 }}>Outline · {skill.label}</span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setOutlineSections(skill.outline ?? [])} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}>All</button>
+              <button onClick={() => setOutlineSections([])} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#9ca3af', cursor: 'pointer' }}>None</button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {skill.outline.map((sec) => {
+              const on = outlineSections.includes(sec)
+              return (
+                <button
+                  key={sec}
+                  onClick={() => setOutlineSections((prev) => on ? prev.filter((x) => x !== sec) : [...prev, sec])}
+                  style={{
+                    fontSize: 12, padding: '5px 12px', borderRadius: 14, cursor: 'pointer',
+                    border: `1px solid ${on ? '#1d4ed8' : '#e5e7eb'}`,
+                    background: on ? '#eff6ff' : '#fff',
+                    color: on ? '#1d4ed8' : '#6b7280',
+                    fontWeight: on ? 600 : 500,
+                  }}
+                >
+                  {on ? '✓ ' : ''}{sec}
+                </button>
+              )
+            })}
+          </div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>Selected sections become the draft&apos;s structure. Uncheck any you don&apos;t need.</div>
+        </div>
+      )}
 
       {/* KB file picker */}
       {useKb && (

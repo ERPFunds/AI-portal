@@ -2,26 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ApifyClient } from "apify-client";
 import { createClient } from "@/lib/supabase/server";
+import { getSkill, DEFAULT_MAX_TOKENS } from "@/lib/data/draftingSkills";
 
 export const maxDuration = 120;
 
 const anthropic = new Anthropic();
-
-const SYSTEM_PROMPTS: Record<string, string> = {
-  freeform: `You are a research and writing assistant for ERP Industrials, a private equity industrial real estate fund manager focused on Permian Basin (West Texas) and Brevard County / Space Coast (Florida) markets. Help with research, writing, and analysis. Be specific, data-driven, and actionable. Write and stop — do not ask follow-up questions or offer options.`,
-
-  "om-section": `You are a professional OM (Offering Memorandum) writer for ERP Industrials. Write polished, institutional-quality OM sections for industrial properties. Use industry-standard CRE language with concrete data points. Be specific about market fundamentals, demand drivers, and investment thesis. Write and stop — do not ask follow-up questions.`,
-
-  "lp-memo": `You are a fund communications writer for ERP Industrials preparing LP memos and investor updates. Tone: professional, confident, transparent. Focus on fund performance, market positioning, deal pipeline, and strategic context. Write for a sophisticated LP audience. Write and stop — do not ask follow-up questions.`,
-
-  "deal-summary": `You are a deal analyst for ERP Industrials. Write clear, concise deal summaries covering: property description, location/submarket, pricing ($/SF, cap rate, price/acre), tenant/occupancy, investment highlights, risks, and ERP's thesis. Use a structured section format. Write and stop — do not ask follow-up questions.`,
-
-  "email-draft": `You are an IR/communications assistant for ERP Industrials. Draft professional emails. LP emails: formal and warm. Broker emails: direct and professional. Internal emails: concise. Write only the email body (include Subject: line at top). Write and stop — do not ask follow-up questions.`,
-
-  "market-brief": `You are a CRE market analyst for ERP Industrials. Write concise market briefs covering industrial fundamentals: vacancy, absorption, asking rents, notable transactions, development pipeline, and demand drivers. Focus on Permian Basin and/or Brevard County / Space Coast. Write and stop — do not ask follow-up questions.`,
-
-  "newsletter": `You are a market intelligence editor for ERP Industrials. You may be given a previously sent newsletter as base context. Help edit, update, rewrite sections, summarize key points, or draft a follow-up edition. Be specific and data-driven. Write and stop — do not ask follow-up questions.`,
-};
 
 function sse(enc: TextEncoder, payload: object) {
   return enc.encode("data: " + JSON.stringify(payload) + "\n\n");
@@ -41,6 +26,7 @@ export async function POST(req: NextRequest) {
   const attachmentName: string = body.attachmentName ?? "";
   const newsletterNarrative: string = body.newsletterNarrative ?? "";
   const newsletterSubject: string = body.newsletterSubject ?? "";
+  const outline: string[] = Array.isArray(body.outline) ? body.outline.filter((o: unknown) => typeof o === "string" && o.trim()) : [];
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
 
@@ -125,12 +111,21 @@ export async function POST(req: NextRequest) {
           context += `\n\n${header}\n${attachmentText}`;
         }
 
-        const systemText = SYSTEM_PROMPTS[docType] ?? SYSTEM_PROMPTS.freeform;
-        const fullPrompt = context ? `${prompt}\n${context}` : prompt;
+        const skill = getSkill(docType);
+        let systemText = skill.systemPrompt;
+        if (skill.checklist?.length) {
+          systemText += `\n\nBefore finishing, make sure the draft includes: ${skill.checklist.join("; ")}.`;
+        }
+
+        // Outline scaffold — the sections the user kept in the picker, in order.
+        const outlineText = outline.length
+          ? `\n\nOrganize the writing under these sections, in this order (use them as headings):\n${outline.map((o) => `- ${o}`).join("\n")}`
+          : "";
+        const fullPrompt = `${prompt}${outlineText}${context ? `\n${context}` : ""}`;
 
         const stream = anthropic.messages.stream({
           model: "claude-opus-4-5",
-          max_tokens: 4000,
+          max_tokens: skill.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: systemText,
           messages: [{ role: "user", content: fullPrompt }],
         });
