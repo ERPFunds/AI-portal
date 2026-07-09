@@ -2507,10 +2507,11 @@ function LpDirectoryView() {
                 : data.sfError
                   ? `SF error: ${data.sfError}`
                   : (() => {
-                      const fundIv = data.lps.filter(l => l.group !== 'DST / 1031')
+                      const fundIv = data.lps.filter(l => l.group !== 'DST / 1031' && l.group !== PRIOR_GROUP)
                       const matched = fundIv.filter(l => l.sfCrmId).length
                       const dst = data.dstCount ?? data.lps.filter(l => l.group === 'DST / 1031').length
-                      return `${matched} of ${fundIv.length} Fund IV LPs in Salesforce${dst ? ` · +${dst} DST/1031 investors` : ''}`
+                      const prior = data.lps.filter(l => l.group === PRIOR_GROUP).length
+                      return `${matched} of ${fundIv.length} Fund IV LPs in Salesforce${dst ? ` · +${dst} DST/1031 investors` : ''}${prior ? ` · +${prior} prior-fund LPs` : ''}`
                     })()}
             </div>
           )}
@@ -2694,10 +2695,11 @@ function LpDirectoryView() {
       {(() => {
         const visibleLps = !data ? [] : data.lps.filter(lp => inFundView(lp) && (groupView === 'All' || lp.group === groupView) && matchesSearch(lp) && (stageFilter === 'All' || (stageFilter === 'None' ? !lp.sfStage : lp.sfStage === stageFilter)))
         const dstVisible = visibleLps.filter(lp => lp.group === 'DST / 1031').length
-        const fundIvVisible = visibleLps.length - dstVisible
+        const priorVisible = visibleLps.filter(lp => lp.group === PRIOR_GROUP).length
+        const fundIvVisible = visibleLps.length - dstVisible - priorVisible
         // Fund-level commitment totals — computed across ALL LPs, independent of the active filter.
         const allLps = data ? data.lps : []
-        const fundIvLps = allLps.filter(lp => lp.group !== DST_GROUP)
+        const fundIvLps = allLps.filter(lp => lp.group !== DST_GROUP && lp.group !== PRIOR_GROUP)
         const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         // Hard-committed to Fund IV so far = sum of the known commitments (currently ERP GP IV $2.7M).
@@ -2705,7 +2707,7 @@ function LpDirectoryView() {
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
-              { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? (dstVisible ? `${fundIvVisible} Fund IV · ${dstVisible} DST/1031` : 'Fund IV commitment schedule') : groupView },
+              { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? ([dstVisible ? `${fundIvVisible} Fund IV` : '', dstVisible ? `${dstVisible} DST/1031` : '', priorVisible ? `${priorVisible} prior-fund` : ''].filter(Boolean).join(' · ') || 'Fund IV commitment schedule') : groupView },
               { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Committed so far (incl. ERP GP)' },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
               { label: 'DST IV Committed', value: fmtUsd(0), sub: 'New DST offering — not yet open' },
