@@ -247,8 +247,12 @@ export async function GET(req: NextRequest) {
           const msgs = await listFolderMessages(TEAM_MAILBOX, fid, PER_FOLDER);
           for (const m of msgs) {
             if (seen.has(m.id)) continue;
-            // Skip inbound mail addressed directly to an IR lead; keep drafts (To: the investor).
-            if (!m.isDraft && addressedToLead(m.toRecipients)) continue;
+            // NOTE: no addressedToLead filter here. These routing subfolders (Escalate / Forwarded
+            // Drafts) are curated by the sweep — every message was already triaged as an investor
+            // inquiry and copied in on purpose, including DD questionnaires addressed directly to a
+            // lead (e.g. To: William). Filtering by recipient here wrongly hid them, leaving the
+            // folders looking empty. The addressedToLead guard still applies to the PARENT IR folder,
+            // where a lead's personal mail can legitimately sit.
             seen.add(m.id);
             items.push(toItem(m, path, g.kind));
             count++;
