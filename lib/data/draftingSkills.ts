@@ -31,7 +31,7 @@ export interface DraftingSkill {
   checklist?: string[]
 }
 
-export const DEFAULT_MAX_TOKENS = 4000
+export const DEFAULT_MAX_TOKENS = 8000
 
 const FIRM =
   'ERP Industrials, a private equity industrial real estate fund manager focused on the Permian Basin (West Texas) and Brevard County / Space Coast (Florida) markets'
@@ -52,7 +52,7 @@ export const DRAFTING_SKILLS: DraftingSkill[] = [
     systemPrompt: `You are a professional OM (Offering Memorandum) writer for ${FIRM}. Write polished, institutional-quality OM sections for industrial properties. Use industry-standard CRE language with concrete data points ($/SF, cap rate, clear height, dock/grade doors, acreage, power). Ground every claim in the source material provided; where a specific figure is required but not supplied, insert a clearly marked placeholder like [CAP RATE] rather than inventing it. Be specific about market fundamentals, demand drivers, and investment thesis. Write and stop — do not ask follow-up questions.`,
     outline: ['Executive Summary', 'Market Overview', 'Property Description', 'Tenancy & Lease Summary', 'Financial Highlights', 'Investment Thesis', 'Risk Factors'],
     defaultKbCategories: ['Acquisition KB', 'Analytics KB', 'Capital KB'],
-    maxTokens: 8000,
+    maxTokens: 16000,
     checklist: ['concrete metrics (SF, cap rate, $/SF, clear height) where relevant', 'named demand drivers and comparable transactions', 'a clear, evidence-backed investment thesis', 'balanced, honest risk factors', 'placeholders for any figure not in the source material'],
   },
   {
@@ -63,7 +63,7 @@ export const DRAFTING_SKILLS: DraftingSkill[] = [
     systemPrompt: `You are a fund communications writer for ${FIRM} preparing LP memos and investor updates. Tone: professional, confident, transparent. Focus on fund performance, market positioning, deal pipeline, and strategic context. Write for a sophisticated LP audience. Quote figures exactly as given in the source material and attribute them; never state an unqualified forward-looking claim. Write and stop — do not ask follow-up questions.`,
     outline: ['Executive Summary', 'Fund Performance', 'Recent Acquisitions', 'Market Conditions', 'Pipeline & Outlook', 'Capital & Distributions'],
     defaultKbCategories: ['Investor Relations (SharePoint)', 'Capital KB'],
-    maxTokens: 6000,
+    maxTokens: 16000,
     checklist: ['figures cited to their source where possible', 'no unqualified forward-looking statements', 'a confident but transparent tone appropriate for LPs'],
   },
   {
@@ -74,7 +74,7 @@ export const DRAFTING_SKILLS: DraftingSkill[] = [
     systemPrompt: `You are a deal analyst for ${FIRM}. Write clear, concise deal summaries. Lead with the numbers, keep it skimmable, and use a structured section format. Use only figures provided; mark anything missing with a placeholder. Write and stop — do not ask follow-up questions.`,
     outline: ['Property Description', 'Location & Submarket', 'Pricing & Returns', 'Tenancy & Occupancy', 'Investment Highlights', 'Risks', "ERP's Thesis"],
     defaultKbCategories: ['Acquisition KB', 'Analytics KB'],
-    maxTokens: 3000,
+    maxTokens: 6000,
     checklist: ['pricing metrics ($/SF, cap rate, price/acre)', 'tenant and occupancy detail', 'explicit risks and ERP thesis'],
   },
   {
@@ -84,6 +84,7 @@ export const DRAFTING_SKILLS: DraftingSkill[] = [
     placeholder: 'Draft a follow-up email to an LP who attended our Q2 update and asked about our Brevard deal pipeline...',
     systemPrompt: `You are an IR/communications assistant for ${FIRM}. Draft professional emails. LP emails: formal and warm. Broker emails: direct and professional. Internal emails: concise. Write only the email body (include a Subject: line at top). Write and stop — do not ask follow-up questions.`,
     defaultKbCategories: ['Investor Relations (SharePoint)'],
+    maxTokens: 2000,
   },
   {
     id: 'market-brief',

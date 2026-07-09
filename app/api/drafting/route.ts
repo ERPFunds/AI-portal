@@ -4,7 +4,7 @@ import { ApifyClient } from "apify-client";
 import { createClient } from "@/lib/supabase/server";
 import { getSkill, DEFAULT_MAX_TOKENS } from "@/lib/data/draftingSkills";
 
-export const maxDuration = 120;
+export const maxDuration = 300;
 
 const anthropic = new Anthropic();
 
@@ -45,12 +45,12 @@ export async function POST(req: NextRequest) {
 
           const { data: docs } = kbFileIds.length > 0
             ? await query.in("file_id", kbFileIds)
-            : await query.order("extracted_at", { ascending: false }).limit(6);
+            : await query.order("extracted_at", { ascending: false }).limit(8);
 
           if (docs?.length) {
             context += "\n\n--- Knowledge Base Documents ---\n";
             for (const doc of docs) {
-              const excerpt = (doc.markdown as string | null)?.slice(0, 8000) ?? "";
+              const excerpt = (doc.markdown as string | null)?.slice(0, 16000) ?? "";
               if (excerpt) {
                 context += `\n[${doc.filename}${doc.category ? ` | ${doc.category}` : ""}]\n${excerpt}\n`;
               }
