@@ -1084,6 +1084,52 @@ export async function reconcilePriorContacts(entities: PriorReconcileEntity[], o
   return report;
 }
 
+// Reconcile a handful of individuals who are stored as Salesforce PERSON ACCOUNTS (an Account +
+// built-in Contact in one). A child Contact can't attach to them, so their email lives on the
+// account's PersonEmail. This finds each by name and, when applying: sets PersonEmail if blank
+// (never overwrites a different one), or creates a NEW person account only if none exists.
+export interface PersonAccountSync { name: string; firstName: string; lastName: string; email: string; funds: string[] }
+export interface PersonAccountResult { name: string; email: string; found: boolean; isPersonAccount: boolean; existingEmail: string | null; action: string }
+
+async function personAccountRecordTypeId(): Promise<string | null> {
+  try {
+    const recs = await sfQuery(`SELECT Id FROM RecordType WHERE SobjectType = 'Account' AND IsPersonType = true AND IsActive = true LIMIT 1`);
+    return recs[0]?.Id ? String(recs[0].Id) : null;
+  } catch { return null; }
+}
+
+export async function syncPersonAccounts(people: PersonAccountSync[], opts?: { apply?: boolean }): Promise<PersonAccountResult[]> {
+  const out: PersonAccountResult[] = [];
+  for (const p of people) {
+    const recs = await sfQuery(`SELECT Id, Name, IsPersonAccount, PersonEmail FROM Account WHERE Name = '${soql(p.name)}' LIMIT 5`);
+    const acc = recs.find((r) => r.IsPersonAccount) ?? recs[0] ?? null;
+    const found = !!acc;
+    const isPerson = !!(acc && acc.IsPersonAccount);
+    const existingEmail = acc && acc.PersonEmail ? String(acc.PersonEmail) : null;
+    const desc = [p.funds.length ? `Prior ERP fund(s): ${p.funds.join(", ")}` : "", "Imported from the ERP Funds portal contact listing."].filter(Boolean).join("\n");
+    let action: string;
+
+    if (!opts?.apply) {
+      action = !found ? "would CREATE a new person account"
+        : !isPerson ? "exists as a BUSINESS account — would skip (no duplicate)"
+        : existingEmail ? (existingEmail.toLowerCase() === p.email.toLowerCase() ? "person account already has this email — no change" : `person account has a DIFFERENT email (${existingEmail}) — would skip`)
+        : "would set PersonEmail on the existing person account";
+    } else if (found && isPerson) {
+      if (existingEmail && existingEmail.toLowerCase() !== p.email.toLowerCase()) action = `left as-is — already has a different email (${existingEmail})`;
+      else if (existingEmail) action = "no change — already has this email";
+      else { const r = await sfUpdate("Account", String(acc.Id), { PersonEmail: p.email, Description: desc }); action = r.ok ? "set PersonEmail on existing person account" : `update failed: ${r.detail}`; }
+    } else if (found && !isPerson) {
+      action = "exists as a BUSINESS account — skipped to avoid a duplicate (needs manual handling)";
+    } else {
+      const rtId = await personAccountRecordTypeId();
+      if (!rtId) action = "no active PersonAccount record type found — cannot create";
+      else { const r = await sfCreate("Account", { FirstName: p.firstName || undefined, LastName: p.lastName || "Unknown", PersonEmail: p.email, RecordTypeId: rtId, Description: desc }); action = r.ok ? `created person account ${r.id}` : `create failed: ${r.detail}`; }
+    }
+    out.push({ name: p.name, email: p.email, found, isPersonAccount: isPerson, existingEmail, action });
+  }
+  return out;
+}
+
 /**
  * Log an AI-generated note about the REPLY that was sent to a contact (Workflow #3).
  * Find-or-create the Contact by recipient email, then log a completed Task whose Description
