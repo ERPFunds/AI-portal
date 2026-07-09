@@ -354,18 +354,14 @@ export async function GET(req: NextRequest) {
       draftTotal = keep.size;
     }
 
-    // Divide the drafts queue by IR lead (Meghan / William) instead of one lump. Drafts we can't
-    // attribute fall under "Unassigned". Each becomes its own folder/pill in the inbox.
-    const draftCounts: Record<string, number> = {};
+    // All drafts are Meghan's now — one "Drafts" queue, no per-lead split.
+    let draftCount2 = 0;
     for (const it of items) {
       if (!it.isDraft) continue;
-      const who = it.owner ?? "Unassigned";
-      it.folder = `Drafts · ${who}`;
-      draftCounts[who] = (draftCounts[who] ?? 0) + 1;
+      it.folder = "Drafts";
+      draftCount2++;
     }
-    for (const who of ["Meghan", "William", "Unassigned"]) {
-      if (draftCounts[who]) folders.push({ name: `Drafts · ${who}`, kind: "draft", count: draftCounts[who] });
-    }
+    if (draftCount2) folders.push({ name: "Drafts", kind: "draft", count: draftCount2 });
 
     // 3) Sent — read each IR lead's Sent Items directly, so this captures replies sent from
     //    OUTLOOK (not just ones sent through the app; app-sends also land in Sent Items). Skip

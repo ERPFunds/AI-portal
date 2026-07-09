@@ -1306,7 +1306,6 @@ function InboxView({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [folderFilter, setFolderFilter] = useState('All')
-  const [ownerFilter, setOwnerFilter] = useState<'All' | IrOwner>('All')
   const [sendingId, setSendingId] = useState<string | null>(null)
   const [sendMsg, setSendMsg] = useState<string | null>(null)
   const [bodyCache, setBodyCache] = useState<Record<string, string>>({})
@@ -1449,7 +1448,6 @@ function InboxView({
   // When did the email this item replies to arrive? (server value first, else matched inbound)
   const arrivedISO = (item: AgentInboxItem): string | null =>
     item.originalReceivedISO || (item.isDraft ? findOriginalFor(item)?.receivedISO ?? null : item.receivedISO)
-  const ownerCount = (o: IrOwner) => items.filter((it) => ownerFor(it) === o).length
 
   const [irTab, setIrTab] = React.useState<'inbox' | 'qa'>('inbox')
   const [qaPending, setQaPending] = React.useState<number | null>(null)
@@ -1483,7 +1481,6 @@ function InboxView({
 
   const filtered = items.filter((item) => {
     if (folderFilter !== 'All' && item.folder !== folderFilter) return false
-    if (ownerFilter !== 'All' && ownerFor(item) !== ownerFilter) return false
     if (inboxStatusFilter === 'arrived') return isArrived(item)
     if (inboxStatusFilter === 'drafts') return isDraftItem(item)
     if (inboxStatusFilter === 'handled' || inboxStatusFilter === 'sent') return item.folderKind === 'sent'
@@ -1601,16 +1598,6 @@ function InboxView({
       <div className="inbox-wrap">
         <div className="inbox-left">
           <div className="inbox-filters">
-            <div>
-              <div className="filter-label" style={{ marginBottom: 5 }}>Inbox</div>
-              <div className="pill-row">
-                {(['All', 'Meghan', 'William'] as const).map((o) => (
-                  <div key={o} className={`pill ${ownerFilter === o ? 'active' : ''}`} onClick={() => { setOwnerFilter(o); setSelectedInboxIdx(0) }}>
-                    {o === 'All' ? 'All' : o === 'Meghan' ? `Meghan (${ownerCount('Meghan')})` : `William (${ownerCount('William')})`}
-                  </div>
-                ))}
-              </div>
-            </div>
             {folders.length > 0 && (
               <div>
                 <div className="filter-label" style={{ marginBottom: 5 }}>Folder</div>
@@ -1634,37 +1621,25 @@ function InboxView({
             </div>
           </div>
           <div className="inbox-list">
-            {(['Meghan', 'William', null] as const).map((grp) => {
-              const rows = filtered.map((item, i) => ({ item, i })).filter(({ item }) => (ownerFor(item) ?? null) === grp)
-              if (rows.length === 0) return null
-              const arrived = (item: AgentInboxItem) => arrivedISO(item)
-              return (
-                <div key={grp ?? 'unassigned'}>
-                  <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: grp ? '#4338ca' : '#9ca3af', padding: '10px 12px 4px', background: '#f9fafb', borderBottom: '1px solid #eef2ff', position: 'sticky', top: 0, zIndex: 1 }}>
-                    {grp ?? 'Unassigned'} · {rows.length}
-                  </div>
-                  {rows.map(({ item, i }) => (
-                    <div
-                      key={item.id}
-                      className={`inbox-item ${item.status} ${i === selectedInboxIdx ? 'active' : ''}`}
-                      onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
-                    >
-                      <div className="inbox-item-header">
-                        <div className="inbox-from">{(item.isDraft || item.folderKind === 'sent') ? `To: ${item.to[0] ?? '—'}` : (item.fromName || item.from || '—')}</div>
-                        <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
-                      </div>
-                      <div className="inbox-subject">{item.subject || '(no subject)'}</div>
-                      {item.isDraft && arrived(item) && (
-                        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>✉ Email arrived {formatInboxTime(arrived(item)!)}</div>
-                      )}
-                      <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
-                        <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
-                      </div>
-                    </div>
-                  ))}
+            {filtered.map((item, i) => (
+              <div
+                key={item.id}
+                className={`inbox-item ${item.status} ${i === selectedInboxIdx ? 'active' : ''}`}
+                onClick={() => { setSelectedInboxIdx(i); setSendMsg(null) }}
+              >
+                <div className="inbox-item-header">
+                  <div className="inbox-from">{(item.isDraft || item.folderKind === 'sent') ? `To: ${item.to[0] ?? '—'}` : (item.fromName || item.from || '—')}</div>
+                  <div className="inbox-time">{formatInboxTime(item.receivedISO)}</div>
                 </div>
-              )
-            })}
+                <div className="inbox-subject">{item.subject || '(no subject)'}</div>
+                {item.isDraft && arrivedISO(item) && (
+                  <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>✉ Email arrived {formatInboxTime(arrivedISO(item)!)}</div>
+                )}
+                <div style={{ display: 'flex', gap: 4, alignItems: 'center', flexWrap: 'wrap', marginTop: 3 }}>
+                  <div className={`inbox-agent-tag badge ${FOLDER_BADGE[item.folderKind]}`}>{FOLDER_LABEL[item.folderKind]}</div>
+                </div>
+              </div>
+            ))}
             {!loading && filtered.length === 0 && !error && (() => {
               const isSent = folderFilter === 'Sent' || inboxStatusFilter === 'sent' || inboxStatusFilter === 'handled'
               return (
