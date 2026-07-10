@@ -132,6 +132,12 @@ export default function DraftingWorkspaceView() {
   const [kbFiles, setKbFiles] = useState<{ file_id: string; filename: string; category: string | null; char_count: number | null }[]>([])
   const [kbFilesLoading, setKbFilesLoading] = useState(false)
   const [selectedKbFileIds, setSelectedKbFileIds] = useState<Set<string>>(new Set())
+  // Research (SharePoint) — a live-browsed source, separate from the KB picker.
+  const [useResearch, setUseResearch] = useState(false)
+  const [researchFiles, setResearchFiles] = useState<{ id: string; name: string; extension: string; size: number; lastModifiedDateTime: string; webUrl: string }[]>([])
+  const [researchLoading, setResearchLoading] = useState(false)
+  const [researchError, setResearchError] = useState('')
+  const [selectedResearchFileIds, setSelectedResearchFileIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -145,6 +151,21 @@ export default function DraftingWorkspaceView() {
       .catch(() => {})
       .finally(() => setKbFilesLoading(false))
   }, [useKb])
+
+  useEffect(() => {
+    if (!useResearch) return
+    if (researchFiles.length > 0) return
+    setResearchLoading(true)
+    setResearchError('')
+    fetch('/api/drafting/research-files')
+      .then(r => r.json())
+      .then(d => {
+        setResearchFiles(d.files ?? [])
+        if (d.error) setResearchError(d.error)
+      })
+      .catch(e => setResearchError(String(e)))
+      .finally(() => setResearchLoading(false))
+  }, [useResearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (docType !== 'newsletter') return
@@ -228,6 +249,12 @@ export default function DraftingWorkspaceView() {
           attachmentName: attachment?.name ?? '',
           newsletterNarrative: newsletters.find(n => n.id === selectedNewsletterId)?.narrative ?? '',
           newsletterSubject: newsletters.find(n => n.id === selectedNewsletterId)?.subject ?? '',
+          researchFiles: useResearch
+            ? [...selectedResearchFileIds].map(id => {
+                const f = researchFiles.find(x => x.id === id)
+                return f ? { id: f.id, name: f.name } : null
+              }).filter(Boolean)
+            : [],
         }),
         signal: abortRef.current.signal,
       })
@@ -262,7 +289,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useNewsletter, attachment, streaming, outlineSections, selectedKbFileIds, newsletters, selectedNewsletterId])
+  }, [docType, prompt, useKb, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, researchFiles, newsletters, selectedNewsletterId])
 
   const stop = () => abortRef.current?.abort()
 
@@ -486,6 +513,84 @@ export default function DraftingWorkspaceView() {
         </div>
       )}
 
+      {/* Research (SharePoint) file picker — live browse of the Newsletters research folder */}
+      {useResearch && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={s.label}>Research Files (SharePoint)</span>
+            {researchFiles.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => setSelectedResearchFileIds(new Set(researchFiles.map(f => f.id)))}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}
+                >
+                  All
+                </button>
+                <button
+                  onClick={() => setSelectedResearchFileIds(new Set())}
+                  style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#9ca3af', cursor: 'pointer' }}
+                >
+                  None
+                </button>
+              </div>
+            )}
+          </div>
+          {researchLoading && <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading research files…</div>}
+          {!researchLoading && researchError && (
+            <div style={{ fontSize: 13, color: '#dc2626' }}>{researchError}</div>
+          )}
+          {!researchLoading && !researchError && researchFiles.length === 0 && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No research files found in the Newsletters folder.</div>
+          )}
+          {!researchLoading && researchFiles.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+              {researchFiles.map(f => {
+                const checked = selectedResearchFileIds.has(f.id)
+                return (
+                  <label
+                    key={f.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
+                      borderRadius: 6, cursor: 'pointer',
+                      background: checked ? '#eff6ff' : 'transparent',
+                      border: `1px solid ${checked ? '#bfdbfe' : 'transparent'}`,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {
+                        setSelectedResearchFileIds(prev => {
+                          const next = new Set(prev)
+                          checked ? next.delete(f.id) : next.add(f.id)
+                          return next
+                        })
+                      }}
+                      style={{ accentColor: '#1d4ed8', width: 14, height: 14, flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                        {f.lastModifiedDateTime ? new Date(f.lastModifiedDateTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
+                        {f.size ? ` · ${Math.max(1, Math.round(f.size / 1024))}kb` : ''}
+                      </div>
+                    </div>
+                    {f.webUrl && (
+                      <a href={f.webUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, color: '#1d4ed8', textDecoration: 'none', flexShrink: 0 }}>
+                        open ↗
+                      </a>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {selectedResearchFileIds.size === 0 && !researchLoading && researchFiles.length > 0 && (
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>Select the research files to ground this draft on.</div>
+          )}
+        </div>
+      )}
+
       {/* Newsletter picker */}
       {docType === 'newsletter' && (
         <div style={s.card}>
@@ -529,6 +634,7 @@ export default function DraftingWorkspaceView() {
         <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
         {[
           { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
+          { id: 'research', label: '🔬 Research (SharePoint)', val: useResearch, set: setUseResearch },
           { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
         ].map(({ id, label, val, set }) => (
           <label

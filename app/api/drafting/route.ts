@@ -3,6 +3,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { ApifyClient } from "apify-client";
 import { createClient } from "@/lib/supabase/server";
 import { getSkill, DEFAULT_MAX_TOKENS } from "@/lib/data/draftingSkills";
+import { getGraphToken } from "@/lib/agents/graph-token";
+import { parseBytes } from "@/lib/agents/ir/markdown-store";
 
 export const maxDuration = 300;
 
@@ -26,6 +28,11 @@ export async function POST(req: NextRequest) {
   const attachmentName: string = body.attachmentName ?? "";
   const newsletterNarrative: string = body.newsletterNarrative ?? "";
   const newsletterSubject: string = body.newsletterSubject ?? "";
+  // Live SharePoint research files the user picked (id + name from /api/drafting/research-files).
+  const researchFiles: { id: string; name: string }[] = Array.isArray(body.researchFiles)
+    ? body.researchFiles.filter((f: unknown): f is { id: string; name: string } =>
+        !!f && typeof (f as { id?: unknown }).id === "string")
+    : [];
   const outline: string[] = Array.isArray(body.outline) ? body.outline.filter((o: unknown) => typeof o === "string" && o.trim()) : [];
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
@@ -96,6 +103,33 @@ export async function POST(req: NextRequest) {
             }
           } catch {
             // Apify optional — skip silently
+          }
+        }
+
+        // ── Research files (live from SharePoint) ────────────────────────────────
+        // Download each picked file from the ERPAgentOutput site drive and extract its text now,
+        // so the freshest research grounds the draft without waiting for a KB sync.
+        if (researchFiles.length) {
+          const siteId = process.env.SHAREPOINT_SITE_ID;
+          let token: string | null = null;
+          try { token = await getGraphToken(); } catch { /* skip research grounding if auth fails */ }
+          if (token && siteId) {
+            const auth = { Authorization: `Bearer ${token}` };
+            let header = false;
+            for (const f of researchFiles.slice(0, 12)) {
+              try {
+                const res = await fetch(
+                  `https://graph.microsoft.com/v1.0/sites/${siteId}/drive/items/${encodeURIComponent(f.id)}/content`,
+                  { headers: auth }
+                );
+                if (!res.ok) continue;
+                const buf = Buffer.from(await res.arrayBuffer());
+                const text = (await parseBytes(buf, f.name, null)).slice(0, 16000);
+                if (!text.trim()) continue;
+                if (!header) { context += "\n\n--- Research Files (SharePoint) ---\n"; header = true; }
+                context += `\n[${f.name}]\n${text}\n`;
+              } catch { /* one bad file shouldn't kill the draft */ }
+            }
           }
         }
 
