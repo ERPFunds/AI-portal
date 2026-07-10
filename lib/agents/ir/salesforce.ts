@@ -1174,6 +1174,8 @@ export async function logReplyNote(p: {
   note: string;
   nextStep: string;
   sentDate: string;
+  /** The ACTUAL email body that was sent (plain text). Logged verbatim on the contact when provided. */
+  emailBody?: string;
 }): Promise<string> {
   let contactId = await findContactByEmail(p.contactEmail);
   let created = false;
@@ -1187,16 +1189,21 @@ export async function logReplyNote(p: {
   }
   const activityDate = (p.sentDate || new Date().toISOString()).slice(0, 10);
   const hasNext = p.nextStep && p.nextStep.trim().toLowerCase() !== "none";
+  const emailBody = (p.emailBody || "").replace(/<[^>]+>/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  // Log the actual email that was sent, connected to the contact (WhoId). Fall back to the AI note
+  // only if no body was passed. Keep the AI one-liner as a summary when we have both.
   const description =
-    `Reply sent ${p.sentDate}.\nSubject: ${p.subject}\n\n${p.note}` +
+    `Email sent ${p.sentDate}\nTo: ${p.contactEmail}\nSubject: ${p.subject}\n\n` +
+    (emailBody || p.note) +
+    (emailBody && p.note ? `\n\n— Summary: ${p.note}` : "") +
     (hasNext ? `\n\nNext step: ${p.nextStep}` : "");
   await createTask({
     whoId: contactId,
-    subject: `Reply: ${p.subject}`.slice(0, 255),
+    subject: `Email: ${p.subject}`.slice(0, 255),
     description,
     activityDate,
   });
-  return created ? "sf-created-contact+reply-note" : "sf-reply-note(existing-contact)";
+  return created ? "sf-created-contact+email-logged" : "sf-email-logged(existing-contact)";
 }
 
 /**

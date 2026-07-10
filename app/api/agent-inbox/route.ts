@@ -17,7 +17,7 @@ import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { saveDraftToOutlook } from "@/lib/agents/ir/graph-mail";
 import { textToArialHtml } from "@/lib/agents/ir/email-format";
-import { markMessageProcessed, logAgentRun } from "@/lib/db";
+import { markMessageProcessed, logAgentRun, logIrEmailEntry } from "@/lib/db";
 import { draftLpOutreach, type LpOutreachInput } from "@/lib/agents/ir/lp-outreach";
 
 export const dynamic = "force-dynamic";
@@ -53,6 +53,33 @@ export interface AgentInboxItem {
   originalReceivedISO: string | null;  // when the inbound email this draft replies to arrived
   sentBody?: string;                    // full body for a sent reply (folderKind === "sent")
   mailbox: string;                      // the mailbox this item lives in (for send/read actions)
+}
+
+type SB = Awaited<ReturnType<typeof createClient>>;
+
+// Record a just-sent email as the LP's most-recent interaction in the LP Directory cache, so it
+// shows immediately (matched by recipient email). Best-effort; the weekly recompute re-derives it
+// from ir_email_log. Keeps a newer existing interaction if one is already there.
+async function patchLpCacheInteraction(supabase: SB, emails: string[], subject: string, iso: string): Promise<void> {
+  try {
+    const wanted = new Set(emails.map((e) => e.toLowerCase().trim()).filter(Boolean));
+    if (!wanted.size) return;
+    const { data } = await supabase.from("lp_directory_cache").select("data").eq("id", 1).maybeSingle();
+    const payload = (data as { data?: { lps?: Array<Record<string, unknown>> } } | null)?.data;
+    const lps = payload?.lps;
+    if (!Array.isArray(lps)) return;
+    let changed = false;
+    for (const lp of lps) {
+      const e1 = String(lp.email ?? "").toLowerCase().trim();
+      const e2 = String(lp.resolvedEmail ?? "").toLowerCase().trim();
+      if (!wanted.has(e1) && !wanted.has(e2)) continue;
+      const prev = lp.lastInteraction as { date?: string } | null;
+      if (prev?.date && prev.date > iso) continue; // keep a newer one
+      lp.lastInteraction = { date: iso, note: `Email sent — ${subject}`, source: "email" };
+      changed = true;
+    }
+    if (changed) await supabase.from("lp_directory_cache").update({ data: payload }).eq("id", 1);
+  } catch { /* best-effort */ }
 }
 
 // Which IR lead a message belongs to, from its recipients (the mailbox the investor wrote to).
@@ -469,7 +496,7 @@ export async function POST(req: NextRequest) {
 
   let body: {
     action?: string; id?: string; body?: string; from?: string; to?: string; subject?: string;
-    ai?: boolean; context?: LpOutreachInput; mailbox?: string; contactName?: string;
+    ai?: boolean; context?: LpOutreachInput; mailbox?: string; contactName?: string; lpName?: string;
   };
   try {
     body = await req.json();
@@ -563,14 +590,23 @@ export async function POST(req: NextRequest) {
         try {
           const { note, nextStep } = await composeContactNote({ subject, sentReply: content });
           // Use the LP's contact name (from the compose popup) so a newly-created Contact is named
-          // properly instead of defaulting to the email handle.
+          // properly instead of defaulting to the email handle. Log the ACTUAL email on the contact.
           const nm = (body.contactName || "").trim();
           const parts = nm ? nm.split(/\s+/) : [];
           const firstName = parts.length > 1 ? parts.slice(0, -1).join(" ") : (parts[0] || "");
           const lastName = parts.length > 1 ? parts[parts.length - 1] : "";
-          await logReplyNote({ contactEmail: to, firstName, lastName, subject, note, nextStep, sentDate: new Date().toISOString() });
+          await logReplyNote({ contactEmail: to, firstName, lastName, subject, note, nextStep, sentDate: new Date().toISOString(), emailBody: content });
         } catch { /* non-fatal */ }
       }
+      // Surface this email as the LP's last interaction in the directory — durably (ir_email_log,
+      // read by the weekly recompute) and immediately (cache patch, matched by recipient email).
+      const nowIso = new Date().toISOString();
+      try {
+        await logIrEmailEntry({ fromEmail: sendFrom, subject, workflowId: "ir-outreach", category: "outreach",
+          isEscalation: false, escalationReason: null, lpName: (body.lpName || "").trim() || null,
+          summary: `Email sent — ${subject}`, draftSaved: false, draftId: null });
+      } catch { /* non-fatal */ }
+      try { await patchLpCacheInteraction(supabase, [to], subject, nowIso); } catch { /* non-fatal */ }
       try { await logAgentRun({ agentId: "ir", workflowId: "ir-reply", status: "success", summary: `Reply sent to ${to} — ${subject}`.slice(0, 200) }); } catch { /* best-effort */ }
       return NextResponse.json({ ok: true, sentFrom: sendFrom });
     } catch (e) {
@@ -663,11 +699,13 @@ export async function POST(req: NextRequest) {
         const sentDate = new Date().toISOString();
         const results = await Promise.all(
           recipients.map((to) =>
-            logReplyNote({ contactEmail: to, subject: detail.subject, note: noteText, nextStep, sentDate })
+            logReplyNote({ contactEmail: to, subject: detail.subject, note: noteText, nextStep, sentDate, emailBody: content })
               .catch((e) => `sf-fail(${String(e).slice(0, 60)})`)
           )
         );
         note = recipients.length ? `note-logged: ${results.join("; ")}` : "note-skip(no external recipient)";
+        // Reflect the sent reply as the LP's last interaction in the directory (matched by email).
+        try { await patchLpCacheInteraction(supabase, recipients, detail.subject, sentDate); } catch { /* non-fatal */ }
       } catch (e) {
         note = `note-fail(${String(e).slice(0, 80)})`;
       }
