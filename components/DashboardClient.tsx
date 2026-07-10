@@ -1363,25 +1363,6 @@ function InboxView({
     }
   }
 
-  async function purgeDocusign() {
-    if (!window.confirm('Delete DocuSign notification emails from the team@ and mberry@ inboxes? They move to Deleted Items (recoverable).')) return
-    setBackfilling(true); setBackfillMsg(null)
-    try {
-      const res = await fetch('/api/agent-inbox', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'purge-docusign' }),
-      })
-      const j = await res.json()
-      if (!res.ok || j.error) { setBackfillMsg('DocuSign purge failed: ' + (j.error || res.status)); return }
-      setBackfillMsg(`Deleted ${j.deleted ?? 0} DocuSign email${j.deleted === 1 ? '' : 's'}${j.errors?.length ? ` (${j.errors.length} error${j.errors.length === 1 ? '' : 's'})` : ''}`)
-      load()
-    } catch (e) {
-      setBackfillMsg('DocuSign purge failed: ' + String(e))
-    } finally {
-      setBackfilling(false)
-    }
-  }
-
   async function approveAndSend(item: AgentInboxItem) {
     if (!item.isDraft) return
     const to = item.to.join(', ') || 'the recipient'
@@ -1569,9 +1550,6 @@ function InboxView({
             <input type="checkbox" checked={reimport} onChange={(e) => setReimport(e.target.checked)} />
             Re-import already-seen
           </label>
-          <button className="btn btn-ghost" onClick={purgeDocusign} disabled={backfilling} title="Delete DocuSign notification emails from the team@ and mberry@ inboxes (recoverable — moves to Deleted Items)" style={{ whiteSpace: 'nowrap' }}>
-            🗑 Clear DocuSign
-          </button>
           <button className="btn btn-ghost" onClick={load} disabled={loading} style={{ whiteSpace: 'nowrap' }}>
             {loading ? '↻ Syncing…' : '↻ Sync now'}
           </button>
