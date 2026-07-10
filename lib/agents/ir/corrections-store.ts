@@ -167,6 +167,16 @@ export async function deleteCorrection(id: string): Promise<void> {
   if (error) throw new Error(`ir_agent_corrections delete: ${error.message}`);
 }
 
+/** Undo a tombstone: bring a deleted correction back to active (it applies to drafts again). */
+export async function restoreCorrection(id: string): Promise<void> {
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("ir_agent_corrections")
+    .update({ status: "active", deleted_at: null, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(`ir_agent_corrections restore: ${error.message}`);
+}
+
 /**
  * Corrections rendered for the drafter prompts. Active entries only; negative rules must have
  * been seen at least twice (a single deletion may have been context-specific). KB gaps are for

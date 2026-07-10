@@ -1430,7 +1430,7 @@ function InboxView({
   const arrivedISO = (item: AgentInboxItem): string | null =>
     item.originalReceivedISO || (item.isDraft ? findOriginalFor(item)?.receivedISO ?? null : item.receivedISO)
 
-  const [irTab, setIrTab] = React.useState<'inbox' | 'qa'>('inbox')
+  const [irTab, setIrTab] = React.useState<'inbox' | 'qa' | 'corrections'>('inbox')
   const [qaPending, setQaPending] = React.useState<number | null>(null)
 
   // Pending Learned Q&A count for the tab badge (independent of the Q&A tab being open).
@@ -1559,7 +1559,7 @@ function InboxView({
 
       {/* Tabs: the mail queue and the Learned Q&A review live together */}
       <div style={{ display: 'flex', gap: 4, marginBottom: 16, borderBottom: '1px solid #e5e7eb' }}>
-        {([['inbox', `📥 Inbox${awaitingCount ? ` · ${awaitingCount}` : ''}`], ['qa', `💬 Learned Q&A${qaPending ? ` · ${qaPending}` : ''}`]] as const).map(([val, label]) => (
+        {([['inbox', `📥 Inbox${awaitingCount ? ` · ${awaitingCount}` : ''}`], ['qa', `💬 Learned Q&A${qaPending ? ` · ${qaPending}` : ''}`], ['corrections', '🔧 Corrections']] as const).map(([val, label]) => (
           <button key={val} onClick={() => setIrTab(val)}
             style={{ fontSize: 13, fontWeight: irTab === val ? 700 : 500, color: irTab === val ? '#0e7490' : '#6b7280', background: 'none', border: 'none', borderBottom: `2px solid ${irTab === val ? '#0e7490' : 'transparent'}`, padding: '8px 14px', marginBottom: -1, cursor: 'pointer' }}>
             {label}
@@ -1567,7 +1567,7 @@ function InboxView({
         ))}
       </div>
 
-      {irTab === 'qa' ? <QaReviewView embedded /> : (<>
+      {irTab === 'qa' ? <QaReviewView embedded /> : irTab === 'corrections' ? <CorrectionsReviewView /> : (<>
       {backfillMsg && (
         <div style={{ fontSize: 12, color: /failed/i.test(backfillMsg) ? '#b91c1c' : '#0e7490', background: /failed|skipped/i.test(backfillMsg) ? '#fef2f2' : '#f0f9fa', border: `1px solid ${/failed|skipped/i.test(backfillMsg) ? '#fca5a5' : '#a5f3fc'}`, borderRadius: 8, padding: '8px 14px', marginBottom: 12 }}>
           {backfillMsg}
@@ -4866,6 +4866,82 @@ function QaReviewView({ embedded = false }: { embedded?: boolean } = {}) {
               )}
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface CorrectionItem {
+  id: string; type: 'correction' | 'negative-rule' | 'kb-gap'; learning: string;
+  evidence: string | null; source_subject: string | null; occurrences: number;
+  status: string; created_at: string; updated_at: string;
+}
+
+const CORRECTION_META: Record<string, { label: string; color: string; bg: string }> = {
+  'correction':    { label: 'Correction',   color: '#0369a1', bg: '#f0f9ff' },
+  'negative-rule': { label: 'Rule',          color: '#b45309', bg: '#fffbeb' },
+  'kb-gap':        { label: 'KB gap',        color: '#6b21a8', bg: '#faf5ff' },
+}
+
+function CorrectionsReviewView() {
+  const [tab, setTab] = useState<'active' | 'deleted'>('active')
+  const [items, setItems] = useState<CorrectionItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = async () => {
+    setLoading(true)
+    try { const r = await fetch(`/api/ir-corrections?status=${tab}`); const d = await r.json(); setItems(d.items ?? []) }
+    catch { setItems([]) } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function act(id: string, action: 'delete' | 'restore') {
+    setBusy(id)
+    try {
+      await fetch('/api/ir-corrections', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, action }) })
+      await load()
+    } finally { setBusy(null) }
+  }
+
+  return (
+    <div>
+      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 14, lineHeight: 1.5 }}>
+        What the agent learned by comparing its draft replies against what the team actually sent. Active entries feed every new draft. Delete anything wrong — it stays deleted and won&apos;t be re-learned.
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+        {(['active', 'deleted'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{ fontSize: 12, fontWeight: 600, padding: '6px 14px', borderRadius: 6, cursor: 'pointer', textTransform: 'capitalize', border: tab === t ? '1px solid #0ea5e9' : '1px solid #e5e7eb', background: tab === t ? '#f0f9ff' : '#fff', color: tab === t ? '#0369a1' : '#6b7280' }}>{t}</button>
+        ))}
+      </div>
+      {loading ? <div style={{ fontSize: 12, color: '#9ca3af' }}>Loading…</div>
+        : items.length === 0 ? <div style={{ fontSize: 13, color: '#9ca3af', padding: '20px 0' }}>{tab === 'active' ? 'No corrections learned yet — entries appear as sent replies are compared against their drafts.' : 'No deleted corrections.'}</div>
+        : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {items.map(it => {
+            const meta = CORRECTION_META[it.type] ?? CORRECTION_META['correction']
+            const provisional = it.type === 'negative-rule' && it.occurrences < 2
+            return (
+              <div key={it.id} className="card" style={{ margin: 0 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.4px', color: meta.color, background: meta.bg, border: `1px solid ${meta.color}33`, borderRadius: 4, padding: '2px 7px' }}>{meta.label}</span>
+                    <span style={{ fontSize: 10, color: '#9ca3af' }}>seen {it.occurrences}×</span>
+                    {provisional && <span style={{ fontSize: 10, color: '#b45309' }}>provisional — not yet applied (needs 2×)</span>}
+                    {it.source_subject && <span style={{ fontSize: 10, color: '#9ca3af' }}>from: {it.source_subject}</span>}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', whiteSpace: 'pre-wrap' }}>{it.learning}</div>
+                  {it.evidence && <div style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'pre-wrap' }}><span style={{ fontStyle: 'italic' }}>Evidence:</span> {it.evidence}</div>}
+                  <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                    {tab === 'active'
+                      ? <button onClick={() => act(it.id, 'delete')} disabled={busy === it.id} style={qaBtn('#b91c1c', '#fef2f2', '#fca5a5')}>🗑 Delete</button>
+                      : <button onClick={() => act(it.id, 'restore')} disabled={busy === it.id} style={qaBtn('#166534', '#f0fdf4', '#86efac')}>↩ Restore</button>}
+                  </div>
+                </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
