@@ -158,7 +158,7 @@ export async function POST(req: NextRequest) {
         const fullPrompt = `${prompt}${outlineText}${context ? `\n${context}` : ""}`;
 
         const stream = anthropic.messages.stream({
-          model: "claude-opus-4-5",
+          model: "claude-opus-4-8",
           max_tokens: skill.maxTokens ?? DEFAULT_MAX_TOKENS,
           system: systemText,
           messages: [{ role: "user", content: fullPrompt }],

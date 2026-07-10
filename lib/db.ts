@@ -439,6 +439,20 @@ export async function logAgentRun(params: {
   `;
 }
 
+/** Most recent run timestamp for a given agent+workflow (used to throttle alerts). Null if none. */
+export async function getLastAgentRunAt(agentId: string, workflowId: string): Promise<Date | null> {
+  try {
+    const { rows } = await sql`
+      SELECT created_at FROM agent_runs
+      WHERE agent_id = ${agentId} AND workflow_id = ${workflowId}
+      ORDER BY created_at DESC LIMIT 1
+    `;
+    return rows[0]?.created_at ? new Date(rows[0].created_at as string) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getRecentAgentRuns(limit = 40) {
   // Unified activity feed. Surfaces the real events the portal produces (IR inbox processing,
   // Q&A mining/learning, KB uploads & SharePoint syncs, capital-raise changes, saved searches)

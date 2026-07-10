@@ -27,3 +27,18 @@ export async function sendBriefEmail(params: {
     html: params.html,
   });
 }
+
+/**
+ * Operational alert (e.g. an IR sweep run failed). Goes to the portal operator only by default,
+ * overridable via ALERT_EMAIL_TO (comma-separated) — not the full investor-facing brief list.
+ */
+export async function sendAlertEmail(params: { subject: string; html: string }) {
+  const to = (process.env.ALERT_EMAIL_TO || "mparad@erpfunds.com")
+    .split(",").map((s) => s.trim()).filter(Boolean);
+  await transporter.sendMail({
+    from: `"ERP Funds AI Portal" <${process.env.SMTP_USER}>`,
+    to: to.join(", "),
+    subject: params.subject,
+    html: params.html,
+  });
+}

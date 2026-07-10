@@ -22,8 +22,9 @@ import { buildDueDiligenceReply, getMessageBodyText } from "@/lib/agents/ir/dd-r
 import { unwrapForward } from "@/lib/agents/ir/forward-unwrap";
 import { addAttachmentsToDraft } from "@/lib/agents/ir/draft-attachments";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
-import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun, getDeletedDocusignInternetIds, markDocusignRestored } from "@/lib/db";
+import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun, getLastAgentRunAt, getDeletedDocusignInternetIds, markDocusignRestored } from "@/lib/db";
 import { insertDraftSnapshot } from "@/lib/agents/ir/corrections-store";
+import { sendAlertEmail } from "@/lib/mailer";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
 
 export const maxDuration = 300;
@@ -86,7 +87,7 @@ async function handleMailbox(
   mailbox: string,
   dryRun: boolean,
   opts?: { sinceIso?: string; max?: number; reimport?: boolean }
-): Promise<{ mailbox: string; scanned: number; fresh: number; investor: number; details: string[] }> {
+): Promise<{ mailbox: string; scanned: number; fresh: number; investor: number; draftFailures: number; details: string[] }> {
   const details: string[] = [];
   const messages = opts?.sinceIso
     ? await listInboxMessagesSince(mailbox, opts.sinceIso, opts.max ?? 250)
@@ -107,6 +108,7 @@ async function handleMailbox(
   let teamEscalateFolderId: string | null | undefined;
   let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
+  let draftFailures = 0; // drafts we tried but couldn't create — surfaced to the sweep alert
 
   for (const m of todo) {
     // All drafts are signed by / owned by Meghan — William's inbox isn't monitored or drafted.
@@ -314,11 +316,12 @@ async function handleMailbox(
         if (r.draftId && atts.length) {
           const att = await addAttachmentsToDraft(mailbox, r.draftId, atts);
           actions.push(`dd-drafted(${att.attached.length} attached${att.failed.length ? `, failed: ${att.failed.join("; ")}` : ""})`);
-        } else actions.push(r.success ? "dd-drafted" : `draft-fail(${(r.message || "").slice(0, 40)})`);
+        } else if (r.success) actions.push("dd-drafted");
+        else { draftFailures++; actions.push(`draft-fail(${(r.message || "").slice(0, 40)})`); }
       } else {
         const d = await createReplyDraft({ mailbox, originalMessageId: m.id, htmlBody: triage.draftHtml, categories: cats });
-        if (d.success) draftedHtml = triage.draftHtml;
-        actions.push(d.success ? "drafted" : `draft-fail(${(d.message || "").slice(0, 40)})`);
+        if (d.success) { draftedHtml = triage.draftHtml; actions.push("drafted"); }
+        else { draftFailures++; actions.push(`draft-fail(${(d.message || "").slice(0, 40)})`); }
       }
       // Snapshot the draft for the draft-vs-sent learning loop (sending destroys the draft
       // message, so the exact text must be captured NOW). Matched later by conversationId.
@@ -342,6 +345,7 @@ async function handleMailbox(
         }
       }
     } catch (e) {
+      draftFailures++;
       actions.push(`draft-fail(${String(e).slice(0, 60)})`);
     }
 
@@ -397,7 +401,7 @@ async function handleMailbox(
     details.push(`INVESTOR ${m.fromAddress} → ${actions.join(", ")}`);
   }
 
-  return { mailbox, scanned: messages.length, fresh: todo.length, investor: investorCount, details };
+  return { mailbox, scanned: messages.length, fresh: todo.length, investor: investorCount, draftFailures, details };
 }
 
 // Self-heal: delete stray EMPTY IR subfolders in the team hub (e.g. "IR Escalations",
@@ -448,6 +452,44 @@ async function restoreDeletedDocusigns(mailbox: string): Promise<{ mailbox: stri
   } catch (e) {
     out.error = String(e).slice(0, 160);
     return out;
+  }
+}
+
+// Email the operator when a sweep run fails, so a silent outage (mailbox handler throwing, or a
+// batch of drafts failing to create) doesn't just show up as "fewer drafts". Throttled to once
+// per ALERT_THROTTLE_HOURS via the agent_runs log so a broken 5-minute cron doesn't spam.
+const DRAFT_FAIL_ALERT_THRESHOLD = 3; // draft-create failures in one run that count as a "batch" failure
+const ALERT_THROTTLE_HOURS = 6;
+
+async function maybeAlertOnFailures(
+  results: { mailbox: string; error?: string; draftFailures?: number }[]
+): Promise<string> {
+  const mailboxErrors = results.filter((r) => typeof r.error === "string");
+  const draftFailures = results.reduce((n, r) => n + (r.draftFailures ?? 0), 0);
+  const trigger = mailboxErrors.length > 0 || draftFailures >= DRAFT_FAIL_ALERT_THRESHOLD;
+  if (!trigger) return "no-alert";
+
+  // Throttle: skip if we already alerted within the window.
+  const last = await getLastAgentRunAt("ir", "ir-sweep-alert");
+  if (last && Date.now() - last.getTime() < ALERT_THROTTLE_HOURS * 3600_000) {
+    return `alert-throttled(last ${last.toISOString()})`;
+  }
+
+  const lines: string[] = [];
+  for (const e of mailboxErrors) lines.push(`<li><b>${e.mailbox}</b>: sweep threw — ${String(e.error).slice(0, 300)}</li>`);
+  if (draftFailures > 0) lines.push(`<li><b>${draftFailures}</b> draft(s) failed to create across the run</li>`);
+  const html =
+    `<p>The IR inbox sweep reported failures at ${new Date().toISOString()} (UTC).</p>` +
+    `<ul>${lines.join("")}</ul>` +
+    `<p>Check the ir-inbox-sweep function logs in Vercel. This alert is throttled to once per ${ALERT_THROTTLE_HOURS}h.</p>`;
+  try {
+    await sendAlertEmail({ subject: `⚠️ IR inbox sweep failure${mailboxErrors.length ? ` (${mailboxErrors.length} mailbox error${mailboxErrors.length > 1 ? "s" : ""})` : ""}`, html });
+    // Record the alert so the throttle window starts (and it shows in the activity log).
+    await logAgentRun({ agentId: "ir", workflowId: "ir-sweep-alert", status: "error", summary: `Sweep failure alert sent: ${mailboxErrors.length} mailbox error(s), ${draftFailures} draft failure(s)`.slice(0, 200) });
+    return "alert-sent";
+  } catch (e) {
+    console.log("[ir-sweep] alert-send-fail", String(e).slice(0, 300));
+    return `alert-send-fail(${String(e).slice(0, 100)})`;
   }
 }
 
@@ -511,7 +553,9 @@ export async function GET(req: NextRequest) {
     }
   }
   console.log("[ir-sweep] ran", JSON.stringify(results.map((r) => "scanned" in r
-    ? { mailbox: r.mailbox, scanned: r.scanned, fresh: r.fresh, investor: r.investor, sample: r.details.slice(0, 4) }
+    ? { mailbox: r.mailbox, scanned: r.scanned, fresh: r.fresh, investor: r.investor, draftFailures: r.draftFailures, sample: r.details.slice(0, 4) }
     : r)));
-  return NextResponse.json({ ok: true, dryRun, ranAt: new Date().toISOString(), docusignRestore, results });
+  // Alert the operator on failures (real runs only — dry runs don't touch anything).
+  const alert = dryRun ? "skip(dryRun)" : await maybeAlertOnFailures(results as { mailbox: string; error?: string; draftFailures?: number }[]);
+  return NextResponse.json({ ok: true, dryRun, ranAt: new Date().toISOString(), alert, docusignRestore, results });
 }
