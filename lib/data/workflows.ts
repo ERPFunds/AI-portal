@@ -193,16 +193,6 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Send", description: "Email to Michele, Meghan, William, Brennan — every Monday 8:00 AM CT" }
         ]
       },
-      // ── CoStar data pull (coming soon) ───────────────────────────────────
-      {
-        name: "CoStar Market Data Pull",
-        trigger: "schedule",
-        frequency: "weekly",
-        status: "draft",
-        steps: [
-          { type: "automated", label: "Pull CoStar Data", description: "Vacancy, asking rent, net absorption, sale comps, and pipeline data for Permian Basin and Brevard County submarkets — wiring in progress" }
-        ]
-      },
       // ── Email-triggered RESEARCH: workflow ───────────────────────────────
       {
         name: "Research",

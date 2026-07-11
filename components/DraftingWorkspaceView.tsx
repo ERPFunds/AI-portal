@@ -630,26 +630,32 @@ export default function DraftingWorkspaceView() {
       )}
 
       {/* Sources */}
-      <div style={{ ...s.card, display: 'flex', alignItems: 'center', gap: 28, padding: '12px 20px' }}>
-        <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
-        {[
-          { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
-          { id: 'research', label: '🔬 Research (SharePoint)', val: useResearch, set: setUseResearch },
-          { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
-        ].map(({ id, label, val, set }) => (
-          <label
-            key={id}
-            style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: '#374151' }}
-          >
-            <input
-              type="checkbox"
-              checked={val}
-              onChange={(e) => set(e.target.checked)}
-              style={{ accentColor: '#1d4ed8', width: 15, height: 15 }}
-            />
-            {label}
-          </label>
-        ))}
+      <div style={{ ...s.card, padding: '12px 20px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap' }}>
+          <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
+          {[
+            { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
+            { id: 'research', label: '🔬 Research (SharePoint)', val: useResearch, set: setUseResearch },
+            { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
+          ].map(({ id, label, val, set }) => (
+            <label
+              key={id}
+              style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', fontSize: 13, color: '#374151' }}
+            >
+              <input
+                type="checkbox"
+                checked={val}
+                onChange={(e) => set(e.target.checked)}
+                style={{ accentColor: '#1d4ed8', width: 15, height: 15 }}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 10, lineHeight: 1.5 }}>
+          Market data pull — Research and Newsletter grounding is where current submarket market data enters a draft:
+          vacancy, asking rent, net absorption, sale comps, and pipeline for the Permian Basin and Brevard County submarkets.
+        </div>
       </div>
 
       {/* Attachment */}
