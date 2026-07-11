@@ -37,47 +37,105 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         status: "active",
         steps: [
           { type: "automated", label: "DocuSign Trigger", description: "Power Automate detects executed subscription agreement · POSTs to /api/ir-onboarding" },
-          { type: "automated", label: "Generate Sequence", description: "Claude drafts Day 1, Day 7, Day 30 welcome emails · portal access · key contacts" },
+          { type: "automated", label: "Generate Sequence", description: "Claude drafts Day 1, Day 7, Day 30 welcome emails · key contacts · next steps" },
           { type: "automated", label: "Save to Drafts", description: "3 email drafts saved to Meghan's Outlook · archived to OneDrive /IR/Onboarding/" },
           { type: "manual", label: "Review & Send", description: "Meghan personalizes and sends each email at the right interval" }
         ]
       },
-      // ── Inbound investor email workflows ────────────────────────────────
+      // ── IR inbox sweep (the automatic triage + drafting pipeline) ────────
       {
-        name: "Email Escalation Filter",
-        trigger: "email",
-        triggerSenders: ["team@erpfunds.com", "mberry@erpfunds.com"],
+        name: "IR Inbox Sweep",
+        trigger: "schedule",
+        frequency: "business hours (8am–8pm CT)",
         status: "active",
         steps: [
-          { type: "automated", label: "Receive Email", description: "Power Automate watches team@erpfunds.com DST inbox · POSTs to /api/ir-webhook" },
-          { type: "automated", label: "Classify", description: "Claude identifies: portal access · K-1 · distribution · escalation · new inquiry" },
-          { type: "automated", label: "Draft Response", description: "For repeat questions: AI drafts reply saved to Meghan's Outlook Drafts — never auto-sent" },
-          { type: "manual", label: "Review & Send", description: "Meghan reviews draft · sends or edits · escalations flagged for immediate attention" }
+          { type: "automated", label: "Read & Clean", description: "Pulls the full message · strips Mimecast tracking noise · unwraps forwarded threads so it classifies the original investor, not the forwarder" },
+          { type: "automated", label: "DocuSign Check", description: "DocuSign notifications are marked handled and left in the inbox — never deleted, never drafted to" },
+          { type: "automated", label: "Classify & Route", description: "Decides investor-vs-not, then answerable-from-approved-sources (draft) vs genuinely needs a human (escalate)" },
+          { type: "automated", label: "Write Grounded Draft", description: "Reply grounded on IR Q&A Reference + Approved Learned Q&A + IR Agent Corrections · Arial 10pt · sender signature" },
+          { type: "automated", label: "File Draft", description: "Threaded Outlook draft in Meghan's Drafts (tagged IR:) · filed to Escalate / Forwarded Drafts · copy to the team@ hub for the portal" },
+          { type: "automated", label: "Log to Salesforce", description: "On send, logs the actual subject + body as a completed activity on the investor's Contact (created if new) · surfaces as their last interaction in the LP Directory" }
+        ],
+        meta: {
+          trigger: "Scheduled sweep of the monitored mailbox — Meghan-only",
+          output: "Threaded Outlook draft — reviewed and sent by a human, never auto-sent",
+          escalate: "Meghan"
+        }
+      },
+      // ── Due-diligence answers grounded by RAG over the fund-document KB ───
+      {
+        name: "Due-Diligence Responder",
+        trigger: "email",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Retrieve", description: "Embeds the questions and pulls the top-k relevant chunks from the fund-document knowledge base (pgvector + Voyage)" },
+          { type: "automated", label: "Answer with Citations", description: "Answers each question grounded in the retrieved passages, citing the source file name · never invents figures" },
+          { type: "automated", label: "Draft Reply", description: "Assembles the grounded answers into a reply draft (Arial 10pt · signature) for review" }
+        ],
+        meta: { output: "Grounded, cited DD reply draft", escalate: "Meghan" }
+      },
+      // ── Learning loops (Workflow 5 + corrections) ────────────────────────
+      {
+        name: "Learned Q&A Miner",
+        trigger: "schedule",
+        frequency: "every 2h",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Mine Sent Replies", description: "/api/cron/ir-qa-update reads recently sent replies and generalizes them into reusable Q&A" },
+          { type: "manual", label: "Review & Approve", description: "Entries queue on the Learned Q&A review tab with a pending-count badge · the team approves or edits" },
+          { type: "automated", label: "Feed & Regenerate", description: "Approved entries feed the drafter and rebuild the auto-generated SOP doc" }
         ]
       },
       {
-        name: "Attachment Auto-Filer",
-        trigger: "email",
-        triggerSenders: ["team@erpfunds.com", "mberry@erpfunds.com"],
+        name: "Corrections Miner",
+        trigger: "schedule",
         status: "active",
         steps: [
-          { type: "automated", label: "Receive Email", description: "Power Automate detects investor email with attachment · POSTs to /api/ir-webhook" },
-          { type: "automated", label: "Classify Doc", description: "Claude classifies: subscription · K-1 · wire · signed agreement · KYC · correspondence" },
-          { type: "automated", label: "File to OneDrive", description: "Saves to /IR/[DocType]/[LP-Name]/ · versioned" },
-          { type: "automated", label: "Log Entry", description: "Logged to ir_email_log · portal activity feed updated" }
+          { type: "automated", label: "Diff Draft vs Sent", description: "Compares each draft to what the team actually sent, so drafts drift toward the team's real voice" },
+          { type: "automated", label: "Apply Corrections", description: "Writes an auto-applied \"IR Agent Corrections\" doc the drafter reads on every reply" }
+        ]
+      },
+      // ── LP Directory (outreach console + cached recompute) ───────────────
+      {
+        name: "LP Directory Outreach",
+        trigger: "manual",
+        status: "active",
+        steps: [
+          { type: "manual", label: "Compose", description: "Per-row Email button opens a compose popup pre-filled with the LP's best-known address · pick sender · edit or click AI draft (same grounding + signature + Arial 10)" },
+          { type: "automated", label: "Send or Save", description: "Sends as the chosen sender with a copy to team@ Sent, or saves to the IR Inbox as a draft for later" },
+          { type: "automated", label: "Log to Salesforce", description: "Finds or creates the Contact by email · logs the sent email as a completed activity · records it as that LP's most-recent interaction" }
         ]
       },
       {
-        name: "Investor Dialogue Log",
-        trigger: "email",
-        triggerSenders: ["mberry@erpfunds.com", "wmeyer@erpfunds.com"],
+        name: "LP Directory Recompute",
+        trigger: "schedule",
+        frequency: "weekly",
         status: "active",
         steps: [
-          { type: "automated", label: "Receive Note", description: "Meghan or William emails typed meeting notes or voice memo to agent inbox · POSTs to /api/ir-webhook" },
-          { type: "automated", label: "Parse & Extract", description: "Claude extracts: LP name · interest level · sticking points · follow-up commitments · relationship context" },
-          { type: "automated", label: "Save Log Entry", description: "Structured entry saved to ir_dialogue_log DB · archived to OneDrive /IR/Dialogue-Log/" },
-          { type: "automated", label: "Surface Next Touch", description: "Next touch suggestion returned in response · stale relationships flagged weekly" }
+          { type: "automated", label: "Assemble Sources", description: "SharePoint commitment schedule + Salesforce + an 18-month mailbox interaction scan + prior-fund contacts" },
+          { type: "automated", label: "Cache Snapshot", description: "Writes a single cached row (lp_directory_cache) so the directory loads instantly on every visit" }
+        ],
+        meta: { trigger: "Weekly cron or the 'Sync with Salesforce' button", output: "Cached LP Directory snapshot" }
+      },
+      // ── Knowledge base Q&A + sync (Workflows 6 & 7) ──────────────────────
+      {
+        name: "Fund Q&A Agent",
+        trigger: "manual",
+        status: "active",
+        steps: [
+          { type: "manual", label: "Ask", description: "A question is entered on the Fund Q&A page (/api/fund-qa)" },
+          { type: "automated", label: "Answer, Grounded & Cited", description: "Grounded Q&A over the Investor Relations + Capital KB documents (context-stuffed), with citations" }
         ]
+      },
+      {
+        name: "Knowledge Base Sync",
+        trigger: "schedule",
+        status: "active",
+        steps: [
+          { type: "automated", label: "Pull from SharePoint", description: "Pulls four folders — Investor Relations, ERP Funds IV, and the two SOP folders — adding new files, re-uploading changed/expiring ones, leaving unchanged files alone" },
+          { type: "automated", label: "Extract & Embed", description: "Each file → Anthropic Files API → extracted to the document_markdown layer (WF7) → chunked and embedded to pgvector for retrieval" }
+        ],
+        meta: { trigger: "'Sync from SharePoint' button or a scheduled cron", output: "Refreshed fund-document KB + SOP guides" }
       },
       // ── Accounting-triggered report workflows ────────────────────────────
       {
@@ -102,17 +160,6 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "manual", label: "Review & Send", description: "Meghan adds commentary · sends to LP distribution list" }
         ]
       },
-      // ── Salesforce sync ──────────────────────────────────────────────────
-      {
-        name: "Salesforce Contact Auto-Update",
-        trigger: "webhook",
-        status: "draft",
-        steps: [
-          { type: "automated", label: "Email Interaction Ends", description: "After email-escalation or dialogue-logger workflow completes" },
-          { type: "automated", label: "Push to Salesforce", description: "Power Automate pushes notes and open items to LP Salesforce contact record" },
-          { type: "automated", label: "Log Update", description: "Sync timestamp and field updates logged to portal" }
-        ]
-      }
     ]
   },
   "lp-intel": {
