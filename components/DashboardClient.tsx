@@ -2018,8 +2018,8 @@ function FinancialView() {
 
       </div>
 
-      {/* Row 3: Fund Performance + Acquisition Pipeline */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      {/* Row 3: Fund Performance (Acquisition pipeline now has its own Deal Pipeline section) */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
 
         {/* Fund Performance Table */}
         <div style={cardStyle}>
@@ -2051,34 +2051,6 @@ function FinancialView() {
             </tbody>
           </table>
           <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 10 }}>IRR, CoC, and fund size will populate once connected to Yardi</div>
-        </div>
-
-        {/* Acquisition Pipeline */}
-        <div style={cardStyle}>
-          <div style={cardTitle}>
-            Acquisition Pipeline
-            <span style={cardTitleSub}>by stage</span>
-          </div>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              <span>Stage</span><span>Volume</span>
-            </div>
-            {[
-              { label: 'Screening',       color: '#cbd5e1' },
-              { label: 'LOI / Diligence', color: '#93c5fd' },
-              { label: 'Under Contract',  color: '#3B82F6' },
-              { label: 'Closing',         color: '#3DAE7A' },
-            ].map((row) => (
-              <div key={row.label} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                <div style={{ fontSize: 11, color: '#374151', width: 110, flexShrink: 0 }}>{row.label}</div>
-                <div style={{ flex: 1, height: 8, background: '#f3f4f6', borderRadius: 4 }} />
-                <div style={{ fontSize: 11, color: '#d1d5db', width: 24, textAlign: 'right', flexShrink: 0 }}>—</div>
-              </div>
-            ))}
-          </div>
-          <div style={{ fontSize: 10, color: '#9ca3af', textAlign: 'center', padding: '12px 0' }}>
-            Connect CoStar &amp; Salesforce to populate deal list
-          </div>
         </div>
       </div>
 
