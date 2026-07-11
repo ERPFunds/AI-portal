@@ -15,6 +15,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📊', label: 'Investment Dashboard', view: 'financial' },
     { section: 'Property' },
     { icon: '🏭', label: 'Acquisition Research', view: 'acquisition' },
+    { icon: '🏗️', label: 'Deal Pipeline',        view: 'deal-pipeline' },
     { icon: '📋', label: 'Acquisition Checklist', view: 'acquisition-checklist' },
     { icon: '🏢', label: 'Properties',           view: 'rentroll' },
     { icon: '🔧', label: 'Inspections',         view: 'workorders' },

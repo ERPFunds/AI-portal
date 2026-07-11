@@ -13,6 +13,7 @@ import { ENTITY_ORDER, ENTITY_LABELS, type Property } from '@/lib/data/propertie
 import { type WorkOrder } from '@/lib/data/workOrders'
 import MarketResearchView from './MarketResearchView'
 import DraftingWorkspaceView from './DraftingWorkspaceView'
+import DealPipelineView from './DealPipelineView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -331,6 +332,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
     'acquisition-checklist': <AcquisitionChecklistView />,
+    'deal-pipeline': <DealPipelineView />,
     'signing-queue': <SigningQueueView />,
     'contact-capture': <ContactCaptureView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
