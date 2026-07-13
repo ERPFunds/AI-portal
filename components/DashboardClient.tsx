@@ -17,6 +17,7 @@ import DealPipelineView from './DealPipelineView'
 import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 import BuyBoxPanel from './BuyBoxPanel'
 import InboundListingIntake from './InboundListingIntake'
+import AdminVendorDeskView from './AdminVendorDeskView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -316,6 +317,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     fincontrols: <FinControlsView />,
     accounting: <AccountingView />,
     'daily-priorities': <DailyPrioritiesView />,
+    'admin-vendors': <AdminVendorDeskView />,
     kb: <KnowledgeBaseView />,
     sops: <SOPsView />,
     'market-research': <MarketResearchView />,
