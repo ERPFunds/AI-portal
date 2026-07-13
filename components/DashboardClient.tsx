@@ -14,6 +14,7 @@ import { type WorkOrder } from '@/lib/data/workOrders'
 import MarketResearchView from './MarketResearchView'
 import DraftingWorkspaceView from './DraftingWorkspaceView'
 import DealPipelineView from './DealPipelineView'
+import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -333,6 +334,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     acquisition: <AcquisitionView />,
     'acquisition-checklist': <AcquisitionChecklistView />,
     'deal-pipeline': <DealPipelineView />,
+    'deal-economics': <AcquisitionEconomicsView />,
     'signing-queue': <SigningQueueView />,
     'contact-capture': <ContactCaptureView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
@@ -4383,7 +4385,7 @@ const KB_CATEGORIES = [
   { icon: '💰', label: 'Capital KB',              desc: 'Fund IV pipeline, capital call history, commitment tracking, roadshow materials',   agents: ['LP Market Intelligence', 'Capital Raising'] },
   { icon: '📊', label: 'Investor Relations (SharePoint)', desc: 'LP profiles, fund terms, investor communications, subscription docs — auto-synced weekly from the Investor Relations SharePoint folder', agents: ['Investor Relations', 'Capital Raising'] },
   { icon: '🔐', label: 'Finance & Controls KB',   desc: 'Approval thresholds, GL coding rules, invoice policies, audit documentation',       agents: ['Financial Controls', 'Accounting Operations'] },
-  { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Brokerage'] },
+  { icon: '🏭', label: 'Acquisition KB',          desc: 'Deal memos, LOIs, underwriting models, CoStar comps, broker correspondence',        agents: ['Acquisition Research', 'Acquisition Assistant', 'Brokerage'] },
   { icon: '📈', label: 'Analytics KB',            desc: 'Cap rate benchmarks, valuation models, fund performance data, market reports',      agents: ['Investment Analytics', 'CIO & Chief of Staff'] },
   { icon: '🎯', label: 'Strategy KB',             desc: 'Board presentations, fund narratives, IC materials, strategic planning docs',       agents: ['CIO & Chief of Staff'] },
   { icon: '📋', label: 'Executive KB',            desc: 'Meeting transcripts, calendar context, follow-up templates, board prep materials',  agents: ['Executive Assistant'] },
