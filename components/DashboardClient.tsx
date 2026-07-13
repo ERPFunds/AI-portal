@@ -1066,6 +1066,9 @@ function DashboardView({ roleKey, userName, recentRuns, agentStats, onNavigate }
     { label: 'Runs today',      value: runsToday,                                       sub: 'since midnight' },
     { label: 'Success rate',    value: successRate === null ? '—' : `${successRate}%`,   sub: `${errCount} error${errCount !== 1 ? 's' : ''} · 7d` },
     { label: 'Est. time saved', value: `~${timeSavedHrs}h`,                             sub: `≈${avgMin} min/run avg` },
+    // Live/configured agents (IR drafter + Newsletter) out of the planned ~20-agent roster.
+    // LP-directory tracking is only partial, so it's counted as 2 for now — bump to 3 when it's live.
+    { label: 'Agents configured', value: '2 of 20',                                     sub: 'of planned roster' },
   ]
 
   return (
