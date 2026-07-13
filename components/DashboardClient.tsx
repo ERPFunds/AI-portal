@@ -15,6 +15,7 @@ import MarketResearchView from './MarketResearchView'
 import DraftingWorkspaceView from './DraftingWorkspaceView'
 import DealPipelineView from './DealPipelineView'
 import AcquisitionEconomicsView from './AcquisitionEconomicsView'
+import BuyBoxPanel from './BuyBoxPanel'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -310,6 +311,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     rentroll: <RentRollView />,
     workorders: <WorkOrdersView />,
     leasing: <LeasingView />,
+    'lease-processing': <LeaseProcessingView />,
     fincontrols: <FinControlsView />,
     accounting: <AccountingView />,
     'daily-priorities': <DailyPrioritiesView />,
@@ -3976,27 +3978,17 @@ function WorkOrdersView() {
 // ─── Leasing Pipeline ─────────────────────────────────────────────────────────
 
 function LeasingView() {
-  const TEAL = '#A6C3C9'
-  const NAVY = '#0D2D52'
-
-  const leases = [
-    { property: 'Midland Service Yard',    tenant: 'Permian Oilfield Svcs',  sf: 18500, rent: 11.40, expiry: '2025-09-30', status: 'Renewal Risk',  market: 'Permian' },
-    { property: 'Odessa IOS Yard',         tenant: 'Basin Logistics LLC',    sf: 24000, rent: 10.80, expiry: '2025-12-31', status: 'In Renewal',    market: 'Permian' },
-    { property: 'Midland Flex I',          tenant: 'West TX Mechanical',     sf: 8200,  rent: 12.20, expiry: '2026-03-31', status: 'Stable',        market: 'Permian' },
-    { property: 'Midland Flex I',          tenant: 'Permian Tools & Supply', sf: 6400,  rent: 11.90, expiry: '2026-06-30', status: 'Stable',        market: 'Permian' },
-    { property: 'Palm Bay Industrial',     tenant: 'Space Coast Logistics',  sf: 21000, rent: 13.10, expiry: '2025-11-30', status: 'Renewal Risk',  market: 'Brevard' },
-    { property: 'Melbourne Cold Storage',  tenant: 'Coastal Cold Chain',     sf: 14500, rent: 14.80, expiry: '2026-09-30', status: 'Stable',        market: 'Brevard' },
-    { property: 'Titusville Service Bay',  tenant: 'Aero Ground Support',    sf: 11200, rent: 12.60, expiry: '2027-01-31', status: 'Long Term',     market: 'Brevard' },
-    { property: 'Palm Bay Industrial',     tenant: 'SpaceX Subcontractor',   sf: 9800,  rent: 13.50, expiry: '2027-06-30', status: 'Long Term',     market: 'Brevard' },
-  ]
-
-  const occupancy = [
-    { property: 'Midland Service Yard',   market: 'Permian', totalSf: 18500, occupiedSf: 18500, submarket: 96.3 },
-    { property: 'Odessa IOS Yard',        market: 'Permian', totalSf: 24000, occupiedSf: 24000, submarket: 96.3 },
-    { property: 'Midland Flex I',         market: 'Permian', totalSf: 16200, occupiedSf: 14600, submarket: 96.3 },
-    { property: 'Palm Bay Industrial',    market: 'Brevard', totalSf: 30800, occupiedSf: 30800, submarket: 94.4 },
-    { property: 'Melbourne Cold Storage', market: 'Brevard', totalSf: 14500, occupiedSf: 14500, submarket: 94.4 },
-    { property: 'Titusville Service Bay', market: 'Brevard', totalSf: 11200, occupiedSf: 11200, submarket: 94.4 },
+  // Tenant & contract records. Contract value = annual rent × term (full lease value over the term),
+  // mirroring the "Total for Period" line on the Lease Synopsis.
+  const contracts = [
+    { property: 'Midland Service Yard',    unit: 'A-1',  tenant: 'Permian Oilfield Svcs',  contact: 'Dale Hutchins',   sf: 18500, rent: 11.40, type: 'Renewal', start: '2022-10-01', expiry: '2025-09-30', status: 'Renewal Risk', market: 'Permian' },
+    { property: 'Odessa IOS Yard',         unit: 'Yard', tenant: 'Basin Logistics LLC',    contact: 'Maria Gutierrez', sf: 24000, rent: 10.80, type: 'New',     start: '2023-01-01', expiry: '2025-12-31', status: 'In Renewal',   market: 'Permian' },
+    { property: 'Midland Flex I',          unit: '100',  tenant: 'West TX Mechanical',     contact: 'Roy Alvarado',    sf: 8200,  rent: 12.20, type: 'New',     start: '2023-04-01', expiry: '2026-03-31', status: 'Stable',       market: 'Permian' },
+    { property: 'Midland Flex I',          unit: '120',  tenant: 'Permian Tools & Supply', contact: 'Janet Cole',      sf: 6400,  rent: 11.90, type: 'Renewal', start: '2024-07-01', expiry: '2026-06-30', status: 'Stable',       market: 'Permian' },
+    { property: 'Palm Bay Industrial',     unit: '200',  tenant: 'Space Coast Logistics',  contact: 'Derek Combs',     sf: 21000, rent: 13.10, type: 'New',     start: '2022-12-01', expiry: '2025-11-30', status: 'Renewal Risk', market: 'Brevard' },
+    { property: 'Melbourne Cold Storage',  unit: 'CS-1', tenant: 'Coastal Cold Chain',     contact: 'Angela Ruiz',     sf: 14500, rent: 14.80, type: 'New',     start: '2023-10-01', expiry: '2026-09-30', status: 'Stable',       market: 'Brevard' },
+    { property: 'Titusville Service Bay',  unit: '3',    tenant: 'Aero Ground Support',    contact: 'Priya Anand',     sf: 11200, rent: 12.60, type: 'New',     start: '2024-02-01', expiry: '2027-01-31', status: 'Long Term',    market: 'Brevard' },
+    { property: 'Palm Bay Industrial',     unit: '210',  tenant: 'SpaceX Subcontractor',   contact: 'Tom Whitaker',    sf: 9800,  rent: 13.50, type: 'New',     start: '2024-07-01', expiry: '2027-06-30', status: 'Long Term',    market: 'Brevard' },
   ]
 
   const statusColor: Record<string, string> = {
@@ -4005,42 +3997,38 @@ function LeasingView() {
   const statusBg: Record<string, string> = {
     'Renewal Risk': '#fef2f2', 'In Renewal': '#fffbeb', 'Stable': '#f0fdf4', 'Long Term': '#eff6ff',
   }
+  const typeColor: Record<string, string> = { 'New': '#0e7490', 'Renewal': '#7c3aed' }
 
-  const now = new Date()
-  const monthsUntil = (dateStr: string) => {
-    const d = new Date(dateStr)
-    return (d.getFullYear() - now.getFullYear()) * 12 + (d.getMonth() - now.getMonth())
+  const termMonths = (start: string, end: string) => {
+    const a = new Date(start), b = new Date(end)
+    return Math.max(1, Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24 * 30.44)))
   }
-  const fmtExpiry = (dateStr: string) => new Date(dateStr).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  const monthlyRent   = (c: typeof contracts[number]) => c.rent * c.sf / 12
+  const contractValue = (c: typeof contracts[number]) => c.rent * c.sf * (termMonths(c.start, c.expiry) / 12)
+  const fmtTerm  = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+  const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(2)}M` : `$${Math.round(n).toLocaleString()}`
 
-  const totalSf    = occupancy.reduce((s, p) => s + p.totalSf, 0)
-  const occupiedSf = occupancy.reduce((s, p) => s + p.occupiedSf, 0)
-  const portfolioOcc = Math.round(occupiedSf / totalSf * 100)
-
-  const expiryBuckets = [
-    { label: '< 6 months',  count: leases.filter(l => monthsUntil(l.expiry) < 6).length,  color: '#ef4444' },
-    { label: '6–12 months', count: leases.filter(l => { const m = monthsUntil(l.expiry); return m >= 6 && m < 12 }).length, color: '#f59e0b' },
-    { label: '12–24 months',count: leases.filter(l => { const m = monthsUntil(l.expiry); return m >= 12 && m < 24 }).length, color: '#3B82F6' },
-    { label: '24+ months',  count: leases.filter(l => monthsUntil(l.expiry) >= 24).length, color: '#3DAE7A' },
-  ]
+  const totalSf         = contracts.reduce((s, c) => s + c.sf, 0)
+  const annualRent      = contracts.reduce((s, c) => s + c.rent * c.sf, 0)
+  const totalContractVal = contracts.reduce((s, c) => s + contractValue(c), 0)
+  const wtdRent         = annualRent / totalSf
 
   return (
     <div>
       <div className="page-header">
         <h2>Leasing</h2>
-        <p>Lease expirations · Rollover risk · Portfolio occupancy</p>
+        <p>Tenants · Active contracts · Contract value across the portfolio</p>
       </div>
 
-      <SourceBar source="VTS" agents="Leasing · Property Operations" synced="Not yet connected" link="Connect VTS ↗" />
+      <SourceBar source="VTS · Lease synopses" agents="Leasing · Property Operations" synced="Not yet connected" link="Connect VTS ↗" />
 
       {/* KPI strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         {[
-          { label: 'Portfolio Occupancy', value: `${portfolioOcc}%`,                                           sub: `${occupiedSf.toLocaleString()} / ${totalSf.toLocaleString()} SF` },
-          { label: 'Leases Expiring <6mo', value: `${expiryBuckets[0].count}`,                                sub: `${leases.filter(l=>monthsUntil(l.expiry)<6).reduce((s,l)=>s+l.sf,0).toLocaleString()} SF at risk` },
-          { label: 'In Renewal',           value: `${leases.filter(l=>l.status==='In Renewal').length}`,      sub: 'Active renewal discussions' },
-          { label: 'Total Leases',         value: `${leases.length}`,                                          sub: `${leases.reduce((s,l)=>s+l.sf,0).toLocaleString()} SF leased` },
-          { label: 'Wtd. Avg Rent',        value: `$${(leases.reduce((s,l)=>s+l.rent*l.sf,0)/leases.reduce((s,l)=>s+l.sf,0)).toFixed(2)}/sf`, sub: 'NNN across portfolio' },
+          { label: 'Total Contract Value', value: usd(totalContractVal),        sub: 'Full remaining lease value' },
+          { label: 'Annual Rent Roll',     value: usd(annualRent),              sub: 'Contracted rent / yr' },
+          { label: 'Active Contracts',     value: `${contracts.length}`,        sub: `${totalSf.toLocaleString()} SF leased` },
+          { label: 'Wtd. Avg Rent',        value: `$${wtdRent.toFixed(2)}/sf`,  sub: 'NNN across portfolio' },
         ].map(k => (
           <div key={k.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '14px 18px', flex: 1, minWidth: 130 }}>
             <div style={{ fontSize: 10, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.6px', marginBottom: 6 }}>{k.label}</div>
@@ -4050,113 +4038,64 @@ function LeasingView() {
         ))}
       </div>
 
-      {/* ── Lease Expiration Schedule ── */}
+      {/* ── Tenant & Contracts ── */}
       <div style={{ marginBottom: 28 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <div>
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0, marginBottom: 2 }}>Lease Expiration Schedule</h2>
-            <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Rollover risk by property and tenant</p>
-          </div>
-          <div style={{ display: 'flex', gap: 10 }}>
-            {expiryBuckets.map(b => (
-              <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#6b7280' }}>
-                <span style={{ width: 10, height: 10, borderRadius: 3, background: b.color, display: 'inline-block' }} />
-                {b.label} ({b.count})
-              </div>
-            ))}
-          </div>
+        <div style={{ marginBottom: 14 }}>
+          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0, marginBottom: 2 }}>Tenant &amp; Contracts</h2>
+          <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Active leases by tenant — lease term, monthly rent, and total contract value</p>
         </div>
 
         <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+          <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12, minWidth: 760 }}>
             <thead>
               <tr style={{ background: '#f8fafc' }}>
-                {['Property', 'Market', 'Tenant', 'SF', 'NNN Rate', 'Expiry', 'Months Left', 'Status'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb' }}>{h}</th>
+                {['Property / Unit', 'Tenant', 'SF', 'Type', 'Lease Term', 'Monthly Rent', 'Contract Value', 'Status'].map(h => (
+                  <th key={h} style={{ textAlign: h === 'SF' || h === 'Monthly Rent' || h === 'Contract Value' ? 'right' : 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {[...leases].sort((a, b) => new Date(a.expiry).getTime() - new Date(b.expiry).getTime()).map((l, i) => {
-                const mos = monthsUntil(l.expiry)
-                const barColor = mos < 6 ? '#ef4444' : mos < 12 ? '#f59e0b' : mos < 24 ? '#3B82F6' : '#3DAE7A'
-                return (
-                  <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                    <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827' }}>{l.property}</td>
-                    <td style={{ padding: '11px 14px', color: '#6b7280' }}>{l.market}</td>
-                    <td style={{ padding: '11px 14px', color: '#374151' }}>{l.tenant}</td>
-                    <td style={{ padding: '11px 14px', color: '#6b7280' }}>{l.sf.toLocaleString()}</td>
-                    <td style={{ padding: '11px 14px', color: '#111827', fontWeight: 500 }}>${l.rent.toFixed(2)}</td>
-                    <td style={{ padding: '11px 14px', color: '#374151' }}>{fmtExpiry(l.expiry)}</td>
-                    <td style={{ padding: '11px 14px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ width: 60, height: 5, background: '#f3f4f6', borderRadius: 3 }}>
-                          <div style={{ height: '100%', width: `${Math.min(100, (mos / 30) * 100)}%`, background: barColor, borderRadius: 3 }} />
-                        </div>
-                        <span style={{ fontSize: 11, color: '#374151' }}>{mos}mo</span>
-                      </div>
-                    </td>
-                    <td style={{ padding: '11px 14px' }}>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: statusColor[l.status], background: statusBg[l.status], borderRadius: 5, padding: '2px 7px' }}>{l.status}</span>
-                    </td>
-                  </tr>
-                )
-              })}
+              {[...contracts].sort((a, b) => contractValue(b) - contractValue(a)).map((c, i) => (
+                <tr key={i} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                  <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827' }}>
+                    {c.property}
+                    <div style={{ fontSize: 10, color: '#9ca3af', fontWeight: 400 }}>Unit {c.unit} · {c.market}</div>
+                  </td>
+                  <td style={{ padding: '11px 14px', color: '#374151' }}>
+                    {c.tenant}
+                    <div style={{ fontSize: 10, color: '#9ca3af' }}>{c.contact}</div>
+                  </td>
+                  <td style={{ padding: '11px 14px', color: '#6b7280', textAlign: 'right' }}>{c.sf.toLocaleString()}</td>
+                  <td style={{ padding: '11px 14px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: typeColor[c.type], background: `${typeColor[c.type]}14`, borderRadius: 5, padding: '2px 7px' }}>{c.type}</span>
+                  </td>
+                  <td style={{ padding: '11px 14px', color: '#374151', whiteSpace: 'nowrap' }}>
+                    {fmtTerm(c.start)} – {fmtTerm(c.expiry)}
+                    <div style={{ fontSize: 10, color: '#9ca3af' }}>{termMonths(c.start, c.expiry)} mo · ${c.rent.toFixed(2)}/sf</div>
+                  </td>
+                  <td style={{ padding: '11px 14px', color: '#111827', fontWeight: 500, textAlign: 'right', whiteSpace: 'nowrap' }}>{usd(monthlyRent(c))}</td>
+                  <td style={{ padding: '11px 14px', color: '#0D2D52', fontWeight: 700, textAlign: 'right', whiteSpace: 'nowrap' }}>{usd(contractValue(c))}</td>
+                  <td style={{ padding: '11px 14px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 600, color: statusColor[c.status], background: statusBg[c.status], borderRadius: 5, padding: '2px 7px', whiteSpace: 'nowrap' }}>{c.status}</span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
+            <tfoot>
+              <tr style={{ background: '#f8fafc', borderTop: '2px solid #e5e7eb' }}>
+                <td style={{ padding: '11px 14px', fontWeight: 700, color: '#111827' }} colSpan={2}>Total · {contracts.length} contracts</td>
+                <td style={{ padding: '11px 14px', fontWeight: 700, color: '#374151', textAlign: 'right' }}>{totalSf.toLocaleString()}</td>
+                <td colSpan={2} />
+                <td style={{ padding: '11px 14px', fontWeight: 700, color: '#111827', textAlign: 'right', whiteSpace: 'nowrap' }}>{usd(annualRent / 12)}</td>
+                <td style={{ padding: '11px 14px', fontWeight: 700, color: '#0D2D52', textAlign: 'right', whiteSpace: 'nowrap' }}>{usd(totalContractVal)}</td>
+                <td />
+              </tr>
+            </tfoot>
           </table>
-          <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Placeholder data — connect VTS to populate live lease records</div>
+          </div>
+          <div style={{ fontSize: 10, color: '#9ca3af', padding: '10px 14px', borderTop: '1px solid #f3f4f6' }}>Placeholder data — connect VTS / lease synopses to populate live contract records</div>
         </div>
-      </div>
-
-      {/* ── Occupancy Tracker ── */}
-      <div>
-        <div style={{ marginBottom: 14 }}>
-          <h2 style={{ fontSize: 15, fontWeight: 700, color: '#111827', margin: 0, marginBottom: 2 }}>Occupancy Tracker</h2>
-          <p style={{ fontSize: 12, color: '#6b7280', margin: 0 }}>Portfolio occupancy vs. submarket average by property</p>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          {['Permian', 'Brevard'].map(mkt => {
-            const props = occupancy.filter(p => p.market === mkt)
-            const mktOcc = Math.round(props.reduce((s,p)=>s+p.occupiedSf,0) / props.reduce((s,p)=>s+p.totalSf,0) * 100)
-            const subMkt = props[0]?.submarket ?? 0
-            const color  = mkt === 'Permian' ? TEAL : '#6366f1'
-            return (
-              <div key={mkt} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, padding: '16px 18px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{mkt === 'Permian' ? 'Permian Basin' : 'Brevard County'}</div>
-                    <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{props.length} properties · {props.reduce((s,p)=>s+p.totalSf,0).toLocaleString()} SF</div>
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: '#111827' }}>{mktOcc}%</div>
-                    <div style={{ fontSize: 10, color: '#9ca3af' }}>vs {subMkt}% submarket</div>
-                  </div>
-                </div>
-                {props.map((p, i) => {
-                  const pOcc = Math.round(p.occupiedSf / p.totalSf * 100)
-                  return (
-                    <div key={i} style={{ marginBottom: 12 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                        <span style={{ fontSize: 11, color: '#374151', fontWeight: 500 }}>{p.property}</span>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>{pOcc}%</span>
-                      </div>
-                      <div style={{ position: 'relative', height: 8, background: '#f3f4f6', borderRadius: 4 }}>
-                        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${p.submarket}%`, background: '#e5e7eb', borderRadius: 4 }} />
-                        <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${pOcc}%`, background: color, borderRadius: 4 }} />
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
-                        <span style={{ fontSize: 9, color: '#9ca3af' }}>{p.occupiedSf.toLocaleString()} / {p.totalSf.toLocaleString()} SF occupied</span>
-                        <span style={{ fontSize: 9, color: '#9ca3af' }}>Submarket {p.submarket}%</span>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )
-          })}
-        </div>
-        <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 10, textAlign: 'center' }}>Placeholder data — connect VTS to populate live occupancy records</div>
       </div>
     </div>
   )
@@ -4929,6 +4868,7 @@ function AcquisitionView() {
     <div>
       <div className="page-header"><h2>Acquisition Research</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
       <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
+      <BuyBoxPanel />
       <EmptyDataView source="CoStar · Salesforce" message="Acquisition pipeline data will appear here once connected" />
     </div>
   )
@@ -5121,6 +5061,137 @@ function AcquisitionChecklistView() {
                       <td style={td}>{t.owner}</td>
                       <td style={{ ...td, color: t.status === 'Overdue' ? '#b91c1c' : '#6b7280', whiteSpace: 'nowrap' }}>{t.due}</td>
                       <td style={td}><StatusPill label={t.status} tone={checklistTone[t.status]} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Property · Lease Processing Checklist (Agent 3 · WF2) ──────────────────────
+// Post-execution workflow. When a Lease Synopsis is signed (new lease or renewal),
+// each processing step becomes a tracked task with an owner and status — mirroring
+// the Acquisition Checklist, but for the leasing side. Seeded from the executed
+// synopsis: Unit 23 · Western States Fire Protection Co. (renewal).
+
+type LeaseTaskStatus = 'Done' | 'In progress' | 'Not started' | 'Overdue' | 'N/A'
+type LeaseTask = { task: string; owner: string; status: LeaseTaskStatus }
+type LeasePhase = { phase: string; tasks: LeaseTask[] }
+
+// Owners use the synopsis initials: MJB (VP), BB (lease admin), HB / KC (processing).
+const LEASE_PROCESSING: LeasePhase[] = [
+  { phase: 'Approvals & Setup', tasks: [
+    { task: 'Vice President approval',                 owner: 'MJB',      status: 'Done' },
+    { task: 'VTS updated',                             owner: 'BB',       status: 'Done' },
+    { task: 'Dropbox tracking sheet updated',          owner: 'BB',       status: 'Done' },
+  ]},
+  { phase: 'Systems Update', tasks: [
+    { task: 'Rent Roll updated',                       owner: 'KC',       status: 'Done' },
+    { task: 'Lease Abstract updated',                  owner: 'KC',       status: 'In progress' },
+    { task: 'Yardi updated',                           owner: 'KC',       status: 'In progress' },
+    { task: 'Salesforce updated',                      owner: 'KC',       status: 'Not started' },
+  ]},
+  { phase: 'Tenant Onboarding', tasks: [
+    { task: 'Executed lease copy emailed to tenant',   owner: 'HB / KC',  status: 'Done' },
+    { task: 'Certificate of Insurance collected / verified', owner: 'KC', status: 'In progress' },
+    { task: 'Commercial Café invitation sent',         owner: 'KC',       status: 'Not started' },
+    { task: 'Welcome letter sent (new tenants only)',  owner: 'KC',       status: 'N/A' },
+  ]},
+  { phase: 'Accounting', tasks: [
+    { task: 'Opening charges created (new leases only)', owner: 'KC',     status: 'N/A' },
+    { task: 'Leasing commission payment processed',    owner: 'KC',       status: 'Not started' },
+  ]},
+  { phase: 'Filing & Close-Out', tasks: [
+    { task: 'Saved in CBRE Dropbox & ERP Drive',       owner: 'KC',       status: 'Not started' },
+    { task: 'Filed in management office',              owner: 'KC',       status: 'Not started' },
+    { task: 'Fully signed synopsis shared with BB',    owner: 'KC',       status: 'Not started' },
+  ]},
+]
+
+const leaseTone: Record<LeaseTaskStatus, 'green' | 'yellow' | 'gray' | 'red' | 'blue'> = {
+  'Done': 'green', 'In progress': 'yellow', 'Not started': 'gray', 'Overdue': 'red', 'N/A': 'blue',
+}
+
+function LeaseProcessingView() {
+  const all = LEASE_PROCESSING.flatMap(p => p.tasks)
+  const applicable = all.filter(t => t.status !== 'N/A')            // N/A steps don't count toward completion
+  const done = applicable.filter(t => t.status === 'Done').length
+  const overdue = applicable.filter(t => t.status === 'Overdue').length
+  const pct = Math.round((done / applicable.length) * 100)
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '8px 14px' }
+  const td: React.CSSProperties = { padding: '10px 14px', fontSize: 12, color: '#374151', borderTop: '1px solid #f3f4f6', verticalAlign: 'middle' }
+
+  // Lease terms pulled from the executed synopsis.
+  const terms = [
+    { label: 'Unit', value: '23' },
+    { label: 'SF', value: '1,500' },
+    { label: 'Type', value: 'Renewal' },
+    { label: 'Term', value: '12 mo' },
+    { label: 'Rent', value: '$15.20 psf' },
+    { label: 'Commencement', value: 'Jun 1, 2026' },
+    { label: 'Expiration', value: 'May 31, 2027' },
+    { label: 'Security Deposit', value: '$3,750' },
+  ]
+
+  return (
+    <div>
+      <div className="page-header"><h2>📝 Lease Processing</h2><p>When a lease synopsis is executed — new lease or renewal — the processing checklist becomes a live workflow with owners and status tracking, auto-updating systems (VTS, Yardi, Rent Roll, Salesforce) and handling tenant onboarding, accounting, and filing</p></div>
+      <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF2 · Lease Processing Automator" />
+      <SourceBar source="Lease synopsis (PDF) · VTS · Yardi · Salesforce" agents="Executive Assistant Agent · Property Operations" synced="Executed — synopsis signed Apr 26" link="Open synopsis ↗" />
+
+      {/* Lease header + progress */}
+      <div className="card" style={{ margin: '16px 0', display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af' }}>Active lease</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2D52', marginTop: 3 }}>Unit 23 — Western States Fire Protection Co.</div>
+          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2 }}>1031 Hawkins Blvd, El Paso, TX · ERP 1031 Industrial Portfolio III · Renewal · 1,500 SF</div>
+        </div>
+        <div style={{ minWidth: 200 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#6b7280', marginBottom: 5 }}>
+            <span>{done} of {applicable.length} steps complete</span>
+            <span style={{ fontWeight: 700, color: '#0D2D52' }}>{pct}%</span>
+          </div>
+          <div style={{ height: 8, borderRadius: 999, background: '#eef2f7', overflow: 'hidden' }}>
+            <div style={{ width: `${pct}%`, height: '100%', background: '#0D2D52', borderRadius: 999 }} />
+          </div>
+          {overdue > 0 && <div style={{ fontSize: 11, color: '#b91c1c', marginTop: 6 }}>⚠ {overdue} step{overdue > 1 ? 's' : ''} overdue</div>}
+        </div>
+      </div>
+
+      {/* Lease terms strip (from the synopsis) */}
+      <div className="card" style={{ margin: '0 0 16px', display: 'flex', flexWrap: 'wrap', gap: 0, padding: 0, overflow: 'hidden' }}>
+        {terms.map((t, i) => (
+          <div key={t.label} style={{ flex: '1 1 12%', minWidth: 120, padding: '12px 16px', borderLeft: i === 0 ? 'none' : '1px solid #f3f4f6' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px', color: '#9ca3af' }}>{t.label}</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', marginTop: 3 }}>{t.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Phases */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {LEASE_PROCESSING.map(phase => {
+          const papplicable = phase.tasks.filter(t => t.status !== 'N/A')
+          const pdone = papplicable.filter(t => t.status === 'Done').length
+          return (
+            <div key={phase.phase} className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', borderBottom: '1px solid #f3f4f6', background: '#f9fafb' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52' }}>{phase.phase}</span>
+                <span style={{ fontSize: 11, color: '#9ca3af' }}>{pdone}/{papplicable.length}</span>
+              </div>
+              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <thead><tr>{['Step', 'Owner', 'Status'].map((h, i) => <th key={i} style={th}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {phase.tasks.map((t, i) => (
+                    <tr key={i}>
+                      <td style={{ ...td, fontWeight: 600, color: '#111827', width: '58%' }}>{t.task}</td>
+                      <td style={td}>{t.owner}</td>
+                      <td style={td}><StatusPill label={t.status} tone={leaseTone[t.status]} /></td>
                     </tr>
                   ))}
                 </tbody>
