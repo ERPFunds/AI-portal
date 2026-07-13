@@ -16,6 +16,7 @@ import DraftingWorkspaceView from './DraftingWorkspaceView'
 import DealPipelineView from './DealPipelineView'
 import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 import BuyBoxPanel from './BuyBoxPanel'
+import InboundListingIntake from './InboundListingIntake'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -4872,7 +4873,7 @@ function AcquisitionView() {
       <div className="page-header"><h2>Acquisition Research</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
       <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
       <BuyBoxPanel />
-      <EmptyDataView source="CoStar · Salesforce" message="Acquisition pipeline data will appear here once connected" />
+      <InboundListingIntake />
     </div>
   )
 }
