@@ -18,6 +18,7 @@ import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 import BuyBoxPanel from './BuyBoxPanel'
 import InboundListingIntake from './InboundListingIntake'
 import AdminVendorDeskView from './AdminVendorDeskView'
+import DealVendorDesk from './DealVendorDesk'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -5016,6 +5017,7 @@ const checklistTone: Record<ChecklistTask['status'], 'green' | 'yellow' | 'gray'
 }
 
 function AcquisitionChecklistView() {
+  const [tab, setTab] = useState<'checklist' | 'vendors'>('checklist')
   const all = ACQUISITION_CHECKLIST.flatMap(p => p.tasks)
   const done = all.filter(t => t.status === 'Done').length
   const overdue = all.filter(t => t.status === 'Overdue').length
@@ -5025,7 +5027,14 @@ function AcquisitionChecklistView() {
 
   return (
     <div>
-      <div className="page-header"><h2>📋 Acquisition Checklist</h2><p>Triggered when a deal goes under contract — the acquisition checklist becomes a live workflow with owners, deadlines, and status tracking, auto-assigning each phase and sending reminders</p></div>
+      <div className="page-header"><h2>🧭 Deal Execution</h2><p>Under-contract execution — the acquisition checklist plus the deal vendors delivering diligence and closing, in one place</p></div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
+        {([['checklist', '📋 Checklist'], ['vendors', '🧰 Vendor Desk']] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ fontSize: 13, fontWeight: 600, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: tab === k ? '1px solid #0D2D52' : '1px solid #e5e7eb', background: tab === k ? '#0D2D52' : '#fff', color: tab === k ? '#fff' : '#6b7280' }}>{lbl}</button>
+        ))}
+      </div>
+      {tab === 'vendors' && <DealVendorDesk />}
+      {tab === 'checklist' && <>
       <RoadmapPreviewBanner agent="Executive Assistant Agent" workflow="WF2 · Acquisition Checklist Automator" />
       <SourceBar source="Acquisition checklist (XLS) · Salesforce · Portal tasks" agents="Executive Assistant Agent · Acquisition Research" synced="Triggered — LOI accepted Jun 22" link="Open in Salesforce ↗" />
 
@@ -5075,6 +5084,7 @@ function AcquisitionChecklistView() {
           )
         })}
       </div>
+      </>}
     </div>
   )
 }
