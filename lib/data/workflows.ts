@@ -30,18 +30,6 @@ export interface AgentWorkflows {
 export const WORKFLOWS: Record<string, AgentWorkflowData> = {
   ir: {
     wf: [
-      // ── DocuSign-triggered ───────────────────────────────────────────────
-      {
-        name: "LP Onboarding",
-        trigger: "webhook",
-        status: "active",
-        steps: [
-          { type: "automated", label: "DocuSign Trigger", description: "Power Automate detects executed subscription agreement · POSTs to /api/ir-onboarding" },
-          { type: "automated", label: "Generate Sequence", description: "Claude drafts Day 1, Day 7, Day 30 welcome emails · key contacts · next steps" },
-          { type: "automated", label: "Save to Drafts", description: "3 email drafts saved to Meghan's Outlook · archived to OneDrive /IR/Onboarding/" },
-          { type: "manual", label: "Review & Send", description: "Meghan personalizes and sends each email at the right interval" }
-        ]
-      },
       // ── IR inbox sweep (the automatic triage + drafting pipeline) ────────
       {
         name: "IR Inbox Sweep",
@@ -136,29 +124,6 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
           { type: "automated", label: "Extract & Embed", description: "Each file → Anthropic Files API → extracted to the document_markdown layer (WF7) → chunked and embedded to pgvector for retrieval" }
         ],
         meta: { trigger: "'Sync from SharePoint' button or a scheduled cron", output: "Refreshed fund-document KB + SOP guides" }
-      },
-      // ── Accounting-triggered report workflows ────────────────────────────
-      {
-        name: "Monthly DST Formatter",
-        trigger: "webhook",
-        status: "active",
-        steps: [
-          { type: "automated", label: "Receive Raw Data", description: "Accounting POSTs raw outputs to /api/ir-report after monthly close" },
-          { type: "automated", label: "Format Report", description: "Claude formats into DST reporting package: operating summary · distributions · capital accounts" },
-          { type: "automated", label: "Save to OneDrive", description: "Formatted report filed to /IR/DST-Reports/[period]/" },
-          { type: "manual", label: "Review & Distribute", description: "Meghan reviews · sends to DST investors" }
-        ]
-      },
-      {
-        name: "Quarterly LP Report Formatter",
-        trigger: "webhook",
-        status: "active",
-        steps: [
-          { type: "automated", label: "Receive Raw Data", description: "Accounting POSTs raw outputs to /api/ir-report after quarterly close" },
-          { type: "automated", label: "Format Report", description: "Claude formats into LP package: exec summary · portfolio performance · financials · market update" },
-          { type: "automated", label: "Draft Update Email", description: "Optional: AI drafts LP update email saved to Meghan's Outlook Drafts" },
-          { type: "manual", label: "Review & Send", description: "Meghan adds commentary · sends to LP distribution list" }
-        ]
       },
     ]
   },
@@ -411,7 +376,98 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
   "prop-ops": { wf: [] },
   "acct-ops": { wf: [] },
   "fin-controls": { wf: [] },
-  "cap-raising": { wf: [] },
+  "acq-assistant": {
+    wf: [
+      {
+        name: "Acquisition Checklist Automator",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Trigger Checklist", description: "Converts the XLS acquisition checklist into a tracked workflow when a deal goes under contract — phases auto-assign the right team member with deadlines and reminders" },
+          { type: "automated", label: "New-Entity Setup Track", description: "Insurance binder + E&O/Crime/EPL endorsements (Lockton), operating bank + treasury setup (Prosperity Bank), and property-tax engagement (Weaver)" },
+          { type: "automated", label: "Diligence Track", description: "Phase I ESA, soil, and survey/re-plat (Tetra Tech, Maverick) — each with its deadline and cost-bearer (buyer or seller)" },
+          { type: "automated", label: "Link Invoices", description: "Links incoming deal invoices (legal, appraisal, environmental, survey) to their checklist items" }
+        ],
+        meta: { trigger: "LOI accepted / under contract", output: "Tracked acquisition checklist with owners + deadlines" }
+      },
+      {
+        name: "IC Memo Drafter",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Ingest Model Outputs", description: "Reads finalized underwriting outputs — purchase price, going-in & exit cap, levered/unlevered IRR, equity multiple, cash-on-cash, hold, sources & uses, key assumptions" },
+          { type: "automated", label: "Draft Narrative", description: "Drafts the IC memo — investment thesis, market context, risks & mitigants, and return summary" },
+          { type: "automated", label: "Pull Comparables", description: "Draws appraised value vs. purchase price from appraisals (Colliers) and reuses per-deal transaction-overview inputs (all-in cost, in-place rent, going-in yield)" }
+        ],
+        meta: { trigger: "Underwriting model finalized", output: "IC memo narrative draft" }
+      },
+      {
+        name: "Email Triage & Prioritization",
+        trigger: "email",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Categorize & Prioritize", description: "Prioritizes inbound email for the principal — weights active-deal threads (broker, seller, lender, counsel), flags urgent items, routes routine ones to the right team member" },
+          { type: "automated", label: "Draft Standard Replies", description: "Drafts responses for standard requests so the principal only touches what needs them" },
+          { type: "automated", label: "Auto-File Deal Email", description: "Files deal email into matching Outlook subfolders by deal and document type — title & escrow, legal/PSA, invoices, signatures, due diligence" }
+        ],
+        meta: { trigger: "Inbound email received" }
+      },
+      {
+        name: "Deal Priority & Next-Action List",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Rank Next Actions", description: "For each active deal, surfaces outstanding items and ranked next actions driven by critical dates (title/closing, diligence/environmental deadlines, wire/funding windows) and open asks" },
+          { type: "automated", label: "Surface in Pipeline", description: "Shows as the next-action panel within the Deal Pipeline" }
+        ],
+        meta: { trigger: "On demand / on deal-stage change" }
+      },
+      {
+        name: "Closing Document Auditor",
+        trigger: "schedule",
+        frequency: "5–7 days before closing",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Scan Deal File", description: "Scans the deal file before closing for missing documents, title issues, authority gaps, or outstanding conditions" },
+          { type: "automated", label: "Track Title & Wires", description: "Tracks the title order number (WT Abstract, Permian Abstract), flags draft settlement statements, watches for signed attorney-instruction letters and deposit forms, and confirms wire arrival against the correct entity" },
+          { type: "automated", label: "Output R/Y/G Checklist", description: "Outputs a red/yellow/green pre-closing checklist within the Acquisition Checklist's closing phase" }
+        ],
+        meta: { trigger: "Closing scheduled (5–7 days prior)", output: "Pre-closing red/yellow/green checklist" }
+      },
+      {
+        name: "Deal Pipeline Status Board",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Live Pipeline Cards", description: "Every active deal as a card with stage, next action, owner, and key dates — updating as deals move LOI → due diligence → IC → closing" },
+          { type: "automated", label: "Track Amendments & Dates", description: "Tracks PSA amendment status and critical dates across multiple concurrent deals" }
+        ],
+        meta: { trigger: "On deal-stage change / continuous in the portal", output: "Live Deal Pipeline board" }
+      },
+      {
+        name: "Deal File Organizer & Data Extractor",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "File & Flag", description: "Files incoming diligence documents into the correct KB deal folder with consistent naming and flags what's still outstanding" },
+          { type: "automated", label: "Extract Data", description: "Extracts price, cap rate, square footage, critical dates, and counterparties — writing structured data back to the pipeline dashboard and charts" },
+          { type: "automated", label: "Version & Attribute", description: "Tracks PSA/conveyance redline cycles (Hall Estill, Akin Gump) and attributes each document and legal invoice to the correct acquisition entity" }
+        ],
+        meta: { trigger: "Document received / added to deal file" }
+      },
+      {
+        name: "Deal Economics / Underwriting Summary Capture",
+        trigger: "manual",
+        status: "draft",
+        steps: [
+          { type: "automated", label: "Extract Headline Figures", description: "Extracts key figures from the uploaded Excel model — price, going-in & exit cap, levered/unlevered IRR, equity multiple, cash-on-cash, hold, sources & uses, assumptions + sensitivities" },
+          { type: "manual", label: "Analyst Confirms", description: "Analyst confirms/completes the captured figures — the workflow captures outputs, it does not rebuild the model" },
+          { type: "automated", label: "Feed Downstream", description: "Becomes the single source of deal economics feeding the IC Memo Drafter, the Deal Pipeline Status Board, and the deal charts" }
+        ],
+        meta: { trigger: "Underwriting model finalized / uploaded", output: "Structured per-deal economics record" }
+      }
+    ]
+  },
   marketing: { wf: [] },
   legal: { wf: [] },
   operations: { wf: [] }
