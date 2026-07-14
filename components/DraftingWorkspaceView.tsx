@@ -84,6 +84,47 @@ const s = {
   } as React.CSSProperties,
 }
 
+// Views a Market Research (SharePoint) file's text in-app, the same way KB docs are viewed.
+function ResearchDocViewer({ file, onClose }: { file: { id: string; name: string }; onClose: () => void }) {
+  const [state, setState] = useState<'loading' | 'done' | 'empty' | 'error'>('loading')
+  const [text, setText] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch('/api/drafting/research-files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: file.id, name: file.name }),
+        })
+        if (cancelled) return
+        if (!res.ok) { setState('error'); return }
+        const data = await res.json()
+        if (cancelled) return
+        setText(data.text ?? '')
+        setState((data.text ?? '').trim() ? 'done' : 'empty')
+      } catch { if (!cancelled) setState('error') }
+    })()
+    return () => { cancelled = true }
+  }, [file.id])
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,45,82,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px' }}>
+      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 760, boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e5e7eb', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0D2D52', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>📄 {file.name}</h3>
+          <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1, flexShrink: 0 }}>×</button>
+        </div>
+        <div style={{ padding: 20, maxHeight: '70vh', overflowY: 'auto' }}>
+          {state === 'loading' && <div style={{ fontSize: 12, color: '#9ca3af' }}>Loading…</div>}
+          {state === 'error' && <div style={{ fontSize: 12, color: '#b91c1c' }}>Couldn&apos;t load this document.</div>}
+          {state === 'empty' && <div style={{ fontSize: 12, color: '#9ca3af' }}>No readable text could be extracted from this file.</div>}
+          {state === 'done' && <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontFamily: 'inherit', fontSize: 13, lineHeight: 1.6, color: '#111827' }}>{text}</pre>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DraftingWorkspaceView() {
   const [docType, setDocType] = useState<DocType>('freeform')
   const [outlineSections, setOutlineSections] = useState<string[]>([])
@@ -138,6 +179,7 @@ export default function DraftingWorkspaceView() {
   const [researchFiles, setResearchFiles] = useState<{ id: string; name: string; extension: string; size: number; lastModifiedDateTime: string; webUrl: string }[]>([])
   const [researchLoading, setResearchLoading] = useState(false)
   const [researchError, setResearchError] = useState('')
+  const [viewingResearch, setViewingResearch] = useState<{ id: string; name: string } | null>(null)
   const [selectedResearchFileIds, setSelectedResearchFileIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
@@ -514,11 +556,12 @@ export default function DraftingWorkspaceView() {
         </div>
       )}
 
-      {/* Research (SharePoint) file picker — live browse of the Newsletters research folder */}
+      {/* Market Research file picker — live browse of the Newsletters research folder */}
       {useResearch && (
         <div style={s.card}>
+          {viewingResearch && <ResearchDocViewer file={viewingResearch} onClose={() => setViewingResearch(null)} />}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={s.label}>Research Files (SharePoint)</span>
+            <span style={s.label}>Market Research Files</span>
             {researchFiles.length > 0 && (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button
@@ -541,7 +584,7 @@ export default function DraftingWorkspaceView() {
             <div style={{ fontSize: 13, color: '#dc2626' }}>{researchError}</div>
           )}
           {!researchLoading && !researchError && researchFiles.length === 0 && (
-            <div style={{ fontSize: 13, color: '#9ca3af' }}>No research files found in the Newsletters folder.</div>
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No market research files found in the Newsletters folder.</div>
           )}
           {!researchLoading && researchFiles.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
@@ -570,7 +613,11 @@ export default function DraftingWorkspaceView() {
                       style={{ accentColor: '#1d4ed8', width: 14, height: 14, flexShrink: 0 }}
                     />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</div>
+                      <div
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setViewingResearch({ id: f.id, name: f.name }) }}
+                        title="View text"
+                        style={{ fontSize: 13, fontWeight: 500, color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      >{f.name}</div>
                       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
                         {f.lastModifiedDateTime ? new Date(f.lastModifiedDateTime).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}
                         {f.size ? ` · ${Math.max(1, Math.round(f.size / 1024))}kb` : ''}
@@ -637,7 +684,7 @@ export default function DraftingWorkspaceView() {
           {[
             { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
             { id: 'acquisition', label: '🏭 Acquisition Research', val: useAcquisition, set: setUseAcquisition },
-            { id: 'research', label: '🔬 Research (SharePoint)', val: useResearch, set: setUseResearch },
+            { id: 'research', label: '🔬 Market Research', val: useResearch, set: setUseResearch },
             { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
           ].map(({ id, label, val, set }) => (
             <label
