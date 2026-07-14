@@ -85,6 +85,29 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // ── Acquisition research: screened deal flow from broker / CoStar feeds ──
+        if (sources.includes("acquisition")) {
+          const { data: listings } = await supabase
+            .from("loopnet_listings")
+            .select("market, address, property_name, size, available_space, price, property_type, description, url, received_at")
+            .order("received_at", { ascending: false })
+            .limit(25);
+          if (listings?.length) {
+            context += "\n\n--- Acquisition Research — screened deal flow (broker / CoStar listings) ---\n";
+            for (const l of listings as Record<string, string>[]) {
+              const parts = [
+                l.property_name || l.address,
+                l.market ? `Market: ${l.market}` : "",
+                l.size ? `Size: ${l.size}` : "",
+                l.available_space ? `Available: ${l.available_space}` : "",
+                l.price ? `Price: ${l.price}` : "",
+                l.property_type ? `Type: ${l.property_type}` : "",
+              ].filter(Boolean).join(" · ");
+              context += `\n- ${parts}${l.description ? `\n  ${String(l.description).slice(0, 500)}` : ""}${l.url ? `\n  ${l.url}` : ""}\n`;
+            }
+          }
+        }
+
         // ── Live news via Apify ─────────────────────────────────────────────────
         if (sources.includes("news") && process.env.APIFY_API_TOKEN) {
           try {

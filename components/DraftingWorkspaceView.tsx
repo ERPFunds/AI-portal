@@ -90,6 +90,7 @@ export default function DraftingWorkspaceView() {
   const [prompt, setPrompt] = useState('')
   const [useKb, setUseKb] = useState(true)
   const [useNewsletter, setUseNewsletter] = useState(false)
+  const [useAcquisition, setUseAcquisition] = useState(false)
   const [output, setOutput] = useState('')
   const [streaming, setStreaming] = useState(false)
   const [error, setError] = useState('')
@@ -243,7 +244,7 @@ export default function DraftingWorkspaceView() {
           docType,
           prompt: prompt.trim(),
           outline: (skill.outline ?? []).filter((o) => outlineSections.includes(o)),
-          sources: useKb ? ['kb'] : [],
+          sources: [...(useKb ? ['kb'] : []), ...(useAcquisition ? ['acquisition'] : [])],
           kbFileIds: [...selectedKbFileIds],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
@@ -289,7 +290,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, researchFiles, newsletters, selectedNewsletterId])
+  }, [docType, prompt, useKb, useAcquisition, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, researchFiles, newsletters, selectedNewsletterId])
 
   const stop = () => abortRef.current?.abort()
 
@@ -635,6 +636,7 @@ export default function DraftingWorkspaceView() {
           <span style={{ ...s.label, marginBottom: 0 }}>Ground on</span>
           {[
             { id: 'kb', label: '📚 Knowledge Base', val: useKb, set: setUseKb },
+            { id: 'acquisition', label: '🏭 Acquisition Research', val: useAcquisition, set: setUseAcquisition },
             { id: 'research', label: '🔬 Research (SharePoint)', val: useResearch, set: setUseResearch },
             { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
           ].map(({ id, label, val, set }) => (
