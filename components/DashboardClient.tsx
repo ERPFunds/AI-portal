@@ -5411,7 +5411,7 @@ function ContactCaptureView() {
       {showImport && <ContactImportModal onClose={() => setShowImport(false)} onImported={loadImported} />}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div>
-          <h2>🪪 Contacts</h2>
+          <h2>🪪 Broker Relationship Capture</h2>
           <p>Import contacts you collected at an event or in bulk, and review contacts auto-captured from inbound email signatures</p>
         </div>
         <button onClick={() => setShowImport(true)} style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>📥 Import contacts</button>
