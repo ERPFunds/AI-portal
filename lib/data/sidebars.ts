@@ -25,6 +25,7 @@ export const SIDEBARS: Record<string, SidebarItem[]> = {
     { icon: '📝', label: 'Lease Processing', view: 'lease-processing' },
     { icon: '📣', label: 'Newsletter', view: 'mktg-brokerage' },
     { icon: '📬', label: 'Newsletter Analytics', view: 'newsletter-analytics' },
+    { icon: '💼', label: 'LinkedIn Drafts',      view: 'linkedin-drafts' },
     { icon: '📇', label: 'Distribution Lists',  view: 'distribution-lists' },
     { icon: '🪪', label: 'Broker Relationship Capture', view: 'contact-capture' },
     { section: 'Finance & Admin' },
