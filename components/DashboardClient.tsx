@@ -19,6 +19,7 @@ import BuyBoxPanel from './BuyBoxPanel'
 import InboundListingIntake from './InboundListingIntake'
 import AdminVendorDeskView from './AdminVendorDeskView'
 import DealVendorDesk from './DealVendorDesk'
+import NewsletterAnalyticsView from './NewsletterAnalyticsView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -345,6 +346,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'contact-capture': <ContactCaptureView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
+    'newsletter-analytics': <NewsletterAnalyticsView />,
     fundperf: <StubView title="Fund Performance" icon="📈" desc="Detailed fund-level IRR, cash-on-cash, and waterfall analysis" />,
     peopleops: <StubView title="People Ops" icon="👥" desc="Team directory, onboarding checklists, and HR policy Q&A" />,
     vendors: <StubView title="Vendor Contracts" icon="🔑" desc="Vendor master list, contract status, and COI tracking" />,
