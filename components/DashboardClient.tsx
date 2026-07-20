@@ -345,6 +345,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'deal-economics': <AcquisitionEconomicsView />,
     'signing-queue': <SigningQueueView />,
     'contact-capture': <ContactCaptureView />,
+    'broker-network': <BrokerNetworkView />,
     'mktg-lp': <StubView title="LP Marketing" icon="📣" desc="Investor newsletter drafts, fund deck management, and content library" />,
     'mktg-brokerage': <BrokerageNewsletterView />,
     'newsletter-analytics': <NewsletterAnalyticsView />,
@@ -5374,6 +5375,22 @@ function ContactImportModal({ onClose, onImported }: { onClose: () => void; onIm
           <button onClick={doImport} disabled={!parsed.length || importing} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: !parsed.length || importing ? '#93c5fd' : '#0D2D52', color: '#fff', fontSize: 13, fontWeight: 600, cursor: !parsed.length || importing ? 'default' : 'pointer' }}>{importing ? 'Importing…' : `Import ${parsed.length || ''} contact${parsed.length === 1 ? '' : 's'}`}</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Broker Network — combines Broker Relationship Capture + Distribution Lists under one tabbed view.
+function BrokerNetworkView() {
+  const [tab, setTab] = useState<'relationships' | 'lists'>('relationships')
+  return (
+    <div>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+        {([['relationships', '🪪 Relationships'], ['lists', '📇 Distribution Lists']] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setTab(k)} style={{ fontSize: 13, fontWeight: 600, padding: '7px 16px', borderRadius: 8, cursor: 'pointer', border: tab === k ? '1px solid #0D2D52' : '1px solid #e5e7eb', background: tab === k ? '#0D2D52' : '#fff', color: tab === k ? '#fff' : '#6b7280' }}>{lbl}</button>
+        ))}
+      </div>
+      {tab === 'relationships' && <ContactCaptureView />}
+      {tab === 'lists' && <DistributionListsView />}
     </div>
   )
 }
