@@ -3274,7 +3274,11 @@ function RentRollView() {
           : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
         await load()
       }
-      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.'))
+      else if (d.blocked) {
+        const dbg = d.apifyDebug ? `\n\nScraper (${d.apifyDebug.actor}): ${d.apifyDebug.items ?? '?'} item(s), ${d.apifyDebug.chars ?? 0} chars${d.apifyDebug.blocked ? ', bot-challenge page detected' : ''}` : ''
+        const err = d.apifyError ? `\n\nApify error: ${d.apifyError}` : ''
+        alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.') + err + dbg)
+      }
       else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
     } catch (e) { alert('LoopNet refresh error: ' + e) }
     setLoopnetSyncing(false)
@@ -3788,7 +3792,11 @@ function VacanciesView() {
           : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
         await load()
       }
-      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.'))
+      else if (d.blocked) {
+        const dbg = d.apifyDebug ? `\n\nScraper (${d.apifyDebug.actor}): ${d.apifyDebug.items ?? '?'} item(s), ${d.apifyDebug.chars ?? 0} chars${d.apifyDebug.blocked ? ', bot-challenge page detected' : ''}` : ''
+        const err = d.apifyError ? `\n\nApify error: ${d.apifyError}` : ''
+        alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.') + err + dbg)
+      }
       else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
     } catch (e) { alert('LoopNet refresh error: ' + e) }
     setLoopnetSyncing(false)

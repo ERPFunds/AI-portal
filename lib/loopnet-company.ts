@@ -40,7 +40,14 @@ async function fetchDirect(): Promise<{ urls: string[]; ok: boolean; status?: nu
 // Attempt 2 — route through Apify's browser-based scraper, which renders JS and
 // uses proxies to get past the bot wall. Actor + input are env-overridable so a
 // different/dedicated LoopNet actor can be swapped in without a code change.
-async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: string }> {
+export interface ApifyDebug {
+  actor: string;
+  items?: number;
+  chars: number;
+  blocked: boolean;
+}
+
+async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: string; debug?: ApifyDebug }> {
   const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN || process.env.APIFY_API;
   if (!token) return { urls: [], ok: false, error: "no APIFY_API_TOKEN configured" };
 
@@ -51,13 +58,15 @@ async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: s
     catch { return { urls: [], ok: false, error: "LOOPNET_APIFY_INPUT is not valid JSON" }; }
   } else {
     // Default input for apify/rag-web-browser: scrape the single company URL with a
-    // real browser and return both markdown + HTML so listing links are captured.
+    // real browser + residential proxy (LoopNet blocks datacenter IPs) and return
+    // markdown + HTML so listing links are captured.
     input = {
       query: COMPANY_URL,
       maxResults: 1,
       outputFormats: ["markdown", "html"],
       scrapingTool: "browser-playwright",
       requestTimeoutSecs: 60,
+      proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"] },
     };
   }
 
@@ -69,10 +78,20 @@ async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: s
       body: JSON.stringify(input),
       signal: AbortSignal.timeout(100_000),
     });
-    if (!res.ok) return { urls: [], ok: false, error: `Apify HTTP ${res.status}: ${await res.text().catch(() => "")}`.slice(0, 300) };
-    const items = await res.json();
-    // Scan the whole returned dataset (whatever its shape) for listing URLs.
-    return { urls: extractListingUrls(JSON.stringify(items)), ok: true };
+    const bodyText = await res.text().catch(() => "");
+    if (!res.ok) return { urls: [], ok: false, error: `Apify HTTP ${res.status}: ${bodyText}`.slice(0, 300) };
+    let items: unknown;
+    try { items = JSON.parse(bodyText); } catch { items = bodyText; }
+    const raw = typeof items === "string" ? items : JSON.stringify(items);
+    const urls = extractListingUrls(raw);
+    const debug: ApifyDebug = {
+      actor,
+      items: Array.isArray(items) ? items.length : undefined,
+      chars: raw.length,
+      blocked: /captcha|pardon our interruption|access to this page has been denied|perimeterx|px-captcha|verify you are (a )?human/i.test(raw),
+    };
+    console.log("[loopnet-sync] apify result:", JSON.stringify(debug), "urls:", urls.length);
+    return { urls, ok: true, debug };
   } catch (e) {
     return { urls: [], ok: false, error: String(e) };
   }
@@ -84,6 +103,7 @@ export interface CompanyListingResult {
   blocked?: boolean;
   directStatus?: number;
   apifyError?: string;
+  apifyDebug?: ApifyDebug;
   reason?: string;
 }
 
@@ -102,7 +122,7 @@ export async function getCompanyListingUrls(): Promise<CompanyListingResult> {
     else {
       return {
         urls: [], via: "none", blocked: true,
-        directStatus: direct.status, apifyError: apify.error,
+        directStatus: direct.status, apifyError: apify.error, apifyDebug: apify.debug,
         reason: apify.error?.includes("APIFY_API_TOKEN")
           ? "LoopNet blocked the direct request and no Apify token is configured to scrape it."
           : "LoopNet blocked the request and the scraper could not retrieve the page.",

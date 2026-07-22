@@ -19,7 +19,7 @@ export async function POST() {
   if (listing.urls.length === 0) {
     return NextResponse.json({
       ok: false, blocked: true, via: listing.via,
-      directStatus: listing.directStatus, apifyError: listing.apifyError, reason: listing.reason,
+      directStatus: listing.directStatus, apifyError: listing.apifyError, apifyDebug: listing.apifyDebug, reason: listing.reason,
     });
   }
 
