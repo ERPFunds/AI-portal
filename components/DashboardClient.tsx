@@ -3823,6 +3823,23 @@ function VacanciesView() {
   }
   const fmtN = (n: number | null) => n ? n.toLocaleString() : '—'
 
+  function exportCsv() {
+    const cols: [string, (p: Property) => any][] = [
+      ['Fund', p => ENTITY_LABELS[p.entity] ?? p.entity], ['Address', p => p.address],
+      ['Corridor', p => p.corridor], ['Total SF', p => p.total], ['LoopNet URL', p => p.loopnetUrl ?? ''],
+    ]
+    const esc = (v: any) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const lines = [cols.map(c => c[0]).join(',')]
+    listings.forEach(p => lines.push(cols.map(c => esc(c[1](p))).join(',')))
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ERP-Vacancies-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   return (
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -3834,6 +3851,10 @@ function VacanciesView() {
           <button onClick={refreshLoopnet} disabled={loopnetSyncing} title="Refresh vacancy LoopNet links from ERP's company page"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: loopnetSyncing ? .6 : 1 }}>
             {loopnetSyncing ? 'Refreshing…' : '🔗 Refresh LoopNet'}
+          </button>
+          <button onClick={exportCsv}
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            ⬇ Export to Excel
           </button>
         </div>
       </div>
@@ -3880,7 +3901,7 @@ function VacanciesView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Fund', 'Address', 'Corridor', 'Type', 'Total SF', 'Built', 'LoopNet', ''].map((h, i) => (
+              {['Fund', 'Address', 'Corridor', 'Total SF', 'LoopNet', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -3897,13 +3918,7 @@ function VacanciesView() {
                   </td>
                   <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827', maxWidth: 280 }}>{p.address}</td>
                   <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
-                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                      background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
-                      color: p.type === 'single' ? '#16a34a' : p.type === 'multi' ? '#d97706' : '#dc2626' }}>{p.type}</span>
-                  </td>
                   <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
-                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
                   <td style={{ padding: '9px 12px', maxWidth: 220 }}>
                     {p.loopnetUrl
                       ? <a href={p.loopnetUrl} target="_blank" rel="noopener noreferrer"
