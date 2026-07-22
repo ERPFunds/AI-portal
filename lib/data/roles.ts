@@ -17,11 +17,11 @@ export const ROLES: Record<RoleKey, Role> = {
   william:  { name: 'William Meyer',      title: 'Founder',                         avatar: 'W',  bg: '#1E1235', color: '#9B72E0', access: 'Standard', sidebar: 'executive',  email: 'wmeyer@erpfunds.com' },
   brennan:  { name: 'Brennan Berry',     title: 'COO / Head of Leasing',           avatar: 'BB', bg: '#0A1F22', color: '#3EB5C4', access: 'Manager',   sidebar: 'property',   email: 'bberry@erpfunds.com' },
   michele:  { name: 'Michele Simpkins',  title: 'Controller',                      avatar: 'MS', bg: '#0D1F35', color: '#5B9BD5', access: 'Manager',   sidebar: 'finance',    email: 'msimpkins@erpfunds.com' },
-  liz:      { name: 'Liz Cordova',       title: 'Project Manager',                 avatar: 'LC', bg: '#0D2218', color: '#3DAE7A', access: 'Standard',  sidebar: 'ops',        email: 'lcordova@erpfunds.com' },
+  liz:      { name: 'Liz Cordova',       title: 'Project Manager',                 avatar: 'LC', bg: '#0D2218', color: '#3DAE7A', access: 'Standard',  sidebar: 'all_no_investor', email: 'lcordova@erpfunds.com' },
   hannah:   { name: 'Hannah Powell',      title: 'Leasing Coordinator',             avatar: 'H',  bg: '#0A1F22', color: '#3EB5C4', access: 'Standard', sidebar: 'leasing',    email: 'hpowell@erpfunds.com' },
   sylvia:   { name: 'Sylvia Montoya',    title: 'Senior Accountant',               avatar: 'SM', bg: '#0D1F35', color: '#5B9BD5', access: 'Standard',  sidebar: 'accounting', email: 'smontoya@erpfunds.com' },
   pippi:    { name: 'Pippi Espinoza',    title: 'Investor & Tenant Relations',      avatar: 'PE', bg: '#1F1535', color: '#B07FE0', access: 'Standard',  sidebar: 'property',   email: 'pespinoza@erpfunds.com' },
-  kasandra: { name: 'Kasandra Cordova',  title: 'Industrial Accounting Analyst',   avatar: 'KC', bg: '#0D1F35', color: '#5B9BD5', access: 'Standard',  sidebar: 'accounting', email: 'kcordova@erpfunds.com' },
+  kasandra: { name: 'Kasandra Cordova',  title: 'Industrial Accounting Analyst',   avatar: 'KC', bg: '#0D1F35', color: '#5B9BD5', access: 'Standard',  sidebar: 'all_no_investor', email: 'kcordova@erpfunds.com' },
 }
 
 export const ROLE_CARDS: Array<{ key: RoleKey; description: string; accessLabel: string; accessBg: string; accessColor: string }> = [
