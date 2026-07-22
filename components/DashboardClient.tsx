@@ -3345,23 +3345,20 @@ function RentRollView() {
     return matchEntity && matchWashBay && matchSearch
   })
 
-  // Table rows: break multi-tenant buildings into one row per unit, then apply the type filter per row
+  // Table rows: one row per building. Multi-tenant buildings render as a single merged
+  // "multi-unit" row — per-unit detail lives in the expandable drawer — rather than one row per unit.
   type Row = Property & { _key: string; _unit?: boolean; _unitNo?: string }
   const flat: Row[] = []
   metricBase.forEach(p => {
-    if (p.units && p.units.length > 0) {
-      p.units.forEach(u => {
-        const utype: Property['type'] = (u.tenant || '').toLowerCase() === 'vacant' ? 'vacant' : 'single'
-        if (typeFilter !== 'all' && typeFilter !== 'multi' && utype !== typeFilter) return
-        if (!passExp(u.expiry)) return
-        if (q && !(`${p.address} unit ${u.unit}`.toLowerCase().includes(q) || (u.tenant || '').toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q))) return
-        flat.push({ ...p, _key: `${p.id}-u${u.unit}`, _unit: true, _unitNo: u.unit,
-          address: `${p.address} — Unit ${u.unit}`, tenant: u.tenant || 'Vacant', type: utype,
-          leaseExpiry: u.expiry ?? null, built: p.built, total: u.sf ?? null, office: null, warehouse: null, cranes: null, units: null })
-      })
-    } else if ((typeFilter === 'all' || p.type === typeFilter) && passExp(p.leaseExpiry)) {
-      flat.push({ ...p, _key: `p${p.id}` })
-    }
+    const isMulti = !!(p.units && p.units.length > 0)
+    // Type filter (building-level): multi | single | vacant
+    if (typeFilter === 'multi' && !isMulti) return
+    if (typeFilter === 'single' && (isMulti || p.type !== 'single')) return
+    if (typeFilter === 'vacant' && (isMulti || p.type !== 'vacant')) return
+    // Lease-expiry window: a multi building passes if ANY unit expires in-window; else use the building lease
+    if (isMulti) { if (!(p.units!).some(u => passExp(u.expiry))) return }
+    else if (!passExp(p.leaseExpiry)) return
+    flat.push({ ...p, _key: `p${p.id}` })
   })
 
   // Sort
@@ -3406,13 +3403,11 @@ function RentRollView() {
   })
   const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
-  // Type-filter counts at the UNIT level (multi-tenant counts each unit; single building = 1)
+  // Type-filter counts at the BUILDING level (one row per building)
   let cntSingle = 0, cntMulti = 0, cntVacant = 0
   rows.forEach(p => {
-    if (p.units && p.units.length > 0) {
-      cntMulti += p.units.length
-      p.units.forEach(u => ((u.tenant || '').toLowerCase() === 'vacant' ? cntVacant++ : cntSingle++))
-    } else if (p.type === 'vacant') cntVacant++
+    if (p.units && p.units.length > 0) cntMulti++
+    else if (p.type === 'vacant') cntVacant++
     else cntSingle++
   })
 
@@ -3516,7 +3511,7 @@ function RentRollView() {
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
           <option value="all">All Types</option>
           <option value="single">Single-Tenant ({cntSingle})</option>
-          <option value="multi">Multi-Tenant ({cntMulti})</option>
+          <option value="multi">Multi-Unit ({cntMulti})</option>
           <option value="vacant">Vacant ({cntVacant})</option>
         </select>
         <select value={washBayFilter} onChange={e => setWashBayFilter(e.target.value)}
@@ -3595,7 +3590,7 @@ function RentRollView() {
                       <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
                         background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
                         color: p.type === 'single' ? '#16a34a' : p.type === 'multi' ? '#d97706' : '#dc2626' }}>
-                        {p.type}
+                        {p.type === 'multi' ? 'multi-unit' : p.type}
                       </span>
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
@@ -3664,7 +3659,7 @@ function RentRollView() {
                         </div>
                         {p.units && p.units.length > 0 && (
                           <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #dbeafe' }}>
-                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Units — Lease Expirations ({p.units.length})</div>
+                            <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Units — Lease Expirations ({p.units.length}) · <span style={{ fontWeight: 500, textTransform: 'none', letterSpacing: 0, color: '#9ca3af' }}>click a unit to edit</span></div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: 6 }}>
                               {p.units.map(u => {
                                 let color = '#9ca3af', bg = '#f3f4f6'
@@ -3674,10 +3669,16 @@ function RentRollView() {
                                   bg = months < 6 ? '#fef2f2' : months < 12 ? '#fef3c7' : '#f0fdf4'
                                 }
                                 return (
-                                  <div key={u.unit} style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px', fontSize: 12 }}>
+                                  <div key={u.unit}
+                                    onClick={(e) => { e.stopPropagation(); setUnitDraft({ propId: p.id, building: p.address, unit: u.unit, tenant: u.tenant === 'Vacant' ? '' : u.tenant, expiry: u.expiry ?? '', sf: u.sf != null ? String(u.sf) : '' }) }}
+                                    title="Edit unit"
+                                    style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 7, padding: '6px 10px', fontSize: 12, cursor: 'pointer' }}
+                                    onMouseEnter={e => { e.currentTarget.style.borderColor = '#A6C3C9'; e.currentTarget.style.background = '#f8fafc' }}
+                                    onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.background = '#fff' }}>
                                     <span style={{ fontWeight: 700, color: '#0D2D52', minWidth: 22 }}>{u.unit}</span>
                                     <span style={{ flex: 1, color: u.tenant === 'Vacant' ? '#ef4444' : '#374151', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={u.tenant}>{u.tenant}</span>
                                     <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4, background: bg, color, whiteSpace: 'nowrap' }}>{u.expiry ? u.expiry.slice(0, 7) : '—'}</span>
+                                    <span style={{ color: '#9ca3af', fontSize: 11 }}>✎</span>
                                   </div>
                                 )
                               })}
