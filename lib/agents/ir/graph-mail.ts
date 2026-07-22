@@ -53,10 +53,11 @@ export async function saveDraftToOutlook(params: {
 }
 
 /**
- * Create a THREADED reply draft in `mailbox`'s Drafts, linked to `originalMessageId` (which must
- * live in that mailbox). Outlook then shows the draft in the original conversation and keeps the
- * quoted original beneath the AI text — so the reviewer sees exactly what they're replying to.
- * The original message must NOT have been moved/deleted yet (reply is created against its id).
+ * Create a THREADED reply-ALL draft in `mailbox`'s Drafts, linked to `originalMessageId` (which must
+ * live in that mailbox). Outlook shows the draft in the original conversation with the quoted original
+ * beneath the AI text. Reply-all pre-fills the original sender in To and every other recipient
+ * (other To + CC) in CC — so brokers/advisors/co-investors on the thread are kept, not just the one
+ * sender. The original message must NOT have been moved/deleted yet (reply is created against its id).
  */
 export async function createReplyDraft(params: {
   mailbox: string;
@@ -71,9 +72,10 @@ export async function createReplyDraft(params: {
   const base = `https://graph.microsoft.com/v1.0/users/${encodeURIComponent(params.mailbox)}`;
   const h = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
-  // 1) createReply → a draft reply in Drafts, threaded, body pre-filled with the quoted original.
-  const cr = await fetch(`${base}/messages/${params.originalMessageId}/createReply`, { method: "POST", headers: h, body: "{}" });
-  if (!cr.ok) return { draftId: null, success: false, message: `createReply ${cr.status}: ${(await cr.text()).slice(0, 150)}` };
+  // 1) createReplyAll → a draft reply-all in Drafts, threaded, body pre-filled with the quoted
+  //    original, To = sender + CC = all other recipients (so nobody on the thread is dropped).
+  const cr = await fetch(`${base}/messages/${params.originalMessageId}/createReplyAll`, { method: "POST", headers: h, body: "{}" });
+  if (!cr.ok) return { draftId: null, success: false, message: `createReplyAll ${cr.status}: ${(await cr.text()).slice(0, 150)}` };
   const draft = await cr.json();
   const draftId: string = draft.id;
   const quoted: string = stripMimecastHtml(draft.body?.content ?? "");

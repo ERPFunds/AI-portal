@@ -144,6 +144,26 @@ async function handleMailbox(
       continue;
     }
 
+    // New-business solicitations (e.g. the nightly emails from Kirkor) are NOT investor inquiries —
+    // never draft a reply. Match by sender address or display name. Leave the email in the inbox and
+    // just mark it processed. Configurable via IR_IGNORE_SENDERS (comma-separated substrings).
+    const ignoreSenders = (process.env.IR_IGNORE_SENDERS || "kirkor")
+      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    const senderHay = `${fromAddr || ""} ${m.fromAddress || ""} ${m.fromName || ""}`.toLowerCase();
+    if (ignoreSenders.some((s) => senderHay.includes(s))) {
+      if (!dryRun) {
+        await markMessageProcessed({
+          mailbox,
+          messageId: m.id,
+          internetMessageId: m.internetMessageId,
+          isInvestor: false,
+          action: "ignored-new-business",
+        });
+      }
+      details.push(`IGNORE ${fromAddr || m.fromAddress} — new-business solicitation (ignored sender), no draft`);
+      continue;
+    }
+
     // Classify first. A genuine investor / due-diligence inquiry is triaged even when it's sent
     // DIRECTLY to an IR lead (e.g. a WealthForge DD questionnaire to Meghan) — the reviewer still
     // approves the draft. Anything the classifier doesn't consider an investor inquiry is left
