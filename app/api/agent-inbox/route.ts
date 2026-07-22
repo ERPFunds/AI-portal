@@ -651,8 +651,10 @@ export async function POST(req: NextRequest) {
     const content = typeof body.body === "string" && body.body.trim() ? body.body : detail.bodyText;
     const sendOwner = (body.from === "William" || sendFrom.includes("wmeyer")) ? "William" : "Meghan";
 
+    // Preserve the draft's CC recipients (reply-all) — minus the sender itself.
+    const ccList = (detail.cc || []).filter((a) => a && a.toLowerCase() !== sendFrom.toLowerCase());
     const htmlContent = textToArialHtml(content);
-    await sendMailAs(sendFrom, { to: detail.to, subject: detail.subject, content: htmlContent, contentType: "HTML", categories: [`IR: ${sendOwner}`] });
+    await sendMailAs(sendFrom, { to: detail.to, cc: ccList, subject: detail.subject, content: htmlContent, contentType: "HTML", categories: [`IR: ${sendOwner}`] });
     // Clean up the draft where it lived (best-effort).
     try { await deleteMessage(draftMailbox, body.id); } catch { /* leave it if delete fails */ }
 
@@ -663,6 +665,7 @@ export async function POST(req: NextRequest) {
       const mime = [
         `From: ${senderName} <${sendFrom}>`,
         `To: ${detail.to.join(", ")}`,
+        ...(ccList.length ? [`Cc: ${ccList.join(", ")}`] : []),
         `Subject: ${detail.subject}`,
         `Date: ${new Date().toUTCString()}`,
         "MIME-Version: 1.0",

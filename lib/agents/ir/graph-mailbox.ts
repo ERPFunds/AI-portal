@@ -457,20 +457,21 @@ export async function importMimeMessage(
 export async function getMessageBody(
   mailbox: string,
   messageId: string
-): Promise<{ subject: string; to: string[]; bodyText: string; conversationId: string | null; from: string; fromName: string | null; receivedDateTime: string | null }> {
+): Promise<{ subject: string; to: string[]; cc: string[]; bodyText: string; conversationId: string | null; from: string; fromName: string | null; receivedDateTime: string | null }> {
   const t = await token();
   const res = await fetch(
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${encodeURIComponent(messageId)}` +
-      `?$select=subject,toRecipients,body,conversationId,from,receivedDateTime`,
+      `?$select=subject,toRecipients,ccRecipients,body,conversationId,from,receivedDateTime`,
     { headers: { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' } }
   );
   if (!res.ok) throw new Error(`Graph get message ${res.status}: ${await res.text()}`);
   const m = await res.json();
+  const addrs = (list: { emailAddress?: { address?: string } }[] | undefined) =>
+    (list || []).map((r) => r.emailAddress?.address || "").filter(Boolean);
   return {
     subject: m.subject || "",
-    to: (m.toRecipients || [])
-      .map((r: { emailAddress?: { address?: string } }) => r.emailAddress?.address || "")
-      .filter(Boolean),
+    to: addrs(m.toRecipients),
+    cc: addrs(m.ccRecipients),
     bodyText: stripMimecastNoise(m.body?.content || ""),
     conversationId: m.conversationId ?? null,
     from: m.from?.emailAddress?.address || "",
@@ -581,7 +582,7 @@ export async function sendDraftMessage(mailbox: string, messageId: string): Prom
 /** Send a NEW message as `mailbox` (e.g. mberry@) — used to reply from a person's own address. */
 export async function sendMailAs(
   mailbox: string,
-  p: { to: string[]; subject: string; content: string; contentType?: "Text" | "HTML"; bcc?: string[]; categories?: string[] }
+  p: { to: string[]; cc?: string[]; subject: string; content: string; contentType?: "Text" | "HTML"; bcc?: string[]; categories?: string[] }
 ): Promise<void> {
   const t = await token();
   const message: Record<string, unknown> = {
@@ -589,6 +590,7 @@ export async function sendMailAs(
     body: { contentType: p.contentType ?? "Text", content: p.content },
     toRecipients: p.to.map((a) => ({ emailAddress: { address: a } })),
   };
+  if (p.cc && p.cc.length) message.ccRecipients = p.cc.map((a) => ({ emailAddress: { address: a } }));
   if (p.bcc && p.bcc.length) message.bccRecipients = p.bcc.map((a) => ({ emailAddress: { address: a } }));
   // Tag the Sent Items copy so the IR Inbox "Sent" tab can show only agent-assisted replies.
   if (p.categories && p.categories.length) message.categories = p.categories;
