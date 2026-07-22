@@ -314,6 +314,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     ),
     financial: <FinancialView />,
     rentroll: <RentRollView />,
+    vacancies: <VacanciesView />,
     workorders: <WorkOrdersView />,
     leasing: <LeasingView />,
     'lease-processing': <LeaseProcessingView />,
@@ -3743,6 +3744,182 @@ function RentRollView() {
           <MField label="Tenant (blank = Vacant)" span><input style={mInput} value={unitDraft.tenant} onChange={e => setUnitDraft(d => d ? { ...d, tenant: e.target.value } : d)} /></MField>
           <MField label="Lease Expiry"><input type="date" style={mInput} value={unitDraft.expiry} onChange={e => setUnitDraft(d => d ? { ...d, expiry: e.target.value } : d)} /></MField>
           <MField label="Unit SF"><input type="number" style={mInput} value={unitDraft.sf} onChange={e => setUnitDraft(d => d ? { ...d, sf: e.target.value } : d)} /></MField>
+        </EditModal>
+      )}
+    </div>
+  )
+}
+
+// ─── Vacancies (LoopNet listings) ─────────────────────────────────────────────
+// Dedicated view of every available / LoopNet-listed asset, mirrored from the
+// Properties tab. Shares the same `properties` table and the "Refresh LoopNet"
+// sync action so the two stay in lock-step.
+function VacanciesView() {
+  const [rows, setRows] = React.useState<Property[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [search, setSearch] = React.useState('')
+  const [entityFilter, setEntityFilter] = React.useState('all')
+  const [loopnetSyncing, setLoopnetSyncing] = React.useState(false)
+  const [linkDraft, setLinkDraft] = React.useState<{ id: number; address: string; url: string } | null>(null)
+  const [linkSaving, setLinkSaving] = React.useState(false)
+
+  async function load() {
+    setLoading(true)
+    const { data, error } = await editSb().from('properties').select('*').order('sort_order', { ascending: true })
+    if (!error && data) setRows(data as Property[])
+    setLoading(false)
+  }
+  React.useEffect(() => { load() }, [])
+
+  async function refreshLoopnet() {
+    setLoopnetSyncing(true)
+    try {
+      const res = await fetch('/api/loopnet-sync', { method: 'POST' })
+      const d = await res.json()
+      if (d.ok) { alert(`LoopNet refresh complete — ${d.updatedCount} link(s) updated.`); await load() }
+      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — try again later.')
+      else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
+    } catch (e) { alert('LoopNet refresh error: ' + e) }
+    setLoopnetSyncing(false)
+  }
+
+  async function saveLink() {
+    if (!linkDraft) return
+    setLinkSaving(true)
+    await editSb().from('properties').update({ loopnetUrl: linkDraft.url || null, updated_at: new Date().toISOString() }).eq('id', linkDraft.id)
+    setLinkSaving(false); setLinkDraft(null); await load()
+  }
+
+  const q = search.toLowerCase()
+  // A "vacancy / LoopNet one" = anything currently vacant OR anything carrying a LoopNet listing link
+  const listings = rows.filter(p => {
+    if (!(p.type === 'vacant' || !!p.loopnetUrl)) return false
+    if (entityFilter !== 'all' && p.entity !== entityFilter) return false
+    if (q && !(p.address.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q) || (p.loopnetUrl || '').toLowerCase().includes(q))) return false
+    return true
+  })
+
+  const totalListed = rows.filter(p => p.type === 'vacant' || !!p.loopnetUrl).length
+  const withLink = listings.filter(p => !!p.loopnetUrl).length
+  const missingLink = listings.filter(p => !p.loopnetUrl).length
+
+  const EC: Record<string, { bg: string; text: string; border: string }> = {
+    DST:        { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
+    II:         { bg: '#f0fdf4', text: '#15803d', border: '#bbf7d0' },
+    'III-191':  { bg: '#fef3c7', text: '#b45309', border: '#fde68a' },
+    'III-1788': { bg: '#fdf4ff', text: '#7e22ce', border: '#e9d5ff' },
+    IV:         { bg: '#fff1f2', text: '#be123c', border: '#fecdd3' },
+    'III-other':{ bg: '#f0f9ff', text: '#0c4a6e', border: '#bae6fd' },
+  }
+  const fmtN = (n: number | null) => n ? n.toLocaleString() : '—'
+
+  return (
+    <div>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2>🏚️ Vacancies</h2>
+          <p>Available & LoopNet-listed assets — {totalListed} listing{totalListed === 1 ? '' : 's'} · mirrored from Properties · <span style={{ color: '#16a34a' }}>editable</span></p>
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={refreshLoopnet} disabled={loopnetSyncing} title="Refresh vacancy LoopNet links from ERP's company page"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: loopnetSyncing ? .6 : 1 }}>
+            {loopnetSyncing ? 'Refreshing…' : '🔗 Refresh LoopNet'}
+          </button>
+        </div>
+      </div>
+
+      {/* Summary bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+        {[
+          { label: 'Listings', value: totalListed },
+          { label: 'With LoopNet Link', value: withLink, color: '#16a34a' },
+          { label: 'Missing Link', value: missingLink, color: missingLink > 0 ? '#dc2626' : '#16a34a' },
+        ].map(s => (
+          <div key={s.label} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '12px 16px' }}>
+            <div style={{ fontSize: 11, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: (s as any).color ?? '#111827' }}>{s.value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+        <input
+          placeholder="Search address, corridor, LoopNet URL..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: 220, padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, outline: 'none' }}
+        />
+        <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)}
+          style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
+          <option value="all">All Portfolios</option>
+          {ENTITY_ORDER.map(e => (
+            <option key={e} value={e}>{ENTITY_LABELS[e]} ({rows.filter(p => p.entity === e && (p.type === 'vacant' || !!p.loopnetUrl)).length})</option>
+          ))}
+        </select>
+        {(entityFilter !== 'all' || search) && (
+          <button onClick={() => { setSearch(''); setEntityFilter('all') }}
+            style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#f9fafb', color: '#6b7280', cursor: 'pointer' }}>
+            Clear filters
+          </button>
+        )}
+      </div>
+
+      {/* Table */}
+      <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10, overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+          <thead>
+            <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
+              {['Fund', 'Address', 'Corridor', 'Type', 'Total SF', 'Built', 'LoopNet', ''].map((h, i) => (
+                <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {listings.map(p => {
+              const ec = EC[p.entity] ?? EC.DST
+              return (
+                <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = '#f8fafc' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = '' }}>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4, background: ec.bg, color: ec.text, border: `1px solid ${ec.border}` }}>{p.entity}</span>
+                  </td>
+                  <td style={{ padding: '9px 12px', fontWeight: 500, color: '#111827', maxWidth: 280 }}>{p.address}</td>
+                  <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+                      background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
+                      color: p.type === 'single' ? '#16a34a' : p.type === 'multi' ? '#d97706' : '#dc2626' }}>{p.type}</span>
+                  </td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', fontWeight: 500 }}>{fmtN(p.total)}</td>
+                  <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{p.built ?? '—'}</td>
+                  <td style={{ padding: '9px 12px', maxWidth: 220 }}>
+                    {p.loopnetUrl
+                      ? <a href={p.loopnetUrl} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap' }} title="Open LoopNet listing">🔗 LoopNet ↗</a>
+                      : <span onClick={() => setLinkDraft({ id: p.id, address: p.address, url: '' })}
+                          style={{ fontSize: 11, color: '#9ca3af', cursor: 'pointer', fontStyle: 'italic' }}>+ add LoopNet link</span>}
+                  </td>
+                  <td style={{ padding: '9px 12px', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <button onClick={() => setLinkDraft({ id: p.id, address: p.address, url: p.loopnetUrl ?? '' })}
+                      style={{ padding: '4px 10px', borderRadius: 6, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 11, fontWeight: 600 }}>✎ Link</button>
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+        {loading && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>Loading vacancies…</div>}
+        {!loading && listings.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af' }}>No vacancies match your filters.</div>}
+      </div>
+
+      {linkDraft && (
+        <EditModal title={`LoopNet link — ${linkDraft.address}`} onClose={() => setLinkDraft(null)} onSave={saveLink} saving={linkSaving}>
+          <MField label="LoopNet listing URL" span>
+            <input style={mInput} placeholder="https://www.loopnet.com/Listing/..." value={linkDraft.url}
+              onChange={e => setLinkDraft(d => d ? { ...d, url: e.target.value } : d)} />
+          </MField>
         </EditModal>
       )}
     </div>
