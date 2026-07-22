@@ -1,50 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getCompanyListingUrls } from "@/lib/loopnet-company";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
-
-// ERP Industrials' LoopNet company page — the authoritative list of their active listings.
-const COMPANY_URL = "https://www.loopnet.com/company/erp-industrials/9rvtzp4l/";
-const UA =
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
 
 // Weekly job: pull ERP's active LoopNet listings and auto-refresh the loopnetUrl on each
 // vacant property. This fixes stale links (a retired listing ID is replaced with the current
 // one) and adds a link when a vacancy gets newly listed. Conservative: only updates a row
 // when the company page has a matching listing whose URL differs — it never clears a link
 // just because it isn't on the company page (some listings are co-listed by other brokers).
+//
+// Uses the shared getCompanyListingUrls() helper: direct fetch first, then an Apify
+// browser-scraper fallback when LoopNet's bot protection blocks the request (403).
 export async function GET(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // 1. Fetch ERP's company page
-  let html = "";
-  try {
-    const r = await fetch(COMPANY_URL, {
-      headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
-      cache: "no-store",
-    });
-    html = await r.text();
-    if (!r.ok) return NextResponse.json({ ok: false, blocked: true, status: r.status }, { status: 200 });
-  } catch (e) {
-    return NextResponse.json({ ok: false, blocked: true, error: String(e) }, { status: 200 });
-  }
-
-  // 2. Parse the /Listing/ URLs and key them by street number
-  const urls = [...new Set([...html.matchAll(/https?:\/\/www\.loopnet\.com\/Listing\/[^"'\s)\\]+/g)].map(m => m[0]))];
-  if (urls.length === 0) {
-    // No listings parsed — almost certainly a bot-block/challenge page. Do nothing destructive.
-    return NextResponse.json({ ok: false, blocked: true, reason: "no listings parsed" }, { status: 200 });
+  // 1. Fetch ERP's active listing URLs (with Apify fallback), keyed by street number
+  const listing = await getCompanyListingUrls();
+  if (listing.urls.length === 0) {
+    // No listings parsed — bot-blocked / scraper failed. Do nothing destructive.
+    return NextResponse.json({
+      ok: false, blocked: true, via: listing.via,
+      directStatus: listing.directStatus, apifyError: listing.apifyError, reason: listing.reason,
+    }, { status: 200 });
   }
   const byStreet: Record<string, string> = {};
-  for (const u of urls) {
+  for (const u of listing.urls) {
     const m = u.match(/\/Listing\/(\d+)-/);
     if (m && !byStreet[m[1]]) byStreet[m[1]] = u;
   }
 
-  // 3. Auto-refresh loopnetUrl on vacant buildings + multi-tenant buildings (units inherit it)
+  // 2. Auto-refresh loopnetUrl on vacant buildings + multi-tenant buildings (units inherit it)
   const sb = createAdminClient();
   const { data: props, error } = await sb
     .from("properties")
@@ -63,5 +52,5 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, listingsOnCompanyPage: urls.length, updatedCount: updated.length, updated });
+  return NextResponse.json({ ok: true, via: listing.via, listingsOnCompanyPage: listing.urls.length, updatedCount: updated.length, updated });
 }
