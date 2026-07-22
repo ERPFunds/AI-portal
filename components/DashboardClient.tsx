@@ -3268,8 +3268,13 @@ function RentRollView() {
     try {
       const res = await fetch('/api/loopnet-sync', { method: 'POST' })
       const d = await res.json()
-      if (d.ok) { alert(`LoopNet refresh complete — ${d.updatedCount} link(s) updated.`); await load() }
-      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — try again later.')
+      if (d.ok) {
+        alert(d.updatedCount > 0
+          ? `LoopNet refresh complete — ${d.updatedCount} link(s) updated.`
+          : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
+        await load()
+      }
+      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.'))
       else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
     } catch (e) { alert('LoopNet refresh error: ' + e) }
     setLoopnetSyncing(false)
@@ -3776,8 +3781,13 @@ function VacanciesView() {
     try {
       const res = await fetch('/api/loopnet-sync', { method: 'POST' })
       const d = await res.json()
-      if (d.ok) { alert(`LoopNet refresh complete — ${d.updatedCount} link(s) updated.`); await load() }
-      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — try again later.')
+      if (d.ok) {
+        alert(d.updatedCount > 0
+          ? `LoopNet refresh complete — ${d.updatedCount} link(s) updated.`
+          : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
+        await load()
+      }
+      else if (d.blocked) alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.'))
       else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
     } catch (e) { alert('LoopNet refresh error: ' + e) }
     setLoopnetSyncing(false)
