@@ -30,7 +30,7 @@ const TEAM_MAILBOX = process.env.IR_TEAM_MAILBOX || "team@erpfunds.com";
 const SEND_AS_MAILBOX = process.env.IR_SEND_AS_MAILBOX || "mberry@erpfunds.com";
 // Top-level folder whose subtree we mirror into the Agent Inbox.
 const IR_FOLDER = process.env.IR_FOLDER_NAME || "Investor Relations";
-const PER_FOLDER = 30; // messages to pull per folder
+const PER_FOLDER = Math.min(Math.max(Number(process.env.IR_PER_FOLDER) || 200, 30), 999); // messages to pull per folder (raise if a folder holds more)
 const DRAFTS_TOP = 250; // max drafts across the rolling window (see IR_DRAFTS_MONTHS)
 
 type ItemStatus = "active-thread" | "pending" | "handled" | "needs-review";
