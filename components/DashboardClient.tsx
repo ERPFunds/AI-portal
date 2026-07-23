@@ -21,6 +21,7 @@ import AdminVendorDeskView from './AdminVendorDeskView'
 import DealVendorDesk from './DealVendorDesk'
 import NewsletterAnalyticsView from './NewsletterAnalyticsView'
 import LinkedInRepurposeView from './LinkedInRepurposeView'
+import TenantCommsView from './TenantCommsView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -316,6 +317,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     rentroll: <RentRollView />,
     vacancies: <VacanciesView />,
     workorders: <WorkOrdersView />,
+    'tenant-comms': <TenantCommsView />,
     leasing: <LeasingView />,
     'lease-processing': <LeaseProcessingView />,
     fincontrols: <FinControlsView />,
