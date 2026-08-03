@@ -45,6 +45,7 @@ export interface ApifyDebug {
   items?: number;
   chars: number;
   blocked: boolean;
+  sample?: string; // first chars of what the actor actually returned — for diagnosing empty/soft-block results
 }
 
 async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: string; debug?: ApifyDebug }> {
@@ -89,8 +90,10 @@ async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: s
       items: Array.isArray(items) ? items.length : undefined,
       chars: raw.length,
       blocked: /captcha|pardon our interruption|access to this page has been denied|perimeterx|px-captcha|verify you are (a )?human/i.test(raw),
+      sample: urls.length === 0 ? raw.slice(0, 500) : undefined,
     };
     console.log("[loopnet-sync] apify result:", JSON.stringify(debug), "urls:", urls.length);
+    if (urls.length === 0) console.log("[loopnet-sync] empty-result raw sample:", raw.slice(0, 800));
     return { urls, ok: true, debug };
   } catch (e) {
     return { urls: [], ok: false, error: String(e) };
