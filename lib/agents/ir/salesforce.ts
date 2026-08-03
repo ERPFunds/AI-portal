@@ -946,12 +946,28 @@ export async function findContactByEmail(email: string): Promise<string | null> 
   return data.records?.[0]?.Id ?? null;
 }
 
+/** Find an Account Id by exact name match; returns the first match or null (best-effort). */
+export async function findAccountByName(name: string): Promise<string | null> {
+  const n = (name || "").trim();
+  if (!n) return null;
+  try {
+    const q = `SELECT Id FROM Account WHERE Name = '${soql(n)}' LIMIT 1`;
+    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.records?.[0]?.Id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function createContact(p: {
   firstName: string;
   lastName: string;
   email: string;
   company?: string;
   title?: string;
+  accountId?: string | null; // link the contact under this investor Account when known
 }): Promise<string> {
   const descParts = [
     p.company ? `Company: ${p.company}` : "",
@@ -964,6 +980,7 @@ export async function createContact(p: {
       LastName: p.lastName || "Unknown",
       Email: p.email,
       Title: p.title || undefined,
+      AccountId: p.accountId || undefined,
       Description: descParts.join("\n"),
       LeadSource: "Inbound Email",
     }),
@@ -1176,14 +1193,18 @@ export async function logReplyNote(p: {
   sentDate: string;
   /** The ACTUAL email body that was sent (plain text). Logged verbatim on the contact when provided. */
   emailBody?: string;
+  /** Investor entity name — used to link a newly-created Contact under its matching Salesforce Account. */
+  investorName?: string;
 }): Promise<string> {
   let contactId = await findContactByEmail(p.contactEmail);
   let created = false;
   if (!contactId) {
+    const accountId = p.investorName ? await findAccountByName(p.investorName) : null;
     contactId = await createContact({
       firstName: p.firstName ?? "",
       lastName: p.lastName || p.contactEmail.split("@")[0] || "Unknown",
       email: p.contactEmail,
+      accountId,
     });
     created = true;
   }

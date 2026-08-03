@@ -397,6 +397,26 @@ export async function markMessageProcessed(params: {
   `;
 }
 
+/** Of the given sent-message ids, which were already logged to Salesforce (forward cron or backfill). */
+export async function getAlreadyLoggedSentIds(mailbox: string, ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const { rows } = await sql`
+    SELECT message_id FROM ir_processed_messages
+    WHERE mailbox = ${mailbox} AND message_id = ANY(${ids as unknown as string}::text[])
+      AND (action LIKE 'sent-logged%' OR action LIKE 'sf-backfill%')
+  `;
+  return new Set(rows.map((r) => r.message_id as string));
+}
+
+/** Mark a sent message as logged to Salesforce (upserts the action so a prior skip row is replaced). */
+export async function recordSentLogged(mailbox: string, messageId: string, internetMessageId: string | null, action: string): Promise<void> {
+  await sql`
+    INSERT INTO ir_processed_messages (mailbox, message_id, internet_message_id, is_investor, action)
+    VALUES (${mailbox}, ${messageId}, ${internetMessageId}, true, ${action})
+    ON CONFLICT (mailbox, message_id) DO UPDATE SET action = ${action}
+  `;
+}
+
 /** internetMessageIds of DocuSign notifications the sweep previously DELETED in this mailbox. */
 export async function getDeletedDocusignInternetIds(mailbox: string): Promise<string[]> {
   const { rows } = await sql`
