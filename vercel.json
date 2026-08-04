@@ -60,6 +60,10 @@
     {
       "path": "/api/lp-directory",
       "schedule": "0 12 * * 1"
+    },
+    {
+      "path": "/api/cron/ir-sf-digest",
+      "schedule": "0 13 * * 3"
     }
   ]
 }

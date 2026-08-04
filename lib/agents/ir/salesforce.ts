@@ -1259,3 +1259,39 @@ export async function logCorrespondence(p: {
   });
   return created ? "sf-created-contact+task" : "sf-task(existing-contact)";
 }
+
+/**
+ * What the IR agent added to Salesforce since `sinceIso` — for the weekly digest email.
+ * Contacts we created carry LeadSource='Inbound Email'; the emails we log are Tasks titled "Email: ...".
+ */
+export interface AgentAdditions {
+  contacts: { name: string; email: string; account: string | null; created: string }[];
+  tasks: { subject: string; who: string | null; created: string }[];
+}
+export async function listRecentAgentAdditions(sinceIso: string): Promise<AgentAdditions> {
+  const contacts: AgentAdditions["contacts"] = [];
+  const tasks: AgentAdditions["tasks"] = [];
+  try {
+    const cq = `SELECT Name, Email, Account.Name, CreatedDate FROM Contact WHERE CreatedDate >= ${sinceIso} AND LeadSource = 'Inbound Email' ORDER BY CreatedDate DESC LIMIT 300`;
+    const cr = await sfFetch(`/query?q=${encodeURIComponent(cq)}`);
+    if (cr.ok) {
+      const d = await cr.json();
+      for (const r of (d.records ?? []) as Record<string, unknown>[]) {
+        const acct = (r.Account as { Name?: string } | null)?.Name ?? null;
+        contacts.push({ name: String(r.Name ?? ""), email: String(r.Email ?? ""), account: acct, created: String(r.CreatedDate ?? "") });
+      }
+    }
+  } catch { /* non-fatal */ }
+  try {
+    const tq = `SELECT Subject, Who.Name, CreatedDate FROM Task WHERE CreatedDate >= ${sinceIso} AND (Subject LIKE 'Email:%' OR Subject LIKE 'Reply:%') ORDER BY CreatedDate DESC LIMIT 400`;
+    const tr = await sfFetch(`/query?q=${encodeURIComponent(tq)}`);
+    if (tr.ok) {
+      const d = await tr.json();
+      for (const r of (d.records ?? []) as Record<string, unknown>[]) {
+        const who = (r.Who as { Name?: string } | null)?.Name ?? null;
+        tasks.push({ subject: String(r.Subject ?? ""), who, created: String(r.CreatedDate ?? "") });
+      }
+    }
+  } catch { /* non-fatal */ }
+  return { contacts, tasks };
+}

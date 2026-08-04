@@ -28,6 +28,16 @@ export async function sendBriefEmail(params: {
   });
 }
 
+/** Send an email to a specific recipient list (used by the weekly Salesforce digest). */
+export async function sendSimpleEmail(params: { to: string[]; subject: string; html: string }) {
+  await transporter.sendMail({
+    from: `"ERP Funds AI Portal" <${process.env.SMTP_USER}>`,
+    to: params.to.join(", "),
+    subject: params.subject,
+    html: params.html,
+  });
+}
+
 /**
  * Operational alert (e.g. an IR sweep run failed). Goes to the portal operator only by default,
  * overridable via ALERT_EMAIL_TO (comma-separated) — not the full investor-facing brief list.
