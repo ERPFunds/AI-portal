@@ -1,11 +1,14 @@
 /**
- * Fetches ERP Industrials' active LoopNet listing URLs from their company page.
+ * Fetches ERP's active LoopNet listings and matches them back to ERP's own properties.
  *
- * Direct server fetch first (fast + free), then an Apify browser-scraper fallback
- * when LoopNet's bot protection (PerimeterX) blocks the datacenter IP with a 403.
+ * LoopNet blocks direct/browser fetches (PerimeterX 403), and its company page can't be
+ * expanded by the scraper (it returns the page, not the listings). So the reliable path is:
+ * run the memo23/loopnet-scraper-ppe Apify actor over LoopNet *search* URLs for ERP's markets,
+ * then match the returned listings to ERP's properties by street address. A direct fetch is
+ * still tried first (free) as a best-effort fallback.
  *
- * Shared by the manual refresh (POST /api/loopnet-sync) and the weekly cron
- * (GET /api/cron/loopnet-sync) so both behave identically.
+ * Actor + input are env-overridable (LOOPNET_APIFY_ACTOR / LOOPNET_APIFY_INPUT) so the search
+ * scope can be tuned without a code change.
  */
 
 export const COMPANY_URL = "https://www.loopnet.com/company/erp-industrials/9rvtzp4l/";
@@ -15,124 +18,166 @@ const UA =
 
 const LISTING_RE = /https?:\/\/www\.loopnet\.com\/Listing\/[^"'\s)\\]+/g;
 
-export function extractListingUrls(text: string): string[] {
-  // Also tolerate JSON-escaped slashes (\/) that some scrapers emit.
-  const normalized = text.replace(/\\\//g, "/");
-  return [...new Set([...normalized.matchAll(LISTING_RE)].map((m) => m[0]))];
+// LoopNet search pages covering ERP's markets. The actor fans each of these out into the
+// individual listings on it; we then keep the ones that match an ERP property by address.
+const DEFAULT_SEARCH_URLS = [
+  "https://www.loopnet.com/search/industrial-space/midland-tx/for-lease/",
+  "https://www.loopnet.com/search/industrial-space/odessa-tx/for-lease/",
+  "https://www.loopnet.com/search/industrial-space/melbourne-fl/for-lease/",
+  "https://www.loopnet.com/search/industrial-space/palm-bay-fl/for-lease/",
+]
+
+export interface Listing {
+  url: string
+  streetNo: string | null
+  address?: string
+  city?: string
+  brokerCompany?: string
 }
 
-// Attempt 1 — direct server fetch. Fast + free, but LoopNet's bot protection
-// (PerimeterX) returns 403 to datacenter IPs, so this usually fails in prod.
-async function fetchDirect(): Promise<{ urls: string[]; ok: boolean; status?: number; error?: string }> {
+export interface ApifyDebug { actor: string; items?: number; listings: number; chars: number; blocked: boolean }
+
+// leading street number of a street address ("10800 State Highway 191" -> "10800")
+export function leadingNum(s?: string | null): string | null {
+  if (!s) return null
+  const m = s.match(/^\s*#?\s*(\d{1,6})\b/)
+  return m ? m[1] : null
+}
+
+export function extractListingUrls(text: string): string[] {
+  const normalized = text.replace(/\\\//g, "/") // tolerate JSON-escaped slashes
+  return [...new Set([...normalized.matchAll(LISTING_RE)].map((m) => m[0]))]
+}
+
+// Street-name tokens for fuzzy address matching — drop direction words + generic road words
+// so "3401 E Highway 158" and "3401 E. State Highway 158" still line up on "158".
+const STOP = new Set(['n', 's', 'e', 'w', 'north', 'south', 'east', 'west', 'state', 'hwy', 'highway', 'interstate', 'i', 'us', 'fm', 'county', 'road', 'rd', 'ave', 'avenue', 'st', 'street', 'blvd', 'dr', 'drive', 'ste', 'suite', 'unit', 'bldg', 'building', 'the', 'of', 'w.', 'e.', 'n.', 's.'])
+export function streetTokens(addr?: string | null): Set<string> {
+  if (!addr) return new Set()
+  return new Set(
+    addr.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(t => t && !STOP.has(t))
+  )
+}
+
+// Attempt 1 — direct server fetch (usually 403). URL-only listings.
+async function fetchDirect(): Promise<{ listings: Listing[]; ok: boolean; status?: number; error?: string }> {
   try {
     const r = await fetch(COMPANY_URL, {
       headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" },
       cache: "no-store",
-    });
-    if (!r.ok) return { urls: [], ok: false, status: r.status };
-    const html = await r.text();
-    return { urls: extractListingUrls(html), ok: true };
+    })
+    if (!r.ok) return { listings: [], ok: false, status: r.status }
+    const html = await r.text()
+    const listings = extractListingUrls(html).map(u => ({ url: u, streetNo: u.match(/\/Listing\/(\d+)-/)?.[1] ?? null }))
+    return { listings, ok: true }
   } catch (e) {
-    return { urls: [], ok: false, error: String(e) };
+    return { listings: [], ok: false, error: String(e) }
   }
 }
 
-// Attempt 2 — route through Apify's browser-based scraper, which renders JS and
-// uses proxies to get past the bot wall. Actor + input are env-overridable so a
-// different/dedicated LoopNet actor can be swapped in without a code change.
-export interface ApifyDebug {
-  actor: string;
-  items?: number;
-  chars: number;
-  blocked: boolean;
-  sample?: string; // first chars of what the actor actually returned — for diagnosing empty/soft-block results
-}
+// Attempt 2 — memo23/loopnet-scraper-ppe over market search URLs, parsed into structured listings.
+async function fetchViaApify(): Promise<{ listings: Listing[]; ok: boolean; error?: string; debug?: ApifyDebug }> {
+  const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN || process.env.APIFY_API
+  if (!token) return { listings: [], ok: false, error: "no APIFY_API_TOKEN configured" }
 
-async function fetchViaApify(): Promise<{ urls: string[]; ok: boolean; error?: string; debug?: ApifyDebug }> {
-  const token = process.env.APIFY_API_TOKEN || process.env.APIFY_TOKEN || process.env.APIFY_API;
-  if (!token) return { urls: [], ok: false, error: "no APIFY_API_TOKEN configured" };
-
-  const actor = process.env.LOOPNET_APIFY_ACTOR || "apify~rag-web-browser";
-  let input: unknown;
+  const actor = process.env.LOOPNET_APIFY_ACTOR || "memo23~loopnet-scraper-ppe"
+  let input: unknown
   if (process.env.LOOPNET_APIFY_INPUT) {
-    try { input = JSON.parse(process.env.LOOPNET_APIFY_INPUT); }
-    catch { return { urls: [], ok: false, error: "LOOPNET_APIFY_INPUT is not valid JSON" }; }
+    try { input = JSON.parse(process.env.LOOPNET_APIFY_INPUT) }
+    catch { return { listings: [], ok: false, error: "LOOPNET_APIFY_INPUT is not valid JSON" } }
   } else {
-    // Default input for apify/rag-web-browser: scrape the single company URL with a
-    // real browser + residential proxy (LoopNet blocks datacenter IPs) and return
-    // markdown + HTML so listing links are captured.
-    input = {
-      query: COMPANY_URL,
-      maxResults: 1,
-      outputFormats: ["markdown", "html"],
-      scrapingTool: "browser-playwright",
-      requestTimeoutSecs: 60,
-      proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"] },
-    };
+    input = { startUrls: DEFAULT_SEARCH_URLS.map(u => ({ url: u })), maxItems: 200, includeListingDetails: false }
   }
 
   try {
-    const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}`;
+    const url = `https://api.apify.com/v2/acts/${actor}/run-sync-get-dataset-items?token=${token}`
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(input),
-      signal: AbortSignal.timeout(100_000),
-    });
-    const bodyText = await res.text().catch(() => "");
-    if (!res.ok) return { urls: [], ok: false, error: `Apify HTTP ${res.status}: ${bodyText}`.slice(0, 300) };
-    let items: unknown;
-    try { items = JSON.parse(bodyText); } catch { items = bodyText; }
-    const raw = typeof items === "string" ? items : JSON.stringify(items);
-    const urls = extractListingUrls(raw);
+      signal: AbortSignal.timeout(110_000),
+    })
+    const bodyText = await res.text().catch(() => "")
+    if (!res.ok) return { listings: [], ok: false, error: `Apify HTTP ${res.status}: ${bodyText}`.slice(0, 300) }
+
+    let items: any
+    try { items = JSON.parse(bodyText) } catch { items = null }
+    const arr = Array.isArray(items) ? items : []
+    const listings: Listing[] = []
+    for (const it of arr) {
+      const u = it?.listingUrl || it?.url || it?.link
+      if (typeof u !== "string" || !/loopnet\.com\/Listing\//i.test(u)) continue
+      const address = it?.address ?? it?.addressLine1 ?? it?.propertyAddress
+      listings.push({
+        url: u,
+        streetNo: leadingNum(typeof address === "string" ? address : undefined) ?? (u.match(/\/Listing\/(\d+)-/)?.[1] ?? null),
+        address: typeof address === "string" ? address : undefined,
+        city: typeof it?.city === "string" ? it.city : undefined,
+        brokerCompany: typeof it?.brokerCompany === "string" ? it.brokerCompany : undefined,
+      })
+    }
     const debug: ApifyDebug = {
-      actor,
-      items: Array.isArray(items) ? items.length : undefined,
-      chars: raw.length,
-      blocked: /captcha|pardon our interruption|access to this page has been denied|perimeterx|px-captcha|verify you are (a )?human/i.test(raw),
-      sample: urls.length === 0 ? raw.slice(0, 500) : undefined,
-    };
-    console.log("[loopnet-sync] apify result:", JSON.stringify(debug), "urls:", urls.length);
-    if (urls.length === 0) console.log("[loopnet-sync] empty-result raw sample:", raw.slice(0, 800));
-    return { urls, ok: true, debug };
+      actor, items: arr.length, listings: listings.length, chars: bodyText.length,
+      blocked: /captcha|pardon our interruption|access to this page has been denied|perimeterx/i.test(bodyText),
+    }
+    console.log("[loopnet-sync] apify:", JSON.stringify(debug))
+    return { listings, ok: true, debug }
   } catch (e) {
-    return { urls: [], ok: false, error: String(e) };
+    return { listings: [], ok: false, error: String(e) }
   }
 }
 
 export interface CompanyListingResult {
-  urls: string[];
-  via: "direct" | "apify" | "none";
-  blocked?: boolean;
-  directStatus?: number;
-  apifyError?: string;
-  apifyDebug?: ApifyDebug;
-  reason?: string;
+  listings: Listing[]
+  via: "direct" | "apify" | "none"
+  blocked?: boolean
+  directStatus?: number
+  apifyError?: string
+  apifyDebug?: ApifyDebug
+  reason?: string
 }
 
-// Tries the direct fetch, then the Apify fallback. Returns the listing URLs plus
-// which path produced them, or a blocked result with diagnostics if both fail.
-export async function getCompanyListingUrls(): Promise<CompanyListingResult> {
-  let via: "direct" | "apify" = "direct";
-  let urls: string[] = [];
+export async function getCompanyListings(): Promise<CompanyListingResult> {
+  const direct = await fetchDirect()
+  if (direct.ok && direct.listings.length > 0) return { listings: direct.listings, via: "direct" }
 
-  const direct = await fetchDirect();
-  if (direct.ok && direct.urls.length > 0) {
-    urls = direct.urls;
-  } else {
-    const apify = await fetchViaApify();
-    if (apify.urls.length > 0) { urls = apify.urls; via = "apify"; }
-    else {
-      return {
-        urls: [], via: "none", blocked: true,
-        directStatus: direct.status, apifyError: apify.error, apifyDebug: apify.debug,
-        reason: apify.error?.includes("APIFY_API_TOKEN")
-          ? "LoopNet blocked the direct request and no Apify token is configured to scrape it."
-          : "LoopNet blocked the request and the scraper could not retrieve the page.",
-      };
-    }
+  const apify = await fetchViaApify()
+  if (apify.listings.length > 0) return { listings: apify.listings, via: "apify", apifyDebug: apify.debug }
+
+  return {
+    listings: [], via: "none", blocked: true,
+    directStatus: direct.status, apifyError: apify.error, apifyDebug: apify.debug,
+    reason: apify.error?.includes("APIFY_API_TOKEN")
+      ? "No Apify token is configured to scrape LoopNet."
+      : "The scraper reached LoopNet but returned no listings for ERP's markets.",
   }
+}
 
-  if (urls.length === 0) return { urls: [], via, blocked: true, reason: "no listings parsed (bot-blocked)" };
-  return { urls, via };
+// Match scraped listings to ERP properties by street number + a shared street-name token,
+// and return the loopnetUrl updates to apply (only where the link is new or changed).
+export function computeLinkUpdates(
+  props: { id: number; address: string; loopnetUrl: string | null }[],
+  listings: Listing[],
+): { id: number; address: string; from: string | null; to: string }[] {
+  const byStreet: Record<string, Listing[]> = {}
+  for (const l of listings) { if (l.streetNo) (byStreet[l.streetNo] ||= []).push(l) }
+
+  const out: { id: number; address: string; from: string | null; to: string }[] = []
+  for (const p of props) {
+    const sn = leadingNum(p.address)
+    if (!sn) continue
+    const cands = byStreet[sn]
+    if (!cands) continue
+    const pTok = streetTokens(p.address)
+    // Prefer a candidate that shares a street-name token; if a candidate has no address
+    // (URL-only, from the direct fallback), a street-number match alone is accepted.
+    const match = cands.find(l => {
+      const lt = streetTokens(l.address)
+      if (lt.size === 0) return true
+      for (const t of lt) if (pTok.has(t)) return true
+      return false
+    })
+    if (match && match.url !== p.loopnetUrl) out.push({ id: p.id, address: p.address, from: p.loopnetUrl, to: match.url })
+  }
+  return out
 }

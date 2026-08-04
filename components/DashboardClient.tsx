@@ -3272,8 +3272,8 @@ function RentRollView() {
       const d = await res.json()
       if (d.ok) {
         alert(d.updatedCount > 0
-          ? `LoopNet refresh complete — ${d.updatedCount} link(s) updated.`
-          : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
+          ? `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), updated ${d.updatedCount} link(s).`
+          : `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), all links already up to date.`)
         await load()
       }
       else if (d.blocked) {
@@ -3790,8 +3790,8 @@ function VacanciesView() {
       const d = await res.json()
       if (d.ok) {
         alert(d.updatedCount > 0
-          ? `LoopNet refresh complete — ${d.updatedCount} link(s) updated.`
-          : `LoopNet refresh complete — all ${d.listingsOnCompanyPage ?? 0} listing(s) already up to date.`)
+          ? `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), updated ${d.updatedCount} link(s).`
+          : `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), all links already up to date.`)
         await load()
       }
       else if (d.blocked) {
