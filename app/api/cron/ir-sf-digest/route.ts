@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { salesforceConfigured, listRecentAgentAdditions, type AgentAdditions } from "@/lib/agents/ir/salesforce";
-import { sendSimpleEmail } from "@/lib/mailer";
+import { sendMailAs } from "@/lib/agents/ir/graph-mailbox";
 
 export const maxDuration = 120;
 
@@ -62,10 +62,12 @@ export async function GET(req: NextRequest) {
     const html = buildHtml(add, days, rangeLabel);
     const subject = `Salesforce IR digest — ${add.contacts.length} new contact${add.contacts.length === 1 ? "" : "s"}, ${add.tasks.length} email${add.tasks.length === 1 ? "" : "s"} logged`;
     const to = (process.env.IR_DIGEST_TO || DEFAULT_TO).split(",").map((s) => s.trim()).filter(Boolean);
+    // Send via Microsoft Graph (app-only) — the tenant blocks basic-auth SMTP.
+    const from = process.env.IR_DIGEST_FROM || process.env.IR_TEAM_MAILBOX || "team@erpfunds.com";
 
-    if (doSend) await sendSimpleEmail({ to, subject, html });
+    if (doSend) await sendMailAs(from, { to, subject, content: html, contentType: "HTML" });
 
-    return NextResponse.json({ ok: true, sent: doSend, to, contacts: add.contacts.length, tasks: add.tasks.length, subject });
+    return NextResponse.json({ ok: true, sent: doSend, from, to, contacts: add.contacts.length, tasks: add.tasks.length, subject });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
   }
