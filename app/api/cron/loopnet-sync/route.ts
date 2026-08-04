@@ -32,6 +32,11 @@ export async function GET(req: NextRequest) {
     await sb.from("properties").update({ loopnetUrl: u.to, updated_at: new Date().toISOString() }).eq("id", u.id);
   }
 
+  await sb.from("loopnet_sync_state").upsert({
+    id: 1, last_synced_at: new Date().toISOString(),
+    listings_found: result.listings.length, updated_count: updates.length, via: result.via,
+  });
+
   return NextResponse.json({
     ok: true, via: result.via,
     listingsFound: result.listings.length,

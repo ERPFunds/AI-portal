@@ -3774,14 +3774,33 @@ function VacanciesView() {
   const [loopnetSyncing, setLoopnetSyncing] = React.useState(false)
   const [linkDraft, setLinkDraft] = React.useState<{ id: number; address: string; url: string } | null>(null)
   const [linkSaving, setLinkSaving] = React.useState(false)
+  const [lastSynced, setLastSynced] = React.useState<string | null>(null)
+
+  async function loadSyncState() {
+    const { data } = await editSb().from('loopnet_sync_state').select('last_synced_at').eq('id', 1).single()
+    setLastSynced((data as any)?.last_synced_at ?? null)
+  }
 
   async function load() {
     setLoading(true)
     const { data, error } = await editSb().from('properties').select('*').order('sort_order', { ascending: true })
     if (!error && data) setRows(data as Property[])
     setLoading(false)
+    loadSyncState()
   }
   React.useEffect(() => { load() }, [])
+
+  // "Last synced" as a compact relative label (e.g. "3h ago"), with the exact time on hover.
+  const syncedLabel = (() => {
+    if (!lastSynced) return null
+    const then = new Date(lastSynced).getTime()
+    const mins = Math.round((Date.now() - then) / 60000)
+    if (mins < 1) return 'just now'
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.round(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    return `${Math.round(hrs / 24)}d ago`
+  })()
 
   async function refreshLoopnet() {
     setLoopnetSyncing(true)
@@ -3858,7 +3877,13 @@ function VacanciesView() {
           <h2>🏚️ Vacancies</h2>
           <p>Available & LoopNet-listed assets — {totalListed} listing{totalListed === 1 ? '' : 's'} · mirrored from Properties · <span style={{ color: '#16a34a' }}>editable</span></p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {syncedLabel && (
+            <span title={lastSynced ? `Last LoopNet sync: ${new Date(lastSynced).toLocaleString()}` : ''}
+              style={{ fontSize: 11, color: '#9ca3af', whiteSpace: 'nowrap', marginRight: 2 }}>
+              Last synced {syncedLabel}
+            </span>
+          )}
           <button onClick={refreshLoopnet} disabled={loopnetSyncing} title="Refresh vacancy LoopNet links from ERP's company page"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: loopnetSyncing ? .6 : 1 }}>
             {loopnetSyncing ? 'Refreshing…' : '🔗 Refresh LoopNet'}

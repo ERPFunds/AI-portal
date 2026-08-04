@@ -36,6 +36,12 @@ export async function POST() {
     await admin.from("properties").update({ loopnetUrl: u.to, updated_at: new Date().toISOString() }).eq("id", u.id);
   }
 
+  // Record when the sync last ran (even on a 0-change run) so the UI can show "Last synced".
+  await admin.from("loopnet_sync_state").upsert({
+    id: 1, last_synced_at: new Date().toISOString(),
+    listings_found: result.listings.length, updated_count: updates.length, via: result.via,
+  });
+
   return NextResponse.json({
     ok: true, via: result.via,
     listingsFound: result.listings.length,
