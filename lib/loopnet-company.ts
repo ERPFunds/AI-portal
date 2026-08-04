@@ -153,8 +153,19 @@ export async function getCompanyListings(): Promise<CompanyListingResult> {
   }
 }
 
-// Match scraped listings to ERP properties by street number + a shared street-name token,
-// and return the loopnetUrl updates to apply (only where the link is new or changed).
+// The numeric LoopNet listing id, from either URL form:
+//   /Listing/10800-State-Highway-191-Midland-TX/15743121/  ->  15743121
+//   /Listing/15743121/                                     ->  15743121
+export function listingId(url?: string | null): string | null {
+  if (!url) return null
+  const m = url.replace(/[?#].*$/, "").match(/(\d+)\/?$/)
+  return m ? m[1] : null
+}
+
+// Match scraped listings to ERP properties by street number AND a shared street-NAME token
+// (the street number is excluded from that test, so "12200 Hwy 191" won't match "12200 W I-20").
+// Only returns an update when the matched listing is a genuinely different listing id than what's
+// stored (or the property had no link) — so re-saving the same listing in a shorter URL form is a no-op.
 export function computeLinkUpdates(
   props: { id: number; address: string; loopnetUrl: string | null }[],
   listings: Listing[],
@@ -168,16 +179,18 @@ export function computeLinkUpdates(
     if (!sn) continue
     const cands = byStreet[sn]
     if (!cands) continue
-    const pTok = streetTokens(p.address)
-    // Prefer a candidate that shares a street-name token; if a candidate has no address
-    // (URL-only, from the direct fallback), a street-number match alone is accepted.
+    const pTok = streetTokens(p.address); pTok.delete(sn)
+    // Require a shared street-name token beyond the street number; a listing with no address
+    // (URL-only) can't be safely disambiguated, so it's skipped rather than risk a wrong match.
     const match = cands.find(l => {
-      const lt = streetTokens(l.address)
-      if (lt.size === 0) return true
+      const lt = streetTokens(l.address); lt.delete(sn)
+      if (lt.size === 0) return false
       for (const t of lt) if (pTok.has(t)) return true
       return false
     })
-    if (match && match.url !== p.loopnetUrl) out.push({ id: p.id, address: p.address, from: p.loopnetUrl, to: match.url })
+    if (!match) continue
+    const newId = listingId(match.url)
+    if (newId && newId !== listingId(p.loopnetUrl)) out.push({ id: p.id, address: p.address, from: p.loopnetUrl, to: match.url })
   }
   return out
 }
