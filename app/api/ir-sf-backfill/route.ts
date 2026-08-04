@@ -3,6 +3,7 @@ import { listFolderMessagesSince, getMessageBody } from "@/lib/agents/ir/graph-m
 import { getAlreadyLoggedSentIds, recordSentLogged } from "@/lib/db";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { loadInvestorLookup } from "@/lib/agents/ir/lp-lookup";
+import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
 
 export const maxDuration = 300;
 
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest) {
     for (const m of msgs) {
       if (alreadyLogged.has(m.id)) continue;
       const targets = (m.toRecipients || [])
-        .filter((a) => a && !a.toLowerCase().endsWith("@erpfunds.com") && investors.isInvestor(a));
+        .filter((a) => a && !a.toLowerCase().endsWith("@erpfunds.com") && investors.isInvestor(a) && isRealContactEmail(a));
       if (targets.length === 0) continue;
       targets.forEach((t) => distinctContacts.add(t.toLowerCase()));
       candidates.push({ id: m.id, iid: m.internetMessageId, to: targets, subject: m.subject, date: m.lastModifiedDateTime || m.receivedDateTime || "" });

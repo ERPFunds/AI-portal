@@ -4,6 +4,7 @@ import { filterUnprocessedMessageIds, markMessageProcessed } from "@/lib/db";
 import { salesforceConfigured, logReplyNote } from "@/lib/agents/ir/salesforce";
 import { composeContactNote } from "@/lib/agents/ir/contact-note";
 import { loadInvestorLookup } from "@/lib/agents/ir/lp-lookup";
+import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
 
 export const maxDuration = 300;
 
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
       const todo = msgs.filter((m) => fresh.has(m.id)).slice(0, budget);
 
       for (const m of todo) {
-        const external = (m.toRecipients || []).filter((a) => a && !a.toLowerCase().endsWith("@erpfunds.com"));
+        const external = (m.toRecipients || []).filter((a) => a && !a.toLowerCase().endsWith("@erpfunds.com") && isRealContactEmail(a));
         // On a personal mailbox, keep only recipients that are known investors (skip personal mail).
         const targets = investorFilter ? external.filter((a) => investors.isInvestor(a)) : external;
         if (targets.length === 0) {

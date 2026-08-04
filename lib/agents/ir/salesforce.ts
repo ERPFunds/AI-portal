@@ -11,6 +11,8 @@
  * in-process until shortly before it expires.
  */
 
+import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
+
 const API_VERSION = "v60.0";
 
 interface SfToken {
@@ -1196,6 +1198,7 @@ export async function logReplyNote(p: {
   /** Investor entity name — used to link a newly-created Contact under its matching Salesforce Account. */
   investorName?: string;
 }): Promise<string> {
+  if (!isRealContactEmail(p.contactEmail)) return "sf-skip(invalid-email)";
   let contactId = await findContactByEmail(p.contactEmail);
   let created = false;
   if (!contactId) {
@@ -1242,6 +1245,7 @@ export async function logCorrespondence(p: {
   company?: string;
   title?: string;
 }): Promise<string> {
+  if (!isRealContactEmail(p.investorEmail)) return "sf-skip(invalid-email)";
   let contactId = await findContactByEmail(p.investorEmail);
   let created = false;
   if (!contactId) {
@@ -1258,6 +1262,36 @@ export async function logCorrespondence(p: {
     activityDate,
   });
   return created ? "sf-created-contact+task" : "sf-task(existing-contact)";
+}
+
+/** Delete a Contact by Id (cascades to its Activities in Salesforce). Best-effort throw on failure. */
+export async function deleteContact(id: string): Promise<void> {
+  const res = await sfFetch(`/sobjects/Contact/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok && res.status !== 404) throw new Error(`SF delete contact ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+/**
+ * Find Contacts whose email is NOT a real address (inline-image content-ids, no-reply / voicemail /
+ * skype notifications, etc.) — junk that leaked into the CRM. Used by the cleanup job to remove them.
+ */
+export async function findJunkContacts(): Promise<{ id: string; name: string; email: string }[]> {
+  const likes = [
+    "%.png@%", "%.jpg@%", "%.jpeg@%", "%.gif@%", "%.bmp@%",
+    "noreply@%", "no-reply@%", "donotreply@%", "mailer-daemon@%", "postmaster@%", "bounce%@%",
+    "%voicemail%", "%skype%", "%.microsoft.com",
+  ];
+  const where = likes.map((l) => `Email LIKE '${soql(l)}'`).join(" OR ");
+  const q = `SELECT Id, Name, Email FROM Contact WHERE Email != null AND (${where}) LIMIT 500`;
+  const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+  if (!res.ok) throw new Error(`SF junk query ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const d = await res.json();
+  const out: { id: string; name: string; email: string }[] = [];
+  for (const r of (d.records ?? []) as Record<string, unknown>[]) {
+    const email = String(r.Email ?? "");
+    // Double-check against the validity rule so we never delete a real address caught by a broad LIKE.
+    if (!isRealContactEmail(email)) out.push({ id: String(r.Id ?? ""), name: String(r.Name ?? ""), email });
+  }
+  return out;
 }
 
 /**
