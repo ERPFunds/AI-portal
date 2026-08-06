@@ -10,8 +10,13 @@ import { createClient } from "@/lib/supabase/server";
 const FREE_MAIL = new Set([
   "gmail.com", "googlemail.com", "yahoo.com", "ymail.com", "hotmail.com", "outlook.com", "live.com",
   "msn.com", "aol.com", "icloud.com", "me.com", "mac.com", "comcast.net", "att.net", "verizon.net",
-  "sbcglobal.net", "cox.net", "bellsouth.net", "proton.me", "protonmail.com", "gmx.com", " meta.com",
+  "sbcglobal.net", "cox.net", "bellsouth.net", "proton.me", "protonmail.com", "gmx.com",
 ]);
+// Our own domain(s): internal mail is NEVER an external investor inquiry, so it's never a "known
+// sender" — even if an internal address slips into the LP directory. Override via IR_OWN_DOMAINS.
+const OWN_DOMAINS = new Set(
+  (process.env.IR_OWN_DOMAINS || "erpfunds.com").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean)
+);
 
 export interface InvestorLookup {
   /** lowercased recipient email → investor entity name (for Account linking) */
@@ -49,7 +54,7 @@ export async function loadInvestorLookup(): Promise<InvestorLookup> {
   const knownDomains = new Set<string>();
   for (const em of emailToName.keys()) {
     const dom = domainOf(em);
-    if (dom && !FREE_MAIL.has(dom)) knownDomains.add(dom);
+    if (dom && !FREE_MAIL.has(dom) && !OWN_DOMAINS.has(dom)) knownDomains.add(dom);
   }
 
   return {
@@ -57,6 +62,10 @@ export async function loadInvestorLookup(): Promise<InvestorLookup> {
     knownDomains,
     isInvestor: (e) => emailToName.has(norm(e)),
     nameFor: (e) => emailToName.get(norm(e)),
-    isKnownSender: (e) => emailToName.has(norm(e)) || knownDomains.has(domainOf(e)),
+    isKnownSender: (e) => {
+      const dom = domainOf(e);
+      if (OWN_DOMAINS.has(dom)) return false; // internal mail is never an external investor inquiry
+      return emailToName.has(norm(e)) || knownDomains.has(dom);
+    },
   };
 }
