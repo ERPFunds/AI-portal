@@ -12,6 +12,7 @@
  */
 
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
+import { classifySfLogWorthiness } from "@/lib/agents/ir/sf-log-policy";
 
 const API_VERSION = "v60.0";
 
@@ -1199,6 +1200,10 @@ export async function logReplyNote(p: {
   investorName?: string;
 }): Promise<string> {
   if (!isRealContactEmail(p.contactEmail)) return "sf-skip(invalid-email)";
+  // POLICY: only log meaningful correspondence (interest / new-contact intro / DD-portfolio); skip
+  // routine day-to-day replies. Classify on the actual reply body when we have it, else the note.
+  const decision = await classifySfLogWorthiness({ subject: p.subject, body: p.emailBody || p.note });
+  if (!decision.log) return `sf-skip(not-loggable: ${decision.category})`;
   let contactId = await findContactByEmail(p.contactEmail);
   let created = false;
   if (!contactId) {
@@ -1217,7 +1222,7 @@ export async function logReplyNote(p: {
   // Log the actual email that was sent, connected to the contact (WhoId). Fall back to the AI note
   // only if no body was passed. Keep the AI one-liner as a summary when we have both.
   const description =
-    `Email sent ${p.sentDate}\nTo: ${p.contactEmail}\nSubject: ${p.subject}\n\n` +
+    `Email sent ${p.sentDate}\nTo: ${p.contactEmail}\nSubject: ${p.subject}\nLogged as: ${decision.category}${decision.reason ? ` (${decision.reason})` : ""}\n\n` +
     (emailBody || p.note) +
     (emailBody && p.note ? `\n\n— Summary: ${p.note}` : "") +
     (hasNext ? `\n\nNext step: ${p.nextStep}` : "");
@@ -1227,7 +1232,7 @@ export async function logReplyNote(p: {
     description,
     activityDate,
   });
-  return created ? "sf-created-contact+email-logged" : "sf-email-logged(existing-contact)";
+  return created ? `sf-created-contact+email-logged(${decision.category})` : `sf-email-logged(existing-contact,${decision.category})`;
 }
 
 /**
@@ -1246,6 +1251,11 @@ export async function logCorrespondence(p: {
   title?: string;
 }): Promise<string> {
   if (!isRealContactEmail(p.investorEmail)) return "sf-skip(invalid-email)";
+  // POLICY: only log meaningful relationship events — expressions of interest, new-contact intros,
+  // and DD/portfolio matters. Routine day-to-day correspondence is NOT logged (and we don't create a
+  // Contact for it either — keeps the CRM to real prospects/interest per IR's directive).
+  const decision = await classifySfLogWorthiness({ subject: p.subject, body: p.snippet });
+  if (!decision.log) return `sf-skip(not-loggable: ${decision.category})`;
   let contactId = await findContactByEmail(p.investorEmail);
   let created = false;
   if (!contactId) {
@@ -1258,10 +1268,10 @@ export async function logCorrespondence(p: {
     subject: `Email: ${p.subject}`.slice(0, 255),
     description:
       `Inbound investor email received ${p.receivedDate} via ${p.sourceMailbox}.\n` +
-      `From: ${p.investorEmail}\nSubject: ${p.subject}\n\n${p.snippet}`,
+      `From: ${p.investorEmail}\nSubject: ${p.subject}\nLogged as: ${decision.category}${decision.reason ? ` (${decision.reason})` : ""}\n\n${p.snippet}`,
     activityDate,
   });
-  return created ? "sf-created-contact+task" : "sf-task(existing-contact)";
+  return created ? `sf-created-contact+task(${decision.category})` : `sf-task(existing-contact,${decision.category})`;
 }
 
 /** Delete a Contact by Id (cascades to its Activities in Salesforce). Best-effort throw on failure. */
