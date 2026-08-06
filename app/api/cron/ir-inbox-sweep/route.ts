@@ -26,6 +26,7 @@ import { filterUnprocessedMessageIds, markMessageProcessed, logAgentRun, getLast
 import { insertDraftSnapshot } from "@/lib/agents/ir/corrections-store";
 import { sendAlertEmail } from "@/lib/mailer";
 import { logCorrespondence, salesforceConfigured } from "@/lib/agents/ir/salesforce";
+import { loadInvestorLookup } from "@/lib/agents/ir/lp-lookup";
 
 export const maxDuration = 300;
 
@@ -109,6 +110,7 @@ async function handleMailbox(
   let teamDraftsFolderId: string | null | undefined;
   let investorCount = 0;
   let draftFailures = 0; // drafts we tried but couldn't create — surfaced to the sweep alert
+  const investors = await loadInvestorLookup(); // known investor/broker emails + corporate domains
 
   for (const m of todo) {
     // All drafts are signed by / owned by Meghan — William's inbox isn't monitored or drafted.
@@ -169,7 +171,11 @@ async function handleMailbox(
     // approves the draft. Anything the classifier doesn't consider an investor inquiry is left
     // alone; when it was addressed straight to a lead we note it as their personal correspondence.
     const verdict = await classifyInquiry({ from: fromAddr, subject: m.subject, body: bodyText });
-    if (!verdict.isInvestorInquiry) {
+    // A KNOWN sender — a listed investor, or anyone at a known corporate/advisory domain (e.g. a
+    // broker's colleague like ethan@g3capitalwealth.com when only gaston@ is on file) — is always
+    // treated as an investor inquiry, so the classifier can never wrongly skip someone we work with.
+    const knownSender = investors.isKnownSender(fromAddr);
+    if (!verdict.isInvestorInquiry && !knownSender) {
       const directToLead = (m.toRecipients || []).some((a) => a.includes("mberry@") || a.includes("wmeyer@"));
       if (!dryRun) {
         await markMessageProcessed({
@@ -178,10 +184,15 @@ async function handleMailbox(
           internetMessageId: m.internetMessageId,
           isInvestor: false,
           action: directToLead ? "ignored-direct-to-lead" : "ignored",
+          fromAddress: fromAddr,
+          subject: m.subject,
         });
       }
       details.push(`IGNORE ${fromAddr} — ${directToLead ? "personal (direct to IR lead), " : ""}${verdict.reason}`);
       continue;
+    }
+    if (knownSender && !verdict.isInvestorInquiry) {
+      details.push(`KNOWN-SENDER override → treating ${fromAddr} as investor (classifier said no)`);
     }
 
     investorCount++;

@@ -382,17 +382,20 @@ export async function filterUnprocessedMessageIds(mailbox: string, ids: string[]
   return new Set(ids.filter((id) => !seen.has(id)));
 }
 
-/** Record that a message was handled by the sweep (idempotent). */
+/** Record that a message was handled by the sweep (idempotent). Stores sender + subject so the
+ *  ledger is auditable — you can see exactly what was ignored and why. */
 export async function markMessageProcessed(params: {
   mailbox: string;
   messageId: string;
   internetMessageId: string | null;
   isInvestor: boolean;
   action: string | null;
+  fromAddress?: string | null;
+  subject?: string | null;
 }) {
   await sql`
-    INSERT INTO ir_processed_messages (mailbox, message_id, internet_message_id, is_investor, action)
-    VALUES (${params.mailbox}, ${params.messageId}, ${params.internetMessageId}, ${params.isInvestor}, ${params.action})
+    INSERT INTO ir_processed_messages (mailbox, message_id, internet_message_id, is_investor, action, from_address, subject)
+    VALUES (${params.mailbox}, ${params.messageId}, ${params.internetMessageId}, ${params.isInvestor}, ${params.action}, ${params.fromAddress ?? null}, ${(params.subject ?? "").slice(0, 300) || null})
     ON CONFLICT (mailbox, message_id) DO NOTHING
   `;
 }
