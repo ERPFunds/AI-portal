@@ -1246,7 +1246,7 @@ interface AgentInboxItem {
   preview: string
   receivedISO: string
   folder: string
-  folderKind: 'ir' | 'escalate' | 'forwarded-drafts' | 'draft' | 'sent'
+  folderKind: 'ir' | 'escalate' | 'forwarded-drafts' | 'draft' | 'sent' | 'archive'
   status: 'active-thread' | 'pending' | 'handled' | 'needs-review'
   isDraft: boolean
   webLink: string | null
@@ -1275,6 +1275,7 @@ const FOLDER_BADGE: Record<AgentInboxItem['folderKind'], string> = {
   'forwarded-drafts': 'badge-gold',
   draft: 'badge-purple',
   sent: 'badge-green',
+  archive: 'badge-gray',
 }
 const FOLDER_LABEL: Record<AgentInboxItem['folderKind'], string> = {
   ir: 'Investor Relations',
@@ -1282,6 +1283,7 @@ const FOLDER_LABEL: Record<AgentInboxItem['folderKind'], string> = {
   'forwarded-drafts': 'Forwarded Draft',
   draft: 'Draft · needs approval',
   sent: 'Sent',
+  archive: 'Archived draft',
 }
 
 function formatInboxTime(iso: string): string {
@@ -1478,7 +1480,7 @@ function InboxView({
   const arrivedCount = items.filter(isArrived).length
   const draftsCount = items.filter(isDraftItem).length
   // "Awaiting reply" (the Inbox tab badge) = anything still needing action: an arrived email or a draft.
-  const awaitingReply = (item: AgentInboxItem) => item.folderKind === 'escalate' || item.isDraft
+  const awaitingReply = (item: AgentInboxItem) => item.folderKind !== 'archive' && (item.folderKind === 'escalate' || item.isDraft)
   const awaitingCount = items.filter(awaitingReply).length
 
   const filtered = items.filter((item) => {

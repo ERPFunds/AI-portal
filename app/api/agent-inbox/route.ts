@@ -44,7 +44,7 @@ export interface AgentInboxItem {
   preview: string;
   receivedISO: string;
   folder: string; // display path, e.g. "Investor Relations / Escalate"
-  folderKind: "ir" | "escalate" | "forwarded-drafts" | "draft" | "sent";
+  folderKind: "ir" | "escalate" | "forwarded-drafts" | "draft" | "sent" | "archive";
   status: ItemStatus;
   isDraft: boolean;
   webLink: string | null;
@@ -120,6 +120,7 @@ export interface AgentInboxFolder {
 // Classify a folder by its display name into the kinds the UI cares about.
 function folderKind(name: string): AgentInboxItem["folderKind"] {
   const n = name.toLowerCase();
+  if (/archive/.test(n)) return "archive";
   if (/escalat/.test(n)) return "escalate";
   if (/draft/.test(n)) return "forwarded-drafts";
   return "ir";
@@ -369,26 +370,34 @@ export async function GET(req: NextRequest) {
         it.conversationId || `${stripSubj(it.subject)}|${(it.to[0] ?? "").toLowerCase()}`;
       const latestByKey = new Map<string, AgentInboxItem>();
       for (const it of items) {
-        if (!it.isDraft) continue;
+        if (!it.isDraft || it.folderKind === "archive") continue; // archived drafts aren't part of the active queue
         const k = draftKey(it);
         const prev = latestByKey.get(k);
         if (!prev || (it.receivedISO || "") > (prev.receivedISO || "")) latestByKey.set(k, it);
       }
       const keep = new Set([...latestByKey.values()].map((it) => it.id));
       for (let i = items.length - 1; i >= 0; i--) {
-        if (items[i].isDraft && !keep.has(items[i].id)) items.splice(i, 1);
+        if (items[i].isDraft && items[i].folderKind !== "archive" && !keep.has(items[i].id)) items.splice(i, 1);
       }
       draftTotal = keep.size;
     }
 
-    // All drafts are Meghan's now — one "Drafts" queue, no per-lead split.
+    // Archived drafts live under their own "Investor Relations / Archive" folder — keep them out of
+    // the active queue and out of the review/awaiting counts (they read as handled).
+    let archiveCount = 0;
+    for (const it of items) {
+      if (it.folderKind === "archive") { it.status = "handled"; archiveCount++; }
+    }
+
+    // All active drafts are Meghan's now — one "Drafts" queue, no per-lead split (archived excluded).
     let draftCount2 = 0;
     for (const it of items) {
-      if (!it.isDraft) continue;
+      if (!it.isDraft || it.folderKind === "archive") continue;
       it.folder = "Drafts";
       draftCount2++;
     }
     if (draftCount2) folders.push({ name: "Drafts", kind: "draft", count: draftCount2 });
+    void archiveCount;
 
     // 3) Sent — read each IR lead's Sent Items directly, so this captures replies sent from
     //    OUTLOOK (not just ones sent through the app; app-sends also land in Sent Items). Skip
