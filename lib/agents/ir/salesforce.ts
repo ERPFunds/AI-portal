@@ -1280,12 +1280,19 @@ export async function logCorrespondence(p: {
 export interface AgentTaskReview { id: string; subject: string; contact: string; email: string; created: string; category: SfLogCategory; reason: string }
 export async function reviewAgentCorrespondenceTasks(opts?: { apply?: boolean; limit?: number }): Promise<{ scanned: number; deleted: AgentTaskReview[]; kept: AgentTaskReview[]; errors: string[] }> {
   const limit = Math.min(Math.max(opts?.limit ?? 800, 1), 2000);
-  // NOTE: Task.Who is a polymorphic (Name) reference — `Who.Email` is NOT queryable. Pull the name
-  // via Who.Name and recover the email from the note description (From:/To: line) instead.
+  // NOTES:
+  //  • Task.Description is a long-text-area field → NOT filterable with LIKE in SOQL. So we filter by
+  //    Subject ('Email:%') in the query and match the agent's description markers client-side.
+  //  • Task.Who is a polymorphic (Name) reference — `Who.Email` is NOT queryable; use Who.Name and
+  //    recover the email from the note description (From:/To: line) instead.
   const q = `SELECT Id, Subject, Description, CreatedDate, Who.Name FROM Task ` +
-    `WHERE Subject LIKE 'Email:%' AND (Description LIKE '%Inbound investor email received%' OR Description LIKE '%Email sent%') ` +
-    `ORDER BY CreatedDate DESC LIMIT ${limit}`;
-  const recs = await sfQuery(q);
+    `WHERE Subject LIKE 'Email:%' ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  const all = await sfQuery(q);
+  // Keep only the notes the IR agent generated (identified by their description format).
+  const recs = all.filter((r) => {
+    const d = String(r.Description ?? "");
+    return /Inbound investor email received/i.test(d) || /Email sent /i.test(d);
+  });
   const deleted: AgentTaskReview[] = [];
   const kept: AgentTaskReview[] = [];
   const errors: string[] = [];
