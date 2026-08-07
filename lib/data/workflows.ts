@@ -39,10 +39,10 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         steps: [
           { type: "automated", label: "Read & Clean", description: "Pulls the full message · strips Mimecast tracking noise · unwraps forwarded threads so it classifies the original investor, not the forwarder" },
           { type: "automated", label: "DocuSign Check", description: "DocuSign notifications are marked handled and left in the inbox — never deleted, never drafted to" },
-          { type: "automated", label: "Classify & Route", description: "Decides investor-vs-not, then answerable-from-approved-sources (draft) vs genuinely needs a human (escalate)" },
+          { type: "automated", label: "Classify & Route", description: "Decides investor-vs-not (skipping out-of-scope legal/money-movement and new-business solicitations like Kirkor's nightly reports), then answerable-from-approved-sources (draft) vs genuinely needs a human (escalate)" },
           { type: "automated", label: "Write Grounded Draft", description: "Reply grounded on IR Q&A Reference + Approved Learned Q&A + IR Agent Corrections · Arial 10pt · sender signature" },
-          { type: "automated", label: "File Draft", description: "Threaded Outlook draft in Meghan's Drafts (tagged IR:) · filed to Escalate / Forwarded Drafts · copy to the team@ hub for the portal" },
-          { type: "automated", label: "Log to Salesforce", description: "On send, logs the actual subject + body as a completed activity on the investor's Contact (created if new) · surfaces as their last interaction in the LP Directory" }
+          { type: "automated", label: "File Draft", description: "Threaded reply-all Outlook draft in Meghan's Drafts (To the sender + CC everyone on the thread; tagged IR:) · filed to Escalate / Forwarded Drafts · copy to the team@ hub for the portal" },
+          { type: "automated", label: "Log to Salesforce", description: "On send, logs ONLY meaningful correspondence — interest, new-contact intros, due-diligence — as a completed activity on the investor's Contact (created if new); routine day-to-day is skipped · surfaces as their last interaction in the LP Directory" }
         ],
         meta: {
           trigger: "Scheduled sweep of the monitored mailbox — Meghan-only",
@@ -91,7 +91,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
         steps: [
           { type: "manual", label: "Compose", description: "Per-row Email button opens a compose popup pre-filled with the LP's best-known address · pick sender · edit or click AI draft (same grounding + signature + Arial 10)" },
           { type: "automated", label: "Send or Save", description: "Sends as the chosen sender with a copy to team@ Sent, or saves to the IR Inbox as a draft for later" },
-          { type: "automated", label: "Log to Salesforce", description: "Finds or creates the Contact by email · logs the sent email as a completed activity · records it as that LP's most-recent interaction" }
+          { type: "automated", label: "Log to Salesforce", description: "Same policy as the sweep — only meaningful correspondence (interest, new-contact intros, due-diligence) is logged, day-to-day skipped · finds or creates the Contact by email · records it as that LP's most-recent interaction" }
         ]
       },
       {
