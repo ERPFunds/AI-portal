@@ -12,7 +12,7 @@
  */
 
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
-import { classifySfLogWorthiness } from "@/lib/agents/ir/sf-log-policy";
+import { classifySfLogWorthiness, type SfLogCategory } from "@/lib/agents/ir/sf-log-policy";
 
 const API_VERSION = "v60.0";
 
@@ -1272,6 +1272,46 @@ export async function logCorrespondence(p: {
     activityDate,
   });
   return created ? `sf-created-contact+task(${decision.category})` : `sf-task(existing-contact,${decision.category})`;
+}
+
+// Review the correspondence notes (Tasks) the IR agent has logged, re-scoring each against the
+// current logging policy. Day-to-day notes are candidates for removal. Read-only unless { apply }.
+// Only touches AGENT-created "Email: …" Tasks (identified by their generated description format).
+export interface AgentTaskReview { id: string; subject: string; contact: string; email: string; created: string; category: SfLogCategory; reason: string }
+export async function reviewAgentCorrespondenceTasks(opts?: { apply?: boolean; limit?: number }): Promise<{ scanned: number; deleted: AgentTaskReview[]; kept: AgentTaskReview[]; errors: string[] }> {
+  const limit = Math.min(Math.max(opts?.limit ?? 800, 1), 2000);
+  const q = `SELECT Id, Subject, Description, CreatedDate, Who.Name, Who.Email FROM Task ` +
+    `WHERE Subject LIKE 'Email:%' AND (Description LIKE '%Inbound investor email received%' OR Description LIKE '%Email sent%') ` +
+    `ORDER BY CreatedDate DESC LIMIT ${limit}`;
+  const recs = await sfQuery(q);
+  const deleted: AgentTaskReview[] = [];
+  const kept: AgentTaskReview[] = [];
+  const errors: string[] = [];
+
+  let i = 0;
+  const worker = async () => {
+    while (i < recs.length) {
+      const r = recs[i++];
+      const subject = String(r.Subject ?? "");
+      const description = String(r.Description ?? "");
+      const who = r.Who as { Name?: string; Email?: string } | null;
+      const item: AgentTaskReview = {
+        id: String(r.Id), subject, contact: who?.Name ?? "", email: who?.Email ?? "",
+        created: String(r.CreatedDate ?? "").slice(0, 10), category: "day-to-day", reason: "",
+      };
+      const decision = await classifySfLogWorthiness({ subject, body: description });
+      item.category = decision.category;
+      item.reason = decision.reason;
+      if (decision.log) { kept.push(item); continue; }
+      if (opts?.apply) {
+        const d = await sfDelete("Task", item.id);
+        if (!d.ok) { errors.push(`${item.id}: ${d.detail}`); kept.push(item); continue; }
+      }
+      deleted.push(item);
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker)); // limited concurrency for the classifier calls
+  return { scanned: recs.length, deleted, kept, errors };
 }
 
 /** Delete a Contact by Id (cascades to its Activities in Salesforce). Best-effort throw on failure. */
