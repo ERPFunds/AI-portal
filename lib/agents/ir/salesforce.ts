@@ -1280,7 +1280,9 @@ export async function logCorrespondence(p: {
 export interface AgentTaskReview { id: string; subject: string; contact: string; email: string; created: string; category: SfLogCategory; reason: string }
 export async function reviewAgentCorrespondenceTasks(opts?: { apply?: boolean; limit?: number }): Promise<{ scanned: number; deleted: AgentTaskReview[]; kept: AgentTaskReview[]; errors: string[] }> {
   const limit = Math.min(Math.max(opts?.limit ?? 800, 1), 2000);
-  const q = `SELECT Id, Subject, Description, CreatedDate, Who.Name, Who.Email FROM Task ` +
+  // NOTE: Task.Who is a polymorphic (Name) reference — `Who.Email` is NOT queryable. Pull the name
+  // via Who.Name and recover the email from the note description (From:/To: line) instead.
+  const q = `SELECT Id, Subject, Description, CreatedDate, Who.Name FROM Task ` +
     `WHERE Subject LIKE 'Email:%' AND (Description LIKE '%Inbound investor email received%' OR Description LIKE '%Email sent%') ` +
     `ORDER BY CreatedDate DESC LIMIT ${limit}`;
   const recs = await sfQuery(q);
@@ -1294,9 +1296,10 @@ export async function reviewAgentCorrespondenceTasks(opts?: { apply?: boolean; l
       const r = recs[i++];
       const subject = String(r.Subject ?? "");
       const description = String(r.Description ?? "");
-      const who = r.Who as { Name?: string; Email?: string } | null;
+      const who = r.Who as { Name?: string } | null;
+      const emailMatch = description.match(/(?:From|To):\s*([^\s@<>]+@[^\s@<>]+)/i);
       const item: AgentTaskReview = {
-        id: String(r.Id), subject, contact: who?.Name ?? "", email: who?.Email ?? "",
+        id: String(r.Id), subject, contact: who?.Name ?? "", email: emailMatch?.[1] ?? "",
         created: String(r.CreatedDate ?? "").slice(0, 10), category: "day-to-day", reason: "",
       };
       const decision = await classifySfLogWorthiness({ subject, body: description });
