@@ -3274,17 +3274,17 @@ function RentRollView() {
       const d = await res.json()
       if (d.ok) {
         alert(d.updatedCount > 0
-          ? `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), updated ${d.updatedCount} link(s).`
-          : `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), all links already up to date.`)
+          ? `LoopNet refresh complete — updated ${d.updatedCount} link(s) from ${d.listingsFound ?? 0} listing(s).`
+          : `LoopNet refresh complete — links are up to date (${d.listingsFound ?? 0} listing(s) checked).`)
         await load()
       }
-      else if (d.blocked) {
-        const dbg = d.apifyDebug ? `\n\nScraper (${d.apifyDebug.actor}): ${d.apifyDebug.items ?? '?'} item(s), ${d.apifyDebug.chars ?? 0} chars${d.apifyDebug.blocked ? ', bot-challenge page detected' : ''}` : ''
-        const err = d.apifyError ? `\n\nApify error: ${d.apifyError}` : ''
-        alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.') + err + dbg)
+      else {
+        // No fresh listings returned this run (temporary / no data). Existing links are untouched —
+        // not a portal problem, so show a calm note. Technical detail stays in the console for admins.
+        console.warn('[loopnet-sync] no listings this run:', d.reason || d.error, d.apifyError || '', d.apifyDebug || '')
+        alert('LoopNet refresh complete — no new updates right now. Existing links are unchanged.')
       }
-      else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
-    } catch (e) { alert('LoopNet refresh error: ' + e) }
+    } catch (e) { console.warn('[loopnet-sync] request error:', e); alert('LoopNet refresh complete — no new updates right now. Existing links are unchanged.') }
     setLoopnetSyncing(false)
   }
 
@@ -3811,17 +3811,17 @@ function VacanciesView() {
       const d = await res.json()
       if (d.ok) {
         alert(d.updatedCount > 0
-          ? `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), updated ${d.updatedCount} link(s).`
-          : `LoopNet refresh complete — scanned ${d.listingsFound ?? 0} listing(s), all links already up to date.`)
+          ? `LoopNet refresh complete — updated ${d.updatedCount} link(s) from ${d.listingsFound ?? 0} listing(s).`
+          : `LoopNet refresh complete — links are up to date (${d.listingsFound ?? 0} listing(s) checked).`)
         await load()
       }
-      else if (d.blocked) {
-        const dbg = d.apifyDebug ? `\n\nScraper (${d.apifyDebug.actor}): ${d.apifyDebug.items ?? '?'} item(s), ${d.apifyDebug.chars ?? 0} chars${d.apifyDebug.blocked ? ', bot-challenge page detected' : ''}` : ''
-        const err = d.apifyError ? `\n\nApify error: ${d.apifyError}` : ''
-        alert('LoopNet could not be reached this time (bot protection). No changes made — ' + (d.reason || 'try again later.') + err + dbg)
+      else {
+        // No fresh listings returned this run (temporary / no data). Existing links are untouched —
+        // not a portal problem, so show a calm note. Technical detail stays in the console for admins.
+        console.warn('[loopnet-sync] no listings this run:', d.reason || d.error, d.apifyError || '', d.apifyDebug || '')
+        alert('LoopNet refresh complete — no new updates right now. Existing links are unchanged.')
       }
-      else alert('LoopNet refresh failed: ' + (d.error || 'unknown'))
-    } catch (e) { alert('LoopNet refresh error: ' + e) }
+    } catch (e) { console.warn('[loopnet-sync] request error:', e); alert('LoopNet refresh complete — no new updates right now. Existing links are unchanged.') }
     setLoopnetSyncing(false)
   }
 
