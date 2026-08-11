@@ -3250,10 +3250,16 @@ const mInput: React.CSSProperties = { padding: '7px 10px', borderRadius: 8, bord
 
 const EMPTY_PROPERTY: Property = {
   id: 0, entity: 'DST', corridor: '', address: '', tenant: '', built: null, acres: null,
-  total: null, office: null, warehouse: null, type: 'single', cranes: null, layout: '',
+  total: null, office: null, warehouse: null, cranes: null, layout: '',
   structure: '', electrical: '', hvac: '', plumbing: '', exterior: '', notes: '',
   washBay: 'Unknown', leaseExpiry: null,
 }
+
+// Property "kind" is derived from tenant + units — there is no stored `type` field.
+// multi = has units; vacant = single building whose tenant is "Vacant"; otherwise single.
+const isMultiProp = (p: { units?: { unit: string }[] | null }) => !!(p.units && p.units.length > 0)
+const isVacantProp = (p: { tenant?: string | null; units?: { unit: string }[] | null }) =>
+  !isMultiProp(p) && (p.tenant || '').trim().toLowerCase() === 'vacant'
 
 function RentRollView() {
   const [search, setSearch] = React.useState('')
@@ -3359,10 +3365,10 @@ function RentRollView() {
   const flat: Row[] = []
   metricBase.forEach(p => {
     const isMulti = !!(p.units && p.units.length > 0)
-    // Type filter (building-level): multi | single | vacant
+    // Type filter (building-level): multi | single | vacant — derived from tenant/units
     if (typeFilter === 'multi' && !isMulti) return
-    if (typeFilter === 'single' && (isMulti || p.type !== 'single')) return
-    if (typeFilter === 'vacant' && (isMulti || p.type !== 'vacant')) return
+    if (typeFilter === 'single' && (isMulti || isVacantProp(p))) return
+    if (typeFilter === 'vacant' && !isVacantProp(p)) return
     // Lease-expiry window: a multi building passes if ANY unit expires in-window; else use the building lease
     if (isMulti) { if (!(p.units!).some(u => passExp(u.expiry))) return }
     else if (!passExp(p.leaseExpiry)) return
@@ -3377,7 +3383,7 @@ function RentRollView() {
       if (so !== 0) return so
       return (parseInt((a as any)._unitNo || '0') - parseInt((b as any)._unitNo || '0'))
     }
-    if ((a.type === 'vacant') !== (b.type === 'vacant')) return a.type === 'vacant' ? -1 : 1 // vacant first
+    if (isVacantProp(a) !== isVacantProp(b)) return isVacantProp(a) ? -1 : 1 // vacant first
     if (sortBy === 'portfolio') return 0
     if (!a.leaseExpiry && !b.leaseExpiry) return 0
     if (!a.leaseExpiry) return 1
@@ -3391,31 +3397,18 @@ function RentRollView() {
   metricBase.forEach(p => {
     if (p.units && p.units.length > 0) {
       p.units.forEach(u => { if (u.expiry) { const w = u.sf ?? 0; waleNum += w * yrsLeft(u.expiry); waleDen += w } })
-    } else if (p.type !== 'vacant' && p.leaseExpiry) {
+    } else if (!isVacantProp(p) && p.leaseExpiry) {
       const w = p.total ?? 0
       waleNum += w * yrsLeft(p.leaseExpiry); waleDen += w
     }
   })
   const wale = waleDen ? waleNum / waleDen : 0
 
-  // Occupancy by UNIT count across the portfolio: multi-tenant counts each unit; single-tenant = 1 unit
-  let totalUnits = 0, occupiedUnits = 0
-  metricBase.forEach(p => {
-    if (p.units && p.units.length > 0) {
-      totalUnits += p.units.length
-      occupiedUnits += p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
-    } else {
-      totalUnits += 1
-      occupiedUnits += p.type === 'vacant' ? 0 : 1
-    }
-  })
-  const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
-
   // Type-filter counts at the BUILDING level (one row per building)
   let cntSingle = 0, cntMulti = 0, cntVacant = 0
   rows.forEach(p => {
     if (p.units && p.units.length > 0) cntMulti++
-    else if (p.type === 'vacant') cntVacant++
+    else if (isVacantProp(p)) cntVacant++
     else cntSingle++
   })
 
@@ -3432,7 +3425,7 @@ function RentRollView() {
   function exportCsv() {
     const cols: [string, (p: Property) => any][] = [
       ['Fund', p => ENTITY_LABELS[p.entity] ?? p.entity], ['Address', p => p.address], ['Corridor', p => p.corridor],
-      ['Tenant', p => p.tenant], ['Type', p => p.type], ['Built', p => p.built], ['Total SF', p => p.total],
+      ['Tenant', p => isVacantProp(p) ? 'Vacant' : p.tenant], ['Built', p => p.built], ['Total SF', p => p.total],
       ['Office SF', p => p.office], ['Warehouse SF', p => p.warehouse], ['Acres', p => p.acres],
       ['Wash Bay', p => p.washBay], ['Lease Expiry', p => p.leaseExpiry], ['Cranes', p => p.cranes],
       ['Layout', p => p.layout], ['Structure', p => p.structure], ['Electrical', p => p.electrical],
@@ -3485,11 +3478,9 @@ function RentRollView() {
       </div>
 
       {/* Summary bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
           { label: 'Total Properties', value: rows.length },
-          { label: 'Occupancy',        value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
-          { label: 'Occupied Units',   value: occupiedUnits + ' / ' + totalUnits },
           { label: 'Expiring ≤6 mo',   value: expiring6, color: expiring6 > 0 ? '#dc2626' : '#16a34a' },
           { label: 'WALE',             value: wale.toFixed(1) + ' yrs' },
         ].map(s => (
@@ -3553,7 +3544,7 @@ function RentRollView() {
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
           <thead>
             <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e5e7eb' }}>
-              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Cranes', 'Type', 'Wash Bay', 'Lease Exp', ''].map((h, i) => (
+              {['Fund', 'Address', 'Corridor', 'Tenant', 'Built', 'Total SF', 'Office', 'Whse', 'Cranes', 'Wash Bay', 'Lease Exp', ''].map((h, i) => (
                 <th key={i} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px', color: '#9ca3af', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
@@ -3578,8 +3569,8 @@ function RentRollView() {
                     </td>
                     <td style={{ padding: '9px 12px', fontWeight: isUnit ? 400 : 500, color: isUnit ? '#4b5563' : '#111827', maxWidth: 260 }}>{isUnit ? '↳ ' + p.address : p.address}</td>
                     <td style={{ padding: '9px 12px', color: '#9ca3af', whiteSpace: 'nowrap' }}>{p.corridor}</td>
-                    <td style={{ padding: '9px 12px', maxWidth: 220, color: p.type === 'vacant' ? '#ef4444' : '#374151' }}>
-                      {p.type === 'vacant'
+                    <td style={{ padding: '9px 12px', maxWidth: 220, color: isVacantProp(p) ? '#ef4444' : '#374151' }}>
+                      {isVacantProp(p)
                         ? (p.loopnetUrl
                             ? <a href={p.loopnetUrl} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                                 style={{ fontSize: 11, fontWeight: 700, color: '#2563eb', textDecoration: 'none', whiteSpace: 'nowrap' }} title="Open LoopNet listing">🔗 LoopNet ↗</a>
@@ -3593,13 +3584,6 @@ function RentRollView() {
                     <td style={{ padding: '9px 12px', color: '#6b7280', whiteSpace: 'nowrap' }}>{fmtN(p.warehouse)}</td>
                     <td title={p.cranes ?? ''} style={{ padding: '9px 12px', color: p.cranes && p.cranes !== 'None' ? '#374151' : '#d1d5db', maxWidth: 150, fontSize: 12, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       {p.cranes ? p.cranes : '—'}
-                    </td>
-                    <td style={{ padding: '9px 12px', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
-                        background: p.type === 'single' ? '#f0fdf4' : p.type === 'multi' ? '#fef3c7' : '#fef2f2',
-                        color: p.type === 'single' ? '#16a34a' : p.type === 'multi' ? '#d97706' : '#dc2626' }}>
-                        {p.type === 'multi' ? 'multi-unit' : p.type}
-                      </span>
                     </td>
                     <td style={{ padding: '9px 12px', textAlign: 'center' }}>
                       {p.washBay === 'Yes' ? '✅' : p.washBay === 'No' ? '✗' : '?'}
@@ -3635,7 +3619,7 @@ function RentRollView() {
                   </tr>
                   {isExp && (
                     <tr style={{ background: '#f0f9ff', borderBottom: '2px solid #A6C3C9' }}>
-                      <td colSpan={13} style={{ padding: '14px 20px' }}>
+                      <td colSpan={12} style={{ padding: '14px 20px' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, fontSize: 12 }}>
                           <div>
                             <div style={{ fontWeight: 700, color: '#374151', marginBottom: 8, fontSize: 10, textTransform: 'uppercase', letterSpacing: '.6px' }}>Building</div>
@@ -3724,12 +3708,7 @@ function RentRollView() {
           </MField>
           <MField label="Corridor"><input style={mInput} value={draft.corridor} onChange={e => upd({ corridor: e.target.value })} /></MField>
           <MField label="Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
-          <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
-          <MField label="Type">
-            <select value={draft.type} onChange={e => upd({ type: e.target.value as Property['type'] })} style={mInput}>
-              <option value="single">single</option><option value="multi">multi</option><option value="vacant">vacant</option>
-            </select>
-          </MField>
+          <MField label="Tenant (blank/“Vacant” = vacant)" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
           <MField label="Wash Bay">
             <select value={draft.washBay} onChange={e => upd({ washBay: e.target.value as Property['washBay'] })} style={mInput}>
               <option value="Yes">Yes</option><option value="No">No</option><option value="Unknown">Unknown</option>
@@ -3835,15 +3814,29 @@ function VacanciesView() {
   const q = search.toLowerCase()
   // A "vacancy / LoopNet one" = anything currently vacant OR anything carrying a LoopNet listing link
   const listings = rows.filter(p => {
-    if (!(p.type === 'vacant' || !!p.loopnetUrl)) return false
+    if (!(isVacantProp(p) || !!p.loopnetUrl)) return false
     if (entityFilter !== 'all' && p.entity !== entityFilter) return false
     if (q && !(p.address.toLowerCase().includes(q) || p.corridor.toLowerCase().includes(q) || (p.loopnetUrl || '').toLowerCase().includes(q))) return false
     return true
   })
 
-  const totalListed = rows.filter(p => p.type === 'vacant' || !!p.loopnetUrl).length
+  const totalListed = rows.filter(p => isVacantProp(p) || !!p.loopnetUrl).length
   const withLink = listings.filter(p => !!p.loopnetUrl).length
   const missingLink = listings.filter(p => !p.loopnetUrl).length
+
+  // Portfolio occupancy by UNIT count: multi-tenant counts each unit; single-tenant = 1 unit.
+  // Computed across ALL properties (not just the listed vacancies) so the figure reflects the whole book.
+  let totalUnits = 0, occupiedUnits = 0
+  rows.forEach(p => {
+    if (p.units && p.units.length > 0) {
+      totalUnits += p.units.length
+      occupiedUnits += p.units.filter(u => (u.tenant || '').toLowerCase() !== 'vacant').length
+    } else {
+      totalUnits += 1
+      occupiedUnits += isVacantProp(p) ? 0 : 1
+    }
+  })
+  const occupancyPct = totalUnits ? Math.round((occupiedUnits / totalUnits) * 100) : 0
 
   const EC: Record<string, { bg: string; text: string; border: string }> = {
     DST:        { bg: '#e0f2fe', text: '#0369a1', border: '#bae6fd' },
@@ -3898,8 +3891,10 @@ function VacanciesView() {
       </div>
 
       {/* Summary bar */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 12, marginBottom: 20 }}>
         {[
+          { label: 'Occupancy',      value: occupancyPct + '%', color: occupancyPct >= 90 ? '#16a34a' : occupancyPct >= 75 ? '#d97706' : '#dc2626' },
+          { label: 'Occupied Units', value: occupiedUnits + ' / ' + totalUnits },
           { label: 'Listings', value: totalListed },
           { label: 'With LoopNet Link', value: withLink, color: '#16a34a' },
           { label: 'Missing Link', value: missingLink, color: missingLink > 0 ? '#dc2626' : '#16a34a' },
@@ -3923,7 +3918,7 @@ function VacanciesView() {
           style={{ padding: '7px 12px', border: '1px solid #e5e7eb', borderRadius: 7, fontSize: 13, background: '#fff', color: '#111827' }}>
           <option value="all">All Portfolios</option>
           {ENTITY_ORDER.map(e => (
-            <option key={e} value={e}>{ENTITY_LABELS[e]} ({rows.filter(p => p.entity === e && (p.type === 'vacant' || !!p.loopnetUrl)).length})</option>
+            <option key={e} value={e}>{ENTITY_LABELS[e]} ({rows.filter(p => p.entity === e && (isVacantProp(p) || !!p.loopnetUrl)).length})</option>
           ))}
         </select>
         {(entityFilter !== 'all' || search) && (
@@ -4069,24 +4064,25 @@ function WorkOrdersView() {
 
   async function syncWithProperties() {
     setSyncing(true)
-    const { data: props } = await editSb().from('properties').select('address,tenant,type')
-    const list = (props ?? []) as { address: string; tenant: string; type: string }[]
+    const { data: props } = await editSb().from('properties').select('address,tenant')
+    const list = (props ?? []) as { address: string; tenant: string }[]
     const have = new Set(rows.map(r => r.address))
     let changed = 0, added = 0
     // Update tenant / vacancy on existing inspection rows
     for (const w of rows) {
       const p = list.find(x => x.address === w.address)
       if (!p) continue
-      const desired = p.type === 'vacant' ? 'Vacant' : p.tenant
+      const vacant = (p.tenant || '').trim().toLowerCase() === 'vacant'
+      const desired = vacant ? 'Vacant' : p.tenant
       const patch: any = {}
       if (desired !== w.tenant) patch.tenant = desired
-      if (p.type === 'vacant' && w.flag) patch.flag = null
+      if (vacant && w.flag) patch.flag = null
       if (Object.keys(patch).length) { await editSb().from('work_orders').update(patch).eq('id', w.id); changed++ }
     }
     // Add any property missing from the inspections log
     for (const p of list) {
       if (have.has(p.address)) continue
-      const vacant = p.type === 'vacant'
+      const vacant = (p.tenant || '').trim().toLowerCase() === 'vacant'
       await editSb().from('work_orders').insert({ address: p.address, tenant: vacant ? 'Vacant' : p.tenant, flag: vacant ? null : 'Needs first inspection' })
       added++
     }
