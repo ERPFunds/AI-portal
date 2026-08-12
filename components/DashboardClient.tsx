@@ -5114,7 +5114,7 @@ function CorrectionsReviewView() {
 function AcquisitionView() {
   return (
     <div>
-      <div className="page-header"><h2>Acquisition Research</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
+      <div className="page-header"><h2>Inbound Listings</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
       <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
       <BuyBoxPanel />
       <InboundListingIntake />
