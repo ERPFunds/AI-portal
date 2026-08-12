@@ -54,7 +54,28 @@ const TD: React.CSSProperties = {
   verticalAlign: 'top',
 }
 const numTD: React.CSSProperties = { ...TD, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
-const noteTD: React.CSSProperties = { ...TD, fontSize: 11.5, color: '#4b5563', minWidth: 240, maxWidth: 360, whiteSpace: 'pre-line' }
+
+// Note/Next-Steps cell: a compact one-line preview by default (so it doesn't dominate the table),
+// click to open the full text inline. Each cell owns its expanded state.
+function NoteCell({ text, minWidth = 130 }: { text: string; minWidth?: number }) {
+  const [open, setOpen] = useState(false)
+  if (!text) return <td style={{ ...TD, color: '#cbd5e1' }}>—</td>
+  return (
+    <td
+      onClick={() => setOpen((o) => !o)}
+      title={open ? 'Click to collapse' : text}
+      style={{
+        ...TD, fontSize: 11.5, color: '#4b5563', cursor: 'pointer', minWidth,
+        maxWidth: open ? 520 : 210,
+        whiteSpace: open ? 'pre-line' : 'nowrap',
+        overflow: 'hidden', textOverflow: 'ellipsis',
+      }}
+    >
+      {text}
+      {!open && <span style={{ color: '#94a3b8', marginLeft: 4 }}>▸</span>}
+    </td>
+  )
+}
 
 function StatusBand({ label, color, count, sub }: { label: string; color: string; count: number; sub?: string }) {
   return (
@@ -112,8 +133,8 @@ function TexasPipeline({ query, showMarket }: { query: string; showMarket: boole
                       <td style={numTD}>{num(r.acreage)}</td>
                       <td style={numTD}>{num(r.sqft)}</td>
                       <td style={{ ...numTD, textAlign: 'left' }}>{txt(r.yearBuilt)}</td>
-                      <td style={noteTD}>{txt(r.nextSteps)}</td>
-                      <td style={noteTD}>{txt(r.notes)}</td>
+                      <NoteCell text={r.nextSteps} />
+                      <NoteCell text={r.notes} />
                     </tr>
                   ))}
                 </React.Fragment>
@@ -151,7 +172,7 @@ function TexasPipeline({ query, showMarket }: { query: string; showMarket: boole
                         <td style={numTD}>{num(r.acreage)}</td>
                         <td style={numTD}>{num(r.sqft)}</td>
                         <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.yearBuilt)}</td>
-                        <td style={noteTD}>{txt(r.notes)}</td>
+                        <NoteCell text={r.notes} />
                       </tr>
                     ))}
                   </React.Fragment>
@@ -205,7 +226,7 @@ function FloridaPipeline({ query }: { query: string }) {
                       <td style={numTD}>{num(r.acres)}</td>
                       <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
                       <td style={numTD}>{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</td>
-                      <td style={noteTD}>{txt(r.notes)}</td>
+                      <NoteCell text={r.notes} />
                     </tr>
                   ))}
                 </React.Fragment>
