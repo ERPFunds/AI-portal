@@ -1,88 +1,277 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useMemo, useState } from 'react'
+import {
+  TX_ROWS, FL_ROWS, TX_AS_OF, FL_AS_OF, FL_STRATEGY_NOTES,
+  type TxRow, type FlRow,
+} from '../lib/data/dealPipelineData'
+import PipelineLiveTracker from './PipelineLiveTracker'
 
-// Deal Pipeline — active acquisition deals from LOI through closing. Portal-managed (like the
-// capital-raise pipeline); the Acquisition Assistant agents feed/act on it later. Each deal carries
-// its stage, owner, key dates, a "next action" (the per-deal priority), and a costs-vs-budget
-// snapshot (the Deal Cost & Invoice Tracker concept). Closing readiness lives in Acquisition Checklist.
+// Deal Pipeline — mirrors the two ERP deal-pipeline workbooks kept in SharePoint (ERP Deal Pipelines/):
+//   • TX — "ERP TX Pipeline & Market Analysis" (Permian Basin — Midland/Odessa)
+//   • FL — "ERP FL Pipeline & Comp Summary" (Brevard / Space Coast)
+// Laid out like the spreadsheets (grouped, tabular), separated by state. Data is sourced from
+// lib/data/dealPipelineData.ts (auto-generated from the workbooks). Regenerate that file when the
+// workbooks change. The live portal-managed tracker still lives behind /api/deal-pipeline and feeds
+// the Acquisition Economics views — this section is the workbook mirror.
 
-const STAGES = ['Sourcing', 'LOI', 'Under Contract', 'Due Diligence', 'IC Approval', 'Closing', 'Closed']
-const STAGE_COLOR: Record<string, string> = {
-  'Sourcing': '#9ca3af', 'LOI': '#3b82f6', 'Under Contract': '#0ea5e9', 'Due Diligence': '#8b5cf6',
-  'IC Approval': '#f59e0b', 'Closing': '#059669', 'Closed': '#10b981',
+const NAVY = '#0D2D52'
+
+// ---- status palette (matches the workbook legends) ----
+const TX_STATUS_ORDER = ['Under Contract', 'Active', 'Pending', 'Decline']
+const TX_STATUS_COLOR: Record<string, string> = {
+  'Under Contract': '#059669', 'Active': '#2563eb', 'Pending': '#d97706', 'Decline': '#6b7280',
 }
-const MARKETS = ['Permian Basin', 'Brevard / Space Coast', 'Other']
-const OWNERS = ['Meghan', 'William', 'Michele']
-
-type DealRow = {
-  id: string; deal_name: string; entity: string | null; market: string | null; stage: string;
-  owner: string | null; purchase_price: number | null; budget: number | null; costs_to_date: number | null;
-  next_action: string | null; next_action_due: string | null; dd_deadline: string | null; closing_date: string | null;
-  notes: string | null; created_at: string; updated_at: string
+const TX_STATUS_DESC: Record<string, string> = {
+  'Under Contract': 'Contract signed', 'Active': 'Pursuing', 'Pending': 'Investigating', 'Decline': 'Passed',
+}
+const FL_SECTION_ORDER = [
+  'Under Contract', 'Contract Negotiations', 'Targets / Under Review', 'Prospects',
+  'Comparable — Multi-Tenant', 'Comparable — Single-Tenant', 'Comparable — Vacant Land',
+]
+const FL_SECTION_COLOR: Record<string, string> = {
+  'Under Contract': '#059669', 'Contract Negotiations': '#0ea5e9', 'Targets / Under Review': '#2563eb',
+  'Prospects': '#d97706', 'Comparable — Multi-Tenant': '#6b7280', 'Comparable — Single-Tenant': '#6b7280',
+  'Comparable — Vacant Land': '#6b7280',
 }
 
-const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
-const todayStr = () => new Date().toISOString().slice(0, 10)
-const daysUntil = (iso: string | null) => { if (!iso) return null; return Math.round((new Date(iso + 'T00:00:00').getTime() - new Date(todayStr() + 'T00:00:00').getTime()) / 86400000) }
+// ---- formatters ----
+const isNum = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v)
+const money = (v: unknown) => (isNum(v) ? `$${Math.round(v).toLocaleString('en-US')}` : v ? String(v) : '—')
+const psf = (v: unknown) => (isNum(v) ? `$${v.toFixed(2)}` : v ? String(v) : '—')
+const pct = (v: unknown) => (isNum(v) ? `${(v * 100).toFixed(v * 100 % 1 === 0 ? 0 : 1)}%` : v ? String(v) : '—')
+const num = (v: unknown) => (isNum(v) ? v.toLocaleString('en-US') : v ? String(v) : '—')
+const txt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v))
 
-function dateChip(label: string, iso: string | null) {
-  if (!iso) return null
-  const d = daysUntil(iso)
-  const overdue = d != null && d < 0
-  const soon = d != null && d >= 0 && d <= 14
-  const color = overdue ? '#b91c1c' : soon ? '#b45309' : '#6b7280'
+// ---- shared cell styles ----
+const TH: React.CSSProperties = {
+  position: 'sticky', top: 0, zIndex: 2, background: '#f1f5f9', color: '#334155',
+  fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px',
+  textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid #cbd5e1', whiteSpace: 'nowrap',
+}
+const TD: React.CSSProperties = {
+  padding: '7px 10px', fontSize: 12, color: '#1f2937', borderBottom: '1px solid #eef2f7',
+  verticalAlign: 'top',
+}
+const numTD: React.CSSProperties = { ...TD, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+const noteTD: React.CSSProperties = { ...TD, fontSize: 11.5, color: '#4b5563', minWidth: 240, maxWidth: 360, whiteSpace: 'pre-line' }
+
+function StatusBand({ label, color, count, sub }: { label: string; color: string; count: number; sub?: string }) {
   return (
-    <span style={{ fontSize: 11, color, fontWeight: overdue || soon ? 600 : 400 }}>
-      {label}: {iso}{d != null ? (overdue ? ` · ${Math.abs(d)}d overdue` : d === 0 ? ' · today' : ` · ${d}d`) : ''}
-    </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: `${color}12`, borderLeft: `4px solid ${color}` }}>
+      <span style={{ width: 9, height: 9, borderRadius: 2, background: color }} />
+      <span style={{ fontSize: 13, fontWeight: 700, color: NAVY }}>{label}</span>
+      {sub && <span style={{ fontSize: 11, color: '#64748b' }}>· {sub}</span>}
+      <span style={{ fontSize: 11, fontWeight: 600, color, marginLeft: 'auto' }}>{count} {count === 1 ? 'property' : 'properties'}</span>
+    </div>
   )
 }
 
+// =============================== TEXAS ===============================
+function TexasPipeline({ query, showMarket }: { query: string; showMarket: boolean }) {
+  const q = query.trim().toLowerCase()
+  const match = (r: TxRow) =>
+    !q || [r.location, r.owner, r.address, r.tenant, r.source, r.notes, r.nextSteps].join(' ').toLowerCase().includes(q)
+
+  const pipeline = useMemo(() => TX_ROWS.filter((r) => r.kind === 'pipeline' && match(r)), [q])
+  const market = useMemo(() => TX_ROWS.filter((r) => r.kind === 'market' && match(r)), [q])
+
+  const cols = ['Location', 'Owner', 'Address', 'Tenant', 'Source', 'Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.', 'Year Built', 'Next Steps', 'Notes / Comments']
+
+  const marketByLoc = useMemo(() => {
+    const m = new Map<string, TxRow[]>()
+    for (const r of market) { const k = r.location || 'Other'; if (!m.has(k)) m.set(k, []); m.get(k)!.push(r) }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
+  }, [market])
+
+  return (
+    <div>
+      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1180 }}>
+          <thead>
+            <tr>{cols.map((c) => <th key={c} style={c === 'Price' || c === '$ PSF' || c === '% Yield' || c === 'Acreage' || c === 'Sq. Ft.' ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {TX_STATUS_ORDER.map((st) => {
+              const rows = pipeline.filter((r) => r.status === st)
+              if (!rows.length) return null
+              const color = TX_STATUS_COLOR[st]
+              return (
+                <React.Fragment key={st}>
+                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={st} color={color} count={rows.length} sub={TX_STATUS_DESC[st]} /></td></tr>
+                  {rows.map((r, i) => (
+                    <tr key={i} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
+                      <td style={{ ...TD, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
+                      <td style={TD}>{txt(r.owner)}</td>
+                      <td style={{ ...TD, minWidth: 180 }}>{txt(r.address)}</td>
+                      <td style={TD}>{txt(r.tenant)}</td>
+                      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
+                      <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
+                      <td style={numTD}>{psf(r.pricePsf)}</td>
+                      <td style={numTD}>{pct(r.yield)}</td>
+                      <td style={numTD}>{num(r.acreage)}</td>
+                      <td style={numTD}>{num(r.sqft)}</td>
+                      <td style={{ ...numTD, textAlign: 'left' }}>{txt(r.yearBuilt)}</td>
+                      <td style={noteTD}>{txt(r.nextSteps)}</td>
+                      <td style={noteTD}>{txt(r.notes)}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              )
+            })}
+            {pipeline.length === 0 && (
+              <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>No pipeline deals match “{query}”.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Submarket inventory (the workbook's Market Analysis rows) */}
+      {showMarket && marketByLoc.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: NAVY, marginBottom: 4 }}>Market Analysis — Submarket Inventory</div>
+          <div style={{ fontSize: 11.5, color: '#64748b', marginBottom: 10 }}>
+            Every industrial property tracked in the target submarkets ({market.length} rows) — untagged inventory from the workbook, not active deals.
+          </div>
+          <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1000 }}>
+              <thead>
+                <tr>{['Owner', 'Address', 'Tenant', 'Acreage', 'Sq. Ft.', 'Year Built', 'Notes'].map((c) =>
+                  <th key={c} style={c === 'Acreage' || c === 'Sq. Ft.' ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr>
+              </thead>
+              <tbody>
+                {marketByLoc.map(([loc, rows]) => (
+                  <React.Fragment key={loc}>
+                    <tr><td colSpan={7} style={{ padding: '7px 12px', background: '#f8fafc', fontSize: 12, fontWeight: 700, color: '#475569', borderTop: '1px solid #e2e8f0', borderBottom: '1px solid #e2e8f0' }}>{loc} <span style={{ fontWeight: 500, color: '#94a3b8' }}>· {rows.length}</span></td></tr>
+                    {rows.map((r, i) => (
+                      <tr key={i} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
+                        <td style={TD}>{txt(r.owner)}</td>
+                        <td style={{ ...TD, minWidth: 170 }}>{txt(r.address)}</td>
+                        <td style={TD}>{txt(r.tenant)}</td>
+                        <td style={numTD}>{num(r.acreage)}</td>
+                        <td style={numTD}>{num(r.sqft)}</td>
+                        <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.yearBuilt)}</td>
+                        <td style={noteTD}>{txt(r.notes)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// =============================== FLORIDA ===============================
+function FloridaPipeline({ query }: { query: string }) {
+  const q = query.trim().toLowerCase()
+  const match = (r: FlRow) =>
+    !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
+  const rows = useMemo(() => FL_ROWS.filter(match), [q])
+
+  const cols = ['Name', 'Status', 'Source', 'Property Type', 'Location', 'Year Built', 'Units', 'Occup.', 'Cap Rate', 'SQFT', 'Acres', 'Purchase Price', 'PSF / P-Acre', 'Notes / Status']
+  const rightCols = new Set(['Year Built', 'Units', 'Occup.', 'Cap Rate', 'SQFT', 'Acres', 'Purchase Price', 'PSF / P-Acre'])
+
+  return (
+    <div>
+      <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1240 }}>
+          <thead>
+            <tr>{cols.map((c) => <th key={c} style={rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr>
+          </thead>
+          <tbody>
+            {FL_SECTION_ORDER.map((sec) => {
+              const secRows = rows.filter((r) => r.section === sec)
+              if (!secRows.length) return null
+              const color = FL_SECTION_COLOR[sec] || '#6b7280'
+              return (
+                <React.Fragment key={sec}>
+                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={sec} color={color} count={secRows.length} /></td></tr>
+                  {secRows.map((r, i) => (
+                    <tr key={i} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
+                      <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}</td>
+                      <td style={TD}>{txt(r.status)}</td>
+                      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
+                      <td style={TD}>{txt(r.propertyType)}</td>
+                      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
+                      <td style={{ ...numTD, textAlign: 'left' }}>{txt(r.yearBuilt)}</td>
+                      <td style={numTD}>{num(r.units)}</td>
+                      <td style={numTD}>{pct(r.occupancy)}</td>
+                      <td style={numTD}>{pct(r.capRate)}</td>
+                      <td style={numTD}>{num(r.sqft)}</td>
+                      <td style={numTD}>{num(r.acres)}</td>
+                      <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
+                      <td style={numTD}>{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</td>
+                      <td style={noteTD}>{txt(r.notes)}</td>
+                    </tr>
+                  ))}
+                </React.Fragment>
+              )
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>No properties match “{query}”.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <details style={{ marginTop: 16, background: '#fff', border: '1px solid #e2e8f0', borderRadius: 12, padding: '12px 16px' }}>
+        <summary style={{ cursor: 'pointer', fontSize: 13, fontWeight: 700, color: NAVY }}>Market &amp; Strategy Notes</summary>
+        <ul style={{ margin: '12px 0 2px', paddingLeft: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {FL_STRATEGY_NOTES.map((n, i) => <li key={i} style={{ fontSize: 12, color: '#4b5563', lineHeight: 1.5 }}>{n}</li>)}
+        </ul>
+      </details>
+    </div>
+  )
+}
+
+// =============================== SHELL ===============================
 export default function DealPipelineView() {
-  const [rows, setRows] = useState<DealRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [editing, setEditing] = useState<Partial<DealRow> | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [err, setErr] = useState('')
+  const [mode, setMode] = useState<'mirror' | 'live'>('mirror')
+  const [stateTab, setStateTab] = useState<'TX' | 'FL'>('TX')
+  const [query, setQuery] = useState('')
+  const [showMarket, setShowMarket] = useState(false)
 
-  const load = async () => {
-    setLoading(true)
-    try { const r = await fetch('/api/deal-pipeline'); const d = await r.json(); if (r.ok) setRows(d.items ?? []) }
-    catch { /* ignore */ } finally { setLoading(false) }
-  }
-  useEffect(() => { load() }, [])
+  const txPipeline = TX_ROWS.filter((r) => r.kind === 'pipeline')
+  const txMarket = TX_ROWS.filter((r) => r.kind === 'market')
+  const txActive = txPipeline.filter((r) => r.status === 'Active' || r.status === 'Under Contract').length
+  const txPending = txPipeline.filter((r) => r.status === 'Pending').length
+  const flTargets = FL_ROWS.filter((r) => r.section === 'Targets / Under Review' || r.section === 'Prospects').length
 
-  const save = async () => {
-    if (!editing || !editing.deal_name?.trim() || saving) return
-    setSaving(true); setErr('')
-    try {
-      const method = editing.id ? 'PATCH' : 'POST'
-      const r = await fetch('/api/deal-pipeline', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
-      const d = await r.json()
-      if (!r.ok) { setErr(d.error || 'Save failed'); return }
-      setEditing(null); await load()
-    } catch (e) { setErr(String(e)) } finally { setSaving(false) }
-  }
-
-  const remove = async (id: string) => {
-    setRows((prev) => prev.filter((x) => x.id !== id)); setEditing(null)
-    try { await fetch(`/api/deal-pipeline?id=${encodeURIComponent(id)}`, { method: 'DELETE' }) } catch { /* ignore */ }
-  }
-
-  const active = rows.filter((r) => r.stage !== 'Closed')
-  const pipelineValue = active.reduce((s, r) => s + (r.purchase_price || 0), 0)
-  const inDD = active.filter((r) => r.stage === 'Due Diligence').length
-  const underContractPlus = active.filter((r) => ['Under Contract', 'Due Diligence', 'IC Approval', 'Closing'].includes(r.stage)).length
-  const closingSoon = active.filter((r) => { const d = daysUntil(r.closing_date); return d != null && d >= 0 && d <= 30 }).length
-
-  const sorted = [...rows].sort((a, b) => (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) || (b.purchase_price || 0) - (a.purchase_price || 0))
+  const asOf = stateTab === 'TX' ? TX_AS_OF : FL_AS_OF
+  const meta = stateTab === 'TX'
+    ? { title: 'Permian Basin', sub: 'Midland / Odessa, TX', file: 'ERP TX Pipeline & Market Analysis' }
+    : { title: 'Brevard / Space Coast', sub: 'Melbourne / Palm Bay / Titusville, FL', file: 'ERP FL Pipeline & Comp Summary' }
 
   const kpi = (label: string, value: string, color?: string) => (
-    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', flex: 1, minWidth: 130 }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: color || '#0D2D52', marginTop: 4 }}>{value}</div>
+    <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 16px', flex: 1, minWidth: 120 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.4px' }}>{label}</div>
+      <div style={{ fontSize: 22, fontWeight: 700, color: color || NAVY, marginTop: 4 }}>{value}</div>
     </div>
+  )
+
+  const tab = (id: 'TX' | 'FL', label: string, sub: string) => (
+    <button onClick={() => setStateTab(id)}
+      style={{
+        flex: 1, padding: '10px 16px', borderRadius: 10, cursor: 'pointer', textAlign: 'left',
+        border: stateTab === id ? `2px solid ${NAVY}` : '1px solid #e2e8f0',
+        background: stateTab === id ? '#eef4ff' : '#fff',
+      }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: stateTab === id ? NAVY : '#334155' }}>{label}</div>
+      <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{sub}</div>
+    </button>
+  )
+
+  const modeBtn = (id: 'mirror' | 'live', label: string) => (
+    <button onClick={() => setMode(id)}
+      style={{
+        padding: '7px 16px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+        border: mode === id ? `1px solid ${NAVY}` : '1px solid #e2e8f0',
+        background: mode === id ? NAVY : '#fff', color: mode === id ? '#fff' : '#64748b',
+      }}>{label}</button>
   )
 
   return (
@@ -90,133 +279,65 @@ export default function DealPipelineView() {
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
         <div>
           <h2>Deal Pipeline</h2>
-          <p>Active acquisitions from LOI through closing — stage, next action, key dates, and cost-to-budget per deal. Closing readiness lives in Acquisition Checklist.</p>
+          <p>{mode === 'mirror'
+            ? 'Acquisition pipeline mirrored from the ERP deal-pipeline workbooks, separated by market. Texas and Florida track different fields, so each is shown in its own workbook layout.'
+            : 'Editable, portal-managed pipeline (Sourcing → Closed) — feeds the Acquisition Economics views. Auto-add fit inbound listings, or add deals manually.'}</p>
         </div>
-        <button onClick={() => setEditing({ stage: 'Sourcing', market: 'Permian Basin' })}
-          style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add deal</button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          {modeBtn('mirror', '📊 Workbook Mirror')}
+          {modeBtn('live', '✏️ Live Tracker')}
+        </div>
       </div>
 
+      {mode === 'live' ? <PipelineLiveTracker /> : (
+      <>
+      {/* State selector */}
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        {tab('TX', '🛢️  Texas — Permian Basin', 'Midland / Odessa · Pipeline & Market Analysis')}
+        {tab('FL', '🚀  Florida — Brevard', 'Space Coast · Pipeline & Comp Summary')}
+      </div>
+
+      {/* KPIs */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        {kpi('Active Deals', String(active.length))}
-        {kpi('Under Contract+', String(underContractPlus))}
-        {kpi('In Diligence', String(inDD), inDD ? '#8b5cf6' : undefined)}
-        {kpi('Closing ≤30d', String(closingSoon), closingSoon ? '#059669' : undefined)}
-        {kpi('Pipeline Value', pipelineValue ? usd(pipelineValue) : '—', '#0e7490')}
+        {stateTab === 'TX' ? (
+          <>
+            {kpi('Pipeline Deals', String(txPipeline.length))}
+            {kpi('Active / U.C.', String(txActive), '#2563eb')}
+            {kpi('Pending', String(txPending), '#d97706')}
+            {kpi('Submarket Inventory', String(txMarket.length), '#0e7490')}
+          </>
+        ) : (
+          <>
+            {kpi('Total Records', String(FL_ROWS.length))}
+            {kpi('Targets + Prospects', String(flTargets), '#2563eb')}
+            {kpi('Comparables', String(FL_ROWS.filter((r) => r.section.startsWith('Comparable')).length), '#6b7280')}
+          </>
+        )}
       </div>
 
-      {/* Stage funnel */}
-      <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
-        {STAGES.map((s) => {
-          const n = rows.filter((r) => r.stage === s).length
-          const amt = rows.filter((r) => r.stage === s).reduce((a, r) => a + (r.purchase_price || 0), 0)
-          return (
-            <div key={s} style={{ flex: 1, minWidth: 92, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 2, background: STAGE_COLOR[s], display: 'inline-block' }} />
-                <span style={{ fontSize: 10, fontWeight: 600, color: '#6b7280' }}>{s}</span>
-              </div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: '#0D2D52', marginTop: 3 }}>{n}</div>
-              <div style={{ fontSize: 10, color: '#9ca3af' }}>{amt ? usd(amt) : '—'}</div>
-            </div>
-          )
-        })}
+      {/* Context bar */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: '#64748b' }}>
+          <span style={{ fontWeight: 700, color: NAVY }}>{meta.title}</span> · {meta.sub}
+          <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
+          Source: <span style={{ fontStyle: 'italic' }}>{meta.file}</span>
+          <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>
+          As of {asOf}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {stateTab === 'TX' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showMarket} onChange={(e) => setShowMarket(e.target.checked)} />
+              Show submarket inventory
+            </label>
+          )}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search address, owner, tenant…"
+            style={{ fontSize: 12.5, padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 8, width: 240, maxWidth: '100%' }} />
+        </div>
       </div>
 
-      {loading ? (
-        <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading pipeline…</div>
-      ) : rows.length === 0 ? (
-        <div style={{ background: '#fff', border: '1px dashed #d1d5db', borderRadius: 12, padding: 40, textAlign: 'center' }}>
-          <div style={{ fontSize: 28, marginBottom: 8 }}>🏗️</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No deals yet</div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Add an acquisition to start tracking the pipeline.</div>
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {sorted.map((r) => {
-            const spentPct = r.budget && r.budget > 0 ? Math.min(100, Math.round(((r.costs_to_date || 0) / r.budget) * 100)) : null
-            return (
-              <div key={r.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderLeft: `3px solid ${STAGE_COLOR[r.stage] || '#9ca3af'}`, borderRadius: 10, padding: '12px 14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: '#111827' }}>{r.deal_name}</span>
-                      <span style={{ fontSize: 10, fontWeight: 600, color: STAGE_COLOR[r.stage], background: `${STAGE_COLOR[r.stage]}14`, borderRadius: 5, padding: '1px 8px' }}>{r.stage}</span>
-                      {r.market && <span style={{ fontSize: 10, color: '#6b7280', background: '#f3f4f6', borderRadius: 5, padding: '1px 7px' }}>{r.market}</span>}
-                      {r.purchase_price != null && r.purchase_price > 0 && <span style={{ fontSize: 12, fontWeight: 600, color: '#0D2D52' }}>{usd(r.purchase_price)}</span>}
-                    </div>
-                    {r.entity && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{r.entity}</div>}
-                    {r.next_action && (
-                      <div style={{ fontSize: 12, color: '#374151', marginTop: 6 }}>
-                        <span style={{ fontWeight: 600 }}>Next:</span> {r.next_action}
-                        {r.next_action_due && <span style={{ marginLeft: 6 }}>{dateChip('due', r.next_action_due)}</span>}
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 6 }}>
-                      {r.owner && <span style={{ fontSize: 11, color: '#9ca3af' }}>👤 {r.owner}</span>}
-                      {dateChip('DD', r.dd_deadline)}
-                      {dateChip('Close', r.closing_date)}
-                    </div>
-                    {spentPct != null && (
-                      <div style={{ marginTop: 8, maxWidth: 320 }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#6b7280', marginBottom: 3 }}>
-                          <span>Costs vs budget</span><span>{usd(r.costs_to_date || 0)} / {usd(r.budget || 0)}</span>
-                        </div>
-                        <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ width: `${spentPct}%`, height: '100%', background: spentPct >= 90 ? '#b91c1c' : '#0e7490' }} />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                  <button onClick={() => setEditing(r)} style={{ flexShrink: 0, background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '3px 10px', fontSize: 12, cursor: 'pointer', color: '#374151' }}>Edit</button>
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      )}
-
-      {editing && (
-        <div onClick={() => setEditing(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, padding: 22, width: 560, maxWidth: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: '#0D2D52', marginBottom: 16 }}>{editing.id ? 'Edit deal' : 'Add deal'}</div>
-            {(() => {
-              const set = (k: keyof DealRow, v: unknown) => setEditing((p) => ({ ...p, [k]: v }))
-              const lbl = { fontSize: 11, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase' as const, letterSpacing: '.4px', marginBottom: 4, display: 'block' }
-              const inp = { width: '100%', boxSizing: 'border-box' as const, fontSize: 13, padding: '8px 10px', border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff', color: '#111827' }
-              return (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div><label style={lbl}>Deal name</label><input style={inp} value={editing.deal_name || ''} onChange={(e) => set('deal_name', e.target.value)} placeholder="e.g. 9105 I-20, Midland" /></div>
-                  <div><label style={lbl}>Entity</label><input style={inp} value={editing.entity || ''} onChange={(e) => set('entity', e.target.value)} placeholder="ERP Industrials 9105, LLC" /></div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}><label style={lbl}>Stage</label><select style={inp} value={editing.stage || 'Sourcing'} onChange={(e) => set('stage', e.target.value)}>{STAGES.map((s) => <option key={s}>{s}</option>)}</select></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>Market</label><select style={inp} value={editing.market || ''} onChange={(e) => set('market', e.target.value)}><option value="">—</option>{MARKETS.map((m) => <option key={m}>{m}</option>)}</select></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>Owner</label><select style={inp} value={editing.owner || ''} onChange={(e) => set('owner', e.target.value)}><option value="">—</option>{OWNERS.map((o) => <option key={o}>{o}</option>)}</select></div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}><label style={lbl}>Purchase price</label><input type="number" style={inp} value={editing.purchase_price ?? ''} onChange={(e) => set('purchase_price', e.target.value)} placeholder="0" /></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>DD deadline</label><input type="date" style={inp} value={editing.dd_deadline || ''} onChange={(e) => set('dd_deadline', e.target.value)} /></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>Closing date</label><input type="date" style={inp} value={editing.closing_date || ''} onChange={(e) => set('closing_date', e.target.value)} /></div>
-                  </div>
-                  <div><label style={lbl}>Next action</label><input style={inp} value={editing.next_action || ''} onChange={(e) => set('next_action', e.target.value)} placeholder="What needs to happen next" /></div>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <div style={{ flex: 1 }}><label style={lbl}>Next action due</label><input type="date" style={inp} value={editing.next_action_due || ''} onChange={(e) => set('next_action_due', e.target.value)} /></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>Costs to date</label><input type="number" style={inp} value={editing.costs_to_date ?? ''} onChange={(e) => set('costs_to_date', e.target.value)} placeholder="0" /></div>
-                    <div style={{ flex: 1 }}><label style={lbl}>Deal budget</label><input type="number" style={inp} value={editing.budget ?? ''} onChange={(e) => set('budget', e.target.value)} placeholder="0" /></div>
-                  </div>
-                  <div><label style={lbl}>Notes</label><textarea style={{ ...inp, minHeight: 60, resize: 'vertical' as const }} value={editing.notes || ''} onChange={(e) => set('notes', e.target.value)} /></div>
-                  {err && <div style={{ fontSize: 12, color: '#b91c1c' }}>{err}</div>}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
-                    <div>{editing.id && <button onClick={() => remove(editing.id!)} style={{ background: 'none', border: '1px solid #fca5a5', color: '#b91c1c', borderRadius: 8, padding: '8px 14px', fontSize: 13, cursor: 'pointer' }}>Delete</button>}</div>
-                    <div style={{ display: 'flex', gap: 10 }}>
-                      <button onClick={() => setEditing(null)} style={{ background: 'none', border: '1px solid #d1d5db', color: '#374151', borderRadius: 8, padding: '8px 16px', fontSize: 13, cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={save} disabled={saving || !editing.deal_name?.trim()} style={{ border: 'none', background: '#0D2D52', color: '#fff', borderRadius: 8, padding: '8px 18px', fontSize: 13, fontWeight: 600, cursor: saving ? 'default' : 'pointer', opacity: saving || !editing.deal_name?.trim() ? .6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
-                    </div>
-                  </div>
-                </div>
-              )
-            })()}
-          </div>
-        </div>
+      {stateTab === 'TX' ? <TexasPipeline query={query} showMarket={showMarket} /> : <FloridaPipeline query={query} />}
+      </>
       )}
     </div>
   )
