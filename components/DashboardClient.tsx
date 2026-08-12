@@ -18,6 +18,7 @@ import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 import BuyBoxPanel from './BuyBoxPanel'
 import InboundListingIntake from './InboundListingIntake'
 import AdminVendorDeskView from './AdminVendorDeskView'
+import DstTaxPrepView from './DstTaxPrepView'
 import DealVendorDesk from './DealVendorDesk'
 import NewsletterAnalyticsView from './NewsletterAnalyticsView'
 import LinkedInRepurposeView from './LinkedInRepurposeView'
@@ -324,6 +325,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     accounting: <AccountingView />,
     'daily-priorities': <DailyPrioritiesView />,
     'admin-vendors': <AdminVendorDeskView />,
+    'dst-tax-prep': <DstTaxPrepView />,
     kb: <KnowledgeBaseView />,
     sops: <SOPsView />,
     'market-research': <MarketResearchView />,
