@@ -376,7 +376,7 @@ export const WORKFLOWS: Record<string, AgentWorkflowData> = {
   "prop-ops": { wf: [] },
   "acct-ops": { wf: [] },
   "fin-controls": { wf: [] },
-  "acq-assistant": {
+  "deal-pipeline": {
     wf: [
       {
         name: "Acquisition Checklist Automator",
