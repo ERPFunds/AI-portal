@@ -57,18 +57,36 @@ export async function GET(req: NextRequest) {
   const sinceIso = since.toISOString().split(".")[0] + "Z";
   const rangeLabel = `${sinceIso.slice(0, 10)} → ${new Date().toISOString().slice(0, 10)}`;
 
+  // Retry transient failures (a Graph token blip or a slow Salesforce query once caused the weekly
+  // send to 500 and silently skip). Two extra attempts with a short backoff makes the digest robust.
+  const retry = async <T>(label: string, fn: () => Promise<T>): Promise<T> => {
+    let lastErr: unknown;
+    for (let i = 0; i < 3; i++) {
+      try { return await fn(); }
+      catch (e) { lastErr = e; if (i < 2) await new Promise((r) => setTimeout(r, 1500 * (i + 1))); }
+    }
+    throw new Error(`${label} failed after retries: ${String(lastErr).slice(0, 200)}`);
+  };
+
   try {
-    const add = await listRecentAgentAdditions(sinceIso);
+    const add = await retry("sf-query", () => listRecentAgentAdditions(sinceIso));
     const html = buildHtml(add, days, rangeLabel);
     const subject = `Salesforce IR digest — ${add.contacts.length} new contact${add.contacts.length === 1 ? "" : "s"}, ${add.tasks.length} email${add.tasks.length === 1 ? "" : "s"} logged`;
     const to = (process.env.IR_DIGEST_TO || DEFAULT_TO).split(",").map((s) => s.trim()).filter(Boolean);
     // Send via Microsoft Graph (app-only) — the tenant blocks basic-auth SMTP.
     const from = process.env.IR_DIGEST_FROM || process.env.IR_TEAM_MAILBOX || "team@erpfunds.com";
 
-    if (doSend) await sendMailAs(from, { to, subject, content: html, contentType: "HTML" });
+    if (doSend) await retry("send", () => sendMailAs(from, { to, subject, content: html, contentType: "HTML" }));
 
     return NextResponse.json({ ok: true, sent: doSend, from, to, contacts: add.contacts.length, tasks: add.tasks.length, subject });
   } catch (e) {
+    // Surface failures instead of dropping the weekly email silently — alert the operator via Graph.
+    console.error("[ir-sf-digest] failed:", String(e));
+    try {
+      const alertTo = (process.env.ALERT_EMAIL_TO || "mparad@erpfunds.com").split(",").map((s) => s.trim()).filter(Boolean);
+      const from = process.env.IR_DIGEST_FROM || process.env.IR_TEAM_MAILBOX || "team@erpfunds.com";
+      await sendMailAs(from, { to: alertTo, subject: "⚠ Salesforce IR digest failed to send", content: `The weekly Salesforce digest failed:<br><br>${String(e).slice(0, 400)}`, contentType: "HTML" });
+    } catch { /* alert is best-effort */ }
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 500 });
   }
 }
