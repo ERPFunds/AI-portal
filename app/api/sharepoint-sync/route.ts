@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getGraphToken } from "@/lib/agents/graph-token";
-import { sql } from "@vercel/postgres";
+import { sql } from "@/lib/sql";
 
 export const dynamic = "force-dynamic";
 
