@@ -5,6 +5,9 @@
 
 export type Fit = 'fit' | 'borderline' | 'no-fit'
 export type Source = 'Crexi' | 'LoopNet' | 'Broker email' | 'OM attachment'
+// How the listing reached ERP — most are forwarded by brokers, but some come from
+// investors/LPs, colleagues, platform alerts, or arrive direct/cold.
+export type ReferralKind = 'Broker' | 'Investor/LP' | 'Colleague' | 'Platform alert' | 'Direct/Cold'
 
 export type Listing = {
   id: string
@@ -17,7 +20,9 @@ export type Listing = {
   compPsf: number         // recent-comp $/SF for the quick-score
   broker: string
   brokerFirm: string
-  source: Source
+  source: Source          // channel it arrived through (Crexi / LoopNet / email / OM)
+  referredBy: string      // who forwarded/surfaced it to ERP — name · firm
+  referralKind: ReferralKind  // that source's relationship to ERP
   received: string
   fit: Fit
   reason: string
@@ -56,12 +61,12 @@ export const BUY_BOXES: Record<Listing['state'], BuyBox> = {
 export const BUY_BOX = BUY_BOXES.TX
 
 export const INBOUND_LISTINGS: Listing[] = [
-  { id: 'l1', address: '4200 W Industrial Ave, Odessa, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 3200000, sf: 42000, inPlaceNoi: 237000, compPsf: 81, broker: 'Jake Georgiades', brokerFirm: 'Colliers', source: 'Crexi', received: '2026-07-13', fit: 'fit', reason: 'In-market industrial; 7.4% cap ≥ 6.5% floor; $76/SF and $3.2M within bands.', score: 84 },
-  { id: 'l2', address: '1450 Aerospace Pkwy, Titusville, FL', submarket: 'Space Coast', state: 'FL', askingPrice: 2600000, sf: 28500, inPlaceNoi: 179000, compPsf: 89, broker: 'Kristian Brown', brokerFirm: 'Cushman & Wakefield', source: 'OM attachment', received: '2026-07-12', fit: 'fit', reason: 'Target Space Coast IOS; 6.9% cap, size and price/SF all within Buy Box.', score: 78 },
-  { id: 'l3', address: '8800 CR 1290, Midland, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 5900000, sf: 95000, inPlaceNoi: 360000, compPsf: 66, broker: 'Matt Berres', brokerFirm: 'Newmark', source: 'LoopNet', received: '2026-07-11', fit: 'borderline', reason: '6.1% cap is below the 6.5% floor; SF near top of range — worth a look but off-box on yield.', score: 62 },
-  { id: 'l4', address: '1200 Logistics Way, Dallas, TX', submarket: 'DFW (Great SW)', state: 'TX', askingPrice: 12000000, sf: 180000, inPlaceNoi: 648000, compPsf: 71, broker: 'S. Alvarez', brokerFirm: 'CBRE', source: 'Crexi', received: '2026-07-11', fit: 'no-fit', reason: 'Outside target submarkets (DFW); $12M exceeds ≤$8M limit; 5.4% cap below floor.', score: 38 },
-  { id: 'l5', address: '300 Retail Plaza, Melbourne, FL', submarket: 'Space Coast', state: 'FL', askingPrice: 1800000, sf: 12000, inPlaceNoi: 112000, compPsf: 150, broker: 'D. Feldman', brokerFirm: 'Marcus & Millichap', source: 'Broker email', received: '2026-07-10', fit: 'no-fit', reason: 'Retail, not industrial/IOS; 12k SF below 15k floor; $150/SF above band.', score: 31 },
-  { id: 'l6', address: '9105 I-20, Midland, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 2900000, sf: 44000, inPlaceNoi: 205000, compPsf: 68, broker: 'C. Watts', brokerFirm: 'Invest Texas', source: 'Broker email', received: '2026-07-09', fit: 'fit', reason: 'Matches an existing deal record.', score: 80, deduped: 'Already in Deal Pipeline — Closing' },
+  { id: 'l1', address: '4200 W Industrial Ave, Odessa, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 3200000, sf: 42000, inPlaceNoi: 237000, compPsf: 81, broker: 'Jake Georgiades', brokerFirm: 'Colliers', source: 'Crexi', referredBy: 'Jake Georgiades · Colliers', referralKind: 'Broker', received: '2026-07-13', fit: 'fit', reason: 'In-market industrial; 7.4% cap ≥ 6.5% floor; $76/SF and $3.2M within bands.', score: 84 },
+  { id: 'l2', address: '1450 Aerospace Pkwy, Titusville, FL', submarket: 'Space Coast', state: 'FL', askingPrice: 2600000, sf: 28500, inPlaceNoi: 179000, compPsf: 89, broker: 'Kristian Brown', brokerFirm: 'Cushman & Wakefield', source: 'OM attachment', referredBy: 'Dana Cole · Meridian (LP)', referralKind: 'Investor/LP', received: '2026-07-12', fit: 'fit', reason: 'Target Space Coast IOS; 6.9% cap, size and price/SF all within Buy Box.', score: 78 },
+  { id: 'l3', address: '8800 CR 1290, Midland, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 5900000, sf: 95000, inPlaceNoi: 360000, compPsf: 66, broker: 'Matt Berres', brokerFirm: 'Newmark', source: 'LoopNet', referredBy: 'Matt Berres · Newmark', referralKind: 'Broker', received: '2026-07-11', fit: 'borderline', reason: '6.1% cap is below the 6.5% floor; SF near top of range — worth a look but off-box on yield.', score: 62 },
+  { id: 'l4', address: '1200 Logistics Way, Dallas, TX', submarket: 'DFW (Great SW)', state: 'TX', askingPrice: 12000000, sf: 180000, inPlaceNoi: 648000, compPsf: 71, broker: 'S. Alvarez', brokerFirm: 'CBRE', source: 'Crexi', referredBy: 'S. Alvarez · CBRE', referralKind: 'Broker', received: '2026-07-11', fit: 'no-fit', reason: 'Outside target submarkets (DFW); $12M exceeds ≤$8M limit; 5.4% cap below floor.', score: 38 },
+  { id: 'l5', address: '300 Retail Plaza, Melbourne, FL', submarket: 'Space Coast', state: 'FL', askingPrice: 1800000, sf: 12000, inPlaceNoi: 112000, compPsf: 150, broker: 'D. Feldman', brokerFirm: 'Marcus & Millichap', source: 'Broker email', referredBy: 'Priya Nair · ERP', referralKind: 'Colleague', received: '2026-07-10', fit: 'no-fit', reason: 'Retail, not industrial/IOS; 12k SF below 15k floor; $150/SF above band.', score: 31 },
+  { id: 'l6', address: '9105 I-20, Midland, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 2900000, sf: 44000, inPlaceNoi: 205000, compPsf: 68, broker: 'C. Watts', brokerFirm: 'Invest Texas', source: 'Broker email', referredBy: 'C. Watts · Invest Texas', referralKind: 'Broker', received: '2026-07-09', fit: 'fit', reason: 'Matches an existing deal record.', score: 80, deduped: 'Already in Deal Pipeline — Closing' },
 ]
 
 export const PIPELINE_MARKETS = ['Permian Basin', 'Brevard / Space Coast', 'Other'] as const

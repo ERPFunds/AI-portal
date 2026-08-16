@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { INBOUND_LISTINGS as LISTINGS, BUY_BOXES, type Fit, type Source } from '../lib/data/inboundListings'
+import { INBOUND_LISTINGS as LISTINGS, BUY_BOXES, type Fit, type Source, type ReferralKind } from '../lib/data/inboundListings'
 
 // UI MOCKUP — Acquisition EA Workflow #9: Inbound Listing Intake, Screen & Quick-Score.
 // Demonstrates the flow with sample data (not wired to a live inbox). Captures broker-supplied
@@ -18,6 +18,7 @@ const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label:
   'no-fit':     { color: '#b91c1c', bg: '#fef2f2', border: '#fecaca', label: 'No-fit' },
 }
 const SOURCE_ICON: Record<Source, string> = { 'Crexi': '🟧', 'LoopNet': '🔵', 'Broker email': '✉️', 'OM attachment': '📎' }
+const REFERRAL_ICON: Record<ReferralKind, string> = { 'Broker': '🤝', 'Investor/LP': '💼', 'Colleague': '👥', 'Platform alert': '🔔', 'Direct/Cold': '📩' }
 
 export default function InboundListingIntake({ market: locked }: { market?: 'TX' | 'FL' } = {}) {
   const [market, setMarket] = useState<'All' | 'TX' | 'FL'>('All')
@@ -115,6 +116,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{SOURCE_ICON[l.source]} {l.source}</span>
+                  <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px', color: '#6d28d9' }} title={`Forwarded to ERP by ${l.referredBy}`}>{REFERRAL_ICON[l.referralKind]} {l.referralKind}</span>
                   <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{l.state}</span>
                 </div>
                 {l.deduped
@@ -124,6 +126,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
 
               <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address}</div>
               <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referredBy}</span></div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 10 }}>
                 <Metric label="Asking" value={usd(l.askingPrice)} />
