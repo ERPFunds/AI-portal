@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import { INBOUND_LISTINGS as LISTINGS, BUY_BOX as BOX, type Fit, type Source } from '../lib/data/inboundListings'
+import { INBOUND_LISTINGS as LISTINGS, BUY_BOXES, type Fit, type Source } from '../lib/data/inboundListings'
 
 // UI MOCKUP — Acquisition EA Workflow #9: Inbound Listing Intake, Screen & Quick-Score.
 // Demonstrates the flow with sample data (not wired to a live inbox). Captures broker-supplied
@@ -63,12 +63,19 @@ export default function InboundListingIntake() {
         <span>🧪</span><span><strong>UI mockup</strong> — Acquisition EA Workflow #9. Sample data; not yet wired to the live inbox. Captures broker-supplied data only (no Crexi/LoopNet scraping).</span>
       </div>
 
-      {/* Buy Box being screened against */}
-      <div style={{ fontSize: 11, color: '#6b7280', marginBottom: 12, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-        <span style={{ fontWeight: 600, color: '#0D2D52' }}>🎯 Screening vs Buy Box:</span>
-        {[BOX.markets, BOX.assetClass, BOX.sf, BOX.psf, `cap ≥ ${BOX.capFloor}`, BOX.dealSize].map(t => (
-          <span key={t} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>{t}</span>
-        ))}
+      {/* Buy Box(es) being screened against — market-specific. TX is portfolio-derived; FL illustrative. */}
+      <div style={{ marginBottom: 12 }}>
+        {(market === 'All' ? (['TX', 'FL'] as const) : [market]).map(mk => {
+          const box = BUY_BOXES[mk]
+          return (
+            <div key={mk} style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+              <span style={{ fontWeight: 600, color: '#0D2D52' }}>🎯 {mk} Buy Box:</span>
+              {[box.markets, box.assetClass, box.sf, box.psf, box.yieldTarget, box.dealSize].map(t => (
+                <span key={t} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px' }}>{t}</span>
+              ))}
+            </div>
+          )
+        })}
       </div>
 
       {/* KPIs */}

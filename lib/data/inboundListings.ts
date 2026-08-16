@@ -25,8 +25,35 @@ export type Listing = {
   deduped?: string        // set when it matches an existing record
 }
 
-// The illustrative Buy Box these are screened against.
-export const BUY_BOX = { markets: 'TX & FL', assetClass: 'Industrial / IOS', sf: '15k–120k SF', psf: '$50–$120/SF', capFloor: '6.5%', dealSize: '≤ $8M' }
+export type BuyBox = { markets: string; assetClass: string; sf: string; psf: string; yieldTarget: string; dealSize: string }
+
+// Market-specific buy boxes. The TX (Permian) box is derived from ERP's 80-property Texas portfolio
+// — geography by corridor, single-tenant NNN industrial/flex asset class, ~5k–25k SF core (median
+// ~10.6k) on 2.5–10 ac with low building-to-land ratio — plus the two 2026 Permian acquisitions
+// (3001/3105 CR 1255 and 9105 I-20): ~$50–185/SF, all-cash, underwritten to a ~10% stabilized
+// unlevered yield rather than an in-place cap floor. The FL (Space Coast) box stays illustrative
+// until there's FL portfolio/transaction data to anchor it.
+export const BUY_BOXES: Record<Listing['state'], BuyBox> = {
+  TX: {
+    markets: 'Permian — Midland/Odessa',
+    assetClass: 'Single-tenant NNN industrial / flex',
+    sf: '5k–25k SF (to ~75k)',
+    psf: '$50–$185/SF',
+    yieldTarget: '~10% stabilized yield',
+    dealSize: '≤ ~$3M core',
+  },
+  FL: {
+    markets: 'Brevard / Space Coast',
+    assetClass: 'Industrial / IOS',
+    sf: '15k–120k SF',
+    psf: '$50–$120/SF',
+    yieldTarget: 'cap ≥ 6.5%',
+    dealSize: '≤ $8M',
+  },
+}
+
+// Back-compat default (TX is the primary market).
+export const BUY_BOX = BUY_BOXES.TX
 
 export const INBOUND_LISTINGS: Listing[] = [
   { id: 'l1', address: '4200 W Industrial Ave, Odessa, TX', submarket: 'Permian Basin', state: 'TX', askingPrice: 3200000, sf: 42000, inPlaceNoi: 237000, compPsf: 81, broker: 'Jake Georgiades', brokerFirm: 'Colliers', source: 'Crexi', received: '2026-07-13', fit: 'fit', reason: 'In-market industrial; 7.4% cap ≥ 6.5% floor; $76/SF and $3.2M within bands.', score: 84 },
