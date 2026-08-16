@@ -19,19 +19,21 @@ const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label:
 }
 const SOURCE_ICON: Record<Source, string> = { 'Crexi': '🟧', 'LoopNet': '🔵', 'Broker email': '✉️', 'OM attachment': '📎' }
 
-export default function InboundListingIntake() {
+export default function InboundListingIntake({ market: locked }: { market?: 'TX' | 'FL' } = {}) {
   const [market, setMarket] = useState<'All' | 'TX' | 'FL'>('All')
   const [fitFilter, setFitFilter] = useState<'All' | Fit>('All')
 
-  const visible = LISTINGS.filter(l =>
-    (market === 'All' || l.state === market) &&
-    (fitFilter === 'All' || l.fit === fitFilter))
+  // When `locked` is set (a market-specific page — TX or FL), the market is fixed and its toggle
+  // is hidden; KPIs, cards, and the buy box all scope to that state.
+  const effMarket: 'All' | 'TX' | 'FL' = locked ?? market
+  const base = LISTINGS.filter(l => effMarket === 'All' || l.state === effMarket)
+  const visible = base.filter(l => fitFilter === 'All' || l.fit === fitFilter)
 
-  const fitCount = LISTINGS.filter(l => l.fit === 'fit' && !l.deduped).length
-  const borderlineCount = LISTINGS.filter(l => l.fit === 'borderline').length
-  const noFitCount = LISTINGS.filter(l => l.fit === 'no-fit').length
+  const fitCount = base.filter(l => l.fit === 'fit' && !l.deduped).length
+  const borderlineCount = base.filter(l => l.fit === 'borderline').length
+  const noFitCount = base.filter(l => l.fit === 'no-fit').length
   const avgYield = (() => {
-    const q = LISTINGS.filter(l => l.fit !== 'no-fit')
+    const q = base.filter(l => l.fit !== 'no-fit')
     if (!q.length) return 0
     return q.reduce((s, l) => s + (l.inPlaceNoi / l.askingPrice) * 100, 0) / q.length
   })()
@@ -51,9 +53,9 @@ export default function InboundListingIntake() {
     <div style={{ marginTop: 4 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>📥 Inbound Listings — Prospective Deals</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>📥 Inbound Listings — {locked === 'TX' ? 'Texas (Permian)' : locked === 'FL' ? 'Florida (Space Coast)' : 'Prospective Deals'}</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, maxWidth: 640, lineHeight: 1.5 }}>
-            Auto-captured from broker emails and Crexi / LoopNet links or OM attachments, filtered to TX &amp; FL, deduped, and screened against the Buy Box. A triage gate — not the analytical score.
+            Auto-captured from broker emails and Crexi / LoopNet links or OM attachments, filtered to {locked === 'TX' ? 'Texas' : locked === 'FL' ? 'Florida' : 'TX & FL'}, deduped, and screened against the Buy Box. A triage gate — not the analytical score.
           </div>
         </div>
       </div>
@@ -65,7 +67,7 @@ export default function InboundListingIntake() {
 
       {/* Buy Box(es) being screened against — market-specific. TX is portfolio-derived; FL illustrative. */}
       <div style={{ marginBottom: 12 }}>
-        {(market === 'All' ? (['TX', 'FL'] as const) : [market]).map(mk => {
+        {(effMarket === 'All' ? (['TX', 'FL'] as const) : [effMarket]).map(mk => {
           const box = BUY_BOXES[mk]
           return (
             <div key={mk} style={{ fontSize: 11, color: '#6b7280', marginBottom: 6, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
@@ -89,10 +91,12 @@ export default function InboundListingIntake() {
 
       {/* Filters */}
       <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 14, alignItems: 'center' }}>
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>Market</span>
-          {(['All', 'TX', 'FL'] as const).map(m => <button key={m} style={pill(market === m)} onClick={() => setMarket(m)}>{m}</button>)}
-        </div>
+        {!locked && (
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>Market</span>
+            {(['All', 'TX', 'FL'] as const).map(m => <button key={m} style={pill(market === m)} onClick={() => setMarket(m)}>{m}</button>)}
+          </div>
+        )}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>Fit</span>
           {(['All', 'fit', 'borderline', 'no-fit'] as const).map(f => <button key={f} style={pill(fitFilter === f)} onClick={() => setFitFilter(f)}>{f === 'All' ? 'All' : FIT_STYLE[f].label}</button>)}

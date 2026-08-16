@@ -345,6 +345,8 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'distribution-lists': <DistributionListsView />,
     drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
+    'acquisition-tx': <AcquisitionView market="TX" />,
+    'acquisition-fl': <AcquisitionView market="FL" />,
     'acquisition-checklist': <AcquisitionChecklistView />,
     'deal-pipeline': <DealPipelineView />,
     'deal-economics': <AcquisitionEconomicsView />,
@@ -5121,13 +5123,14 @@ function CorrectionsReviewView() {
   )
 }
 
-function AcquisitionView() {
+function AcquisitionView({ market }: { market?: 'TX' | 'FL' } = {}) {
+  const label = market === 'TX' ? 'Texas' : market === 'FL' ? 'Florida' : null
   return (
     <div>
-      <div className="page-header"><h2>Inbound Listings</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
+      <div className="page-header"><h2>Inbound Listings{label ? ` — ${label}` : ''}</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
       <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
       <BuyBoxPanel />
-      <InboundListingIntake />
+      <InboundListingIntake market={market} />
     </div>
   )
 }
