@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react'
 // each fit / borderline / no-fit before it becomes a prospective-deal card.
 
 type BuyBox = {
-  id?: string; name?: string; markets: string | null; asset_class: string | null;
+  id?: string; name?: string; market?: string; markets: string | null; asset_class: string | null;
   sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null;
   cap_rate_floor: number | null; deal_size_min: number | null; deal_size_max: number | null;
   notes: string | null; updated_by?: string | null; updated_at?: string | null
@@ -23,7 +23,7 @@ function range(a: number | null, b: number | null, fmt: (n: number) => string, u
   return `≤ ${fmt(b!)}${unit}`
 }
 
-export default function BuyBoxPanel() {
+export default function BuyBoxPanel({ market = 'TX' }: { market?: 'TX' | 'FL' } = {}) {
   const [box, setBox] = useState<BuyBox | null>(null)
   const [loading, setLoading] = useState(true)
   const [editing, setEditing] = useState<BuyBox | null>(null)
@@ -32,16 +32,16 @@ export default function BuyBoxPanel() {
 
   const load = async () => {
     setLoading(true)
-    try { const r = await fetch('/api/buy-box'); const d = await r.json(); if (r.ok) setBox(d.item) }
+    try { const r = await fetch(`/api/buy-box?market=${market}`); const d = await r.json(); if (r.ok) setBox(d.item) }
     catch { /* ignore */ } finally { setLoading(false) }
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [market])
 
   const save = async () => {
     if (!editing || saving) return
     setSaving(true); setErr('')
     try {
-      const r = await fetch('/api/buy-box', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
+      const r = await fetch('/api/buy-box', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editing, market }) })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'Save failed'); return }
       setEditing(null); await load()
@@ -66,7 +66,7 @@ export default function BuyBoxPanel() {
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '16px 18px', marginBottom: 16 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
         <div>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52', display: 'flex', alignItems: 'center', gap: 6 }}>🎯 Buy Box — acquisition criteria</div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#0D2D52', display: 'flex', alignItems: 'center', gap: 6 }}>🎯 Buy Box ({market}) — acquisition criteria</div>
           <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>Inbound listings (Crexi / LoopNet / broker email) are screened against this and tagged fit · borderline · no-fit.</div>
         </div>
         <button onClick={startEdit} style={{ flexShrink: 0, background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer', color: '#374151' }}>

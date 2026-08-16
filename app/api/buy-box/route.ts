@@ -3,10 +3,15 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-// Buy Box — the firm's stored acquisition screening criteria. Single record (the "Primary" box).
+// Buy Box — the firm's stored acquisition screening criteria, one record per market (TX / FL).
 // The Inbound Listing Intake workflow screens broker/Crexi/LoopNet listings against this. Auth-gated.
 
-const COLS = "id, name, markets, asset_class, sf_min, sf_max, price_per_sf_min, price_per_sf_max, cap_rate_floor, deal_size_min, deal_size_max, notes, updated_by, updated_at";
+const COLS = "id, name, market, markets, asset_class, sf_min, sf_max, price_per_sf_min, price_per_sf_max, cap_rate_floor, deal_size_min, deal_size_max, notes, updated_by, updated_at";
+
+// Market is a fixed enum; anything that isn't FL falls back to TX (the primary market).
+function marketOf(v: unknown): "TX" | "FL" {
+  return String(v ?? "").toUpperCase() === "FL" ? "FL" : "TX";
+}
 
 function int(v: unknown): number | null {
   if (v === "" || v == null) return null;
@@ -35,14 +40,16 @@ function clean(body: Record<string, unknown>) {
   return out;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
+  const market = marketOf(req.nextUrl.searchParams.get("market"));
   const { data, error } = await supabase
     .from("buy_box")
     .select(COLS)
+    .eq("market", market)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -50,18 +57,20 @@ export async function GET() {
   return NextResponse.json({ item: data ?? null });
 }
 
-// Upsert the single Buy Box: update the latest row if one exists, else insert.
+// Upsert the Buy Box for a market (TX / FL): update that market's row if one exists, else insert.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
+  const market = marketOf(body.market);
   const row = clean(body);
 
   const { data: existing } = await supabase
     .from("buy_box")
     .select("id")
+    .eq("market", market)
     .order("updated_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -79,7 +88,7 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("buy_box")
-    .insert({ name: "Primary", ...row, updated_by: user.email ?? user.id })
+    .insert({ name: `Primary — ${market}`, market, ...row, updated_by: user.email ?? user.id })
     .select(COLS)
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

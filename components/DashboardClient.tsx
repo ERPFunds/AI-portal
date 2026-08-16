@@ -5129,7 +5129,7 @@ function AcquisitionView({ market }: { market?: 'TX' | 'FL' } = {}) {
     <div>
       <div className="page-header"><h2>Inbound Listings{label ? ` — ${label}` : ''}</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
       <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
-      <BuyBoxPanel />
+      <BuyBoxPanel market={market} />
       <InboundListingIntake market={market} />
     </div>
   )
