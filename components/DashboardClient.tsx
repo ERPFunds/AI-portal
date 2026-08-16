@@ -2115,6 +2115,14 @@ function fmtUsd(n: number): string {
   if (n === 0) return '—'
   return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 0 })
 }
+// Committed dollars for a row: the portal-stored figure if set; otherwise a Fund IV opportunity that
+// is Closed Won rolls its commitment up as committed. (DST rows already carry their funded amount as
+// committedUsd server-side; prior-fund rows have no commitment so they contribute nothing.)
+function effectiveCommitted(lp: LpRecord): number | null {
+  if (lp.committedUsd != null) return lp.committedUsd
+  if (lp.sfStage === 'Closed Won' && lp.commitmentUsd > 0) return lp.commitmentUsd
+  return null
+}
 const COMMIT_TYPE_COLOR: Record<string, string> = {
   'Hard Commit': '#3DAE7A', 'Signed Docs': '#16a34a',
   'Soft Circle': '#3B82F6', 'Verbal': '#f59e0b', 'TBD': '#9ca3af',
@@ -2314,7 +2322,7 @@ function LpDirectoryView() {
 
   function startEdit(lp: LpRecord) {
     setEditingRow(lp.investor)
-    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact, committed: lp.committedUsd != null ? String(lp.committedUsd) : '', stage: lp.sfStage || '' })
+    setEditValues({ commitment: lp.commitment, commitType: lp.commitType, contact: lp.contact, email: lp.email, phone: lp.phone, notes: lp.notes, date: lp.date, brokerFirm: lp.brokerFirm, brokerContact: lp.brokerContact, committed: (() => { const c = effectiveCommitted(lp); return c != null ? String(c) : '' })(), stage: lp.sfStage || '' })
     setSaveMsg(null)
   }
   function cancelEdit() { setEditingRow(null); setSaveMsg(null) }
@@ -2392,7 +2400,7 @@ function LpDirectoryView() {
       (lp.priorFunds || []).join(', '),
       lp.sfStage || '',
       lp.commitmentUsd > 0 ? fmtUsd(lp.commitmentUsd) : (lp.commitment || ''),
-      lp.committedUsd != null ? fmtUsd(lp.committedUsd) : '',
+      (() => { const c = effectiveCommitted(lp); return c != null ? fmtUsd(c) : '' })(),
       lp.contact || lp.sfBrokerContact || '',
       lp.brokerFirm || lp.sfAdvisorFirm || '',
       lp.brokerContact || lp.sfAdvisorContact || '',
@@ -2653,12 +2661,12 @@ function LpDirectoryView() {
         const dstLps = allLps.filter(lp => lp.group === DST_GROUP)
         const dstCommitted = dstLps.reduce((s, lp) => s + lp.commitmentUsd, 0)
         // Hard-committed to Fund IV so far = sum of the known commitments (currently ERP GP IV $2.7M).
-        const fundIvCommittedSoFar = fundIvLps.reduce((s, lp) => s + (lp.committedUsd ?? 0), 0)
+        const fundIvCommittedSoFar = fundIvLps.reduce((s, lp) => s + (effectiveCommitted(lp) ?? 0), 0)
         return (
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { label: 'Total LPs',       value: loading ? '…' : data ? `${visibleLps.length}` : '—',   sub: groupView === 'All' ? ([dstVisible ? `${fundIvVisible} Fund IV` : '', dstVisible ? `${dstVisible} DST/1031` : '', priorVisible ? `${priorVisible} prior-fund` : ''].filter(Boolean).join(' · ') || 'Fund IV commitment schedule') : groupView },
-              { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Committed so far (incl. ERP GP)' },
+              { label: 'Fund IV Committed', value: fmtUsd(fundIvCommittedSoFar), sub: 'Closed Won + hard commits (incl. ERP GP)' },
               { label: 'DST / 1031 Committed', value: loading ? '…' : data ? fmtUsd(dstCommitted) : '—', sub: `${dstLps.length} DST / 1031 investors` },
               { label: 'DST IV Committed', value: fmtUsd(0), sub: 'Placeholder — investor list expected end of Aug' },
             ].map(k => (
@@ -2802,7 +2810,7 @@ function LpDirectoryView() {
                       <td style={{ padding: '11px 14px', fontWeight: 600, color: '#111827', whiteSpace: 'nowrap' }}>
                         {isEditing
                           ? <input value={ev.committed} onChange={e => setEditValues(v => ({ ...v, committed: e.target.value }))} placeholder="$2.7M" style={{ ...inputStyle, width: 80 }} />
-                          : (lp.committedUsd != null ? fmtUsd(lp.committedUsd) : <span style={{ color: '#d1d5db', fontWeight: 400 }}>—</span>)}
+                          : (() => { const c = effectiveCommitted(lp); return c != null ? fmtUsd(c) : <span style={{ color: '#d1d5db', fontWeight: 400 }}>—</span> })()}
                       </td>
 
                       {/* Last Interaction — from IR agent logs or Salesforce */}
