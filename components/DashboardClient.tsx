@@ -345,8 +345,6 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'distribution-lists': <DistributionListsView />,
     drafting: <DraftingWorkspaceView />,
     acquisition: <AcquisitionView />,
-    'acquisition-tx': <AcquisitionView market="TX" />,
-    'acquisition-fl': <AcquisitionView market="FL" />,
     'acquisition-checklist': <AcquisitionChecklistView />,
     'deal-pipeline': <DealPipelineView />,
     'deal-economics': <AcquisitionEconomicsView />,
@@ -5123,14 +5121,23 @@ function CorrectionsReviewView() {
   )
 }
 
-function AcquisitionView({ market }: { market?: 'TX' | 'FL' } = {}) {
-  const label = market === 'TX' ? 'Texas' : market === 'FL' ? 'Florida' : null
+function AcquisitionView() {
+  const [mkt, setMkt] = React.useState<'TX' | 'FL'>('TX')
+  const tabStyle = (m: 'TX' | 'FL'): React.CSSProperties => ({
+    fontSize: 13, fontWeight: 600, padding: '8px 18px', borderRadius: 8, cursor: 'pointer', whiteSpace: 'nowrap',
+    border: mkt === m ? '1px solid #0D2D52' : '1px solid #e5e7eb',
+    background: mkt === m ? '#0D2D52' : '#fff', color: mkt === m ? '#fff' : '#6b7280',
+  })
   return (
     <div>
-      <div className="page-header"><h2>Inbound Listings{label ? ` — ${label}` : ''}</h2><p>Agent-curated deal flow — screened opportunities, underwriting status, and market comps from CoStar and broker feeds</p></div>
-      <SourceBar source="CoStar · Broker feeds · Agent research" agents="Acquisition Research · Investment Analytics · CIO & Chief of Staff" synced="Today 6:00 AM (daily scan)" link="Open in Salesforce ↗" />
-      <BuyBoxPanel market={market} />
-      <InboundListingIntake market={market} />
+      <div className="page-header"><h2>Inbound Listings</h2><p>Property listings brokers and others forward to Meghan, Brennan &amp; William — auto-pulled from their inboxes, deduped, and screened against the Buy Box</p></div>
+      <SourceBar source="Meghan / Brennan / William inboxes · Microsoft Graph" agents="Acquisition inbox scan · Buy-Box screener" synced="Auto ~3×/day + on-demand scan" link="Microsoft 365 ↗" />
+      <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+        <button onClick={() => setMkt('TX')} style={tabStyle('TX')}>🤠 Texas — Permian</button>
+        <button onClick={() => setMkt('FL')} style={tabStyle('FL')}>🌴 Florida — Space Coast</button>
+      </div>
+      <BuyBoxPanel market={mkt} />
+      <InboundListingIntake market={mkt} />
     </div>
   )
 }

@@ -41,7 +41,7 @@ const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label:
 const NEUTRAL_FIT = { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'Unscored' }
 const fitStyle = (f: string | null) => (f && f in FIT_STYLE ? FIT_STYLE[f as Fit] : NEUTRAL_FIT)
 const SOURCE_ICON: Record<Source, string> = { 'Crexi': '🟧', 'LoopNet': '🔵', 'Broker email': '✉️', 'OM attachment': '📎' }
-const REFERRAL_ICON: Record<ReferralKind, string> = { 'Broker': '🤝', 'Investor/LP': '💼', 'Colleague': '👥', 'Platform alert': '🔔', 'Direct/Cold': '📩' }
+const REFERRAL_ICON: Record<ReferralKind, string> = { 'Broker': '🤝', 'Investor/LP': '💼', 'Colleague': '👥', 'Crexi': '🟧', 'LoopNet': '🔵', 'Direct/Cold': '📩' }
 const icon = <T extends string>(map: Record<T, string>, k: string | null, fallback: string) => (k && k in map ? map[k as T] : fallback)
 
 export default function InboundListingIntake({ market: locked }: { market?: 'TX' | 'FL' } = {}) {
@@ -51,6 +51,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<string | null>(null)
+  const [adding, setAdding] = useState<string | null>(null)
 
   const load = async () => {
     setLoading(true)
@@ -74,10 +75,35 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
     try { await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch { /* ignore */ }
   }
 
+  const addToPipeline = async (id: string) => {
+    setAdding(id)
+    try {
+      const r = await fetch('/api/inbound-listings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      const d = await r.json()
+      if (r.ok) {
+        setRows(rs => rs.map(x => x.id === id ? { ...x, status: 'imported' } : x))
+        setScanMsg(d.duplicate ? `"${d.deal_name}" is already in the Deal Pipeline.` : `Added "${d.deal_name}" to the Deal Pipeline.`)
+      } else setScanMsg(d.error || 'Could not add to the Deal Pipeline')
+    } catch { setScanMsg('Could not add to the Deal Pipeline') } finally { setAdding(null) }
+  }
+
   // When `locked` is set (a market-specific page), the market is fixed and its toggle is hidden.
   const effMarket: 'All' | 'TX' | 'FL' = locked ?? market
   const base = rows.filter(r => effMarket === 'All' || r.state === effMarket)
   const visible = base.filter(r => fitFilter === 'All' || r.fit === fitFilter)
+
+  // Rank by Buy-Box fit: fit → borderline → no-fit, then by quick-score, then most-recent.
+  // Duplicates sink to the bottom.
+  const FIT_RANK: Record<string, number> = { fit: 0, borderline: 1, 'no-fit': 2 }
+  const ranked = [...visible].sort((a, b) => {
+    const du = (a.status === 'duplicate' ? 1 : 0) - (b.status === 'duplicate' ? 1 : 0)
+    if (du) return du
+    const fr = (FIT_RANK[a.fit ?? ''] ?? 3) - (FIT_RANK[b.fit ?? ''] ?? 3)
+    if (fr) return fr
+    const sc = (b.score ?? 0) - (a.score ?? 0)
+    if (sc) return sc
+    return String(b.received_at ?? '').localeCompare(String(a.received_at ?? ''))
+  })
 
   const fitCount = base.filter(r => r.fit === 'fit' && r.status !== 'duplicate').length
   const borderlineCount = base.filter(r => r.fit === 'borderline').length
@@ -169,7 +195,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
       {/* Cards */}
       {!loading && base.length > 0 && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
-        {visible.map(l => {
+        {ranked.map((l, i) => {
           const dup = l.status === 'duplicate'
           const yieldPct = l.cap_pct ?? (l.in_place_noi && l.asking_price ? (l.in_place_noi / l.asking_price) * 100 : null)
           const psf = l.asking_price && l.sf ? l.asking_price / l.sf : null
@@ -178,6 +204,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
             <div key={l.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, opacity: dup ? 0.7 : 1, position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {!dup && <span title="Buy-Box rank" style={{ fontSize: 10, fontWeight: 800, color: '#0D2D52', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 5, padding: '1px 6px' }}>#{i + 1}</span>}
                   {l.channel && <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{icon(SOURCE_ICON, l.channel, '✉️')} {l.channel}</span>}
                   {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px', color: '#6d28d9' }} title={`Forwarded to ERP by ${l.referred_by ?? 'unknown'}`}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
                   {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{l.state}</span>}
@@ -222,7 +249,10 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                 <div style={{ fontSize: 11, color: '#374151' }}>
                   {l.broker || l.broker_firm ? `👤 ${[l.broker, l.broker_firm].filter(Boolean).join(' · ')}` : <span style={{ color: '#9ca3af' }}>Broker not identified</span>}
                 </div>
-                <div style={{ display: 'flex', gap: 6 }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  {l.status === 'imported'
+                    ? <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '4px 9px' }}>✓ In Deal Pipeline</span>
+                    : (!dup && l.fit === 'fit' && <button onClick={() => addToPipeline(l.id)} disabled={adding === l.id} style={btn('#fff', '#16a34a')}>{adding === l.id ? 'Adding…' : '➕ Add to Deal Pipeline'}</button>)}
                   <button onClick={() => dismiss(l.id)} style={btn('#9ca3af')}>Dismiss</button>
                 </div>
               </div>

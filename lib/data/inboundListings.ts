@@ -7,7 +7,7 @@ export type Fit = 'fit' | 'borderline' | 'no-fit'
 export type Source = 'Crexi' | 'LoopNet' | 'Broker email' | 'OM attachment'
 // How the listing reached ERP — most are forwarded by brokers, but some come from
 // investors/LPs, colleagues, platform alerts, or arrive direct/cold.
-export type ReferralKind = 'Broker' | 'Investor/LP' | 'Colleague' | 'Platform alert' | 'Direct/Cold'
+export type ReferralKind = 'Broker' | 'Investor/LP' | 'Colleague' | 'Crexi' | 'LoopNet' | 'Direct/Cold'
 
 export type Listing = {
   id: string

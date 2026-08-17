@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseBytes } from "@/lib/agents/ir/markdown-store";
 
 // Inbound Listings scanner. Reads the acquisition principals' mailboxes (Meghan, Brennan, William)
 // for emails where brokers or others are forwarding a property listing, extracts a structured
@@ -18,9 +19,7 @@ const LISTING_HINT =
 
 type Msg = { id: string; from: string; fromName: string; subject: string; preview: string; received: string };
 
-async function readMailboxSince(mailbox: string, sinceIso: string, max: number): Promise<Msg[]> {
-  const t = await getGraphToken();
-  if (!t) throw new Error("AZURE credentials not configured");
+async function readMailboxSince(t: string, mailbox: string, sinceIso: string, max: number): Promise<Msg[]> {
   const h = { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' };
 
   const excluded = new Set<string>();
@@ -59,6 +58,46 @@ async function readMailboxSince(mailbox: string, sinceIso: string, max: number):
   return out;
 }
 
+// Pull text from a message's PDF/OM/flyer/spreadsheet attachments (bounded), so the extractor
+// reads the actual listing package — not just the covering email. Best-effort; never throws.
+const ATTACH_OK = /\.(pdf|docx|xlsx|xls|pptx|txt|md|csv)$/i;
+async function readAttachmentsText(token: string, mailbox: string, messageId: string): Promise<string> {
+  try {
+    const h = { Authorization: `Bearer ${token}` };
+    const r = await fetch(
+      `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${messageId}/attachments?$select=id,name,contentType,size,isInline`,
+      { headers: h }
+    );
+    if (!r.ok) return "";
+    const d = await r.json();
+    const atts = ((d.value || []) as Record<string, unknown>[]).filter(
+      (a) => String(a["@odata.type"] || "").includes("fileAttachment") && !a.isInline
+    );
+    let out = "";
+    for (const a of atts.slice(0, 3)) {
+      const name = String(a.name || "");
+      const ct = String(a.contentType || "");
+      const size = Number(a.size || 0);
+      if (size > 8_000_000) continue;
+      if (!ATTACH_OK.test(name) && !/pdf|word|excel|spreadsheet|presentation|text|csv/i.test(ct)) continue;
+      try {
+        const vr = await fetch(
+          `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${messageId}/attachments/${a.id}/$value`,
+          { headers: h }
+        );
+        if (!vr.ok) continue;
+        const buf = Buffer.from(await vr.arrayBuffer());
+        const text = await parseBytes(buf, name, ct || null);
+        if (text) out += `\n[attachment: ${name}] ${text.replace(/\s+/g, " ").slice(0, 1500)}`;
+      } catch { /* skip a bad attachment */ }
+      if (out.length > 3000) break;
+    }
+    return out.slice(0, 3000);
+  } catch {
+    return "";
+  }
+}
+
 const EXTRACT_SCHEMA = {
   type: "object",
   additionalProperties: false,
@@ -77,7 +116,7 @@ const EXTRACT_SCHEMA = {
           address: { anyOf: [{ type: "string" }, { type: "null" }] },
           submarket: { anyOf: [{ type: "string" }, { type: "null" }] },
           channel: { type: "string", enum: ["Broker email", "Crexi", "LoopNet", "OM attachment"] },
-          referralKind: { type: "string", enum: ["Broker", "Investor/LP", "Colleague", "Platform alert", "Direct/Cold"] },
+          referralKind: { type: "string", enum: ["Broker", "Investor/LP", "Colleague", "Crexi", "LoopNet", "Direct/Cold"] },
           broker: { anyOf: [{ type: "string" }, { type: "null" }], description: "listing broker name if identifiable" },
           brokerFirm: { anyOf: [{ type: "string" }, { type: "null" }] },
           askingPrice: { anyOf: [{ type: "number" }, { type: "null" }] },
@@ -138,6 +177,8 @@ export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: n
   const sinceIso = since.toISOString().split(".")[0] + "Z";
 
   const admin = createAdminClient();
+  const token = await getGraphToken();
+  if (!token) throw new Error("AZURE credentials not configured");
   const { data: boxes } = await admin.from("buy_box").select("market, markets, asset_class, sf_min, sf_max, price_per_sf_min, price_per_sf_max, cap_rate_floor, deal_size_max, notes");
   const bbText = buyBoxText((boxes as never[]) ?? []);
 
@@ -146,7 +187,7 @@ export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: n
   const candidates: (Msg & { mailbox: string })[] = [];
   for (const mailbox of mailboxes) {
     try {
-      const msgs = await readMailboxSince(mailbox, sinceIso, maxPerMailbox);
+      const msgs = await readMailboxSince(token, mailbox, sinceIso, maxPerMailbox);
       const hits = msgs.filter(m => LISTING_HINT.test(`${m.subject} ${m.preview}`));
       hits.forEach(m => candidates.push({ ...m, mailbox }));
       perMailbox.push({ mailbox, scanned: msgs.length, candidates: hits.length });
@@ -168,11 +209,20 @@ export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: n
 
   // LLM extraction in batches.
   let extracted = 0, inserted = 0, duplicates = 0;
+  let attnFetched = 0;
+  const ATTN_CAP = 40; // bound attachment fetches per scan (keeps within the serverless time limit)
   const BATCH = 15;
   for (let i = 0; i < fresh.length; i += BATCH) {
     const batch = fresh.slice(i, i + BATCH);
+    // Read PDF/OM/flyer attachment text for each candidate (bounded), so the extractor sees the package.
+    const attTexts: string[] = [];
+    for (const m of batch) {
+      if (attnFetched >= ATTN_CAP) { attTexts.push(""); continue; }
+      attnFetched++;
+      attTexts.push(await readAttachmentsText(token, m.mailbox, m.id));
+    }
     const digest = batch
-      .map((m, j) => `${j}. <${m.from}> "${m.subject}" :: ${(m.preview || "").replace(/\s+/g, " ").slice(0, 240)}`)
+      .map((m, j) => `${j}. <${m.from}> "${m.subject}" :: ${(m.preview || "").replace(/\s+/g, " ").slice(0, 240)}${attTexts[j] ? " " + attTexts[j] : ""}`)
       .join("\n");
 
     let items: Extracted[] = [];
@@ -184,13 +234,13 @@ export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: n
         system: [{ type: "text" as const, text:
 `You screen an acquisition team's inbound email for a private-equity industrial real estate firm (ERP — Permian Basin, TX and Brevard/Space Coast, FL). For each email in the digest, decide if it is a broker or other party FORWARDING/PRESENTING a specific property available to acquire (broker availability, offering memorandum, Crexi/LoopNet listing, off-market offer). Set isListing=false for market reports, newsletters, tenant/leasing matters, investor relations, closing logistics on an existing deal, and internal admin.
 
-For each listing, extract what is stated (null when absent): US state (TX/FL/Other), street address, submarket, listing broker + firm, asking price (USD), building SF, in-place NOI, and cap rate %. Pick the channel it arrived through and the referral relationship of the SENDER to ERP (Broker if from a brokerage; Colleague if from an @erpfunds.com address; Investor/LP, Platform alert for Crexi/LoopNet auto-alerts, or Direct/Cold otherwise).
+For each listing, extract what is stated (null when absent): US state (TX/FL/Other), street address, submarket, listing broker + firm, asking price (USD), building SF, in-place NOI, and cap rate %. Pick the channel it arrived through and the referral relationship of the SENDER to ERP (Broker if from a brokerage; Colleague if from an @erpfunds.com address; Investor/LP; Crexi or LoopNet for those platform auto-alerts; or Direct/Cold otherwise).
 
 Then screen each listing against the Buy Box below and tag fit / borderline / no-fit with a 0-100 quick score and a one-line reason. Be evidence-based; do not invent details not present in the email.
 
 Buy Box:
 ${bbText}` }],
-        messages: [{ role: "user", content: `Emails:\n${digest}\n\nReturn one item per email, echoing its index.` }],
+        messages: [{ role: "user", content: `Emails (subject + preview + any attachment text):\n${digest}\n\nReturn one item per email, echoing its index.` }],
       });
       const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
       items = (JSON.parse(text).items ?? []) as Extracted[];
