@@ -5,8 +5,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const category = req.nextUrl.searchParams.get("category");
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const category = req.nextUrl.searchParams.get("category");
     let query = supabase
       .from("uploaded_files")
       .select("id, file_id, filename, size_bytes, mime_type, project_tag, category, uploaded_by, expires_at, created_at")

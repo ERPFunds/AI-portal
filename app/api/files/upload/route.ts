@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
 import { embedAndStoreChunks, voyageConfigured } from "@/lib/agents/ir/embeddings";
 
@@ -11,6 +10,12 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest) {
   try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const projectTag = formData.get("projectTag") as string | null;
@@ -36,19 +41,7 @@ export async function POST(req: NextRequest) {
       expires_at:  expiresAt,
     };
 
-    const supabase = await createClient();
-    let { error } = await supabase.from("uploaded_files").insert(row);
-
-    // Fall back to the service-role client when the session insert is blocked by RLS
-    // (e.g. an unauthenticated/programmatic upload with no Supabase session cookie).
-    if (error) {
-      try {
-        const admin = createAdminClient();
-        ({ error } = await admin.from("uploaded_files").insert(row));
-      } catch (e) {
-        console.error("Admin insert fallback failed:", e);
-      }
-    }
+    const { error } = await supabase.from("uploaded_files").insert(row);
 
     if (error) {
       console.error("File metadata save error:", error);
