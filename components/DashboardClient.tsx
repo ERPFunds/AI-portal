@@ -3357,6 +3357,9 @@ function RentRollView() {
     setSaving(true); setSaveError(null)
     const { id, ...rest } = draft as any
     delete rest.sort_order; delete rest.updated_at
+    // Drop UI-only fields injected for table rendering (_key, _unit, _unitNo) — they
+    // are not columns on `properties` and PostgREST rejects the whole write otherwise.
+    for (const k of Object.keys(rest)) if (k.startsWith('_')) delete rest[k]
     const err = isNew
       ? await writeWithRetry(() => {
           const maxOrder = rows.reduce((m, r: any) => Math.max(m, r.sort_order ?? 0), 0)
