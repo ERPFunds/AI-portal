@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { leadingNum, streetTokens } from "@/lib/loopnet-company";
 
 // Market scan (proactive sourcing). Complements the inbound mailbox scan: instead of waiting for a
 // broker to forward a deal, this scrapes the listing platforms (LoopNet + Crexi) for ON-MARKET
@@ -20,10 +21,11 @@ const LOOPNET_SEARCHES = [
 const TX_CITIES = ["midland", "odessa"];
 const FL_CITIES = ["melbourne", "palm bay", "titusville", "cocoa", "rockledge", "grant", "malabar", "sebastian"];
 
-type Src = "LoopNet" | "Crexi";
+type Src = "LoopNet" | "Crexi" | "LinkedIn";
 type Norm = {
   url: string; address: string | null; city: string | null; state: "TX" | "FL" | null;
   price: number | null; sf: number | null; propertyType: string | null; broker: string | null; title: string | null;
+  datePosted: string | null;
 };
 
 function apToken(): string | null {
@@ -57,7 +59,8 @@ function normalize(it: Record<string, unknown>, src: Src): Norm | null {
   const propertyType = strOf(it.propertyType) || strOf(it.type) || strOf(it.assetType);
   const broker = strOf(it.brokerCompany) || strOf(it.broker) || strOf(it.brokerageName) || strOf(it.company);
   const title = strOf(it.title) || strOf(it.propertyName) || strOf(it.name);
-  return { url, address, city, state, price, sf, propertyType, broker, title };
+  const datePosted = strOf(it.datePosted) || strOf(it.dateListed) || strOf(it.listedDate) || strOf(it.updatedAt) || strOf(it.postedAt) || null;
+  return { url, address, city, state, price, sf, propertyType, broker, title, datePosted };
 }
 
 async function runActor(actor: string, input: unknown, token: string): Promise<Record<string, unknown>[]> {
@@ -118,6 +121,18 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   const boxBy: Record<string, Box> = {};
   for (const b of (boxes ?? []) as (Box & { market: string })[]) boxBy[b.market] = b;
 
+  // ERP's own properties — exclude them from market results (we source acquisitions, not our own listings).
+  const { data: props } = await admin.from("properties").select("address");
+  const erpProps = ((props ?? []) as { address: string }[]).map((p) => ({ num: leadingNum(p.address), tokens: streetTokens(p.address) }));
+  const isErpListing = (n: Norm): boolean => {
+    if (/\berp\b|erp industrials|erp funds/i.test(`${n.broker ?? ""} ${n.title ?? ""}`)) return true;
+    const num = leadingNum(n.address);
+    const toks = streetTokens(n.address);
+    if (!num || toks.size === 0) return false;
+    return erpProps.some((p) => p.num === num && [...toks].some((t) => p.tokens.has(t)));
+  };
+  const cutoff = Date.now() - 31 * 24 * 3600 * 1000; // market research: only the last ~1 month
+
   const sources: { source: Src; actor: string | null; input: unknown }[] = [
     {
       source: "LoopNet",
@@ -131,12 +146,17 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
       actor: process.env.CREXI_APIFY_ACTOR || null, // set CREXI_APIFY_ACTOR (+ CREXI_APIFY_INPUT) to enable
       input: process.env.CREXI_APIFY_INPUT ? JSON.parse(process.env.CREXI_APIFY_INPUT) : null,
     },
+    {
+      source: "LinkedIn",
+      actor: process.env.LINKEDIN_APIFY_ACTOR || null, // set LINKEDIN_APIFY_ACTOR (+ LINKEDIN_APIFY_INPUT) to enable
+      input: process.env.LINKEDIN_APIFY_INPUT ? JSON.parse(process.env.LINKEDIN_APIFY_INPUT) : null,
+    },
   ];
 
   const perSource: MarketScanSummary["perSource"] = [];
   for (const s of sources) {
     if (!token) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: "no APIFY token configured" }); continue; }
-    if (!s.actor) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: `${s.source} actor not configured (set ${s.source === "Crexi" ? "CREXI_APIFY_ACTOR + CREXI_APIFY_INPUT" : "the actor env"})` }); continue; }
+    if (!s.actor) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: `${s.source} actor not configured (set ${s.source.toUpperCase()}_APIFY_ACTOR + ${s.source.toUpperCase()}_APIFY_INPUT)` }); continue; }
 
     let items: Record<string, unknown>[];
     try { items = await runActor(s.actor, s.input, token); }
@@ -150,6 +170,8 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
       const cityL = (n.city || n.address || "").toLowerCase();
       const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
       if (!inMarket) continue;
+      if (isErpListing(n)) continue; // don't surface ERP's own listings
+      if (n.datePosted) { const t = Date.parse(n.datePosted); if (!Number.isNaN(t) && t < cutoff) continue; } // older than ~1 month
       norms.push(n);
     }
 
