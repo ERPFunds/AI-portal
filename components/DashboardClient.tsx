@@ -3230,8 +3230,33 @@ function editSb() {
   return _editSb
 }
 
+// Runs a Supabase write and, on failure, refreshes the auth session and retries
+// once. Writes to RLS-protected tables (properties, work_orders) require the
+// `authenticated` role; if the browser's access token has gone stale on a
+// long-open tab, the write silently falls back to `anon` and is rejected. The
+// refresh-and-retry recovers that case, and any remaining error is RETURNED as a
+// user-facing string instead of being swallowed — so a failed save is never
+// invisible again. (If the session is fully expired the user must sign in again;
+// no client-side refresh can rebuild it.)
+async function writeWithRetry(op: () => PromiseLike<{ error: any }>): Promise<string | null> {
+  let { error } = await op()
+  if (error) {
+    try { await editSb().auth.refreshSession() } catch { /* fall through to retry */ }
+    ;({ error } = await op())
+  }
+  if (error) {
+    console.warn('[portal] write failed:', error)
+    const msg = String(error.message || '')
+    if (/jwt|token|expired|auth|permission|row-level|rls/i.test(msg)) {
+      return 'Your sign-in has expired. Please sign out, sign back in with Microsoft, then try again.'
+    }
+    return `Save failed: ${msg || 'unknown error'}. Please try again.`
+  }
+  return null
+}
+
 // Generic modal shell used by the editable data views
-function EditModal({ title, onClose, onSave, saving, children }: { title: string; onClose: () => void; onSave: () => void; saving: boolean; children: React.ReactNode }) {
+function EditModal({ title, onClose, onSave, saving, error, children }: { title: string; onClose: () => void; onSave: () => void; saving: boolean; error?: string | null; children: React.ReactNode }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,45,82,.45)', zIndex: 1000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', overflowY: 'auto', padding: '40px 16px' }}>
       <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 12, width: '100%', maxWidth: 720, boxShadow: '0 20px 60px rgba(0,0,0,.25)' }}>
@@ -3240,6 +3265,11 @@ function EditModal({ title, onClose, onSave, saving, children }: { title: string
           <button onClick={onClose} style={{ border: 'none', background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>×</button>
         </div>
         <div style={{ padding: 20, display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 14 }}>{children}</div>
+        {error && (
+          <div style={{ margin: '0 20px', padding: '10px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12.5, lineHeight: 1.4 }}>
+            {error}
+          </div>
+        )}
         <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
           <button onClick={onClose} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e5e7eb', background: '#fff', color: '#6b7280', cursor: 'pointer', fontSize: 13 }}>Cancel</button>
           <button onClick={onSave} disabled={saving} style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#0D2D52', color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, opacity: saving ? .6 : 1 }}>{saving ? 'Saving…' : 'Save'}</button>
@@ -3311,6 +3341,8 @@ function RentRollView() {
   const [draft, setDraft] = React.useState<Property | null>(null) // edit/add modal state
   const [isNew, setIsNew] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)      // property modal
+  const [unitError, setUnitError] = React.useState<string | null>(null)      // unit modal
 
   async function load() {
     setLoading(true)
@@ -3322,21 +3354,24 @@ function RentRollView() {
 
   async function saveDraft() {
     if (!draft) return
-    setSaving(true)
+    setSaving(true); setSaveError(null)
     const { id, ...rest } = draft as any
     delete rest.sort_order; delete rest.updated_at
-    if (isNew) {
-      const maxOrder = rows.reduce((m, r: any) => Math.max(m, r.sort_order ?? 0), 0)
-      await editSb().from('properties').insert({ ...rest, sort_order: maxOrder + 1 })
-    } else {
-      await editSb().from('properties').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
-    }
-    setSaving(false); setDraft(null); await load()
+    const err = isNew
+      ? await writeWithRetry(() => {
+          const maxOrder = rows.reduce((m, r: any) => Math.max(m, r.sort_order ?? 0), 0)
+          return editSb().from('properties').insert({ ...rest, sort_order: maxOrder + 1 })
+        })
+      : await writeWithRetry(() => editSb().from('properties').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id))
+    setSaving(false)
+    if (err) { setSaveError(err); return }   // keep the modal open so the edit isn't lost
+    setDraft(null); await load()
   }
 
   async function deleteRow(id: number) {
     if (!confirm('Delete this property? This cannot be undone.')) return
-    await editSb().from('properties').delete().eq('id', id)
+    const err = await writeWithRetry(() => editSb().from('properties').delete().eq('id', id))
+    if (err) { alert(err); return }
     setExpanded(null); await load()
   }
 
@@ -3345,14 +3380,16 @@ function RentRollView() {
 
   async function saveUnit() {
     if (!unitDraft) return
-    setUnitSaving(true)
+    setUnitSaving(true); setUnitError(null)
     const { data } = await editSb().from('properties').select('units').eq('id', unitDraft.propId).single()
     const units = ((data?.units as any[]) ?? []).map(u =>
       String(u.unit) === String(unitDraft.unit)
         ? { ...u, tenant: unitDraft.tenant || 'Vacant', expiry: unitDraft.expiry || null, sf: unitDraft.sf ? Number(unitDraft.sf) : null }
         : u)
-    await editSb().from('properties').update({ units, updated_at: new Date().toISOString() }).eq('id', unitDraft.propId)
-    setUnitSaving(false); setUnitDraft(null); await load()
+    const err = await writeWithRetry(() => editSb().from('properties').update({ units, updated_at: new Date().toISOString() }).eq('id', unitDraft.propId))
+    setUnitSaving(false)
+    if (err) { setUnitError(err); return }   // keep the modal open so the edit isn't lost
+    setUnitDraft(null); await load()
   }
 
   const q = search.toLowerCase()
@@ -3712,7 +3749,7 @@ function RentRollView() {
       </div>
 
       {draft && (
-        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => { setDraft(null); setSaveError(null) }} onSave={saveDraft} saving={saving} error={saveError}>
           <MField label="Fund / Entity">
             <select value={draft.entity} onChange={e => upd({ entity: e.target.value })} style={mInput}>
               {ENTITY_ORDER.map(en => <option key={en} value={en}>{ENTITY_LABELS[en]}</option>)}
@@ -3745,7 +3782,7 @@ function RentRollView() {
       )}
 
       {unitDraft && (
-        <EditModal title={`Edit unit — ${unitDraft.building} · Unit ${unitDraft.unit}`} onClose={() => setUnitDraft(null)} onSave={saveUnit} saving={unitSaving}>
+        <EditModal title={`Edit unit — ${unitDraft.building} · Unit ${unitDraft.unit}`} onClose={() => { setUnitDraft(null); setUnitError(null) }} onSave={saveUnit} saving={unitSaving} error={unitError}>
           <MField label="Tenant (blank = Vacant)" span><input style={mInput} value={unitDraft.tenant} onChange={e => setUnitDraft(d => d ? { ...d, tenant: e.target.value } : d)} /></MField>
           <MField label="Lease Expiry"><input type="date" style={mInput} value={unitDraft.expiry} onChange={e => setUnitDraft(d => d ? { ...d, expiry: e.target.value } : d)} /></MField>
           <MField label="Unit SF"><input type="number" style={mInput} value={unitDraft.sf} onChange={e => setUnitDraft(d => d ? { ...d, sf: e.target.value } : d)} /></MField>
@@ -3767,6 +3804,7 @@ function VacanciesView() {
   const [loopnetSyncing, setLoopnetSyncing] = React.useState(false)
   const [linkDraft, setLinkDraft] = React.useState<{ id: number; address: string; url: string } | null>(null)
   const [linkSaving, setLinkSaving] = React.useState(false)
+  const [linkError, setLinkError] = React.useState<string | null>(null)
   const [lastSynced, setLastSynced] = React.useState<string | null>(null)
 
   async function loadSyncState() {
@@ -3818,9 +3856,11 @@ function VacanciesView() {
 
   async function saveLink() {
     if (!linkDraft) return
-    setLinkSaving(true)
-    await editSb().from('properties').update({ loopnetUrl: linkDraft.url || null, updated_at: new Date().toISOString() }).eq('id', linkDraft.id)
-    setLinkSaving(false); setLinkDraft(null); await load()
+    setLinkSaving(true); setLinkError(null)
+    const err = await writeWithRetry(() => editSb().from('properties').update({ loopnetUrl: linkDraft.url || null, updated_at: new Date().toISOString() }).eq('id', linkDraft.id))
+    setLinkSaving(false)
+    if (err) { setLinkError(err); return }
+    setLinkDraft(null); await load()
   }
 
   const q = search.toLowerCase()
@@ -3985,7 +4025,7 @@ function VacanciesView() {
       </div>
 
       {linkDraft && (
-        <EditModal title={`LoopNet link — ${linkDraft.address}`} onClose={() => setLinkDraft(null)} onSave={saveLink} saving={linkSaving}>
+        <EditModal title={`LoopNet link — ${linkDraft.address}`} onClose={() => { setLinkDraft(null); setLinkError(null) }} onSave={saveLink} saving={linkSaving} error={linkError}>
           <MField label="LoopNet listing URL" span>
             <input style={mInput} placeholder="https://www.loopnet.com/Listing/..." value={linkDraft.url}
               onChange={e => setLinkDraft(d => d ? { ...d, url: e.target.value } : d)} />
@@ -4016,6 +4056,7 @@ function WorkOrdersView() {
   const [draft, setDraft] = React.useState<WorkOrder | null>(null)
   const [isNew, setIsNew] = React.useState(false)
   const [saving, setSaving] = React.useState(false)
+  const [saveError, setSaveError] = React.useState<string | null>(null)
 
   async function load() {
     setLoading(true)
@@ -4030,17 +4071,22 @@ function WorkOrdersView() {
 
   async function saveDraft() {
     if (!draft) return
-    setSaving(true)
+    setSaving(true); setSaveError(null)
     const { id, ...rest } = draft as any
     delete rest.updated_at
     rest.flag = anyDate(draft) ? null : draft.flag // any inspection on record clears the flag
-    if (isNew) await editSb().from('work_orders').insert({ ...rest })
-    else await editSb().from('work_orders').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id)
-    setSaving(false); setDraft(null); await load()
+    const err = isNew
+      ? await writeWithRetry(() => editSb().from('work_orders').insert({ ...rest }))
+      : await writeWithRetry(() => editSb().from('work_orders').update({ ...rest, updated_at: new Date().toISOString() }).eq('id', id))
+    setSaving(false)
+    if (err) { setSaveError(err); return }   // keep the modal open so the edit isn't lost
+    setDraft(null); await load()
   }
   async function deleteRow(id: number) {
     if (!confirm('Delete this property from the inspections log?')) return
-    await editSb().from('work_orders').delete().eq('id', id); await load()
+    const err = await writeWithRetry(() => editSb().from('work_orders').delete().eq('id', id))
+    if (err) { alert(err); return }
+    await load()
   }
   const upd = (patch: Partial<WorkOrder>) => setDraft(d => d ? { ...d, ...patch } : d)
 
@@ -4219,7 +4265,7 @@ function WorkOrdersView() {
       </div>
 
       {draft && (
-        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => setDraft(null)} onSave={saveDraft} saving={saving}>
+        <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => { setDraft(null); setSaveError(null) }} onSave={saveDraft} saving={saving} error={saveError}>
           <MField label="Property / Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
           <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
           <MField label="🔍 Quicklook — last done"><input type="date" style={mInput} value={draft.quicklook_last ?? ''} onChange={e => upd({ quicklook_last: e.target.value || null })} /></MField>
