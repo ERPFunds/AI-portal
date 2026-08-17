@@ -17,9 +17,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Restricted to acquisition principals" }, { status: 403 });
   }
 
-  const months = Number(req.nextUrl.searchParams.get("months")) || 3;
+  const days = Number(req.nextUrl.searchParams.get("days")) || 90;
   try {
-    const summary = await runInboundScan({ months });
+    const summary = await runInboundScan({ days });
     return NextResponse.json(summary);
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 300) }, { status: 502 });

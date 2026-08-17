@@ -63,7 +63,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const scan = async () => {
     setScanning(true); setScanMsg(null)
     try {
-      const r = await fetch('/api/inbound-listings/scan?months=3', { method: 'POST' })
+      const r = await fetch('/api/inbound-listings/scan?days=90', { method: 'POST' })
       const d = await r.json()
       if (r.ok) { setScanMsg(`Scan complete — ${d.inserted ?? 0} new, ${d.duplicates ?? 0} duplicate, ${d.skippedExisting ?? 0} already seen.`); await load() }
       else setScanMsg(d.error || 'Scan failed')
@@ -240,7 +240,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
               {/* Fit reason */}
               {l.reason && (
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 10, lineHeight: 1.5, background: dup ? '#f9fafb' : fs.bg, border: `1px solid ${dup ? '#e5e7eb' : fs.border}`, borderRadius: 8, padding: '7px 10px' }}>
-                  {dup ? '🔁 Same property already captured from another inbox.' : l.reason}
+                  {dup ? '🔁 Same property already captured from another inbox.' : <><span style={{ fontWeight: 700, color: fs.color }}>Why this score: </span>{l.reason}</>}
                 </div>
               )}
 

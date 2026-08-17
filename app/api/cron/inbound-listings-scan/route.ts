@@ -8,7 +8,7 @@ export const maxDuration = 300;
 // manual trigger, using the service-role client for writes. Vercel authenticates cron requests.
 export async function GET() {
   try {
-    const summary = await runInboundScan({ months: 2 });
+    const summary = await runInboundScan({ days: 90 });
     return NextResponse.json(summary);
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e).slice(0, 300) }, { status: 502 });

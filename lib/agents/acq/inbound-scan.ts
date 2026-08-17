@@ -125,7 +125,7 @@ const EXTRACT_SCHEMA = {
           capPct: { anyOf: [{ type: "number" }, { type: "null" }] },
           fit: { type: "string", enum: ["fit", "borderline", "no-fit"] },
           score: { type: "integer", description: "0-100 first-pass quick score vs the Buy Box" },
-          reason: { type: "string", description: "one line: why fit/borderline/no-fit vs the Buy Box" },
+          reason: { type: "string", description: "one line JUSTIFYING the score: name the specific Buy Box factors it meets or misses — market, asset type, size vs band, $/SF vs band, yield/cap vs target, deal size. e.g. '42k SF above the 25k core and 5.4% cap below target, but in-market and $76/SF within band.'" },
         },
       },
     },
@@ -167,13 +167,13 @@ export type ScanSummary = {
   skippedExisting: number;
 };
 
-export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: number; mailboxes?: string[] }): Promise<ScanSummary> {
-  const months = Math.min(Math.max(opts?.months ?? 3, 1), 12);
+export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: number; mailboxes?: string[] }): Promise<ScanSummary> {
+  const days = Math.min(Math.max(opts?.days ?? 90, 1), 400); // default: look back 90 days
   const maxPerMailbox = Math.min(Math.max(opts?.maxPerMailbox ?? 250, 20), 800);
   const mailboxes = opts?.mailboxes ?? SCAN_MAILBOXES;
 
   const since = new Date();
-  since.setMonth(since.getMonth() - months);
+  since.setDate(since.getDate() - days);
   const sinceIso = since.toISOString().split(".")[0] + "Z";
 
   const admin = createAdminClient();
@@ -236,7 +236,7 @@ export async function runInboundScan(opts?: { months?: number; maxPerMailbox?: n
 
 For each listing, extract what is stated (null when absent): US state (TX/FL/Other), street address, submarket, listing broker + firm, asking price (USD), building SF, in-place NOI, and cap rate %. Pick the channel it arrived through and the referral relationship of the SENDER to ERP (Broker if from a brokerage; Colleague if from an @erpfunds.com address; Investor/LP; Crexi or LoopNet for those platform auto-alerts; or Direct/Cold otherwise).
 
-Then screen each listing against the Buy Box below and tag fit / borderline / no-fit with a 0-100 quick score and a one-line reason. Be evidence-based; do not invent details not present in the email.
+Then screen each listing against the Buy Box below and tag fit / borderline / no-fit with a 0-100 quick score. The reason must EXPLAIN that score by naming which Buy Box criteria it meets or misses (market, asset type, size, $/SF, yield/cap, deal size) — so a reader understands why it landed where it did. Be evidence-based; do not invent details not present in the email.
 
 Buy Box:
 ${bbText}` }],
