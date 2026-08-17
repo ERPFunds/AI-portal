@@ -19,6 +19,18 @@ export const SCAN_MAILBOXES = ["mberry@erpfunds.com", "bberry@erpfunds.com", "wm
 const LISTING_HINT =
   /\b(for lease|for sale|available|availabilit|listing|offering memorandum|\bOM\b|flyer|marketing package|sq\.?\s?ft|\bsf\b|acre|cap rate|\bNNN\b|price|\$\/sf|psf|crexi|loopnet|industrial|warehouse|\bIOS\b|yard|off[- ]market)\b/i;
 
+// Known deal sources from the Deal Pipeline "Source" column — brokers/firms who regularly bring ERP
+// deals. Any email from one of these is ALWAYS deep-scanned (attachments + LLM), even if the subject
+// has no listing keywords, so an "details attached" note from a known broker isn't filtered out.
+const KNOWN_SOURCES = [
+  "formation", "ullian", "lbr", "moriah", "invest texas", "lafrance", "brasher", "nrg", "loopnet",
+  "crexi", "cbre", "salmon", "northmarq", "sorrells", "matthews", "marcus millichap", "caleb lawson", "aj brown",
+];
+const isKnownSource = (from: string, name: string): boolean => {
+  const hay = `${from} ${name}`.toLowerCase();
+  return KNOWN_SOURCES.some((t) => hay.includes(t));
+};
+
 type Msg = { id: string; from: string; fromName: string; subject: string; preview: string; received: string };
 
 async function readMailboxSince(t: string, mailbox: string, sinceIso: string, max: number): Promise<Msg[]> {
@@ -190,7 +202,7 @@ export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: num
   for (const mailbox of mailboxes) {
     try {
       const msgs = await readMailboxSince(token, mailbox, sinceIso, maxPerMailbox);
-      const hits = msgs.filter(m => LISTING_HINT.test(`${m.subject} ${m.preview}`));
+      const hits = msgs.filter(m => LISTING_HINT.test(`${m.subject} ${m.preview}`) || isKnownSource(m.from, m.fromName));
       hits.forEach(m => candidates.push({ ...m, mailbox }));
       perMailbox.push({ mailbox, scanned: msgs.length, candidates: hits.length });
     } catch (e) {
