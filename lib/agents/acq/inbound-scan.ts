@@ -11,7 +11,9 @@ import { parseBytes } from "@/lib/agents/ir/markdown-store";
 const GRAPH = "https://graph.microsoft.com/v1.0";
 const anthropic = new Anthropic();
 
-export const SCAN_MAILBOXES = ["mberry@erpfunds.com", "bberry@erpfunds.com", "wmeyer@erpfunds.com"];
+// mparad@ is included so listings a colleague (e.g. Meghan) forwards TO Michele — which land in her
+// inbox, not the sender's scanned received-mail — are still captured.
+export const SCAN_MAILBOXES = ["mberry@erpfunds.com", "bberry@erpfunds.com", "wmeyer@erpfunds.com", "mparad@erpfunds.com"];
 
 // Signals that an email might be a forwarded listing — used to pre-filter before the (costlier) LLM pass.
 const LISTING_HINT =

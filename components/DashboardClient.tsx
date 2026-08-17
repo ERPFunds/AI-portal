@@ -17,6 +17,7 @@ import DealPipelineView from './DealPipelineView'
 import AcquisitionEconomicsView from './AcquisitionEconomicsView'
 import BuyBoxPanel from './BuyBoxPanel'
 import InboundListingIntake from './InboundListingIntake'
+import LeasingInquiriesView from './LeasingInquiriesView'
 import AdminVendorDeskView from './AdminVendorDeskView'
 import DstTaxPrepView from './DstTaxPrepView'
 import DealVendorDesk from './DealVendorDesk'
@@ -317,6 +318,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     financial: <FinancialView />,
     rentroll: <RentRollView />,
     vacancies: <VacanciesView />,
+    'leasing-inquiries': <LeasingInquiriesView />,
     workorders: <WorkOrdersView />,
     'tenant-comms': <TenantCommsView />,
     leasing: <LeasingView />,
