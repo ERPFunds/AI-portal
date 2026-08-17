@@ -31,7 +31,31 @@ const isKnownSource = (from: string, name: string): boolean => {
   return KNOWN_SOURCES.some((t) => hay.includes(t));
 };
 
-type Msg = { id: string; from: string; fromName: string; subject: string; preview: string; received: string };
+// Strip Outlook/security boilerplate that pollutes previews & extraction (first-time-sender banner,
+// external-mail caution) so it doesn't leak into the stored preview or confuse the extractor.
+function cleanText(s: string): string {
+  return (s || "")
+    .replace(/You don't often get email from[^.]*\.?\s*Learn why this is important\.?/gi, " ")
+    .replace(/Learn why this is important\.?/gi, " ")
+    .replace(/CAUTION:\s*This message originated from outside[^\n]*/gi, " ")
+    .replace(/Do not click links or open attachments unless you recognize the sender[^\n]*/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// First http(s) URL that looks like a property listing (Crexi/LoopNet/OM/flyer), for the tab's link-out.
+const URL_RE = /https?:\/\/[^\s"'<>)\]]+/gi;
+function pickListingUrl(...texts: string[]): string | null {
+  for (const t of texts) {
+    const urls = (t || "").match(URL_RE);
+    if (!urls) continue;
+    const hit = urls.find((u) => /crexi|loopnet|listing|offering|property|marketing|\.pdf/i.test(u));
+    if (hit) return hit.replace(/[.,);]+$/, "");
+  }
+  return null;
+}
+
+type Msg = { id: string; from: string; fromName: string; subject: string; preview: string; received: string; webLink: string };
 
 async function readMailboxSince(t: string, mailbox: string, sinceIso: string, max: number): Promise<Msg[]> {
   const h = { Authorization: `Bearer ${t}`, Prefer: 'outlook.body-content-type="text"' };
@@ -47,7 +71,7 @@ async function readMailboxSince(t: string, mailbox: string, sinceIso: string, ma
   const out: Msg[] = [];
   let url: string | null =
     `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
-    `?$select=id,subject,from,bodyPreview,receivedDateTime,parentFolderId` +
+    `?$select=id,subject,from,bodyPreview,receivedDateTime,parentFolderId,webLink` +
     `&$filter=${encodeURIComponent(`receivedDateTime ge ${sinceIso}`)}` +
     `&$orderby=receivedDateTime desc&$top=50`;
   while (url && out.length < max) {
@@ -64,6 +88,7 @@ async function readMailboxSince(t: string, mailbox: string, sinceIso: string, ma
         subject: (m.subject as string) || "",
         preview: (m.bodyPreview as string) || "",
         received: (m.receivedDateTime as string) || "",
+        webLink: (m.webLink as string) || "",
       });
       if (out.length >= max) break;
     }
@@ -75,25 +100,27 @@ async function readMailboxSince(t: string, mailbox: string, sinceIso: string, ma
 // Pull text from a message's PDF/OM/flyer/spreadsheet attachments (bounded), so the extractor
 // reads the actual listing package — not just the covering email. Best-effort; never throws.
 const ATTACH_OK = /\.(pdf|docx|xlsx|xls|pptx|txt|md|csv)$/i;
-async function readAttachmentsText(token: string, mailbox: string, messageId: string): Promise<string> {
+async function readAttachmentsText(token: string, mailbox: string, messageId: string): Promise<{ text: string; names: string[] }> {
   try {
     const h = { Authorization: `Bearer ${token}` };
     const r = await fetch(
       `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${messageId}/attachments?$select=id,name,contentType,size,isInline`,
       { headers: h }
     );
-    if (!r.ok) return "";
+    if (!r.ok) return { text: "", names: [] };
     const d = await r.json();
     const atts = ((d.value || []) as Record<string, unknown>[]).filter(
       (a) => String(a["@odata.type"] || "").includes("fileAttachment") && !a.isInline
     );
+    const names: string[] = [];
     let out = "";
-    for (const a of atts.slice(0, 3)) {
+    for (const a of atts.slice(0, 5)) {
       const name = String(a.name || "");
       const ct = String(a.contentType || "");
       const size = Number(a.size || 0);
-      if (size > 8_000_000) continue;
       if (!ATTACH_OK.test(name) && !/pdf|word|excel|spreadsheet|presentation|text|csv/i.test(ct)) continue;
+      names.push(name); // surface the attachment name even if we don't parse its bytes
+      if (size > 8_000_000) continue;
       try {
         const vr = await fetch(
           `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${messageId}/attachments/${a.id}/$value`,
@@ -102,13 +129,13 @@ async function readAttachmentsText(token: string, mailbox: string, messageId: st
         if (!vr.ok) continue;
         const buf = Buffer.from(await vr.arrayBuffer());
         const text = await parseBytes(buf, name, ct || null);
-        if (text) out += `\n[attachment: ${name}] ${text.replace(/\s+/g, " ").slice(0, 1500)}`;
+        if (text) out += `\n[attachment: ${name}] ${cleanText(text).slice(0, 1500)}`;
       } catch { /* skip a bad attachment */ }
       if (out.length > 3000) break;
     }
-    return out.slice(0, 3000);
+    return { text: out.slice(0, 3000), names };
   } catch {
-    return "";
+    return { text: "", names: [] };
   }
 }
 
@@ -122,7 +149,7 @@ const EXTRACT_SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["index", "isListing", "state", "address", "submarket", "channel", "referralKind", "broker", "brokerFirm", "askingPrice", "sf", "inPlaceNoi", "capPct", "fit", "score", "reason"],
+        required: ["index", "isListing", "state", "address", "submarket", "channel", "referralKind", "broker", "brokerFirm", "askingPrice", "sf", "inPlaceNoi", "capPct", "fit", "score", "reason", "listingUrl"],
         properties: {
           index: { type: "integer", description: "the email's index from the digest" },
           isListing: { type: "boolean", description: "true only if this email is forwarding/presenting a specific property available to acquire (broker availability, OM, Crexi/LoopNet link, off-market offer). Newsletters, market reports, tenant/leasing, IR, and internal admin are false." },
@@ -140,6 +167,7 @@ const EXTRACT_SCHEMA = {
           fit: { type: "string", enum: ["fit", "borderline", "no-fit"] },
           score: { type: "integer", description: "0-100 first-pass quick score vs the Buy Box" },
           reason: { type: "string", description: "one line JUSTIFYING the score: name the specific Buy Box factors it meets or misses — market, asset type, size vs band, $/SF vs band, yield/cap vs target, deal size. e.g. '42k SF above the 25k core and 5.4% cap below target, but in-market and $76/SF within band.'" },
+          listingUrl: { anyOf: [{ type: "string" }, { type: "null" }], description: "the property's Crexi/LoopNet/broker listing URL, from the email body or an attachment, if present" },
         },
       },
     },
@@ -150,7 +178,7 @@ type Extracted = {
   index: number; isListing: boolean; state: string | null; address: string | null; submarket: string | null;
   channel: string; referralKind: string; broker: string | null; brokerFirm: string | null;
   askingPrice: number | null; sf: number | null; inPlaceNoi: number | null; capPct: number | null;
-  fit: string; score: number; reason: string;
+  fit: string; score: number; reason: string; listingUrl: string | null;
 };
 
 function buyBoxText(rows: { market: string | null; markets: string | null; asset_class: string | null; sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; cap_rate_floor: number | null; deal_size_max: number | null; notes: string | null }[]): string {
@@ -229,14 +257,14 @@ export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: num
   for (let i = 0; i < fresh.length; i += BATCH) {
     const batch = fresh.slice(i, i + BATCH);
     // Read PDF/OM/flyer attachment text for each candidate (bounded), so the extractor sees the package.
-    const attTexts: string[] = [];
+    const attInfo: { text: string; names: string[] }[] = [];
     for (const m of batch) {
-      if (attnFetched >= ATTN_CAP) { attTexts.push(""); continue; }
+      if (attnFetched >= ATTN_CAP) { attInfo.push({ text: "", names: [] }); continue; }
       attnFetched++;
-      attTexts.push(await readAttachmentsText(token, m.mailbox, m.id));
+      attInfo.push(await readAttachmentsText(token, m.mailbox, m.id));
     }
     const digest = batch
-      .map((m, j) => `${j}. <${m.from}> "${m.subject}" :: ${(m.preview || "").replace(/\s+/g, " ").slice(0, 240)}${attTexts[j] ? " " + attTexts[j] : ""}`)
+      .map((m, j) => `${j}. <${m.from}> "${m.subject}" :: ${cleanText(m.preview).slice(0, 240)}${attInfo[j].text ? " " + attInfo[j].text : ""}`)
       .join("\n");
 
     let items: Extracted[] = [];
@@ -268,6 +296,8 @@ ${bbText}` }],
       const m = batch[it.index];
       if (!m) continue;
       extracted++;
+      const att = attInfo[it.index] ?? { text: "", names: [] };
+      const listingUrl = it.listingUrl || pickListingUrl(m.preview, att.text);
       const state = it.state === "TX" || it.state === "FL" ? it.state : null;
       const key = dedupKey(state, it.address);
       let status = "new";
@@ -299,7 +329,10 @@ ${bbText}` }],
         dedup_key: key,
         status,
         raw_subject: m.subject,
-        preview: (m.preview || "").replace(/\s+/g, " ").trim().slice(0, 300),
+        preview: cleanText(m.preview).slice(0, 300),
+        source_url: m.webLink || null,
+        listing_url: listingUrl,
+        attachments: att.names.length ? att.names : null,
       });
       if (!error) inserted++;
       else console.error("[inbound-scan] insert failed:", error.message);

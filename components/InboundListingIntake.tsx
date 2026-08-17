@@ -33,6 +33,8 @@ type Row = {
   preview: string | null
   origin: string | null
   listing_url: string | null
+  source_url: string | null
+  attachments: string[] | null
 }
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
@@ -245,6 +247,15 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                   ? <>🔎 Discovered on <span style={{ fontWeight: 600, color: '#374151' }}>{l.referral_kind ?? 'platform'}</span>{l.listing_url && <> · <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>View ↗</a></>}</>
                   : <>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></>}
               </div>
+              {(l.source_url || (l.origin !== 'discovered' && l.listing_url) || (l.attachments && l.attachments.length > 0)) && (
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 5 }}>
+                  {l.origin !== 'discovered' && l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>🔗 Listing ↗</a>}
+                  {l.source_url && <a href={l.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>✉️ Open email ↗</a>}
+                  {(l.attachments ?? []).slice(0, 4).map((n, i) => (
+                    <span key={i} title={n} style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>📎 {n.length > 22 ? n.slice(0, 20) + '…' : n}</span>
+                  ))}
+                </div>
+              )}
               {l.preview && (
                 <div title={l.preview} style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', borderLeft: '2px solid #e5e7eb', paddingLeft: 8 }}>
                   &ldquo;{l.preview}&rdquo;
