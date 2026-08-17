@@ -38,6 +38,8 @@ type Row = {
 }
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
+// Deal Pipeline categories (unified FL scheme) — Meghan picks one when moving a listing to the board.
+const PIPE_CATEGORIES = ['Under Contract', 'Contract Negotiations', 'Under Review', 'Prospects', 'Comparable — Single-Tenant', 'Comparable — Multi-Tenant', 'Comparable — Vacant Land']
 const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label: string }> = {
   'fit':        { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Fit' },
   'borderline': { color: '#b45309', bg: '#fffbeb', border: '#fde68a', label: 'Borderline' },
@@ -95,16 +97,25 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
     try { await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch { /* ignore */ }
   }
 
-  const addToPipeline = async (id: string) => {
-    setAdding(id)
+  // Move a listing into the Deal Pipeline mirror board under a category Meghan picks (no auto-routing
+  // by score). Maps the listing to a TX (status) or FL (section) row, then removes it from inbound.
+  const moveToPipeline = async (l: Row, category: string) => {
+    if (!category) return
+    setAdding(l.id)
     try {
-      const r = await fetch('/api/inbound-listings', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
-      const d = await r.json()
+      const psf = l.asking_price && l.sf ? Math.round((l.asking_price / l.sf) * 100) / 100 : null
+      const notes = [l.reason, l.listing_url].filter(Boolean).join(' — ')
+      const isFL = l.state === 'FL'
+      const data = isFL
+        ? { section: category, name: l.address || l.submarket || 'Listing', status: '', source: l.referred_by || l.channel || '', propertyType: 'Industrial', location: l.submarket || '', yearBuilt: null, units: null, occupancy: null, capRate: l.cap_pct ?? null, sqft: l.sf ?? null, acres: null, price: l.asking_price ?? null, psf, notes }
+        : { kind: 'pipeline', status: category, location: l.submarket || '', owner: l.broker_firm || l.broker || '', address: l.address || '', tenant: '', source: l.referred_by || l.channel || '', price: l.asking_price ?? null, pricePsf: psf, yield: null, acreage: null, sqft: l.sf ?? null, yearBuilt: null, nextSteps: '', notes }
+      const r = await fetch('/api/deal-pipeline/mirror', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: isFL ? 'FL' : 'TX', data }) })
       if (r.ok) {
-        setRows(rs => rs.map(x => x.id === id ? { ...x, status: 'imported' } : x))
-        setScanMsg(d.duplicate ? `"${d.deal_name}" is already in the Deal Pipeline.` : `Added "${d.deal_name}" to the Deal Pipeline.`)
-      } else setScanMsg(d.error || 'Could not add to the Deal Pipeline')
-    } catch { setScanMsg('Could not add to the Deal Pipeline') } finally { setAdding(null) }
+        await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: l.id, status: 'dismissed' }) })
+        setRows(rs => rs.filter(x => x.id !== l.id))
+        setScanMsg(`Moved to the ${isFL ? 'Florida' : 'Texas'} pipeline → ${category}.`)
+      } else { const d = await r.json().catch(() => ({})); setScanMsg(d.error || 'Could not move to pipeline') }
+    } catch { setScanMsg('Could not move to pipeline') } finally { setAdding(null) }
   }
 
   // When `locked` is set (a market-specific page), the market is fixed and its toggle is hidden.
@@ -295,9 +306,11 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                   {l.broker || l.broker_firm ? `👤 ${[l.broker, l.broker_firm].filter(Boolean).join(' · ')}` : <span style={{ color: '#9ca3af' }}>Broker not identified</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  {l.status === 'imported'
-                    ? <span style={{ fontSize: 10, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '4px 9px' }}>✓ In Deal Pipeline</span>
-                    : (!dup && l.fit === 'fit' && <button onClick={() => addToPipeline(l.id)} disabled={adding === l.id} style={btn('#fff', '#16a34a')}>{adding === l.id ? 'Adding…' : '➕ Add to Deal Pipeline'}</button>)}
+                  <select value="" disabled={adding === l.id} onChange={(e) => moveToPipeline(l, e.target.value)} title="Move to the Deal Pipeline — Meghan picks the category"
+                    style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', cursor: adding === l.id ? 'default' : 'pointer' }}>
+                    <option value="">{adding === l.id ? 'Moving…' : '→ Move to pipeline…'}</option>
+                    {PIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
                   <button onClick={() => dismiss(l.id)} style={btn('#9ca3af')}>Dismiss</button>
                 </div>
               </div>
