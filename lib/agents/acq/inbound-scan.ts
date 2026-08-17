@@ -285,6 +285,7 @@ ${bbText}` }],
         dedup_key: key,
         status,
         raw_subject: m.subject,
+        preview: (m.preview || "").replace(/\s+/g, " ").trim().slice(0, 300),
       });
       if (!error) inserted++;
       else console.error("[inbound-scan] insert failed:", error.message);

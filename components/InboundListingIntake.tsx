@@ -30,6 +30,7 @@ type Row = {
   reason: string | null
   status: string
   raw_subject: string | null
+  preview: string | null
 }
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
@@ -217,6 +218,11 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
               <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address || l.raw_subject || 'Listing'}</div>
               {l.submarket && <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>}
               <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></div>
+              {l.preview && (
+                <div title={l.preview} style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', borderLeft: '2px solid #e5e7eb', paddingLeft: 8 }}>
+                  &ldquo;{l.preview}&rdquo;
+                </div>
+              )}
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 10 }}>
                 <Metric label="Asking" value={l.asking_price != null ? usd(l.asking_price) : '—'} />
