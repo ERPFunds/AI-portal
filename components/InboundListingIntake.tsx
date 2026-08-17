@@ -31,6 +31,8 @@ type Row = {
   status: string
   raw_subject: string | null
   preview: string | null
+  origin: string | null
+  listing_url: string | null
 }
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
@@ -51,6 +53,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
+  const [marketScanning, setMarketScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
 
@@ -69,6 +72,20 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
       if (r.ok) { setScanMsg(`Scan complete — ${d.inserted ?? 0} new, ${d.duplicates ?? 0} duplicate, ${d.skippedExisting ?? 0} already seen.`); await load() }
       else setScanMsg(d.error || 'Scan failed')
     } catch { setScanMsg('Scan failed') } finally { setScanning(false) }
+  }
+
+  const scanMarket = async () => {
+    setMarketScanning(true); setScanMsg(null)
+    try {
+      const r = await fetch('/api/inbound-listings/market-scan', { method: 'POST' })
+      const d = await r.json()
+      if (r.ok) {
+        const per = (d.perSource ?? []) as { source: string; inserted?: number; error?: string; skipped?: string }[]
+        const ins = per.reduce((s, x) => s + (x.inserted ?? 0), 0)
+        const notes = per.map(x => `${x.source}: ${x.inserted ?? 0} new${x.error ? ' (error)' : x.skipped ? ' (not configured)' : ''}`).join(' · ')
+        setScanMsg(`Market scan complete — ${ins} new. ${notes}`); await load()
+      } else setScanMsg(d.error || 'Market scan failed')
+    } catch { setScanMsg('Market scan failed') } finally { setMarketScanning(false) }
   }
 
   const dismiss = async (id: string) => {
@@ -135,10 +152,16 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
             Pulled from Meghan, Brennan &amp; William&apos;s inboxes — listings that brokers or others forwarded them, deduped and screened against the {locked === 'TX' ? 'Texas' : locked === 'FL' ? 'Florida' : ''} Buy Box. A triage gate — not the analytical score.
           </div>
         </div>
-        <button onClick={scan} disabled={scanning} title="Scan Meghan / Brennan / William's inboxes for newly forwarded listings"
-          style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#0D2D52', color: '#fff', cursor: scanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: scanning ? .6 : 1 }}>
-          {scanning ? 'Scanning inboxes…' : '✉️ Scan inboxes'}
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <button onClick={scan} disabled={scanning} title="Scan Meghan / Brennan / William's inboxes for newly forwarded listings"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#0D2D52', color: '#fff', cursor: scanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: scanning ? .6 : 1 }}>
+            {scanning ? 'Scanning inboxes…' : '✉️ Scan inboxes'}
+          </button>
+          <button onClick={scanMarket} disabled={marketScanning} title="Scrape LoopNet + Crexi for on-market for-sale industrial matching the Buy Box"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: marketScanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: marketScanning ? .6 : 1 }}>
+            {marketScanning ? 'Scanning market…' : '🔎 Scan market'}
+          </button>
+        </div>
       </div>
 
       {scanMsg && (
@@ -217,7 +240,11 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
 
               <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address || l.raw_subject || 'Listing'}</div>
               {l.submarket && <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>}
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></div>
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
+                {l.origin === 'discovered'
+                  ? <>🔎 Discovered on <span style={{ fontWeight: 600, color: '#374151' }}>{l.referral_kind ?? 'platform'}</span>{l.listing_url && <> · <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>View ↗</a></>}</>
+                  : <>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></>}
+              </div>
               {l.preview && (
                 <div title={l.preview} style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', borderLeft: '2px solid #e5e7eb', paddingLeft: 8 }}>
                   &ldquo;{l.preview}&rdquo;

@@ -62,6 +62,10 @@
       "schedule": "0 14,18,22 * * *"
     },
     {
+      "path": "/api/cron/market-scan",
+      "schedule": "0 15 * * 1"
+    },
+    {
       "path": "/api/lp-directory",
       "schedule": "0 12 * * 1"
     },

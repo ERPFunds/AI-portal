@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // (the table is RLS-locked); every request is gated on an authenticated portal user first.
 
 const COLS =
-  "id, source_mailbox, received_at, referred_by, referral_kind, channel, address, submarket, state, asking_price, sf, in_place_noi, cap_pct, broker, broker_firm, fit, score, reason, dedup_key, status, raw_subject, preview, created_at";
+  "id, source_mailbox, received_at, origin, listing_url, referred_by, referral_kind, channel, address, submarket, state, asking_price, sf, in_place_noi, cap_pct, broker, broker_firm, fit, score, reason, dedup_key, status, raw_subject, preview, created_at";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
