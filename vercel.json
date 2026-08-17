@@ -58,6 +58,10 @@
       "schedule": "0 14 * * 1"
     },
     {
+      "path": "/api/cron/inbound-listings-scan",
+      "schedule": "0 14,18,22 * * *"
+    },
+    {
       "path": "/api/lp-directory",
       "schedule": "0 12 * * 1"
     },

@@ -1,15 +1,36 @@
 'use client'
 
-import React, { useState } from 'react'
-import { INBOUND_LISTINGS as LISTINGS, BUY_BOXES, type Fit, type Source, type ReferralKind } from '../lib/data/inboundListings'
+import React, { useState, useEffect } from 'react'
+import { BUY_BOXES, type Fit, type Source, type ReferralKind } from '../lib/data/inboundListings'
 
-// UI MOCKUP — Acquisition EA Workflow #9: Inbound Listing Intake, Screen & Quick-Score.
-// Demonstrates the flow with sample data (not wired to a live inbox). Captures broker-supplied
-// listing data (email + OM/flyer or Crexi/LoopNet links), dedupes, screens against the Buy Box,
-// tags fit/borderline/no-fit with a reason, and adds a first-pass quick-score. Triage gate only —
-// deep scoring + full underwriting stay with the Acquisition Research agent. Listing data + the
-// listing→deal mapping live in lib/data/inboundListings.ts (shared with the Deal Pipeline
-// live tracker and the /api/deal-pipeline/import-listings auto-add mechanism).
+// Inbound Listing Intake — live. Pulls forwarded property listings out of the acquisition principals'
+// mailboxes (Meghan / Brennan / William) via the inbound-listings scan, screens each against the
+// market Buy Box, and shows them as triage cards. A triage gate — deep scoring + full underwriting
+// stay with the Acquisition Research agent.
+
+// Live row shape (from /api/inbound-listings; a subset of the inbound_listings table).
+type Row = {
+  id: string
+  source_mailbox: string
+  received_at: string | null
+  referred_by: string | null
+  referral_kind: string | null
+  channel: string | null
+  address: string | null
+  submarket: string | null
+  state: string | null
+  asking_price: number | null
+  sf: number | null
+  in_place_noi: number | null
+  cap_pct: number | null
+  broker: string | null
+  broker_firm: string | null
+  fit: string | null
+  score: number | null
+  reason: string | null
+  status: string
+  raw_subject: string | null
+}
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
 const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label: string }> = {
@@ -17,26 +38,54 @@ const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label:
   'borderline': { color: '#b45309', bg: '#fffbeb', border: '#fde68a', label: 'Borderline' },
   'no-fit':     { color: '#b91c1c', bg: '#fef2f2', border: '#fecaca', label: 'No-fit' },
 }
+const NEUTRAL_FIT = { color: '#6b7280', bg: '#f9fafb', border: '#e5e7eb', label: 'Unscored' }
+const fitStyle = (f: string | null) => (f && f in FIT_STYLE ? FIT_STYLE[f as Fit] : NEUTRAL_FIT)
 const SOURCE_ICON: Record<Source, string> = { 'Crexi': '🟧', 'LoopNet': '🔵', 'Broker email': '✉️', 'OM attachment': '📎' }
 const REFERRAL_ICON: Record<ReferralKind, string> = { 'Broker': '🤝', 'Investor/LP': '💼', 'Colleague': '👥', 'Platform alert': '🔔', 'Direct/Cold': '📩' }
+const icon = <T extends string>(map: Record<T, string>, k: string | null, fallback: string) => (k && k in map ? map[k as T] : fallback)
 
 export default function InboundListingIntake({ market: locked }: { market?: 'TX' | 'FL' } = {}) {
   const [market, setMarket] = useState<'All' | 'TX' | 'FL'>('All')
   const [fitFilter, setFitFilter] = useState<'All' | Fit>('All')
+  const [rows, setRows] = useState<Row[]>([])
+  const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState(false)
+  const [scanMsg, setScanMsg] = useState<string | null>(null)
 
-  // When `locked` is set (a market-specific page — TX or FL), the market is fixed and its toggle
-  // is hidden; KPIs, cards, and the buy box all scope to that state.
+  const load = async () => {
+    setLoading(true)
+    try { const r = await fetch('/api/inbound-listings'); const d = await r.json(); if (r.ok) setRows(d.items ?? []) }
+    catch { /* ignore */ } finally { setLoading(false) }
+  }
+  useEffect(() => { load() }, [])
+
+  const scan = async () => {
+    setScanning(true); setScanMsg(null)
+    try {
+      const r = await fetch('/api/inbound-listings/scan?months=3', { method: 'POST' })
+      const d = await r.json()
+      if (r.ok) { setScanMsg(`Scan complete — ${d.inserted ?? 0} new, ${d.duplicates ?? 0} duplicate, ${d.skippedExisting ?? 0} already seen.`); await load() }
+      else setScanMsg(d.error || 'Scan failed')
+    } catch { setScanMsg('Scan failed') } finally { setScanning(false) }
+  }
+
+  const dismiss = async (id: string) => {
+    setRows(rs => rs.filter(r => r.id !== id))
+    try { await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch { /* ignore */ }
+  }
+
+  // When `locked` is set (a market-specific page), the market is fixed and its toggle is hidden.
   const effMarket: 'All' | 'TX' | 'FL' = locked ?? market
-  const base = LISTINGS.filter(l => effMarket === 'All' || l.state === effMarket)
-  const visible = base.filter(l => fitFilter === 'All' || l.fit === fitFilter)
+  const base = rows.filter(r => effMarket === 'All' || r.state === effMarket)
+  const visible = base.filter(r => fitFilter === 'All' || r.fit === fitFilter)
 
-  const fitCount = base.filter(l => l.fit === 'fit' && !l.deduped).length
-  const borderlineCount = base.filter(l => l.fit === 'borderline').length
-  const noFitCount = base.filter(l => l.fit === 'no-fit').length
+  const fitCount = base.filter(r => r.fit === 'fit' && r.status !== 'duplicate').length
+  const borderlineCount = base.filter(r => r.fit === 'borderline').length
+  const noFitCount = base.filter(r => r.fit === 'no-fit').length
   const avgYield = (() => {
-    const q = base.filter(l => l.fit !== 'no-fit')
-    if (!q.length) return 0
-    return q.reduce((s, l) => s + (l.inPlaceNoi / l.askingPrice) * 100, 0) / q.length
+    const q = base.filter(r => r.fit !== 'no-fit' && r.in_place_noi && r.asking_price)
+    if (!q.length) return null
+    return q.reduce((s, r) => s + (r.in_place_noi! / r.asking_price!) * 100, 0) / q.length
   })()
 
   const pill = (active: boolean): React.CSSProperties => ({
@@ -56,15 +105,18 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>📥 Inbound Listings — {locked === 'TX' ? 'Texas (Permian)' : locked === 'FL' ? 'Florida (Space Coast)' : 'Prospective Deals'}</div>
           <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, maxWidth: 640, lineHeight: 1.5 }}>
-            Auto-captured from broker emails and Crexi / LoopNet links or OM attachments, filtered to {locked === 'TX' ? 'Texas' : locked === 'FL' ? 'Florida' : 'TX & FL'}, deduped, and screened against the Buy Box. A triage gate — not the analytical score.
+            Pulled from Meghan, Brennan &amp; William&apos;s inboxes — listings that brokers or others forwarded them, deduped and screened against the {locked === 'TX' ? 'Texas' : locked === 'FL' ? 'Florida' : ''} Buy Box. A triage gate — not the analytical score.
           </div>
         </div>
+        <button onClick={scan} disabled={scanning} title="Scan Meghan / Brennan / William's inboxes for newly forwarded listings"
+          style={{ flexShrink: 0, padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#0D2D52', color: '#fff', cursor: scanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: scanning ? .6 : 1 }}>
+          {scanning ? 'Scanning inboxes…' : '✉️ Scan inboxes'}
+        </button>
       </div>
 
-      {/* Mockup marker */}
-      <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '8px 14px', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#4338ca' }}>
-        <span>🧪</span><span><strong>UI mockup</strong> — Acquisition EA Workflow #9. Sample data; not yet wired to the live inbox. Captures broker-supplied data only (no Crexi/LoopNet scraping).</span>
-      </div>
+      {scanMsg && (
+        <div style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 8, padding: '8px 14px', marginBottom: 14, fontSize: 12, color: '#4338ca' }}>{scanMsg}</div>
+      )}
 
       {/* Buy Box(es) being screened against — market-specific. TX is portfolio-derived; FL illustrative. */}
       <div style={{ marginBottom: 12 }}>
@@ -83,11 +135,11 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
 
       {/* KPIs */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
-        {kpi('New · 7d', String(LISTINGS.length))}
+        {kpi('Listings', String(base.length))}
         {kpi('Fit', String(fitCount), '#16a34a')}
         {kpi('Borderline', String(borderlineCount), '#b45309')}
         {kpi('No-fit', String(noFitCount), '#b91c1c')}
-        {kpi('Avg going-in yield', `${avgYield.toFixed(1)}%`, '#0e7490')}
+        {kpi('Avg going-in yield', avgYield == null ? '—' : `${avgYield.toFixed(1)}%`, '#0e7490')}
       </div>
 
       {/* Filters */}
@@ -104,39 +156,50 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         </div>
       </div>
 
+      {/* Empty / loading states */}
+      {loading && <div style={{ textAlign: 'center', padding: 40, color: '#9ca3af', fontSize: 13 }}>Loading listings…</div>}
+      {!loading && base.length === 0 && (
+        <div style={{ textAlign: 'center', padding: '48px 20px', color: '#6b7280', background: '#fff', border: '1px dashed #d1d5db', borderRadius: 12 }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📭</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No inbound listings yet{effMarket !== 'All' ? ` for ${effMarket}` : ''}</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>Click <strong>Scan inboxes</strong> to pull forwarded listings from Meghan, Brennan &amp; William&apos;s mail.</div>
+        </div>
+      )}
+
       {/* Cards */}
+      {!loading && base.length > 0 && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
         {visible.map(l => {
-          const yieldPct = (l.inPlaceNoi / l.askingPrice) * 100
-          const psf = l.askingPrice / l.sf
-          const vsComp = Math.round(((psf - l.compPsf) / l.compPsf) * 100)
-          const fs = FIT_STYLE[l.fit]
+          const dup = l.status === 'duplicate'
+          const yieldPct = l.cap_pct ?? (l.in_place_noi && l.asking_price ? (l.in_place_noi / l.asking_price) * 100 : null)
+          const psf = l.asking_price && l.sf ? l.asking_price / l.sf : null
+          const fs = fitStyle(l.fit)
           return (
-            <div key={l.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, opacity: l.deduped ? 0.7 : 1, position: 'relative' }}>
+            <div key={l.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, opacity: dup ? 0.7 : 1, position: 'relative' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{SOURCE_ICON[l.source]} {l.source}</span>
-                  <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px', color: '#6d28d9' }} title={`Forwarded to ERP by ${l.referredBy}`}>{REFERRAL_ICON[l.referralKind]} {l.referralKind}</span>
-                  <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{l.state}</span>
+                  {l.channel && <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{icon(SOURCE_ICON, l.channel, '✉️')} {l.channel}</span>}
+                  {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px', color: '#6d28d9' }} title={`Forwarded to ERP by ${l.referred_by ?? 'unknown'}`}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
+                  {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{l.state}</span>}
                 </div>
-                {l.deduped
-                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 8px' }}>Deduped</span>
+                {dup
+                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 8px' }}>Duplicate</span>
                   : <span style={{ fontSize: 11, fontWeight: 700, color: fs.color, background: fs.bg, border: `1px solid ${fs.border}`, borderRadius: 6, padding: '2px 9px' }}>{fs.label}</span>}
               </div>
 
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address}</div>
-              <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referredBy}</span></div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address || l.raw_subject || 'Listing'}</div>
+              {l.submarket && <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>}
+              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 10 }}>
-                <Metric label="Asking" value={usd(l.askingPrice)} />
-                <Metric label="Cap (in-place)" value={`${yieldPct.toFixed(1)}%`} />
-                <Metric label="SF" value={l.sf.toLocaleString('en-US')} />
-                <Metric label="$/SF" value={`$${Math.round(psf)}`} sub={`${vsComp >= 0 ? '+' : ''}${vsComp}% vs comps`} subColor={vsComp <= 0 ? '#16a34a' : '#b45309'} />
+                <Metric label="Asking" value={l.asking_price != null ? usd(l.asking_price) : '—'} />
+                <Metric label="Cap (in-place)" value={yieldPct != null ? `${yieldPct.toFixed(1)}%` : '—'} />
+                <Metric label="SF" value={l.sf != null ? l.sf.toLocaleString('en-US') : '—'} />
+                <Metric label="$/SF" value={psf != null ? `$${Math.round(psf)}` : '—'} />
               </div>
 
               {/* Quick-score */}
-              {!l.deduped && (
+              {!dup && l.score != null && (
                 <div style={{ marginTop: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginBottom: 3 }}>
                     <span>Quick-score</span><span style={{ fontWeight: 700, color: fs.color }}>{l.score}/100</span>
@@ -148,30 +211,30 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
               )}
 
               {/* Fit reason */}
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 10, lineHeight: 1.5, background: l.deduped ? '#f9fafb' : fs.bg, border: `1px solid ${l.deduped ? '#e5e7eb' : fs.border}`, borderRadius: 8, padding: '7px 10px' }}>
-                {l.deduped ? `🔁 ${l.deduped}` : l.reason}
-              </div>
+              {l.reason && (
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 10, lineHeight: 1.5, background: dup ? '#f9fafb' : fs.bg, border: `1px solid ${dup ? '#e5e7eb' : fs.border}`, borderRadius: 8, padding: '7px 10px' }}>
+                  {dup ? '🔁 Same property already captured from another inbox.' : l.reason}
+                </div>
+              )}
 
               {/* Broker + actions */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
                 <div style={{ fontSize: 11, color: '#374151' }}>
-                  👤 {l.broker} · {l.brokerFirm}
-                  <span title="Broker captured to Salesforce via Contact Auto-Capture" style={{ marginLeft: 6, fontSize: 9, color: '#16a34a', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 5, padding: '1px 6px' }}>→ SF</span>
+                  {l.broker || l.broker_firm ? `👤 ${[l.broker, l.broker_firm].filter(Boolean).join(' · ')}` : <span style={{ color: '#9ca3af' }}>Broker not identified</span>}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  {!l.deduped && l.fit !== 'no-fit' && <button style={btn('#0D2D52', '#fff')}>→ Auto-Scoring</button>}
-                  <button style={btn('#374151')}>Source ↗</button>
-                  {!l.deduped && <button style={btn('#9ca3af')}>Dismiss</button>}
+                  <button onClick={() => dismiss(l.id)} style={btn('#9ca3af')}>Dismiss</button>
                 </div>
               </div>
             </div>
           )
         })}
       </div>
+      )}
 
       {/* Footer caveats */}
       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 14, lineHeight: 1.6, borderTop: '1px solid #f3f4f6', paddingTop: 10 }}>
-        Buy-box tag is a lightweight fit flag off broker-supplied data only — a triage gate, not the analytical score. Deep multi-factor scoring and top-10 ranking stay with the Acquisition Research agent&apos;s Property Auto-Scoring workflow (which this feeds). Full underwriting — levered model, IRR, sensitivities — stays with Acquisition Research, not this EA agent. Fit listings become prospective-deal candidates, distinct from the active Deal Pipeline.
+        Read-only mailbox sweep — nothing is moved, replied to, or modified. Fields are extracted from the forwarded email, so figures are only as complete as the broker supplied. The buy-box tag is a lightweight triage flag, not the analytical score; deep multi-factor scoring and full underwriting stay with the Acquisition Research agent. Fit listings become prospective-deal candidates, distinct from the active Deal Pipeline.
       </div>
     </div>
   )
