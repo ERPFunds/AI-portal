@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { ApifyClient } from "apify-client";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getSkill, DEFAULT_MAX_TOKENS } from "@/lib/data/draftingSkills";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { parseBytes } from "@/lib/agents/ir/markdown-store";
@@ -15,9 +16,10 @@ function sse(enc: TextEncoder, payload: object) {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const supabase = createAdminClient();
 
   const body = await req.json();
   const docType: string = body.docType ?? "freeform";

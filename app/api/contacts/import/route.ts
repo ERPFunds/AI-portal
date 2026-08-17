@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -9,9 +10,10 @@ export const dynamic = "force-dynamic";
 const COLS = "id, name, email, company, title, phone, category, event, notes, status, sf_contact_id, created_at";
 
 export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
 
   const { data, error } = await supabase
     .from("imported_contacts")
@@ -23,9 +25,10 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
 
   const body = await req.json().catch(() => ({}));
   const event: string = (body.event ?? "").toString().trim() || null as unknown as string;
@@ -60,9 +63,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
 
   const id = req.nextUrl.searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });

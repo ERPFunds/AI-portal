@@ -1,5 +1,5 @@
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const anthropic = new Anthropic();
 
@@ -33,7 +33,7 @@ function buildMarkdown(rows: { question: string; answer: string; category: strin
 /** Rebuild the approved-Q&A doc: replace the prior auto-generated file + refresh markdown layer. */
 export async function regenerateApprovedQaDoc(): Promise<{ ok: boolean; count: number; fileId?: string; error?: string }> {
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("ir_qa")
       .select("question, answer, category")

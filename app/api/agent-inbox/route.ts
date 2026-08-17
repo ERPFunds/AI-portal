@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   resolveFolderId,
   listChildFolders,
@@ -55,7 +56,8 @@ export interface AgentInboxItem {
   mailbox: string;                      // the mailbox this item lives in (for send/read actions)
 }
 
-type SB = Awaited<ReturnType<typeof createClient>>;
+// ir_sent and lp_directory_cache are RLS-locked, so they go through the service-role client.
+type SB = Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createAdminClient>;
 
 // Record a just-sent email as the LP's most-recent interaction in the LP Directory cache, so it
 // shows immediately (matched by recipient email). Best-effort; the weekly recompute re-derives it
@@ -164,6 +166,7 @@ function toItem(
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+  const admin = createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -440,7 +443,7 @@ export async function GET(req: NextRequest) {
     try {
       const sentSince = new Date();
       sentSince.setMonth(sentSince.getMonth() - 6);
-      const { data: logged } = await supabase
+      const { data: logged } = await admin
         .from("ir_sent")
         .select("id, sent_at, from_mailbox, to_email, subject, body, owner")
         .gte("sent_at", sentSince.toISOString())
@@ -498,6 +501,7 @@ export async function GET(req: NextRequest) {
 // Approve & send a draft that lives in the team mailbox's Drafts. Irreversible.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+  const admin = createAdminClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -593,7 +597,7 @@ export async function POST(req: NextRequest) {
       } catch { /* non-fatal */ }
       // Salesforce log + app Sent-section log
       try {
-        await supabase.from("ir_sent").insert({ from_mailbox: sendFrom, to_email: to, subject, body: content, owner: body.from === "William" ? "William" : "Meghan" });
+        await admin.from("ir_sent").insert({ from_mailbox: sendFrom, to_email: to, subject, body: content, owner: body.from === "William" ? "William" : "Meghan" });
       } catch { /* non-fatal */ }
       if (salesforceConfigured()) {
         try {
@@ -615,7 +619,7 @@ export async function POST(req: NextRequest) {
           isEscalation: false, escalationReason: null, lpName: (body.lpName || "").trim() || null,
           summary: `Email sent — ${subject}`, draftSaved: false, draftId: null });
       } catch { /* non-fatal */ }
-      try { await patchLpCacheInteraction(supabase, [to], subject, nowIso); } catch { /* non-fatal */ }
+      try { await patchLpCacheInteraction(admin, [to], subject, nowIso); } catch { /* non-fatal */ }
       try { await logAgentRun({ agentId: "ir", workflowId: "ir-reply", status: "success", summary: `Reply sent to ${to} — ${subject}`.slice(0, 200) }); } catch { /* best-effort */ }
       return NextResponse.json({ ok: true, sentFrom: sendFrom });
     } catch (e) {
@@ -691,7 +695,7 @@ export async function POST(req: NextRequest) {
 
     // Log the sent reply so it surfaces in the IR Inbox "Sent" section (best-effort).
     try {
-      await supabase.from("ir_sent").insert({
+      await admin.from("ir_sent").insert({
         from_mailbox: sendFrom,
         to_email: detail.to[0] ?? null,
         subject: detail.subject,
@@ -717,7 +721,7 @@ export async function POST(req: NextRequest) {
         );
         note = recipients.length ? `note-logged: ${results.join("; ")}` : "note-skip(no external recipient)";
         // Reflect the sent reply as the LP's last interaction in the directory (matched by email).
-        try { await patchLpCacheInteraction(supabase, recipients, detail.subject, sentDate); } catch { /* non-fatal */ }
+        try { await patchLpCacheInteraction(admin, recipients, detail.subject, sentDate); } catch { /* non-fatal */ }
       } catch (e) {
         note = `note-fail(${String(e).slice(0, 80)})`;
       }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { purgeStoredDoc } from "@/lib/agents/ir/markdown-store";
 
 const anthropic = new Anthropic();
@@ -15,7 +15,7 @@ export async function GET(
 ) {
   const { id: fileId } = await params;
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("document_markdown")
       .select("filename, category, markdown, extracted_at")
@@ -51,7 +51,7 @@ export async function DELETE(
   }
 
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { error } = await supabase.from("uploaded_files").delete().eq("file_id", fileId);
     if (error) throw error;
     await purgeStoredDoc(fileId); // also drop extracted text + embedding chunks

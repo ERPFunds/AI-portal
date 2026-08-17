@@ -1,5 +1,5 @@
 import Anthropic, { toFile } from "@anthropic-ai/sdk";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { listAllCorrections, type AgentCorrection } from "@/lib/agents/ir/corrections-store";
 
 const anthropic = new Anthropic();
@@ -44,7 +44,7 @@ export async function regenerateCorrectionsDoc(): Promise<{ ok: boolean; count: 
   try {
     const rows = await listAllCorrections();
     const md = buildMarkdown(rows);
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     // Remove the prior auto-generated doc (Anthropic file + uploaded_files + markdown rows).
     const { data: prior } = await supabase.from("uploaded_files").select("file_id").eq("filename", DOC_NAME);

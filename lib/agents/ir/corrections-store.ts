@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 // Draft-vs-sent learning loop, SEPARATE from the Learned Q&A (ir_qa) pipeline.
 // ir_draft_outcomes: a snapshot of every draft the sweep creates, later matched against the
@@ -52,7 +52,7 @@ export async function insertDraftSnapshot(p: {
   isDd: boolean;
   draftHtml: string;
 }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { error } = await supabase.from("ir_draft_outcomes").insert({
     mailbox: p.mailbox,
     signer: p.signer,
@@ -70,7 +70,7 @@ export async function insertDraftSnapshot(p: {
 }
 
 export async function listPendingOutcomes(limit = 15): Promise<DraftOutcome[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("ir_draft_outcomes")
     .select("id, created_at, mailbox, signer, conversation_id, original_message_id, from_address, subject, category, route, is_dd, draft_html, status")
@@ -85,7 +85,7 @@ export async function updateOutcome(
   id: string,
   patch: { status: OutcomeStatus; sentAt?: string | null; sentMailbox?: string | null; sentText?: string | null; similarity?: number | null; lessons?: number | null }
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { error } = await supabase
     .from("ir_draft_outcomes")
     .update({
@@ -103,7 +103,7 @@ export async function updateOutcome(
 
 /** All corrections including tombstones — the updater needs deleted ones so it never re-adds them. */
 export async function listAllCorrections(): Promise<AgentCorrection[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("ir_agent_corrections")
     .select("id, created_at, updated_at, type, learning, evidence, source_subject, occurrences, status")
@@ -113,7 +113,7 @@ export async function listAllCorrections(): Promise<AgentCorrection[]> {
 }
 
 export async function addCorrection(p: { type: CorrectionType; learning: string; evidence?: string | null; sourceSubject?: string | null }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { error } = await supabase.from("ir_agent_corrections").insert({
     type: p.type,
     learning: p.learning,
@@ -125,7 +125,7 @@ export async function addCorrection(p: { type: CorrectionType; learning: string;
 
 /** Same learning seen again: bump occurrences (activates provisional negative rules at 2). */
 export async function incrementCorrection(id: string, sourceSubject?: string | null): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase.from("ir_agent_corrections").select("occurrences").eq("id", id).maybeSingle();
   const { error } = await supabase
     .from("ir_agent_corrections")
@@ -140,7 +140,7 @@ export async function incrementCorrection(id: string, sourceSubject?: string | n
 
 /** New learning contradicts/supersedes an existing entry: overwrite it in place (keeps id + count). */
 export async function replaceCorrection(id: string, p: { type: CorrectionType; learning: string; evidence?: string | null; sourceSubject?: string | null }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase.from("ir_agent_corrections").select("occurrences").eq("id", id).maybeSingle();
   const { error } = await supabase
     .from("ir_agent_corrections")
@@ -159,7 +159,7 @@ export async function replaceCorrection(id: string, p: { type: CorrectionType; l
 
 /** Human pruning: tombstone (never hard-delete) so the miner can't re-add it later. */
 export async function deleteCorrection(id: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { error } = await supabase
     .from("ir_agent_corrections")
     .update({ status: "deleted", deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
@@ -169,7 +169,7 @@ export async function deleteCorrection(id: string): Promise<void> {
 
 /** Undo a tombstone: bring a deleted correction back to active (it applies to drafts again). */
 export async function restoreCorrection(id: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { error } = await supabase
     .from("ir_agent_corrections")
     .update({ status: "active", deleted_at: null, updated_at: new Date().toISOString() })

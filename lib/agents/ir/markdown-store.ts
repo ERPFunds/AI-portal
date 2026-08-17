@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import AdmZip from "adm-zip";
 import * as XLSX from "xlsx";
 import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
@@ -9,7 +9,7 @@ import { getAnthropicFileBytes } from "@/lib/agents/ir/file-text";
 const STORE_MAX = 200_000; // store up to ~200k chars of extracted text per doc
 
 export async function getStoredMarkdown(fileId: string): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data } = await supabase.from("document_markdown").select("markdown").eq("file_id", fileId).maybeSingle();
   return (data?.markdown as string) ?? null;
 }
@@ -17,7 +17,7 @@ export async function getStoredMarkdown(fileId: string): Promise<string | null> 
 /** Remove a file's stored text and embedding chunks. Call when a file is deleted or replaced,
  *  so stale extractions can't linger and pollute Q&A / retrieval. */
 export async function purgeStoredDoc(fileId: string): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   await supabase.from("document_markdown").delete().eq("file_id", fileId);
   await supabase.from("document_chunks").delete().eq("file_id", fileId);
 }
@@ -107,7 +107,7 @@ export async function extractAndStoreMarkdown(p: {
     return "";
   }
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   await supabase.from("document_markdown").upsert(
     {
       file_id: p.fileId,

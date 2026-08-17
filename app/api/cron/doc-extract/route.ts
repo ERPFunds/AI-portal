@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { extractAndStoreMarkdown } from "@/lib/agents/ir/markdown-store";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   const { data: files, error } = await supabase
     .from("uploaded_files")

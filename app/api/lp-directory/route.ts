@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { getGraphToken } from "@/lib/agents/graph-token";
 import { readExcelRows, listWorksheetNames } from "@/lib/agents/excel-utils";
 import { findCommitmentSchedule } from "@/lib/agents/sharepoint-files";
@@ -16,7 +17,8 @@ export const maxDuration = 300;
 // times out on cold loads (which is why broker/last-interaction "disappear"). We persist the
 // computed payload to `lp_directory_cache` and serve it instantly on every page load. The heavy
 // scan only runs on an explicit refresh: the weekly cron or the "Sync with Salesforce" button.
-type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
+// The lp_* tables are RLS-locked, so they're read/written through the service-role client.
+type SupabaseServer = Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createAdminClient>;
 
 async function readLpCache(sb: SupabaseServer): Promise<{ data: Record<string, unknown>; updated_at: string } | null> {
   try {
@@ -259,6 +261,7 @@ function parseHeaders(values: string[][]) {
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+  const admin = createAdminClient();
 
   // Auth: an interactive user session, OR the weekly cron (Bearer CRON_SECRET).
   const isCron = !!process.env.CRON_SECRET &&
@@ -272,10 +275,10 @@ export async function GET(req: NextRequest) {
   // Every other page load is served instantly from the cached snapshot.
   const refresh = isCron || req.nextUrl.searchParams.get("refresh") === "1";
   if (!refresh) {
-    const cached = await readLpCache(supabase);
+    const cached = await readLpCache(admin);
     if (cached) {
       const out = { ...cached.data, cachedAt: cached.updated_at, fromCache: true };
-      await applyPriorContacts(supabase, out);
+      await applyPriorContacts(admin, out);
       return NextResponse.json(withTestLp(out));
     }
   }
@@ -523,7 +526,7 @@ export async function GET(req: NextRequest) {
     // Committed amounts (portal-stored). Blank for uncommitted Fund IV targets; DST/1031 rows are
     // closed deals so their commitment IS the committed amount.
     try {
-      const { data: committedRows } = await supabase.from("lp_committed").select("investor_key, committed_usd");
+      const { data: committedRows } = await admin.from("lp_committed").select("investor_key, committed_usd");
       const committedMap = new Map<string, number>();
       for (const r of (committedRows ?? []) as { investor_key: string; committed_usd: number }[]) {
         committedMap.set(r.investor_key, Number(r.committed_usd));
@@ -558,17 +561,17 @@ export async function GET(req: NextRequest) {
       sfFieldMap,
       sfError,
     };
-    await writeLpCache(supabase, payload);
+    await writeLpCache(admin, payload);
     // Layer the prior-fund contacts onto the response (the cache stays SharePoint+SF only).
-    await applyPriorContacts(supabase, payload as unknown as Record<string, unknown>);
+    await applyPriorContacts(admin, payload as unknown as Record<string, unknown>);
     return NextResponse.json(withTestLp(payload));
   } catch (err) {
     // Refresh failed (e.g. scan timed out) — fall back to the last good snapshot so the
     // directory (and its broker/last-interaction columns) never goes blank.
-    const cached = await readLpCache(supabase);
+    const cached = await readLpCache(admin);
     if (cached) {
       const out = { ...cached.data, cachedAt: cached.updated_at, fromCache: true, refreshError: String(err).slice(0, 300) };
-      await applyPriorContacts(supabase, out);
+      await applyPriorContacts(admin, out);
       return NextResponse.json(withTestLp(out));
     }
     return NextResponse.json({ error: String(err) }, { status: 500 });
@@ -579,6 +582,7 @@ export async function GET(req: NextRequest) {
 
 export async function PATCH(req: NextRequest) {
   const supabase = await createClient();
+  const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -590,7 +594,7 @@ export async function PATCH(req: NextRequest) {
   // immediately, then push it to Salesforce.
   let contactName = (body.contact ?? "").trim();
   try {
-    const cached = await readLpCache(supabase);
+    const cached = await readLpCache(admin);
     const data = cached?.data as ({ lps?: LpRecord[] } & Record<string, unknown>) | undefined;
     const target = data?.lps?.find((l) => l.investor.trim().toLowerCase() === body.investor.trim().toLowerCase());
     if (data && target) {
@@ -606,7 +610,7 @@ export async function PATCH(req: NextRequest) {
       if (body.brokerContact!== undefined) target.brokerContact= body.brokerContact;
       if (body.committed    !== undefined) target.committedUsd  = body.committed.trim() ? parseDollar(body.committed) : null;
       if (body.stage        !== undefined) target.sfStage       = body.stage || null;
-      await writeLpCache(supabase, data);
+      await writeLpCache(admin, data);
     }
   } catch { /* cache update is best-effort */ }
 
@@ -616,12 +620,12 @@ export async function PATCH(req: NextRequest) {
     const usd = body.committed.trim() ? parseDollar(body.committed) : 0;
     try {
       if (usd > 0) {
-        await supabase.from("lp_committed").upsert(
+        await admin.from("lp_committed").upsert(
           { investor_key: key, investor: body.investor.trim(), committed_usd: usd, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() },
           { onConflict: "investor_key" }
         );
       } else {
-        await supabase.from("lp_committed").delete().eq("investor_key", key);
+        await admin.from("lp_committed").delete().eq("investor_key", key);
       }
     } catch { /* non-fatal */ }
   }
@@ -657,6 +661,7 @@ export async function PATCH(req: NextRequest) {
 // ── POST — add a brand-new LP (creates the Salesforce Account + Opportunity, adds it to the cache) ──
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+  const admin = createAdminClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -707,21 +712,21 @@ export async function POST(req: NextRequest) {
 
   // Add to the cached snapshot so it shows immediately (before the next full Sync).
   try {
-    const cached = await readLpCache(supabase);
+    const cached = await readLpCache(admin);
     const data = cached?.data as ({ lps?: LpRecord[]; groups?: string[]; lpCount?: number; dstCount?: number } & Record<string, unknown>) | undefined;
     if (data && Array.isArray(data.lps)) {
       data.lps.push(rec);
       data.lpCount = data.lps.length;
       if (isDst) data.dstCount = (data.dstCount ?? 0) + 1;
       if (Array.isArray(data.groups) && !data.groups.includes(group)) data.groups.push(group);
-      await writeLpCache(supabase, data);
+      await writeLpCache(admin, data);
     }
   } catch { /* cache add is best-effort */ }
 
   // Persist a committed amount if given.
   if (committedUsd && committedUsd > 0) {
     try {
-      await supabase.from("lp_committed").upsert(
+      await admin.from("lp_committed").upsert(
         { investor_key: investor.toLowerCase(), investor, committed_usd: committedUsd, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() },
         { onConflict: "investor_key" }
       );

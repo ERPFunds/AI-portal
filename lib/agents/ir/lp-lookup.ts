@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * "Is this email a known investor, and under what entity?" — built from the LP Directory cache.
@@ -32,7 +32,7 @@ export interface InvestorLookup {
 export async function loadInvestorLookup(): Promise<InvestorLookup> {
   const emailToName = new Map<string, string>();
   try {
-    const sb = await createClient();
+    const sb = createAdminClient();
     const { data } = await sb.from("lp_directory_cache").select("data").eq("id", 1).maybeSingle();
     const lps = ((data as { data?: { lps?: Array<Record<string, unknown>> } } | null)?.data?.lps) ?? [];
     for (const lp of lps) {

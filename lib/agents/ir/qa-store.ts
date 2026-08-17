@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export type QaStatus = "pending" | "approved" | "rejected";
 
@@ -33,7 +33,7 @@ export function qaDedupKey(question: string): string {
 /** Insert new Q&A as 'pending'; existing dedup keys (any status) are skipped. Returns count actually inserted. */
 export async function insertPendingQa(items: QaCandidate[]): Promise<number> {
   if (items.length === 0) return 0;
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const rows = items.map((i) => ({
     question: i.question,
     answer: i.answer,
@@ -53,7 +53,7 @@ export async function insertPendingQa(items: QaCandidate[]): Promise<number> {
 }
 
 export async function listQa(status?: QaStatus): Promise<QaEntry[]> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   let q = supabase
     .from("ir_qa")
     .select("id, question, answer, category, status, source_subject, source_mailbox, source_sent_at, created_at, reviewed_by, reviewed_at")
@@ -68,7 +68,7 @@ export async function updateQa(
   id: string,
   patch: { status?: QaStatus; question?: string; answer?: string; category?: string; reviewedBy?: string }
 ): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (patch.question !== undefined) row.question = patch.question;
   if (patch.answer !== undefined) row.answer = patch.answer;
@@ -85,7 +85,7 @@ export async function updateQa(
 
 /** Approved Q&A rendered for the drafter prompt. Empty string if none. */
 export async function getApprovedQaForPrompt(): Promise<string> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("ir_qa")
     .select("question, answer, category")
@@ -101,7 +101,7 @@ export async function getApprovedQaForPrompt(): Promise<string> {
 
 export async function filterUnprocessedSentIds(mailbox: string, ids: string[]): Promise<Set<string>> {
   if (ids.length === 0) return new Set();
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("ir_qa_processed")
     .select("message_id")
@@ -118,7 +118,7 @@ export async function markSentProcessed(p: {
   internetMessageId?: string | null;
   extracted: number;
 }): Promise<void> {
-  const supabase = await createClient();
+  const supabase = createAdminClient();
   await supabase
     .from("ir_qa_processed")
     .upsert(
