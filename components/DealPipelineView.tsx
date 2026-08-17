@@ -12,13 +12,11 @@ import PipelineLiveTracker from './PipelineLiveTracker'
 
 const NAVY = '#0D2D52'
 
-const TX_STATUS_ORDER = ['Under Contract', 'Active', 'Pending', 'Decline']
-const TX_STATUS_COLOR: Record<string, string> = { 'Under Contract': '#059669', 'Active': '#2563eb', 'Pending': '#d97706', 'Decline': '#6b7280' }
-const TX_STATUS_DESC: Record<string, string> = { 'Under Contract': 'Contract signed', 'Active': 'Pursuing', 'Pending': 'Investigating', 'Decline': 'Passed' }
-const FL_SECTION_ORDER = ['Under Contract', 'Contract Negotiations', 'Targets / Under Review', 'Prospects', 'Comparable — Multi-Tenant', 'Comparable — Single-Tenant', 'Comparable — Vacant Land']
-const FL_SECTION_COLOR: Record<string, string> = {
-  'Under Contract': '#059669', 'Contract Negotiations': '#0ea5e9', 'Targets / Under Review': '#2563eb',
-  'Prospects': '#d97706', 'Comparable — Multi-Tenant': '#6b7280', 'Comparable — Single-Tenant': '#6b7280', 'Comparable — Vacant Land': '#6b7280',
+// Unified category scheme (matches the FL spreadsheet) — groups BOTH boards: TX by `status`, FL by `section`.
+const CATEGORIES = ['Under Contract', 'Contract Negotiations', 'Under Review', 'Prospects', 'Comparable — Single-Tenant', 'Comparable — Multi-Tenant', 'Comparable — Vacant Land']
+const CAT_COLOR: Record<string, string> = {
+  'Under Contract': '#059669', 'Contract Negotiations': '#0ea5e9', 'Under Review': '#2563eb',
+  'Prospects': '#d97706', 'Comparable — Single-Tenant': '#6b7280', 'Comparable — Multi-Tenant': '#6b7280', 'Comparable — Vacant Land': '#6b7280',
 }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v)
@@ -61,13 +59,22 @@ const editBtn = (onClick: () => void) => (
   <button onClick={(e) => { e.stopPropagation(); onClick() }} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', color: '#374151', whiteSpace: 'nowrap' }}>✎ Edit</button>
 )
 
+// Inline category dropdown — changing it moves the row between groups (decline/move), no save needed.
+const catSelect = (val: string | null | undefined, onChange: (v: string) => void) => (
+  <select value={val ?? ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); onChange(e.target.value) }}
+    style={{ fontSize: 11, padding: '3px 6px', border: '1px solid #d1d5db', borderRadius: 6, background: '#fff', color: '#374151', maxWidth: 168 }}>
+    <option value="">—</option>
+    {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+  </select>
+)
+
 // =============================== TEXAS ===============================
-function TexasPipeline({ rows, query, showMarket, onEdit }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void }) {
+function TexasPipeline({ rows, query, showMarket, onEdit, onMove }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void }) {
   const q = query.trim().toLowerCase()
   const match = (r: TxRow) => !q || [r.location, r.owner, r.address, r.tenant, r.source, r.notes, r.nextSteps].join(' ').toLowerCase().includes(q)
   const pipeline = useMemo(() => rows.filter((r) => r.kind === 'pipeline' && match(r)), [rows, q])
   const market = useMemo(() => rows.filter((r) => r.kind === 'market' && match(r)), [rows, q])
-  const cols = ['Location', 'Owner', 'Address', 'Tenant', 'Source', 'Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.', 'Year Built', 'Next Steps', 'Notes / Comments', '']
+  const cols = ['Location', 'Status', 'Owner', 'Address', 'Tenant', 'Source', 'Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.', 'Year Built', 'Next Steps', 'Notes / Comments', '']
   const rightCols = new Set(['Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.'])
   const marketByLoc = useMemo(() => {
     const m = new Map<string, TxRowE[]>()
@@ -78,6 +85,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit }: { rows: TxRowE[]; qu
   const dataRow = (r: TxRowE, i: number) => (
     <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
       <td style={{ ...TD, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
+      <td style={TD}>{catSelect(r.status, (v) => onMove(r, v))}</td>
       <td style={TD}>{txt(r.owner)}</td>
       <td style={{ ...TD, minWidth: 180 }}>{txt(r.address)}</td>
       <td style={TD}>{txt(r.tenant)}</td>
@@ -100,12 +108,12 @@ function TexasPipeline({ rows, query, showMarket, onEdit }: { rows: TxRowE[]; qu
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1240 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
-            {TX_STATUS_ORDER.map((st) => {
+            {CATEGORIES.map((st) => {
               const g = pipeline.filter((r) => r.status === st)
               if (!g.length) return null
               return (
                 <React.Fragment key={st}>
-                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={st} color={TX_STATUS_COLOR[st]} count={g.length} sub={TX_STATUS_DESC[st]} /></td></tr>
+                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={st} color={CAT_COLOR[st]} count={g.length} /></td></tr>
                   {g.map(dataRow)}
                 </React.Fragment>
               )
@@ -150,7 +158,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit }: { rows: TxRowE[]; qu
 }
 
 // =============================== FLORIDA ===============================
-function FloridaPipeline({ rows, query, onEdit }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void }) {
+function FloridaPipeline({ rows, query, onEdit, onMove }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void }) {
   const q = query.trim().toLowerCase()
   const match = (r: FlRow) => !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
   const list = useMemo(() => rows.filter(match), [rows, q])
@@ -162,15 +170,15 @@ function FloridaPipeline({ rows, query, onEdit }: { rows: FlRowE[]; query: strin
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1300 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
-            {FL_SECTION_ORDER.map((sec) => {
+            {CATEGORIES.map((sec) => {
               const g = list.filter((r) => r.section === sec)
               if (!g.length) return null
               return (
                 <React.Fragment key={sec}>
-                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={sec} color={FL_SECTION_COLOR[sec] || '#6b7280'} count={g.length} /></td></tr>
+                  <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={sec} color={CAT_COLOR[sec] || '#6b7280'} count={g.length} /></td></tr>
                   {g.map((r, i) => (
                     <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
-                      <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}</td>
+                      <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
                       <td style={TD}>{txt(r.status)}</td>
                       <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
                       <td style={TD}>{txt(r.propertyType)}</td>
@@ -232,7 +240,7 @@ function RowEditor({ draft, onChange, onClose, onSave, onDelete, saving }: {
           {state === 'TX' ? (
             <>
               <Field label="Kind">{sel('kind', ['pipeline', 'market'])}</Field>
-              <Field label="Status (moves the row)">{sel('status', TX_STATUS_ORDER)}</Field>
+              <Field label="Status (moves the row)">{sel('status', CATEGORIES)}</Field>
               <Field label="Location">{inp('location')}</Field>
               <Field label="Owner">{inp('owner')}</Field>
               <Field label="Address" span>{inp('address')}</Field>
@@ -249,7 +257,7 @@ function RowEditor({ draft, onChange, onClose, onSave, onDelete, saving }: {
             </>
           ) : (
             <>
-              <Field label="Section (moves the row)">{sel('section', FL_SECTION_ORDER)}</Field>
+              <Field label="Section (moves the row)">{sel('section', CATEGORIES)}</Field>
               <Field label="Status">{inp('status')}</Field>
               <Field label="Name" span>{inp('name')}</Field>
               <Field label="Source">{inp('source')}</Field>
@@ -351,14 +359,19 @@ export default function DealPipelineView() {
     a.click()
     URL.revokeObjectURL(url)
   }
+  const move = async (r: TxRowE | FlRowE, field: 'status' | 'section', cat: string) => {
+    const { _id, ...data } = r as Record<string, unknown> & { _id: string }
+    await fetch('/api/deal-pipeline/mirror', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: _id, data: { ...data, [field]: cat } }) })
+    await load(stateTab)
+  }
   const openEdit = (r: TxRowE | FlRowE) => setDraft({ ...r, _state: stateTab })
-  const openAdd = () => setDraft(stateTab === 'TX' ? { _state: 'TX', kind: 'pipeline', status: 'Active' } : { _state: 'FL', section: 'Targets / Under Review' })
+  const openAdd = () => setDraft(stateTab === 'TX' ? { _state: 'TX', kind: 'pipeline', status: 'Under Review' } : { _state: 'FL', section: 'Under Review' })
 
   const txPipeline = txRows.filter((r) => r.kind === 'pipeline')
   const txMarket = txRows.filter((r) => r.kind === 'market')
-  const txActive = txPipeline.filter((r) => r.status === 'Active' || r.status === 'Under Contract').length
-  const txPending = txPipeline.filter((r) => r.status === 'Pending').length
-  const flTargets = flRows.filter((r) => r.section === 'Targets / Under Review' || r.section === 'Prospects').length
+  const txActive = txPipeline.filter((r) => ['Under Contract', 'Contract Negotiations', 'Under Review'].includes(r.status)).length
+  const txPending = txPipeline.filter((r) => r.status === 'Prospects').length
+  const flTargets = flRows.filter((r) => r.section === 'Under Review' || r.section === 'Prospects').length
 
   const asOf = stateTab === 'TX' ? TX_AS_OF : FL_AS_OF
   const meta = stateTab === 'TX'
@@ -402,7 +415,7 @@ export default function DealPipelineView() {
 
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
             {stateTab === 'TX' ? (
-              <>{kpi('Pipeline Deals', String(txPipeline.length))}{kpi('Active / U.C.', String(txActive), '#2563eb')}{kpi('Pending', String(txPending), '#d97706')}{kpi('Submarket Inventory', String(txMarket.length), '#0e7490')}</>
+              <>{kpi('Pipeline Deals', String(txPipeline.length))}{kpi('Under Review+', String(txActive), '#2563eb')}{kpi('Prospects', String(txPending), '#d97706')}{kpi('Submarket Inventory', String(txMarket.length), '#0e7490')}</>
             ) : (
               <>{kpi('Total Records', String(flRows.length))}{kpi('Targets + Prospects', String(flTargets), '#2563eb')}{kpi('Comparables', String(flRows.filter((r) => r.section.startsWith('Comparable')).length), '#6b7280')}</>
             )}
@@ -427,8 +440,8 @@ export default function DealPipelineView() {
           </div>
 
           {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-            : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} />
-              : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} />}
+            : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} />
+              : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} />}
         </>
       )}
 
