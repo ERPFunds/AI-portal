@@ -41,7 +41,7 @@ export type BuyBox = { markets: string; assetClass: string; sf: string; psf: str
 export const BUY_BOXES: Record<Listing['state'], BuyBox> = {
   TX: {
     markets: 'Permian — Midland/Odessa',
-    assetClass: 'Single-tenant NNN industrial / flex',
+    assetClass: 'Single- & multi-tenant NNN industrial / flex',
     sf: '5k–25k SF (to ~75k)',
     psf: '$50–$185/SF',
     yieldTarget: '~10% stabilized yield',

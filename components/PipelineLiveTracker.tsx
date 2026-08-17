@@ -16,6 +16,7 @@ const STAGE_COLOR: Record<string, string> = {
 }
 const MARKETS = ['Permian Basin', 'Brevard / Space Coast', 'Other']
 const OWNERS = ['Meghan', 'William', 'Michele']
+const MKT: Record<'TX' | 'FL', string> = { TX: 'Permian Basin', FL: 'Brevard / Space Coast' }
 
 type DealRow = {
   id: string; deal_name: string; entity: string | null; market: string | null; stage: string;
@@ -49,6 +50,7 @@ export default function PipelineLiveTracker() {
   const [err, setErr] = useState('')
   const [importing, setImporting] = useState<string | null>(null) // listing id or 'all'
   const [importMsg, setImportMsg] = useState('')
+  const [stateTab, setStateTab] = useState<'All' | 'TX' | 'FL'>('All')
 
   const load = async () => {
     setLoading(true)
@@ -77,8 +79,8 @@ export default function PipelineLiveTracker() {
   // ---- inbound-listing import (auto-add mechanism) ----
   const haveNames = useMemo(() => new Set(rows.map((r) => r.deal_name.trim().toLowerCase())), [rows])
   const candidates = useMemo(
-    () => INBOUND_LISTINGS.filter((l) => isPipelineCandidate(l) && !haveNames.has(l.address.trim().toLowerCase())),
-    [haveNames],
+    () => INBOUND_LISTINGS.filter((l) => isPipelineCandidate(l) && !haveNames.has(l.address.trim().toLowerCase()) && (stateTab === 'All' || marketForState(l.state) === MKT[stateTab])),
+    [haveNames, stateTab],
   )
 
   const importListings = async (ids: string[], key: string) => {
@@ -95,13 +97,14 @@ export default function PipelineLiveTracker() {
     } catch (e) { setImportMsg(String(e)) } finally { setImporting(null) }
   }
 
-  const active = rows.filter((r) => r.stage !== 'Closed')
+  const viewRows = stateTab === 'All' ? rows : rows.filter((r) => r.market === MKT[stateTab])
+  const active = viewRows.filter((r) => r.stage !== 'Closed')
   const pipelineValue = active.reduce((s, r) => s + (r.purchase_price || 0), 0)
   const inDD = active.filter((r) => r.stage === 'Due Diligence').length
   const underContractPlus = active.filter((r) => ['Under Contract', 'Due Diligence', 'IC Approval', 'Closing'].includes(r.stage)).length
   const closingSoon = active.filter((r) => { const d = daysUntil(r.closing_date); return d != null && d >= 0 && d <= 30 }).length
 
-  const sorted = [...rows].sort((a, b) => (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) || (b.purchase_price || 0) - (a.purchase_price || 0))
+  const sorted = [...viewRows].sort((a, b) => (STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)) || (b.purchase_price || 0) - (a.purchase_price || 0))
 
   const kpi = (label: string, value: string, color?: string) => (
     <div style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '14px 18px', flex: 1, minWidth: 130 }}>
@@ -112,9 +115,16 @@ export default function PipelineLiveTracker() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-        <div style={{ fontSize: 12, color: '#64748b' }}>Editable, portal-managed pipeline — feeds the Acquisition Economics views.</div>
-        <button onClick={() => setEditing({ stage: 'Sourcing', market: 'Permian Basin' })}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {(['All', 'TX', 'FL'] as const).map((t) => (
+            <button key={t} onClick={() => setStateTab(t)}
+              style={{ padding: '7px 16px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: stateTab === t ? `1px solid ${NAVY}` : '1px solid #e2e8f0', background: stateTab === t ? NAVY : '#fff', color: stateTab === t ? '#fff' : '#64748b' }}>
+              {t === 'All' ? 'All markets' : t === 'TX' ? '🛢️ Texas — Permian' : '🚀 Florida — Space Coast'}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setEditing({ stage: 'Sourcing', market: stateTab === 'FL' ? 'Brevard / Space Coast' : 'Permian Basin' })}
           style={{ flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add deal</button>
       </div>
 
@@ -175,8 +185,8 @@ export default function PipelineLiveTracker() {
       {/* Stage funnel */}
       <div style={{ display: 'flex', gap: 6, marginBottom: 16, flexWrap: 'wrap' }}>
         {STAGES.map((s) => {
-          const n = rows.filter((r) => r.stage === s).length
-          const amt = rows.filter((r) => r.stage === s).reduce((a, r) => a + (r.purchase_price || 0), 0)
+          const n = viewRows.filter((r) => r.stage === s).length
+          const amt = viewRows.filter((r) => r.stage === s).reduce((a, r) => a + (r.purchase_price || 0), 0)
           return (
             <div key={s} style={{ flex: 1, minWidth: 92, background: '#fff', border: '1px solid #e5e7eb', borderRadius: 8, padding: '8px 10px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -192,10 +202,10 @@ export default function PipelineLiveTracker() {
 
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading pipeline…</div>
-      ) : rows.length === 0 ? (
+      ) : viewRows.length === 0 ? (
         <div style={{ background: '#fff', border: '1px dashed #d1d5db', borderRadius: 12, padding: 40, textAlign: 'center' }}>
           <div style={{ fontSize: 28, marginBottom: 8 }}>🏗️</div>
-          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No deals yet</div>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>No {stateTab === 'All' ? '' : stateTab === 'TX' ? 'Texas ' : 'Florida '}deals yet</div>
           <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>Add an acquisition manually, or auto-add a fit listing above.</div>
         </div>
       ) : (

@@ -3,6 +3,10 @@ import { getGraphToken } from "@/lib/agents/graph-token";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SCAN_MAILBOXES } from "@/lib/agents/acq/inbound-scan";
 
+// Leasing inquiries also sweep Hannah Powell's inbox (leasing coordination) on top of the
+// acquisition principals' mailboxes used for inbound listings.
+const LEASING_MAILBOXES = [...SCAN_MAILBOXES, "hpowell@erpfunds.com"];
+
 // Inbound Leasing Inquiries scanner. The demand-side complement to the inbound-listings scanner:
 // reads the same mailboxes for emails where a prospective TENANT (or their broker) is asking to
 // LEASE space — a storage yard, warehouse, flex/office, IOS — extracts what they need, and matches
@@ -123,7 +127,7 @@ export type LeasingScanSummary = {
 export async function runLeasingScan(opts?: { days?: number; maxPerMailbox?: number; mailboxes?: string[] }): Promise<LeasingScanSummary> {
   const days = Math.min(Math.max(opts?.days ?? 90, 1), 365);
   const maxPerMailbox = Math.min(Math.max(opts?.maxPerMailbox ?? 250, 20), 800);
-  const mailboxes = opts?.mailboxes ?? SCAN_MAILBOXES;
+  const mailboxes = opts?.mailboxes ?? LEASING_MAILBOXES;
 
   const since = new Date(); since.setDate(since.getDate() - days);
   const sinceIso = since.toISOString().split(".")[0] + "Z";
