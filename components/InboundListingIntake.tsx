@@ -249,6 +249,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                 </div>
                 {dup
                   ? <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 8px' }}>Duplicate</span>
+                  : l.fit === 'no-fit' ? null
                   : <span style={{ fontSize: 11, fontWeight: 700, color: fs.color, background: fs.bg, border: `1px solid ${fs.border}`, borderRadius: 6, padding: '2px 9px' }}>{fs.label}</span>}
               </div>
 
