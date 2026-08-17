@@ -73,7 +73,7 @@ async function runActor(actor: string, input: unknown, token: string): Promise<R
   return Array.isArray(items) ? (items as Record<string, unknown>[]) : [];
 }
 
-type Box = { sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; deal_size_max: number | null };
+type Box = { sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; deal_size_min: number | null; deal_size_max: number | null };
 
 // Deterministic Buy-Box screen for a discovered listing (no LLM — the fields are already structured).
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string } {
@@ -90,9 +90,11 @@ function screen(n: Norm, box: Box | undefined): { fit: string; score: number; re
     if (psf >= box.price_per_sf_min && psf <= box.price_per_sf_max) { pts += 20; notes.push(`$${Math.round(psf)}/SF in band`); }
     else notes.push(`$${Math.round(psf)}/SF outside $${box.price_per_sf_min}–${box.price_per_sf_max}`);
   }
-  if (box?.deal_size_max && n.price != null) {
-    if (n.price <= box.deal_size_max) { pts += 15; notes.push(`$${(n.price / 1e6).toFixed(2)}M within deal-size cap`); }
-    else notes.push(`$${(n.price / 1e6).toFixed(2)}M above deal-size cap`);
+  if ((box?.deal_size_min || box?.deal_size_max) && n.price != null) {
+    const okMin = !box?.deal_size_min || n.price >= box.deal_size_min;
+    const okMax = !box?.deal_size_max || n.price <= box.deal_size_max;
+    if (okMin && okMax) { pts += 15; notes.push(`$${(n.price / 1e6).toFixed(2)}M within deal-size band`); }
+    else notes.push(`$${(n.price / 1e6).toFixed(2)}M ${!okMin ? 'below $' + (box.deal_size_min! / 1e6).toFixed(1) + 'M floor' : 'above deal-size cap'}`);
   }
   if (n.sf == null && n.price == null) notes.push("size & price not listed — needs a look to confirm");
   const score = Math.min(100, pts);
@@ -112,7 +114,7 @@ export type MarketScanSummary = {
 export async function runMarketScan(): Promise<MarketScanSummary> {
   const token = apToken();
   const admin = createAdminClient();
-  const { data: boxes } = await admin.from("buy_box").select("market, sf_min, sf_max, price_per_sf_min, price_per_sf_max, deal_size_max");
+  const { data: boxes } = await admin.from("buy_box").select("market, sf_min, sf_max, price_per_sf_min, price_per_sf_max, deal_size_min, deal_size_max");
   const boxBy: Record<string, Box> = {};
   for (const b of (boxes ?? []) as (Box & { market: string })[]) boxBy[b.market] = b;
 

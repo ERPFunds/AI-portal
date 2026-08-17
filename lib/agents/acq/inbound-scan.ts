@@ -181,7 +181,7 @@ type Extracted = {
   fit: string; score: number; reason: string; listingUrl: string | null;
 };
 
-function buyBoxText(rows: { market: string | null; markets: string | null; asset_class: string | null; sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; cap_rate_floor: number | null; deal_size_max: number | null; notes: string | null }[]): string {
+function buyBoxText(rows: { market: string | null; markets: string | null; asset_class: string | null; sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; cap_rate_floor: number | null; deal_size_min: number | null; deal_size_max: number | null; notes: string | null }[]): string {
   if (!rows.length) return "TX (Permian): single-tenant NNN industrial/flex, 5k-25k SF, $50-185/SF, <= $3M, target ~10% stabilized yield. FL (Space Coast): industrial/IOS, 15k-120k SF, $50-120/SF, cap >= 6.5%, <= $8M.";
   return rows.map(b => {
     const parts = [
@@ -189,7 +189,7 @@ function buyBoxText(rows: { market: string | null; markets: string | null; asset
       b.sf_min || b.sf_max ? `SF ${b.sf_min ?? "?"}-${b.sf_max ?? "?"}` : null,
       b.price_per_sf_min || b.price_per_sf_max ? `$${b.price_per_sf_min ?? "?"}-${b.price_per_sf_max ?? "?"}/SF` : null,
       b.cap_rate_floor != null ? `cap >= ${b.cap_rate_floor}%` : null,
-      b.deal_size_max != null ? `<= $${(b.deal_size_max / 1e6).toFixed(1)}M` : null,
+      (b.deal_size_min != null || b.deal_size_max != null) ? `deal size $${b.deal_size_min ? (b.deal_size_min / 1e6).toFixed(1) + 'M' : '0'}–${b.deal_size_max ? (b.deal_size_max / 1e6).toFixed(1) + 'M' : '∞'}` : null,
       b.notes,
     ].filter(Boolean);
     return `${b.market}: ${parts.join(" · ")}`;
@@ -221,7 +221,7 @@ export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: num
   const admin = createAdminClient();
   const token = await getGraphToken();
   if (!token) throw new Error("AZURE credentials not configured");
-  const { data: boxes } = await admin.from("buy_box").select("market, markets, asset_class, sf_min, sf_max, price_per_sf_min, price_per_sf_max, cap_rate_floor, deal_size_max, notes");
+  const { data: boxes } = await admin.from("buy_box").select("market, markets, asset_class, sf_min, sf_max, price_per_sf_min, price_per_sf_max, cap_rate_floor, deal_size_min, deal_size_max, notes");
   const bbText = buyBoxText((boxes as never[]) ?? []);
 
   // Read each mailbox and keep only listing-signal candidates.

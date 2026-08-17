@@ -334,6 +334,23 @@ export default function DealPipelineView() {
     try { await fetch(`/api/deal-pipeline/mirror?id=${encodeURIComponent(String(draft._id))}`, { method: 'DELETE' }); setDraft(null); await load(stateTab) }
     finally { setSaving(false) }
   }
+  function exportCsv() {
+    const rows: Record<string, unknown>[] = stateTab === 'TX' ? txRows : flRows
+    if (!rows.length) return
+    const cols = stateTab === 'TX'
+      ? ['status', 'location', 'owner', 'address', 'tenant', 'source', 'price', 'pricePsf', 'yield', 'acreage', 'sqft', 'yearBuilt', 'nextSteps', 'notes', 'kind']
+      : ['section', 'name', 'status', 'source', 'propertyType', 'location', 'yearBuilt', 'units', 'occupancy', 'capRate', 'sqft', 'acres', 'price', 'psf', 'notes']
+    const esc = (v: unknown) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
+    const lines = [cols.join(',')]
+    rows.forEach((r) => lines.push(cols.map((c) => esc(r[c])).join(',')))
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `ERP-${stateTab}-Pipeline-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
   const openEdit = (r: TxRowE | FlRowE) => setDraft({ ...r, _state: stateTab })
   const openAdd = () => setDraft(stateTab === 'TX' ? { _state: 'TX', kind: 'pipeline', status: 'Active' } : { _state: 'FL', section: 'Targets / Under Review' })
 
@@ -404,6 +421,7 @@ export default function DealPipelineView() {
                 </label>
               )}
               <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search address, owner, tenant…" style={{ fontSize: 12.5, padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 8, width: 220, maxWidth: '100%' }} />
+              <button onClick={exportCsv} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>⬇ Export</button>
               <button onClick={openAdd} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add row</button>
             </div>
           </div>
