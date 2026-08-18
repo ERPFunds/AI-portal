@@ -39,7 +39,7 @@ type Row = {
 
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
 // Deal Pipeline categories (unified FL scheme) — Meghan picks one when moving a listing to the board.
-const PIPE_CATEGORIES = ['Under Contract', 'Contract Negotiations', 'Under Review', 'Prospects', 'Comparable — Single-Tenant', 'Comparable — Multi-Tenant', 'Comparable — Vacant Land']
+const PIPE_CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
 const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label: string }> = {
   'fit':        { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Fit' },
   'borderline': { color: '#b45309', bg: '#fffbeb', border: '#fde68a', label: 'Borderline' },
@@ -258,6 +258,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {l.submarket && <span>{l.submarket}</span>}
                   <span>{l.origin === 'discovered' ? `🔎 ${l.referral_kind ?? 'platform'}` : `📨 ${l.referred_by ?? 'unknown'}`}</span>
+                  {l.received_at && <span title={new Date(l.received_at).toLocaleString()} style={{ color: '#9ca3af' }}>📅 {new Date(l.received_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
                   {l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Listing ↗</a>}
                   {l.source_url && <a href={l.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Email ↗</a>}
                   {(l.attachments ?? []).slice(0, 2).map((n, j) => <span key={j} title={n} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0 6px' }}>📎 {n.length > 18 ? n.slice(0, 16) + '…' : n}</span>)}

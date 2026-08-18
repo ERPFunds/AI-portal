@@ -13,11 +13,8 @@ import PipelineLiveTracker from './PipelineLiveTracker'
 const NAVY = '#0D2D52'
 
 // Unified category scheme (matches the FL spreadsheet) — groups BOTH boards: TX by `status`, FL by `section`.
-const CATEGORIES = ['Under Contract', 'Contract Negotiations', 'Under Review', 'Prospects', 'Comparable — Single-Tenant', 'Comparable — Multi-Tenant', 'Comparable — Vacant Land']
-const CAT_COLOR: Record<string, string> = {
-  'Under Contract': '#059669', 'Contract Negotiations': '#0ea5e9', 'Under Review': '#2563eb',
-  'Prospects': '#d97706', 'Comparable — Single-Tenant': '#6b7280', 'Comparable — Multi-Tenant': '#6b7280', 'Comparable — Vacant Land': '#6b7280',
-}
+const CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
+const CAT_COLOR: Record<string, string> = { 'Under Review': '#2563eb', 'Prospects': '#d97706', 'Comparables': '#6b7280' }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v)
 const money = (v: unknown) => (isNum(v) ? `$${Math.round(v).toLocaleString('en-US')}` : v ? String(v) : '—')
