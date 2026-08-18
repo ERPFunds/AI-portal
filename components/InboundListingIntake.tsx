@@ -215,7 +215,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         )}
         <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
           <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>Fit</span>
-          {(['All', 'fit', 'borderline', 'no-fit'] as const).map(f => <button key={f} style={pill(fitFilter === f)} onClick={() => setFitFilter(f)}>{f === 'All' ? 'All' : FIT_STYLE[f].label}</button>)}
+          {(['All', 'fit', 'borderline'] as const).map(f => <button key={f} style={pill(fitFilter === f)} onClick={() => setFitFilter(f)}>{f === 'All' ? 'All' : FIT_STYLE[f].label}</button>)}
         </div>
       </div>
 
@@ -231,89 +231,54 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
 
       {/* Cards */}
       {!loading && base.length > 0 && (
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
         {ranked.map((l, i) => {
           const dup = l.status === 'duplicate'
           const yieldPct = l.cap_pct ?? (l.in_place_noi && l.asking_price ? (l.in_place_noi / l.asking_price) * 100 : null)
           const psf = l.asking_price && l.sf ? l.asking_price / l.sf : null
           const fs = fitStyle(l.fit)
+          const web = !!l.listing_url || l.channel === 'Crexi' || l.channel === 'LoopNet'
+          const metrics = [l.sf != null ? l.sf.toLocaleString('en-US') + ' SF' : null, psf != null ? `$${Math.round(psf)}/SF` : null, yieldPct != null ? `${yieldPct.toFixed(1)}% cap` : null].filter(Boolean).join(' · ')
           return (
-            <div key={l.id} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, opacity: dup ? 0.7 : 1, position: 'relative' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+            <div key={l.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: '#fff', border: '1px solid #e5e7eb', borderLeft: `3px solid ${dup ? '#e5e7eb' : fs.color}`, borderRadius: 10, padding: '9px 12px', opacity: dup ? 0.7 : 1 }}>
+              {/* rank + score */}
+              <div style={{ width: 40, flexShrink: 0, textAlign: 'center', paddingTop: 2 }}>
+                {dup ? <span style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af' }}>DUP</span>
+                  : <><div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af' }}>#{i + 1}</div>{l.score != null && <div style={{ fontSize: 16, fontWeight: 800, color: fs.color, lineHeight: 1.1 }}>{l.score}</div>}</>}
+              </div>
+              {/* main */}
+              <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  {!dup && <span title="Buy-Box rank" style={{ fontSize: 10, fontWeight: 800, color: '#0D2D52', background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 5, padding: '1px 6px' }}>#{i + 1}</span>}
-                  {(() => { const web = !!l.listing_url || l.channel === 'Crexi' || l.channel === 'LoopNet'; return <span style={{ fontSize: 10, fontWeight: 700, background: web ? '#eff6ff' : '#f0fdf4', border: `1px solid ${web ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: 5, padding: '1px 7px', color: web ? '#1d4ed8' : '#15803d' }}>{web ? '🔗 Web link' : '✉️ Broker email'}</span> })()}
-                  {l.channel && <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{icon(SOURCE_ICON, l.channel, '✉️')} {l.channel}</span>}
-                  {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px', color: '#6d28d9' }} title={`Forwarded to ERP by ${l.referred_by ?? 'unknown'}`}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
-                  {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{l.state}</span>}
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{l.address || l.raw_subject || 'Listing'}</span>
+                  {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '0 6px', color: '#0e7490' }}>{l.state}</span>}
+                  <span style={{ fontSize: 10, fontWeight: 700, background: web ? '#eff6ff' : '#f0fdf4', border: `1px solid ${web ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: 5, padding: '0 6px', color: web ? '#1d4ed8' : '#15803d' }}>{web ? '🔗 Web link' : '✉️ Broker email'}</span>
+                  {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '0 6px', color: '#6d28d9' }}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
+                  {!dup && l.fit !== 'no-fit' && <span style={{ fontSize: 10, fontWeight: 700, color: fs.color }}>{fs.label}</span>}
                 </div>
-                {dup
-                  ? <span style={{ fontSize: 10, fontWeight: 700, color: '#6b7280', background: '#f3f4f6', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 8px' }}>Duplicate</span>
-                  : l.fit === 'no-fit' ? null
-                  : <span style={{ fontSize: 11, fontWeight: 700, color: fs.color, background: fs.bg, border: `1px solid ${fs.border}`, borderRadius: 6, padding: '2px 9px' }}>{fs.label}</span>}
+                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {l.submarket && <span>{l.submarket}</span>}
+                  <span>{l.origin === 'discovered' ? `🔎 ${l.referral_kind ?? 'platform'}` : `📨 ${l.referred_by ?? 'unknown'}`}</span>
+                  {l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Listing ↗</a>}
+                  {l.source_url && <a href={l.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Email ↗</a>}
+                  {(l.attachments ?? []).slice(0, 2).map((n, j) => <span key={j} title={n} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0 6px' }}>📎 {n.length > 18 ? n.slice(0, 16) + '…' : n}</span>)}
+                </div>
+                {l.reason && !dup && <div title={l.reason} style={{ fontSize: 11, color: '#6b7280', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</div>}
+                {dup && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>🔁 Same property already captured from another inbox.</div>}
               </div>
-
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{l.address || l.raw_subject || 'Listing'}</div>
-              {l.submarket && <div style={{ fontSize: 11, color: '#9ca3af' }}>{l.submarket}</div>}
-              <div style={{ fontSize: 11, color: '#6b7280', marginTop: 3 }}>
-                {l.origin === 'discovered'
-                  ? <>🔎 Discovered on <span style={{ fontWeight: 600, color: '#374151' }}>{l.referral_kind ?? 'platform'}</span>{l.listing_url && <> · <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>View ↗</a></>}</>
-                  : <>📨 Source: forwarded by <span style={{ fontWeight: 600, color: '#374151' }}>{l.referred_by ?? 'unknown'}</span></>}
+              {/* metrics */}
+              <div style={{ flexShrink: 0, textAlign: 'right', minWidth: 120 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{l.asking_price != null ? usd(l.asking_price) : '—'}</div>
+                <div style={{ fontSize: 11, color: '#6b7280' }}>{metrics || '—'}</div>
+                {(l.broker || l.broker_firm) && <div title={[l.broker, l.broker_firm].filter(Boolean).join(' · ')} style={{ fontSize: 10, color: '#9ca3af', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 170 }}>👤 {[l.broker, l.broker_firm].filter(Boolean).join(' · ')}</div>}
               </div>
-              {(l.source_url || (l.origin !== 'discovered' && l.listing_url) || (l.attachments && l.attachments.length > 0)) && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginTop: 5 }}>
-                  {l.origin !== 'discovered' && l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>🔗 Listing ↗</a>}
-                  {l.source_url && <a href={l.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}>✉️ Open email ↗</a>}
-                  {(l.attachments ?? []).slice(0, 4).map((n, i) => (
-                    <span key={i} title={n} style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>📎 {n.length > 22 ? n.slice(0, 20) + '…' : n}</span>
-                  ))}
-                </div>
-              )}
-              {l.preview && (
-                <div title={l.preview} style={{ fontSize: 11, color: '#6b7280', marginTop: 6, fontStyle: 'italic', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', borderLeft: '2px solid #e5e7eb', paddingLeft: 8 }}>
-                  &ldquo;{l.preview}&rdquo;
-                </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px', marginTop: 10 }}>
-                <Metric label="Asking" value={l.asking_price != null ? usd(l.asking_price) : '—'} />
-                <Metric label="Cap (in-place)" value={yieldPct != null ? `${yieldPct.toFixed(1)}%` : '—'} />
-                <Metric label="SF" value={l.sf != null ? l.sf.toLocaleString('en-US') : '—'} />
-                <Metric label="$/SF" value={psf != null ? `$${Math.round(psf)}` : '—'} />
-              </div>
-
-              {/* Quick-score */}
-              {!dup && l.score != null && (
-                <div style={{ marginTop: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#9ca3af', marginBottom: 3 }}>
-                    <span>Quick-score</span><span style={{ fontWeight: 700, color: fs.color }}>{l.score}/100</span>
-                  </div>
-                  <div style={{ height: 6, background: '#f3f4f6', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${l.score}%`, height: '100%', background: fs.color }} />
-                  </div>
-                </div>
-              )}
-
-              {/* Fit reason */}
-              {l.reason && (
-                <div style={{ fontSize: 11, color: '#6b7280', marginTop: 10, lineHeight: 1.5, background: dup ? '#f9fafb' : fs.bg, border: `1px solid ${dup ? '#e5e7eb' : fs.border}`, borderRadius: 8, padding: '7px 10px' }}>
-                  {dup ? '🔁 Same property already captured from another inbox.' : <><span style={{ fontWeight: 700, color: fs.color }}>Why this score: </span>{l.reason}</>}
-                </div>
-              )}
-
-              {/* Broker + actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 8, flexWrap: 'wrap' }}>
-                <div style={{ fontSize: 11, color: '#374151' }}>
-                  {l.broker || l.broker_firm ? `👤 ${[l.broker, l.broker_firm].filter(Boolean).join(' · ')}` : <span style={{ color: '#9ca3af' }}>Broker not identified</span>}
-                </div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <select value="" disabled={adding === l.id} onChange={(e) => moveToPipeline(l, e.target.value)} title="Move to the Deal Pipeline — Meghan picks the category"
-                    style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', cursor: adding === l.id ? 'default' : 'pointer' }}>
-                    <option value="">{adding === l.id ? 'Moving…' : '→ Move to pipeline…'}</option>
-                    {PIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                  <button onClick={() => dismiss(l.id)} style={btn('#9ca3af')}>Dismiss</button>
-                </div>
+              {/* actions */}
+              <div style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                <select value="" disabled={adding === l.id} onChange={(e) => moveToPipeline(l, e.target.value)} title="Move to the Deal Pipeline — Meghan picks the category"
+                  style={{ fontSize: 11, fontWeight: 600, padding: '4px 8px', borderRadius: 6, border: '1px solid #16a34a', background: '#fff', color: '#16a34a', cursor: adding === l.id ? 'default' : 'pointer' }}>
+                  <option value="">{adding === l.id ? 'Moving…' : '→ Pipeline…'}</option>
+                  {PIPE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+                <button onClick={() => dismiss(l.id)} style={btn('#9ca3af')}>Dismiss</button>
               </div>
             </div>
           )
