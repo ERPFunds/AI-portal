@@ -14,13 +14,14 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // Broker websites scraped directly (server-rendered pages → LLM extraction). JS-only sites are
 // skipped-with-note until a browser scraper is wired. Extend this list to add brokers.
-const BROKER_SITES: { name: string; url: string }[] = [
+// js:true → render with a headless browser (Apify) before extraction; otherwise a plain fetch is enough.
+const BROKER_SITES: { name: string; url: string; js?: boolean }[] = [
   { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/" },
   { name: "Team LBR", url: "https://teamlbr.com/search-properties/" },
   { name: "Kirk Strahan Realty", url: "https://www.strahancommercialproperties.com/for-sale" }, // Permian — server-rendered
-  { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/" }, // Space Coast — IDX/JS (skips until browser scraper)
-  { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/" }, // Permian — IDX/JS
-  { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC" }, // JS SPA
+  { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/", js: true }, // Space Coast — IDX/JS
+  { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/", js: true }, // Permian — IDX/JS
+  { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC", js: true }, // JS SPA
 ];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
@@ -192,6 +193,26 @@ async function fetchPageText(url: string): Promise<string> {
     .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ").replace(/\s+/g, " ").trim();
 }
 
+// Render a JS/IDX broker page in a headless browser (Apify) and return its text.
+// Uses the website-content-crawler actor, which executes the page's scripts before extracting.
+async function fetchRenderedText(url: string, token: string): Promise<string> {
+  const actor = process.env.BROKER_RENDER_APIFY_ACTOR || "apify~website-content-crawler";
+  const input = process.env.BROKER_RENDER_APIFY_INPUT
+    ? { ...JSON.parse(process.env.BROKER_RENDER_APIFY_INPUT), startUrls: [{ url }] }
+    : {
+        startUrls: [{ url }],
+        crawlerType: "playwright:firefox", // execute page JS
+        maxCrawlPages: 1, maxCrawlDepth: 0,
+        saveMarkdown: true, saveHtml: false,
+        proxyConfiguration: { useApifyProxy: true },
+        readableTextCharThreshold: 50,
+      };
+  const items = await runActor(actor, input, token);
+  const it = items[0] as Record<string, unknown> | undefined;
+  const txt = strOf(it?.text) || strOf(it?.markdown) || "";
+  return txt.replace(/\s+/g, " ").trim();
+}
+
 type BrokerListing = { address: string | null; city: string | null; state: string | null; price: number | null; sf: number | null; propertyType: string | null; listingUrl: string | null; title: string | null };
 const BROKER_SCHEMA = {
   type: "object", additionalProperties: false, required: ["listings"],
@@ -290,11 +311,18 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
     perSource.push({ source: s.source, found: items.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
   }
 
-  // ── Broker websites — direct fetch + LLM extraction (server-rendered pages; JS-only sites skip) ──
+  // ── Broker websites — LLM extraction. Server-rendered pages use a plain fetch; JS/IDX sites
+  //    (site.js) render in a headless browser first, falling back to a plain fetch when no token. ──
   for (const site of BROKER_SITES) {
     try {
-      const text = await fetchPageText(site.url);
-      if (text.length < 400) { perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: "no server-rendered listings (JS site — needs a browser scraper)" }); continue; }
+      let text = "";
+      if (site.js && token) { try { text = await fetchRenderedText(site.url, token); } catch { /* fall back below */ } }
+      if (text.length < 400) text = await fetchPageText(site.url);
+      if (text.length < 400) {
+        const why = site.js ? (token ? "browser render returned no listings (IDX in a nested frame?)" : "JS site — no APIFY token to render") : "no server-rendered listings";
+        perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: why });
+        continue;
+      }
       const found = await extractBrokerListings(site.name, text.slice(0, 16000));
       const norms: Norm[] = [];
       for (const f of found) {
