@@ -17,7 +17,10 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const BROKER_SITES: { name: string; url: string }[] = [
   { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/" },
   { name: "Team LBR", url: "https://teamlbr.com/search-properties/" },
-  { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC" },
+  { name: "Kirk Strahan Realty", url: "https://www.strahancommercialproperties.com/for-sale" }, // Permian — server-rendered
+  { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/" }, // Space Coast — IDX/JS (skips until browser scraper)
+  { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/" }, // Permian — IDX/JS
+  { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC" }, // JS SPA
 ];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
@@ -33,7 +36,15 @@ const LOOPNET_SEARCHES = [
 ];
 
 const TX_CITIES = ["midland", "odessa"];
-const FL_CITIES = ["melbourne", "palm bay", "titusville", "cocoa", "rockledge", "grant", "malabar", "sebastian"];
+// ERP's Florida market is Brevard County / Space Coast as a whole — keep the full municipality list
+// so county-wide LoopNet results (Merritt Island, Viera, West Melbourne, the beaches…) aren't dropped.
+const FL_CITIES = [
+  "brevard", "melbourne", "west melbourne", "melbourne beach", "palm bay", "titusville",
+  "cocoa", "cocoa beach", "rockledge", "grant", "valkaria", "malabar", "sebastian",
+  "merritt island", "cape canaveral", "satellite beach", "indialantic", "indian harbour beach",
+  "viera", "suntree", "mims", "port st. john", "port st john", "palm shores", "micco",
+  "barefoot bay", "sharpes", "june park", "space coast",
+];
 
 // ERP's priority Permian corridors — a TX listing on one of these roads gets a scoring bonus.
 const PRIORITY_TX_ROADS = /\b(hwy\.?\s*191|highway\s*191|us[- ]?191|i[- ]?20|interstate\s*20|bus(?:iness)?\.?\s*(?:route\s*)?20|fm[-\s]?1788|hwy\.?\s*158|highway\s*158|murphy\s*st|industrial\s*ave)/i;
@@ -61,7 +72,7 @@ function stateFrom(addr: string | null, city: string | null, st: unknown): "TX" 
   if (s === "TX" || s === "FL") return s;
   const hay = `${addr ?? ""} ${city ?? ""}`.toLowerCase();
   if (/\btx\b|texas|midland|odessa/.test(hay)) return "TX";
-  if (/\bfl\b|florida|melbourne|palm bay|titusville|brevard/.test(hay)) return "FL";
+  if (/\bfl\b|florida|melbourne|palm bay|titusville|brevard|cocoa|rockledge|merritt island|viera|malabar|cape canaveral|satellite beach|indialantic/.test(hay)) return "FL";
   return null;
 }
 

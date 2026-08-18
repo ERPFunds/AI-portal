@@ -138,12 +138,6 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
 
   const fitCount = base.filter(r => r.fit === 'fit' && r.status !== 'duplicate').length
   const borderlineCount = base.filter(r => r.fit === 'borderline').length
-  const noFitCount = base.filter(r => r.fit === 'no-fit').length
-  const avgYield = (() => {
-    const q = base.filter(r => r.fit !== 'no-fit' && r.in_place_noi && r.asking_price)
-    if (!q.length) return null
-    return q.reduce((s, r) => s + (r.in_place_noi! / r.asking_price!) * 100, 0) / q.length
-  })()
 
   const pill = (active: boolean): React.CSSProperties => ({
     fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
@@ -201,8 +195,6 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         {kpi('Listings', String(base.length))}
         {kpi('Fit', String(fitCount), '#16a34a')}
         {kpi('Borderline', String(borderlineCount), '#b45309')}
-        {kpi('No-fit', String(noFitCount), '#b91c1c')}
-        {kpi('Avg going-in yield', avgYield == null ? '—' : `${avgYield.toFixed(1)}%`, '#0e7490')}
       </div>
 
       {/* Filters */}

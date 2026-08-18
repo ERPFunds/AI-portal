@@ -64,7 +64,6 @@ export default function LeasingInquiriesView() {
   }
 
   const visible = rows.filter(r => marketFilter === 'All' || r.market === marketFilter)
-  const matchedCount = rows.filter(r => r.status === 'matched').length
   const num = (n: number | null) => (n ? n.toLocaleString('en-US') : null)
 
   const pill = (active: boolean): React.CSSProperties => ({
@@ -96,8 +95,6 @@ export default function LeasingInquiriesView() {
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {kpi('Open inquiries', String(rows.length))}
-        {kpi('Matched to a property', String(matchedCount), '#16a34a')}
-        {kpi('Unmatched', String(rows.length - matchedCount), (rows.length - matchedCount) > 0 ? '#b45309' : '#16a34a')}
       </div>
 
       <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 14 }}>
@@ -120,9 +117,6 @@ export default function LeasingInquiriesView() {
                 <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{TYPE_ICON[r.inquiry_type ?? 'Other'] ?? '📦'} {r.inquiry_type ?? 'Inquiry'}</span>
                 {r.market && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{r.market}</span>}
               </div>
-              {r.status === 'matched'
-                ? <span style={{ fontSize: 11, fontWeight: 700, color: '#16a34a', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 6, padding: '2px 9px' }}>Matched</span>
-                : <span style={{ fontSize: 11, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '2px 9px' }}>Unmatched</span>}
             </div>
 
             <div style={{ fontSize: 14, fontWeight: 700, color: '#111827', marginTop: 8 }}>{r.contact_name || r.contact_email || 'Unknown contact'}</div>
