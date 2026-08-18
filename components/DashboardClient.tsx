@@ -325,6 +325,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'lease-processing': <LeaseProcessingView />,
     fincontrols: <FinControlsView />,
     accounting: <AccountingView />,
+    'property-gl': <PropertyGLView />,
     'daily-priorities': <DailyPrioritiesView />,
     'admin-vendors': <AdminVendorDeskView />,
     'dst-tax-prep': <DstTaxPrepView />,
@@ -4430,6 +4431,220 @@ function AccountingView() {
       <div className="page-header"><h2>Accounting Operations</h2><p>Agent-surfaced AP queue, reconciliation status, and close checklist — all data lives in Yardi</p></div>
       <SourceBar source="Yardi Voyager (AP · AR · GL · Bank Rec)" agents="Accounting Operations · Financial Controls" synced="Today 8:00 AM (nightly batch)" link="Open in Yardi ↗" />
       <EmptyDataView source="Yardi Voyager" message="AP queue and close checklist will appear here once Yardi is connected" />
+    </div>
+  )
+}
+
+// ─── Property General Ledger (native double-entry) ──────────────────────────────
+// Roadmap mockup: an in-house, per-property double-entry GL — the accounting
+// spine that would let ERP run its own books instead of Yardi/AppFolio.
+
+type GLClass = 'Assets' | 'Liabilities' | 'Equity' | 'Income' | 'Expenses'
+type TBRow = { code: string; name: string; klass: GLClass; debit: number; credit: number }
+
+// Trial balance for 4820 Kermit Hwy — Jul 2026. Debits === Credits by construction.
+const GL_TRIAL_BALANCE: TBRow[] = [
+  { code: '1000', name: 'Operating Cash',              klass: 'Assets',      debit: 248300,  credit: 0 },
+  { code: '1100', name: 'Tenant Accounts Receivable',  klass: 'Assets',      debit: 42150,   credit: 0 },
+  { code: '1500', name: 'Land',                        klass: 'Assets',      debit: 1450000, credit: 0 },
+  { code: '1510', name: 'Building & Improvements',     klass: 'Assets',      debit: 6200000, credit: 0 },
+  { code: '1590', name: 'Accumulated Depreciation',    klass: 'Assets',      debit: 0,       credit: 512000 },
+  { code: '2000', name: 'Accounts Payable',            klass: 'Liabilities', debit: 0,       credit: 63400 },
+  { code: '2100', name: 'Tenant Security Deposits',    klass: 'Liabilities', debit: 0,       credit: 88750 },
+  { code: '2200', name: 'Prepaid Rent / CAM Reserve',  klass: 'Liabilities', debit: 0,       credit: 15600 },
+  { code: '2500', name: 'Mortgage Payable',            klass: 'Liabilities', debit: 0,       credit: 4900000 },
+  { code: '3000', name: 'Contributed Capital',         klass: 'Equity',      debit: 0,       credit: 2050000 },
+  { code: '3100', name: 'Retained Earnings (opening)', klass: 'Equity',      debit: 0,       credit: 230150 },
+  { code: '4000', name: 'Base Rental Income',          klass: 'Income',      debit: 0,       credit: 528000 },
+  { code: '4100', name: 'CAM Recovery Income',         klass: 'Income',      debit: 0,       credit: 96400 },
+  { code: '5000', name: 'Property Tax Expense',        klass: 'Expenses',    debit: 84300,   credit: 0 },
+  { code: '5100', name: 'Insurance Expense',           klass: 'Expenses',    debit: 31200,   credit: 0 },
+  { code: '5200', name: 'Repairs & Maintenance',       klass: 'Expenses',    debit: 47850,   credit: 0 },
+  { code: '5300', name: 'Utilities',                   klass: 'Expenses',    debit: 22400,   credit: 0 },
+  { code: '5400', name: 'Management Fees',             klass: 'Expenses',    debit: 26100,   credit: 0 },
+  { code: '6000', name: 'Depreciation Expense',        klass: 'Expenses',    debit: 118000,  credit: 0 },
+  { code: '7000', name: 'Mortgage Interest',           klass: 'Expenses',    debit: 214000,  credit: 0 },
+]
+
+type JELine = { code: string; account: string; debit: number; credit: number }
+type JournalEntry = { id: string; date: string; memo: string; source: string; status: 'Posted' | 'Unposted'; lines: JELine[] }
+
+// Each entry is balanced: sum(debit) === sum(credit).
+const GL_JOURNAL: JournalEntry[] = [
+  { id: 'JE-2026-0712', date: 'Jul 1', memo: 'Monthly rent billing — 6 tenants', source: 'Rent roll (auto)', status: 'Posted', lines: [
+    { code: '1100', account: 'Tenant Accounts Receivable', debit: 52000, credit: 0 },
+    { code: '4000', account: 'Base Rental Income',         debit: 0,     credit: 44000 },
+    { code: '4100', account: 'CAM Recovery Income',        debit: 0,     credit: 8000 },
+  ]},
+  { id: 'JE-2026-0713', date: 'Jul 3', memo: 'Rent receipts — ACH batch', source: 'Payments (Stripe/ACH)', status: 'Posted', lines: [
+    { code: '1000', account: 'Operating Cash',             debit: 48500, credit: 0 },
+    { code: '1100', account: 'Tenant Accounts Receivable', debit: 0,     credit: 48500 },
+  ]},
+  { id: 'JE-2026-0714', date: 'Jul 8', memo: 'HVAC repair — Permian Facility Services (Inv #4471)', source: 'AP / Work order', status: 'Posted', lines: [
+    { code: '5200', account: 'Repairs & Maintenance', debit: 6850, credit: 0 },
+    { code: '2000', account: 'Accounts Payable',      debit: 0,    credit: 6850 },
+  ]},
+  { id: 'JE-2026-0715', date: 'Jul 10', memo: 'AP payment batch #2026-118', source: 'Bill pay', status: 'Posted', lines: [
+    { code: '2000', account: 'Accounts Payable', debit: 41300, credit: 0 },
+    { code: '1000', account: 'Operating Cash',   debit: 0,     credit: 41300 },
+  ]},
+  { id: 'JE-2026-0716', date: 'Jul 15', memo: 'Mortgage payment — Series A loan', source: 'Debt service (auto)', status: 'Posted', lines: [
+    { code: '7000', account: 'Mortgage Interest', debit: 17850, credit: 0 },
+    { code: '2500', account: 'Mortgage Payable',  debit: 9400,  credit: 0 },
+    { code: '1000', account: 'Operating Cash',    debit: 0,     credit: 27250 },
+  ]},
+  { id: 'JE-2026-0717', date: 'Jul 31', memo: 'Monthly depreciation', source: 'Fixed assets (auto)', status: 'Posted', lines: [
+    { code: '6000', account: 'Depreciation Expense',     debit: 9833, credit: 0 },
+    { code: '1590', account: 'Accumulated Depreciation', debit: 0,    credit: 9833 },
+  ]},
+  { id: 'JE-2026-0718', date: 'Jul 31', memo: 'New tenant security deposit — Suite 120', source: 'Lease processing', status: 'Unposted', lines: [
+    { code: '1000', account: 'Operating Cash',          debit: 12500, credit: 0 },
+    { code: '2100', account: 'Tenant Security Deposits', debit: 0,    credit: 12500 },
+  ]},
+  { id: 'JE-2026-0719', date: 'Jul 31', memo: 'Management fee accrual (4% of collections)', source: 'Agent-proposed', status: 'Unposted', lines: [
+    { code: '5400', account: 'Management Fees',   debit: 3240, credit: 0 },
+    { code: '2000', account: 'Accounts Payable',  debit: 0,    credit: 3240 },
+  ]},
+  { id: 'JE-2026-0720', date: 'Jul 31', memo: 'CAM true-up reclass', source: 'Agent-proposed', status: 'Unposted', lines: [
+    { code: '4100', account: 'CAM Recovery Income',        debit: 2100, credit: 0 },
+    { code: '1100', account: 'Tenant Accounts Receivable', debit: 0,    credit: 2100 },
+  ]},
+]
+
+const glMoney = (n: number) => n === 0 ? '—' : '$' + n.toLocaleString('en-US')
+
+function PropertyGLView() {
+  const th: React.CSSProperties = { textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '9px 14px', borderBottom: '1px solid #e5e7eb' }
+  const thR: React.CSSProperties = { ...th, textAlign: 'right' }
+  const td: React.CSSProperties = { padding: '9px 14px', fontSize: 12, color: '#374151', borderBottom: '1px solid #f3f4f6', verticalAlign: 'middle' }
+  const tdR: React.CSSProperties = { ...td, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }
+  const selectStyle: React.CSSProperties = { fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }
+
+  const totalDr = GL_TRIAL_BALANCE.reduce((s, r) => s + r.debit, 0)
+  const totalCr = GL_TRIAL_BALANCE.reduce((s, r) => s + r.credit, 0)
+  const balanced = totalDr === totalCr
+  const income = GL_TRIAL_BALANCE.filter(r => r.klass === 'Income').reduce((s, r) => s + r.credit - r.debit, 0)
+  const expenses = GL_TRIAL_BALANCE.filter(r => r.klass === 'Expenses').reduce((s, r) => s + r.debit - r.credit, 0)
+  const netIncome = income - expenses
+  const cash = GL_TRIAL_BALANCE.find(r => r.code === '1000')?.debit ?? 0
+  const unposted = GL_JOURNAL.filter(e => e.status === 'Unposted').length
+
+  const cards: { label: string; value: string; sub?: string }[] = [
+    { label: 'Net income — Jul 2026', value: '$' + netIncome.toLocaleString('en-US'), sub: `Income ${glMoney(income)} · Expenses ${glMoney(expenses)}` },
+    { label: 'Operating cash', value: '$' + cash.toLocaleString('en-US'), sub: 'Acct 1000 · reconciled Jul 31' },
+    { label: 'Trial balance', value: balanced ? 'Balanced ✓' : 'Out of balance', sub: `DR ${glMoney(totalDr)} = CR ${glMoney(totalCr)}` },
+    { label: 'Unposted entries', value: String(unposted), sub: 'Awaiting review & post' },
+  ]
+
+  const classOrder: GLClass[] = ['Assets', 'Liabilities', 'Equity', 'Income', 'Expenses']
+
+  return (
+    <div>
+      <div className="page-header"><h2>📒 Property General Ledger</h2><p>Native double-entry ledger — per-property books, trial balance, and journal entries. The accounting spine that lets ERP run its own books in-house rather than in Yardi.</p></div>
+      <RoadmapPreviewBanner agent="Accounting Operations Agent" workflow="Native Property GL · double-entry ledger" />
+      <SourceBar source="ERP Property Ledger (native double-entry)" agents="Accounting Operations · Financial Controls" synced="Live — posts as rent, AP, and debt-service events occur" link="Export to Yardi ↗" />
+
+      {/* Property / period / basis selectors */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', margin: '16px 0', flexWrap: 'wrap' }}>
+        <select style={{ ...selectStyle, fontWeight: 600, color: '#0D2D52' }} defaultValue="4820 Kermit Hwy, Odessa TX">
+          {['4820 Kermit Hwy, Odessa TX', '1201 Cidco Rd, Cocoa FL', '6501 S CR 1160, Midland TX', 'Fund IV — all properties'].map(p => <option key={p}>{p}</option>)}
+        </select>
+        <select style={selectStyle} defaultValue="Jul 2026">
+          {['Jul 2026', 'Jun 2026', 'May 2026', 'Q2 2026', 'YTD 2026'].map(p => <option key={p}>{p}</option>)}
+        </select>
+        <select style={selectStyle} defaultValue="Accrual basis">
+          {['Accrual basis', 'Cash basis'].map(p => <option key={p}>{p}</option>)}
+        </select>
+        <div style={{ flex: 1 }} />
+        <button style={{ fontSize: 11, fontWeight: 600, color: '#374151', background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>Export P&amp;L / Balance Sheet</button>
+        <button style={{ fontSize: 11, fontWeight: 600, color: '#fff', background: '#0D2D52', border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer' }}>+ New journal entry</button>
+      </div>
+
+      {/* KPI cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 16 }}>
+        {cards.map(c => (
+          <div key={c.label} className="card" style={{ margin: 0, padding: '14px 16px' }}>
+            <div style={{ fontSize: 20, fontWeight: 700, color: c.label === 'Trial balance' && balanced ? '#047857' : '#0D2D52' }}>{c.value}</div>
+            <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>{c.label}</div>
+            {c.sub && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 4, fontVariantNumeric: 'tabular-nums' }}>{c.sub}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
+        {/* Trial balance */}
+        <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>Trial Balance</div>
+            <StatusPill label={balanced ? 'In balance' : 'Out of balance'} tone={balanced ? 'green' : 'red'} />
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead><tr><th style={th}>Account</th><th style={thR}>Debit</th><th style={thR}>Credit</th></tr></thead>
+            <tbody>
+              {classOrder.map(klass => {
+                const rows = GL_TRIAL_BALANCE.filter(r => r.klass === klass)
+                return (
+                  <React.Fragment key={klass}>
+                    <tr><td colSpan={3} style={{ padding: '7px 14px', fontSize: 10, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.4px', background: '#f9fafb', borderBottom: '1px solid #f3f4f6' }}>{klass}</td></tr>
+                    {rows.map(r => (
+                      <tr key={r.code}>
+                        <td style={td}><span style={{ color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{r.code}</span>&nbsp;&nbsp;{r.name}</td>
+                        <td style={tdR}>{glMoney(r.debit)}</td>
+                        <td style={tdR}>{glMoney(r.credit)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                )
+              })}
+              <tr>
+                <td style={{ ...td, fontWeight: 700, color: '#111827', borderTop: '2px solid #e5e7eb' }}>Totals</td>
+                <td style={{ ...tdR, fontWeight: 700, color: '#111827', borderTop: '2px solid #e5e7eb' }}>${totalDr.toLocaleString('en-US')}</td>
+                <td style={{ ...tdR, fontWeight: 700, color: '#111827', borderTop: '2px solid #e5e7eb' }}>${totalCr.toLocaleString('en-US')}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* General journal */}
+        <div className="card" style={{ margin: 0, padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '12px 14px', borderBottom: '1px solid #e5e7eb', fontSize: 13, fontWeight: 700, color: '#111827' }}>General Journal — Jul 2026</div>
+          <div>
+            {GL_JOURNAL.map(entry => {
+              const eDr = entry.lines.reduce((s, l) => s + l.debit, 0)
+              const eCr = entry.lines.reduce((s, l) => s + l.credit, 0)
+              return (
+                <div key={entry.id} style={{ borderBottom: '1px solid #f3f4f6', padding: '10px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#0D2D52', fontVariantNumeric: 'tabular-nums' }}>{entry.id}</span>
+                    <span style={{ fontSize: 11, color: '#9ca3af' }}>{entry.date}</span>
+                    <StatusPill label={entry.status} tone={entry.status === 'Posted' ? 'green' : 'yellow'} />
+                    <span style={{ fontSize: 10, color: '#9ca3af', marginLeft: 'auto' }}>{entry.source}</span>
+                  </div>
+                  <div style={{ fontSize: 12, color: '#374151', marginBottom: 6 }}>{entry.memo}</div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <tbody>
+                      {entry.lines.map((l, i) => (
+                        <tr key={i}>
+                          <td style={{ fontSize: 11, color: l.debit ? '#374151' : '#9ca3af', padding: '2px 0', paddingLeft: l.credit ? 20 : 0 }}>
+                            <span style={{ color: '#9ca3af', fontVariantNumeric: 'tabular-nums' }}>{l.code}</span>&nbsp;&nbsp;{l.account}
+                          </td>
+                          <td style={{ fontSize: 11, textAlign: 'right', color: '#111827', fontVariantNumeric: 'tabular-nums', padding: '2px 0', width: 90 }}>{l.debit ? '$' + l.debit.toLocaleString('en-US') : ''}</td>
+                          <td style={{ fontSize: 11, textAlign: 'right', color: '#111827', fontVariantNumeric: 'tabular-nums', padding: '2px 0', width: 90 }}>{l.credit ? '$' + l.credit.toLocaleString('en-US') : ''}</td>
+                        </tr>
+                      ))}
+                      <tr>
+                        <td style={{ fontSize: 10, color: eDr === eCr ? '#047857' : '#b91c1c', paddingTop: 4 }}>{eDr === eCr ? '✓ balanced' : '⚠ out of balance'}</td>
+                        <td style={{ fontSize: 10, textAlign: 'right', color: '#6b7280', fontVariantNumeric: 'tabular-nums', paddingTop: 4, borderTop: '1px solid #f3f4f6' }}>${eDr.toLocaleString('en-US')}</td>
+                        <td style={{ fontSize: 10, textAlign: 'right', color: '#6b7280', fontVariantNumeric: 'tabular-nums', paddingTop: 4, borderTop: '1px solid #f3f4f6' }}>${eCr.toLocaleString('en-US')}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
