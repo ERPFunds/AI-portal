@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { leadingNum, streetTokens } from "@/lib/loopnet-company";
+import Anthropic from "@anthropic-ai/sdk";
 
 // Market scan (proactive sourcing). Complements the inbound mailbox scan: instead of waiting for a
 // broker to forward a deal, this scrapes the listing platforms (LoopNet + Crexi) for ON-MARKET
@@ -8,6 +9,16 @@ import { leadingNum, streetTokens } from "@/lib/loopnet-company";
 // LoopNet vacancy sync (run-sync-get-dataset-items). Read-only; nothing is contacted or purchased.
 
 const APIFY = "https://api.apify.com/v2";
+const anthropic = new Anthropic();
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+
+// Broker websites scraped directly (server-rendered pages → LLM extraction). JS-only sites are
+// skipped-with-note until a browser scraper is wired. Extend this list to add brokers.
+const BROKER_SITES: { name: string; url: string }[] = [
+  { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/" },
+  { name: "Team LBR", url: "https://teamlbr.com/search-properties/" },
+  { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC" },
+];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
 const LOOPNET_SEARCHES = [
@@ -118,8 +129,89 @@ function dedupKey(state: string | null, address: string | null): string {
 
 export type MarketScanSummary = {
   ok: boolean;
-  perSource: { source: Src; found: number; kept: number; inserted: number; duplicates: number; skippedExisting: number; error?: string; skipped?: string }[];
+  perSource: { source: string; found: number; kept: number; inserted: number; duplicates: number; skippedExisting: number; error?: string; skipped?: string }[];
 };
+
+// Dedup vs stored URLs, screen, and insert discovered listings. Shared by the platform + broker paths.
+async function upsertNorms(
+  admin: ReturnType<typeof createAdminClient>,
+  boxBy: Record<string, Box>,
+  norms: Norm[],
+  meta: { referredBy: string; referralKind: string; channel: string },
+): Promise<{ inserted: number; duplicates: number; skippedExisting: number }> {
+  const urls = norms.map((n) => n.url);
+  const seen = new Set<string>();
+  for (let i = 0; i < urls.length; i += 200) {
+    const { data } = await admin.from("inbound_listings").select("message_id").in("message_id", urls.slice(i, i + 200));
+    (data ?? []).forEach((r: { message_id: string }) => seen.add(r.message_id));
+  }
+  const fresh = norms.filter((n) => !seen.has(n.url));
+  const skippedExisting = norms.length - fresh.length;
+  let inserted = 0, duplicates = 0;
+  for (const n of fresh) {
+    const market = n.state === "TX" ? "Permian Basin" : "Brevard / Space Coast";
+    const sc = screen(n, boxBy[n.state!]);
+    const key = dedupKey(n.state, n.address);
+    let status = "new";
+    if (n.address) {
+      const { data: dupe } = await admin.from("inbound_listings").select("id").eq("dedup_key", key).limit(1).maybeSingle();
+      if (dupe?.id) { status = "duplicate"; duplicates++; }
+    }
+    const { error } = await admin.from("inbound_listings").insert({
+      message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
+      origin: "discovered", listing_url: n.url,
+      referred_by: meta.referredBy, referral_kind: meta.referralKind, channel: meta.channel,
+      address: n.address, submarket: n.city || market, state: n.state,
+      asking_price: n.price, sf: n.sf, broker: n.broker, broker_firm: n.broker,
+      fit: sc.fit, score: sc.score, reason: sc.reason, dedup_key: key, status, raw_subject: n.title,
+    });
+    if (!error) inserted++;
+    else console.error("[market-scan] insert failed:", error.message);
+  }
+  return { inserted, duplicates, skippedExisting };
+}
+
+// Fetch a broker page and strip it to visible text (best-effort; JS-only pages return little text).
+async function fetchPageText(url: string): Promise<string> {
+  const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" }, cache: "no-store", signal: AbortSignal.timeout(20000) });
+  if (!r.ok) return "";
+  const html = await r.text();
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ").replace(/\s+/g, " ").trim();
+}
+
+type BrokerListing = { address: string | null; city: string | null; state: string | null; price: number | null; sf: number | null; propertyType: string | null; listingUrl: string | null; title: string | null };
+const BROKER_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["listings"],
+  properties: { listings: { type: "array", items: {
+    type: "object", additionalProperties: false,
+    required: ["address", "city", "state", "price", "sf", "propertyType", "listingUrl", "title"],
+    properties: {
+      address: { anyOf: [{ type: "string" }, { type: "null" }] },
+      city: { anyOf: [{ type: "string" }, { type: "null" }] },
+      state: { anyOf: [{ type: "string", enum: ["TX", "FL", "Other"] }, { type: "null" }] },
+      price: { anyOf: [{ type: "number" }, { type: "null" }] },
+      sf: { anyOf: [{ type: "integer" }, { type: "null" }] },
+      propertyType: { anyOf: [{ type: "string" }, { type: "null" }] },
+      listingUrl: { anyOf: [{ type: "string" }, { type: "null" }] },
+      title: { anyOf: [{ type: "string" }, { type: "null" }] },
+    },
+  } } },
+} as const;
+
+async function extractBrokerListings(broker: string, text: string): Promise<BrokerListing[]> {
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-opus-4-8", max_tokens: 3000,
+      output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
+      system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL if present, and a short title. Only what's on the page; null when absent.` }],
+      messages: [{ role: "user", content: `Page text:\n${text}` }],
+    });
+    const t = msg.content[0]?.type === "text" ? msg.content[0].text : "";
+    return (JSON.parse(t).listings ?? []) as BrokerListing[];
+  } catch (e) { console.error("[market-scan] broker extract failed:", String(e).slice(0, 150)); return []; }
+}
 
 export async function runMarketScan(): Promise<MarketScanSummary> {
   const token = apToken();
@@ -183,54 +275,34 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
       norms.push(n);
     }
 
-    // Idempotency: drop URLs already stored.
-    const urls = norms.map((n) => n.url);
-    const seen = new Set<string>();
-    for (let i = 0; i < urls.length; i += 200) {
-      const { data } = await admin.from("inbound_listings").select("message_id").in("message_id", urls.slice(i, i + 200));
-      (data ?? []).forEach((r: { message_id: string }) => seen.add(r.message_id));
-    }
-    const fresh = norms.filter((n) => !seen.has(n.url));
-    const skippedExisting = norms.length - fresh.length;
+    const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Discovered on ${s.source}`, referralKind: s.source, channel: s.source });
+    perSource.push({ source: s.source, found: items.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
+  }
 
-    let inserted = 0, duplicates = 0;
-    for (const n of fresh) {
-      const market = n.state === "TX" ? "Permian Basin" : "Brevard / Space Coast";
-      const sc = screen(n, boxBy[n.state!]);
-      const key = dedupKey(n.state, n.address);
-      let status = "new";
-      if (n.address) {
-        const { data: dupe } = await admin.from("inbound_listings").select("id").eq("dedup_key", key).limit(1).maybeSingle();
-        if (dupe?.id) { status = "duplicate"; duplicates++; }
+  // ── Broker websites — direct fetch + LLM extraction (server-rendered pages; JS-only sites skip) ──
+  for (const site of BROKER_SITES) {
+    try {
+      const text = await fetchPageText(site.url);
+      if (text.length < 400) { perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: "no server-rendered listings (JS site — needs a browser scraper)" }); continue; }
+      const found = await extractBrokerListings(site.name, text.slice(0, 16000));
+      const norms: Norm[] = [];
+      for (const f of found) {
+        const state = (f.state === "TX" || f.state === "FL") ? f.state : stateFrom(f.address, f.city, f.state);
+        if (!state) continue;
+        const url = f.listingUrl && /^https?:/i.test(f.listingUrl) ? f.listingUrl : `${site.url}#${encodeURIComponent((f.address ?? f.title ?? "").slice(0, 60))}`;
+        const n: Norm = { url, address: f.address, city: f.city, state, price: f.price, sf: f.sf, propertyType: f.propertyType, broker: site.name, title: f.title, datePosted: null };
+        const cityL = (n.city || n.address || "").toLowerCase();
+        const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
+        if (!inMarket) continue;
+        if (n.propertyType && !/industrial|warehouse|flex|manufactur|distribution|ios|storage|shop|yard/i.test(n.propertyType)) continue;
+        if (isErpListing(n)) continue;
+        norms.push(n);
       }
-      const { error } = await admin.from("inbound_listings").insert({
-        message_id: n.url,
-        source_mailbox: "market-scan",
-        received_at: new Date().toISOString(),
-        origin: "discovered",
-        listing_url: n.url,
-        referred_by: `Discovered on ${s.source}`,
-        referral_kind: s.source,
-        channel: s.source,
-        address: n.address,
-        submarket: n.city || market,
-        state: n.state,
-        asking_price: n.price,
-        sf: n.sf,
-        broker: n.broker,
-        broker_firm: n.broker,
-        fit: sc.fit,
-        score: sc.score,
-        reason: sc.reason,
-        dedup_key: key,
-        status,
-        raw_subject: n.title,
-      });
-      if (!error) inserted++;
-      else console.error("[market-scan] insert failed:", error.message);
+      const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Listed on ${site.name}`, referralKind: "Broker", channel: "Broker site" });
+      perSource.push({ source: `Broker: ${site.name}`, found: found.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
+    } catch (e) {
+      perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, error: String(e).slice(0, 200) });
     }
-
-    perSource.push({ source: s.source, found: items.length, kept: fresh.length, inserted, duplicates, skippedExisting });
   }
 
   return { ok: true, perSource };
