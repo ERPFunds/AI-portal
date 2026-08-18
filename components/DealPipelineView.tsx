@@ -23,9 +23,14 @@ const pct = (v: unknown) => (isNum(v) ? `${(v * 100).toFixed(v * 100 % 1 === 0 ?
 const num = (v: unknown) => (isNum(v) ? v.toLocaleString('en-US') : v ? String(v) : '—')
 const txt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v))
 
-const TH: React.CSSProperties = { position: 'sticky', top: 0, zIndex: 2, background: '#f1f5f9', color: '#334155', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', textAlign: 'left', padding: '8px 10px', borderBottom: '2px solid #cbd5e1', whiteSpace: 'nowrap' }
-const TD: React.CSSProperties = { padding: '7px 10px', fontSize: 12, color: '#1f2937', borderBottom: '1px solid #eef2f7', verticalAlign: 'top' }
+const TH: React.CSSProperties = { position: 'sticky', top: 0, zIndex: 2, background: '#f1f5f9', color: '#334155', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', textAlign: 'left', padding: '7px 9px', borderBottom: '2px solid #cbd5e1', whiteSpace: 'nowrap' }
+const TD: React.CSSProperties = { padding: '6px 9px', fontSize: 12, color: '#1f2937', borderBottom: '1px solid #eef2f7', verticalAlign: 'top' }
 const numTD: React.CSSProperties = { ...TD, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
+
+// First column stays pinned while the rest of the wide board scrolls horizontally, so the row you're
+// reading never loses its identity (Location / Name). Body cells must carry the row's own background.
+const STICKY_TH: React.CSSProperties = { ...TH, left: 0, zIndex: 3, boxShadow: '2px 0 0 #e2e8f0' }
+const stickyTD = (bg: string): React.CSSProperties => ({ position: 'sticky', left: 0, zIndex: 1, background: bg, boxShadow: '2px 0 0 #eef2f7' })
 
 type TxRowE = TxRow & { _id: string }
 type FlRowE = FlRow & { _id: string }
@@ -81,7 +86,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove }: { rows: TxRo
 
   const dataRow = (r: TxRowE, i: number) => (
     <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
-      <td style={{ ...TD, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
+      <td style={{ ...TD, ...stickyTD(i % 2 ? '#fbfcfe' : '#fff'), fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
       <td style={TD}>{catSelect(r.status, (v) => onMove(r, v))}</td>
       <td style={TD}>{txt(r.owner)}</td>
       <td style={{ ...TD, minWidth: 180 }}>{txt(r.address)}</td>
@@ -102,8 +107,8 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove }: { rows: TxRo
   return (
     <div>
       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1240 }}>
-          <thead><tr>{cols.map((c, i) => <th key={i} style={rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1120 }}>
+          <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
             {CATEGORIES.map((st) => {
               const g = pipeline.filter((r) => r.status === st)
@@ -164,8 +169,8 @@ function FloridaPipeline({ rows, query, onEdit, onMove }: { rows: FlRowE[]; quer
   return (
     <div>
       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1300 }}>
-          <thead><tr>{cols.map((c, i) => <th key={i} style={rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1160 }}>
+          <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
             {CATEGORIES.map((sec) => {
               const g = list.filter((r) => r.section === sec)
@@ -175,7 +180,7 @@ function FloridaPipeline({ rows, query, onEdit, onMove }: { rows: FlRowE[]; quer
                   <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={sec} color={CAT_COLOR[sec] || '#6b7280'} count={g.length} /></td></tr>
                   {g.map((r, i) => (
                     <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
-                      <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
+                      <td style={{ ...TD, ...stickyTD(i % 2 ? '#fbfcfe' : '#fff'), fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
                       <td style={TD}>{txt(r.status)}</td>
                       <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
                       <td style={TD}>{txt(r.propertyType)}</td>
