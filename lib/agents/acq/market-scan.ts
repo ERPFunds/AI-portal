@@ -13,9 +13,12 @@ const APIFY = "https://api.apify.com/v2";
 const LOOPNET_SEARCHES = [
   "https://www.loopnet.com/search/industrial-properties/midland-tx/for-sale/",
   "https://www.loopnet.com/search/industrial-properties/odessa-tx/for-sale/",
+  "https://www.loopnet.com/search/industrial-properties/brevard-county-fl/for-sale/",
   "https://www.loopnet.com/search/industrial-properties/melbourne-fl/for-sale/",
   "https://www.loopnet.com/search/industrial-properties/palm-bay-fl/for-sale/",
   "https://www.loopnet.com/search/industrial-properties/titusville-fl/for-sale/",
+  "https://www.loopnet.com/search/industrial-properties/cocoa-fl/for-sale/",
+  "https://www.loopnet.com/search/industrial-properties/rockledge-fl/for-sale/",
 ];
 
 const TX_CITIES = ["midland", "odessa"];
