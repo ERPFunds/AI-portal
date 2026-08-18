@@ -100,20 +100,21 @@ async function readMailboxSince(t: string, mailbox: string, sinceIso: string, ma
 // Pull text from a message's PDF/OM/flyer/spreadsheet attachments (bounded), so the extractor
 // reads the actual listing package — not just the covering email. Best-effort; never throws.
 const ATTACH_OK = /\.(pdf|docx|xlsx|xls|pptx|txt|md|csv)$/i;
-async function readAttachmentsText(token: string, mailbox: string, messageId: string): Promise<{ text: string; names: string[] }> {
+async function readAttachmentsText(token: string, mailbox: string, messageId: string): Promise<{ text: string; names: string[]; pdf: string | null; pdfName: string | null }> {
   try {
     const h = { Authorization: `Bearer ${token}` };
     const r = await fetch(
       `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages/${messageId}/attachments?$select=id,name,contentType,size,isInline`,
       { headers: h }
     );
-    if (!r.ok) return { text: "", names: [] };
+    if (!r.ok) return { text: "", names: [], pdf: null, pdfName: null };
     const d = await r.json();
     const atts = ((d.value || []) as Record<string, unknown>[]).filter(
       (a) => String(a["@odata.type"] || "").includes("fileAttachment") && !a.isInline
     );
     const names: string[] = [];
     let out = "";
+    let pdf: string | null = null, pdfName: string | null = null;
     for (const a of atts.slice(0, 5)) {
       const name = String(a.name || "");
       const ct = String(a.contentType || "");
@@ -128,14 +129,15 @@ async function readAttachmentsText(token: string, mailbox: string, messageId: st
         );
         if (!vr.ok) continue;
         const buf = Buffer.from(await vr.arrayBuffer());
+        if (!pdf && (/\.pdf$/i.test(name) || /pdf/i.test(ct)) && buf.length <= 4_500_000) { pdf = buf.toString("base64"); pdfName = name; }
         const text = await parseBytes(buf, name, ct || null);
         if (text) out += `\n[attachment: ${name}] ${cleanText(text).slice(0, 1500)}`;
       } catch { /* skip a bad attachment */ }
       if (out.length > 3000) break;
     }
-    return { text: out.slice(0, 3000), names };
+    return { text: out.slice(0, 3000), names, pdf, pdfName };
   } catch {
-    return { text: "", names: [] };
+    return { text: "", names: [], pdf: null, pdfName: null };
   }
 }
 
@@ -253,19 +255,31 @@ export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: num
   let extracted = 0, inserted = 0, duplicates = 0;
   let attnFetched = 0;
   const ATTN_CAP = 40; // bound attachment fetches per scan (keeps within the serverless time limit)
-  const BATCH = 15;
+  const BATCH = 8; // smaller batches since we may attach PDF OMs to the call
   for (let i = 0; i < fresh.length; i += BATCH) {
     const batch = fresh.slice(i, i + BATCH);
     // Read PDF/OM/flyer attachment text for each candidate (bounded), so the extractor sees the package.
-    const attInfo: { text: string; names: string[] }[] = [];
+    const attInfo: { text: string; names: string[]; pdf: string | null; pdfName: string | null }[] = [];
     for (const m of batch) {
-      if (attnFetched >= ATTN_CAP) { attInfo.push({ text: "", names: [] }); continue; }
+      if (attnFetched >= ATTN_CAP) { attInfo.push({ text: "", names: [], pdf: null, pdfName: null }); continue; }
       attnFetched++;
       attInfo.push(await readAttachmentsText(token, m.mailbox, m.id));
     }
     const digest = batch
       .map((m, j) => `${j}. <${m.from}> "${m.subject}" :: ${cleanText(m.preview).slice(0, 240)}${attInfo[j].text ? " " + attInfo[j].text : ""}`)
       .join("\n");
+
+    // Attach OM/flyer PDFs directly so Claude reads image-based packages (text extraction can't).
+    const docBlocks: unknown[] = [];
+    let pdfBudget = 18_000_000; // ~18MB of base64 across the batch, under the request cap
+    batch.forEach((m, j) => {
+      const p = attInfo[j].pdf;
+      if (p && p.length <= pdfBudget) {
+        pdfBudget -= p.length;
+        docBlocks.push({ type: "text", text: `[email ${j} attachment: ${attInfo[j].pdfName}]` });
+        docBlocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: p } });
+      }
+    });
 
     let items: Extracted[] = [];
     try {
@@ -282,7 +296,10 @@ Then screen each listing against the Buy Box below and tag fit / borderline / no
 
 Buy Box:
 ${bbText}` }],
-        messages: [{ role: "user", content: `Emails (subject + preview + any attachment text):\n${digest}\n\nReturn one item per email, echoing its index.` }],
+        messages: [{ role: "user", content: [
+          { type: "text", text: `Emails (subject + preview + any attachment text):\n${digest}\n\nSome emails include their OM/flyer PDF below, labeled [email J attachment] — read those (they may be image-based) to pull the address, price, and SF. Return one item per email, echoing its index.` },
+          ...docBlocks,
+        ] as never }],
       });
       const text = msg.content[0]?.type === "text" ? msg.content[0].text : "";
       items = (JSON.parse(text).items ?? []) as Extracted[];

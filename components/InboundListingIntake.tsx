@@ -249,7 +249,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
               {/* main */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{l.address || l.raw_subject || 'Listing'}</span>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#111827' }}>{l.address || (l.raw_subject ? l.raw_subject.replace(/^(re|fw|fwd)\s*:\s*/i, '').split(/\s*\|\s*/)[0].trim() : 'Listing')}</span>
                   {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '0 6px', color: '#0e7490' }}>{l.state}</span>}
                   <span style={{ fontSize: 10, fontWeight: 700, background: web ? '#eff6ff' : '#f0fdf4', border: `1px solid ${web ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: 5, padding: '0 6px', color: web ? '#1d4ed8' : '#15803d' }}>{web ? '🔗 Web link' : '✉️ Broker email'}</span>
                   {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '0 6px', color: '#6d28d9' }}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
