@@ -170,6 +170,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
       const cityL = (n.city || n.address || "").toLowerCase();
       const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
       if (!inMarket) continue;
+      if (n.propertyType && !/industrial|warehouse|flex|manufactur|distribution|ios|storage|shop|yard/i.test(n.propertyType)) continue; // industrial only — skip retail/office/etc.
       if (isErpListing(n)) continue; // don't surface ERP's own listings
       if (n.datePosted) { const t = Date.parse(n.datePosted); if (!Number.isNaN(t) && t < cutoff) continue; } // older than ~1 month
       norms.push(n);
