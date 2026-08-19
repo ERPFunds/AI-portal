@@ -132,9 +132,10 @@ const PRICE_FLOOR = 700_000; // discovered listings priced below this are auto-d
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
   const notes: string[] = [];
   const typeHay = `${n.propertyType ?? ""} ${n.title ?? ""}`;
-  // Vacant land / lots are not a building — auto-dismiss (IOS / laydown yards are handled as industrial).
-  if (/\b(land|lot|lots|acreage|vacant|unimproved|undeveloped|raw\s+land)\b/i.test(typeHay) && !/\b(ios|yard|laydown|building|warehouse|shop)\b/i.test(typeHay)) {
-    return { fit: "no-fit", score: 12, reason: `${n.propertyType || "Land"} — vacant land, not a building`, drop: true };
+  // Vacant land / lots are auto-dismissed in TX only (FL keeps land / development parcels in-scope).
+  // IOS / laydown yards are always kept — those are industrial use, not raw land.
+  if (n.state === "TX" && /\b(land|lot|lots|acreage|vacant|unimproved|undeveloped|raw\s+land)\b/i.test(typeHay) && !/\b(ios|yard|laydown|building|warehouse|shop)\b/i.test(typeHay)) {
+    return { fit: "no-fit", score: 12, reason: `${n.propertyType || "Land"} — vacant land, not a building (TX)`, drop: true };
   }
   const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage|yard/i.test(n.propertyType);
   if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex`, drop: true };
