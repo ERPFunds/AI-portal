@@ -212,14 +212,38 @@ async function upsertNorms(
   return { inserted, duplicates, skippedExisting };
 }
 
-// Fetch a broker page and strip it to visible text (best-effort; JS-only pages return little text).
+// Resolve an href to an absolute URL, but only if it points to a *different* page than `base`
+// (a real detail page) — not a mailto/tel/js link or a same-page fragment. Returns null otherwise.
+function detailHref(href: string, base: string): string | null {
+  if (!href || /^(mailto:|tel:|javascript:|#)/i.test(href)) return null;
+  try {
+    const u = new URL(href, base); if (!/^https?:$/.test(u.protocol)) return null;
+    const b = new URL(base);
+    if (u.origin + u.pathname === b.origin + b.pathname) return null; // same page, only fragment/query differs
+    return u.toString();
+  } catch { return null; }
+}
+
+// Fetch a broker page and reduce it to text for the extractor. Two things matter for accuracy:
+// keep block boundaries as newlines (so each listing's fields stay grouped, not merged into one soup),
+// and inline each link's destination as "text [https://…]" so the extractor can attach a real
+// per-property detail URL to each listing. JS-only pages still return little text.
 async function fetchPageText(url: string): Promise<string> {
   const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" }, cache: "no-store", signal: AbortSignal.timeout(20000) });
   if (!r.ok) return "";
-  const html = await r.text();
+  let html = await r.text();
+  html = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
+  // Inline anchor destinations that lead to a distinct detail page.
+  html = html.replace(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
+    const text = String(inner).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const abs = detailHref(String(href), url);
+    return abs ? ` ${text} [${abs}] ` : ` ${text} `;
+  });
+  // Turn block-level boundaries into newlines so listings stay visually separated.
+  html = html.replace(/<\/(div|li|tr|p|h[1-6]|article|section|td)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n");
   return html
-    .replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ").replace(/\s+/g, " ").trim();
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ")
+    .replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").replace(/[ \t]*\n[ \t]*/g, "\n").trim();
 }
 
 // Render a JS/IDX broker page in a headless browser (Apify) and return its text.
@@ -300,7 +324,11 @@ async function extractBrokerListings(broker: string, text: string): Promise<Brok
     const msg = await anthropic.messages.create({
       model: "claude-opus-4-8", max_tokens: 3000,
       output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
-      system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL if present, and a short title. Only what's on the page; null when absent.` }],
+      system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, and a short title. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
+
+CRITICAL — each listing's fields must come from that listing's own block. The text is grouped roughly one listing per line/section; do not attach one listing's price or SF to a different listing. If a listing shows no price, set price to null (do NOT reuse another listing's price).
+
+listingUrl: use the URL in square brackets [https://…] that appears with that listing — it is the per-property detail page. If a listing has no bracketed URL of its own, set listingUrl to null (do not use the page's own address).` }],
       messages: [{ role: "user", content: `Page text:\n${text}` }],
     });
     const t = msg.content[0]?.type === "text" ? msg.content[0].text : "";
