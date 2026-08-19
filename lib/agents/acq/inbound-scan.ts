@@ -292,7 +292,7 @@ export async function runInboundScan(opts?: { days?: number; maxPerMailbox?: num
 
 For each listing, extract what is stated (null when absent): US state (TX/FL/Other), street address, submarket, listing broker + firm, asking price (USD), building SF, in-place NOI, and cap rate %. Pick the channel it arrived through and the referral relationship of the SENDER to ERP (Broker if from a brokerage; Colleague if from an @erpfunds.com address; Investor/LP; Crexi or LoopNet for those platform auto-alerts; or Direct/Cold otherwise).
 
-Then screen each listing against the Buy Box below and tag fit / borderline / no-fit with a 0-100 quick score. The reason must EXPLAIN that score by naming which Buy Box criteria it meets or misses (market, asset type, size, $/SF, yield/cap, deal size) — so a reader understands why it landed where it did. Be evidence-based; do not invent details not present in the email.
+Then screen each listing against the Buy Box below and tag fit / borderline / no-fit with a 0-100 quick score. The reason must EXPLAIN that score by naming which Buy Box criteria it meets or misses (market, asset type, size, $/SF, yield/cap, deal size) — so a reader understands why it landed where it did. Be evidence-based; do not invent details not present in the email. IMPORTANT: do NOT penalize a listing for missing data — if square footage (or $/SF, which depends on it) is not stated, treat it as unknown/neutral, never as a negative; score it on the criteria that ARE present and note SF as "not listed — to confirm". A missing SF must not by itself push a listing to no-fit.
 
 Buy Box:
 ${bbText}` }],

@@ -122,7 +122,11 @@ function screen(n: Norm, box: Box | undefined): { fit: string; score: number; re
   if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex` };
   let pts = 40; // in-market industrial for-sale
   const psf = n.price && n.sf ? n.price / n.sf : null;
-  if (box?.sf_min && box?.sf_max && n.sf != null) {
+  if (n.sf == null) {
+    // Missing square footage is not the listing's fault — treat as neutral (grant the band credit),
+    // never a penalty. A broker forward often omits SF; we confirm it on a closer look.
+    pts += 25; notes.push("SF not listed — not penalized");
+  } else if (box?.sf_min && box?.sf_max) {
     if (n.sf >= box.sf_min && n.sf <= box.sf_max) { pts += 25; notes.push(`${n.sf.toLocaleString()} SF in ${box.sf_min / 1000}k–${box.sf_max / 1000}k band`); }
     else notes.push(`${n.sf.toLocaleString()} SF outside ${box.sf_min / 1000}k–${box.sf_max / 1000}k`);
   }
