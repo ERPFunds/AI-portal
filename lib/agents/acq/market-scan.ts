@@ -131,6 +131,11 @@ const PRICE_FLOOR = 700_000; // discovered listings priced below this are auto-d
 // `drop` marks a listing we should auto-dismiss on insert (non-industrial — e.g. Shop/Office, or sub-floor price).
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
   const notes: string[] = [];
+  const typeHay = `${n.propertyType ?? ""} ${n.title ?? ""}`;
+  // Vacant land / lots are not a building — auto-dismiss (IOS / laydown yards are handled as industrial).
+  if (/\b(land|lot|lots|acreage|vacant|unimproved|undeveloped|raw\s+land)\b/i.test(typeHay) && !/\b(ios|yard|laydown|building|warehouse|shop)\b/i.test(typeHay)) {
+    return { fit: "no-fit", score: 12, reason: `${n.propertyType || "Land"} — vacant land, not a building`, drop: true };
+  }
   const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage|yard/i.test(n.propertyType);
   if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex`, drop: true };
   // Sub-$700K in these markets is almost always a house or a sub-scale parcel — auto-dismiss.
@@ -330,6 +335,8 @@ async function extractBrokerListings(broker: string, text: string): Promise<Brok
       model: "claude-opus-4-8", max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
       system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, and a short title. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
+
+propertyType: classify precisely. Use "Land" for vacant/undeveloped land, lots, or acreage with no building (even if zoned commercial/industrial). Use "IOS" for industrial outdoor storage or laydown yards. Use "Industrial"/"Warehouse"/"Flex"/"Shop" for buildings, and "Office"/"Retail"/"Multifamily" as applicable. A listing with acreage but no building SF is almost always Land.
 
 CRITICAL — each listing's fields must come from that listing's own block. The text is grouped roughly one listing per line/section; do not attach one listing's price or SF to a different listing. If a listing shows no price, set price to null (do NOT reuse another listing's price).
 
