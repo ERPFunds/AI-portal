@@ -251,6 +251,7 @@ function detailHref(href: string, base: string): string | null {
   if (!href || /^(mailto:|tel:|javascript:|#)/i.test(href)) return null;
   try {
     const u = new URL(href, base); if (!/^https?:$/.test(u.protocol)) return null;
+    if (/idxbroker\.com$/i.test(u.hostname)) return null; // IDX detail pages are signup-gated — not linkable
     const b = new URL(base);
     if (u.origin + u.pathname === b.origin + b.pathname) return null; // same page, only fragment/query differs
     const segs = u.pathname.split("/").filter(Boolean);
