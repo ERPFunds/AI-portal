@@ -38,6 +38,8 @@ export async function POST(req: NextRequest) {
   const outline: string[] = Array.isArray(body.outline) ? body.outline.filter((o: unknown) => typeof o === "string" && o.trim()) : [];
   // Deal Pipeline rows (pipeline_rows ids) the user picked; empty = all Under Review.
   const dealPipelineIds: string[] = Array.isArray(body.dealPipelineIds) ? body.dealPipelineIds.map(String) : [];
+  // Vacancy property ids the user picked; empty = all current vacancies/availabilities.
+  const vacancyIds: string[] = Array.isArray(body.vacancyIds) ? body.vacancyIds.map(String) : [];
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
 
@@ -121,6 +123,43 @@ export async function POST(req: NextRequest) {
                 stage ? `Stage: ${stage}` : "",
               ].filter(Boolean).join(" · ");
               context += `\n- ${title} — ${parts}${d.nextSteps ? `\n  Next: ${d.nextSteps}` : ""}${d.notes ? `\n  ${String(d.notes).slice(0, 400)}` : ""}\n`;
+            }
+          }
+        }
+
+        // ── Vacancies: current vacant / listed availabilities from the Vacancies board ──
+        if (sources.includes("vacancies")) {
+          const { data: props } = await supabase.from("properties").select("*");
+          const avail = (props ?? []).filter((p) => {
+            const d = p as Record<string, unknown>;
+            const units = Array.isArray(d.units) ? (d.units as { tenant?: string }[]) : [];
+            const vacantUnits = units.filter((u) => (u.tenant || "").trim().toLowerCase() === "vacant");
+            const singleVacant = units.length === 0 && String(d.tenant || "").trim().toLowerCase() === "vacant";
+            const isAvail = singleVacant || vacantUnits.length > 0 || !!d.loopnetUrl;
+            if (!isAvail) return false;
+            if (vacancyIds.length && !vacancyIds.includes(String(d.id))) return false;
+            return true;
+          });
+          if (avail.length) {
+            context += "\n\n--- Current Vacancies & Availabilities (Vacancies board) ---\n";
+            for (const p of avail as Record<string, unknown>[]) {
+              const units = Array.isArray(p.units) ? (p.units as { unit?: string; tenant?: string; expiry?: string | null; sf?: number | null }[]) : [];
+              const vacantUnits = units.filter((u) => (u.tenant || "").trim().toLowerCase() === "vacant");
+              const singleVacant = units.length === 0 && String(p.tenant || "").trim().toLowerCase() === "vacant";
+              const sf = (p.total as number) || (p.warehouse as number) || null;
+              const bits = [
+                p.corridor ? `Market: ${p.corridor}` : "",
+                p.entity ? `Entity: ${p.entity}` : "",
+                sf ? `SF: ${Number(sf).toLocaleString()}` : "",
+                p.loopnetUrl ? `Listed: ${p.loopnetUrl}` : "",
+              ].filter(Boolean).join(" · ");
+              context += `\n- ${p.address}${bits ? ` — ${bits}` : ""}`;
+              if (vacantUnits.length) {
+                for (const u of vacantUnits) context += `\n    Vacant unit ${u.unit ?? ""}${u.sf ? ` (${Number(u.sf).toLocaleString()} SF)` : ""}${u.expiry ? ` · avail ${u.expiry}` : ""}`;
+              } else if (singleVacant) {
+                context += `\n    Whole building vacant`;
+              }
+              context += "\n";
             }
           }
         }

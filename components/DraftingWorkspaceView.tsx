@@ -186,6 +186,12 @@ export default function DraftingWorkspaceView() {
   const [dealLoading, setDealLoading] = useState(false)
   const [dealError, setDealError] = useState('')
   const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set())
+  // Vacancies — current vacant / listed availabilities, synced from the Vacancies board.
+  const [useVacancies, setUseVacancies] = useState(false)
+  const [vacancyRows, setVacancyRows] = useState<{ id: string; label: string; sub: string }[]>([])
+  const [vacancyLoading, setVacancyLoading] = useState(false)
+  const [vacancyError, setVacancyError] = useState('')
+  const [selectedVacancyIds, setSelectedVacancyIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -248,6 +254,22 @@ export default function DraftingWorkspaceView() {
       .catch(e => setDealError(String(e)))
       .finally(() => setDealLoading(false))
   }, [useDealPipeline]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!useVacancies) return
+    if (vacancyRows.length > 0) return
+    setVacancyLoading(true); setVacancyError('')
+    fetch('/api/drafting/vacancies')
+      .then(r => r.json())
+      .then(d => {
+        const rows = d.rows ?? []
+        setVacancyRows(rows)
+        setSelectedVacancyIds(new Set(rows.map((r: { id: string }) => r.id)))
+        if (d.error) setVacancyError(d.error)
+      })
+      .catch(e => setVacancyError(String(e)))
+      .finally(() => setVacancyLoading(false))
+  }, [useVacancies]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (docType !== 'newsletter') return
@@ -325,9 +347,10 @@ export default function DraftingWorkspaceView() {
           docType,
           prompt: prompt.trim(),
           outline: (skill.outline ?? []).filter((o) => outlineSections.includes(o)),
-          sources: [...(useKb ? ['kb'] : []), ...(useDealPipeline ? ['deal-pipeline'] : [])],
+          sources: [...(useKb ? ['kb'] : []), ...(useDealPipeline ? ['deal-pipeline'] : []), ...(useVacancies ? ['vacancies'] : [])],
           kbFileIds: [...selectedKbFileIds],
           dealPipelineIds: useDealPipeline ? [...selectedDealIds] : [],
+          vacancyIds: useVacancies ? [...selectedVacancyIds] : [],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
           newsletterNarrative: newsletters.find(n => n.id === selectedNewsletterId)?.narrative ?? '',
@@ -372,7 +395,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useDealPipeline, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, selectedDealIds, researchFiles, newsletters, selectedNewsletterId])
+  }, [docType, prompt, useKb, useDealPipeline, useVacancies, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, selectedDealIds, selectedVacancyIds, researchFiles, newsletters, selectedNewsletterId])
 
   const stop = () => abortRef.current?.abort()
 
@@ -640,6 +663,50 @@ export default function DraftingWorkspaceView() {
         </div>
       )}
 
+      {/* Vacancies picker — current vacant / listed availabilities from the Vacancies board */}
+      {useVacancies && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={s.label}>Vacancies — current availabilities</span>
+            {vacancyRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setSelectedVacancyIds(new Set(vacancyRows.map(r => r.id)))} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}>All</button>
+                <button onClick={() => setSelectedVacancyIds(new Set())} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#9ca3af', cursor: 'pointer' }}>None</button>
+              </div>
+            )}
+          </div>
+          {vacancyLoading && <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading vacancies…</div>}
+          {!vacancyLoading && vacancyError && <div style={{ fontSize: 13, color: '#dc2626' }}>{vacancyError}</div>}
+          {!vacancyLoading && !vacancyError && vacancyRows.length === 0 && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No vacancies or active listings right now.</div>
+          )}
+          {!vacancyLoading && vacancyRows.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+              {vacancyRows.map(r => {
+                const checked = selectedVacancyIds.has(r.id)
+                return (
+                  <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, cursor: 'pointer', background: checked ? '#eff6ff' : 'transparent', border: `1px solid ${checked ? '#bfdbfe' : 'transparent'}` }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setSelectedVacancyIds(prev => { const next = new Set(prev); checked ? next.delete(r.id) : next.add(r.id); return next })}
+                      style={{ accentColor: '#1d4ed8', width: 14, height: 14, flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{r.sub}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {selectedVacancyIds.size === 0 && !vacancyLoading && vacancyRows.length > 0 && (
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>No vacancies selected — will use all current availabilities.</div>
+          )}
+        </div>
+      )}
+
       {/* Market Research file picker — live browse of the Newsletters research folder */}
       {useResearch && (
         <div style={s.card}>
@@ -770,6 +837,7 @@ export default function DraftingWorkspaceView() {
             { id: 'deal-pipeline', label: '🏭 Deal Pipeline (Under Review)', val: useDealPipeline, set: setUseDealPipeline },
             { id: 'research', label: '🔬 Market Research', val: useResearch, set: setUseResearch },
             { id: 'newsletter', label: '📰 Newsletter', val: useNewsletter, set: setUseNewsletter },
+            { id: 'vacancies', label: '🏚️ Vacancies', val: useVacancies, set: setUseVacancies },
           ].map(({ id, label, val, set }) => (
             <label
               key={id}
