@@ -212,14 +212,19 @@ async function upsertNorms(
   return { inserted, duplicates, skippedExisting };
 }
 
-// Resolve an href to an absolute URL, but only if it points to a *different* page than `base`
-// (a real detail page) — not a mailto/tel/js link or a same-page fragment. Returns null otherwise.
+// Resolve an href to an absolute URL, but only if it points to a real *per-property* detail page:
+// a different page than `base`, not a mailto/tel/js link, a same-page fragment, or the site's
+// homepage / a shallow nav page (which the extractor sometimes grabs by mistake). Null otherwise.
 function detailHref(href: string, base: string): string | null {
   if (!href || /^(mailto:|tel:|javascript:|#)/i.test(href)) return null;
   try {
     const u = new URL(href, base); if (!/^https?:$/.test(u.protocol)) return null;
     const b = new URL(base);
     if (u.origin + u.pathname === b.origin + b.pathname) return null; // same page, only fragment/query differs
+    const segs = u.pathname.split("/").filter(Boolean);
+    // Homepage ("/") or a single shallow segment (e.g. /contact, /for-sale) is not a property page.
+    if (segs.length === 0) return null;
+    if (segs.length === 1 && segs[0].length < 12 && !/\d/.test(segs[0])) return null;
     return u.toString();
   } catch { return null; }
 }
@@ -322,13 +327,13 @@ const BROKER_SCHEMA = {
 async function extractBrokerListings(broker: string, text: string): Promise<BrokerListing[]> {
   try {
     const msg = await anthropic.messages.create({
-      model: "claude-opus-4-8", max_tokens: 3000,
+      model: "claude-opus-4-8", max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
       system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, and a short title. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
 
 CRITICAL — each listing's fields must come from that listing's own block. The text is grouped roughly one listing per line/section; do not attach one listing's price or SF to a different listing. If a listing shows no price, set price to null (do NOT reuse another listing's price).
 
-listingUrl: use the URL in square brackets [https://…] that appears with that listing — it is the per-property detail page. If a listing has no bracketed URL of its own, set listingUrl to null (do not use the page's own address).` }],
+listingUrl: use the URL in square brackets [https://…] whose path matches THIS listing (its street address or a slug of it, e.g. .../1911-kermit-hwy...). Ignore site-wide links — homepage, phone, "view all", or navigation. If the listing has no matching per-property bracketed URL, set listingUrl to null.` }],
       messages: [{ role: "user", content: `Page text:\n${text}` }],
     });
     const t = msg.content[0]?.type === "text" ? msg.content[0].text : "";
@@ -416,14 +421,14 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
         perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: why });
         continue;
       }
-      const found = await extractBrokerListings(site.name, text.slice(0, 16000));
+      const found = await extractBrokerListings(site.name, text.slice(0, 40000));
       const norms: Norm[] = [];
       for (const f of found) {
         const state = (f.state === "TX" || f.state === "FL") ? f.state : stateFrom(f.address, f.city, f.state);
         if (!state) continue;
         // A real per-property detail URL if the extractor found one; else null (don't link to the
-        // broker's general listings page). `url` still needs a unique value for dedup / message_id.
-        const detailUrl = f.listingUrl && /^https?:/i.test(f.listingUrl) && f.listingUrl !== site.url ? f.listingUrl : null;
+        // broker's homepage/listings page). `url` still needs a unique value for dedup / message_id.
+        const detailUrl = f.listingUrl ? detailHref(f.listingUrl, site.url) : null;
         const url = detailUrl ?? `${site.url}#${encodeURIComponent((f.address ?? f.title ?? "").slice(0, 60))}`;
         const n: Norm = { url, listingUrl: detailUrl, address: f.address, city: f.city, state, price: f.price, sf: f.sf, propertyType: f.propertyType, broker: site.name, title: f.title, datePosted: null };
         const cityL = (n.city || n.address || "").toLowerCase();
