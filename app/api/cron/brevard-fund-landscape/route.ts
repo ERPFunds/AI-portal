@@ -266,7 +266,7 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
 
     await archiveBrief({ agentName: "brevard-fund-landscape", subject, html, narrative, macro: {}, news }).catch(() => {});
     const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
-    saveNewsletterToSharePoint({ market: "Brevard", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
+    await saveNewsletterToSharePoint({ market: "Brevard", briefType: "Fund Landscape", htmlBody: html }).catch(() => {});
     await logAgentRun({ agentId: "lp-intel", workflowId: "brevard-fund-landscape", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
     return NextResponse.json({ success: emailResult.success, articles: news.length, subject });

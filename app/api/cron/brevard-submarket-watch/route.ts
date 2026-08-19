@@ -262,7 +262,7 @@ Write with data density and specificity. Synthesize what the articles tell you a
 
     await archiveBrief({ agentName: "brevard-submarket-watch", subject, html, narrative, macro: {}, news }).catch(() => {});
     const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
-    saveNewsletterToSharePoint({ market: "Brevard", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
+    await saveNewsletterToSharePoint({ market: "Brevard", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
     await logAgentRun({ agentId: "lp-intel", workflowId: "brevard-submarket-watch", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
     return NextResponse.json({ success: emailResult.success, articles: news.length, subject });

@@ -66,7 +66,7 @@ export async function GET(request: Request) {
     const startMs = Date.now();
     const { subject, htmlBody, summary, newsItems } = await generatePermianMondayBrief(period, { excludeUrls: seenUrls });
     const emailResult = await sendEmailViaGraph({ subject, htmlBody });
-    saveNewsletterToSharePoint({ market: "Permian", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
+    await saveNewsletterToSharePoint({ market: "Permian", briefType: "Weekly Market Update", htmlBody }).catch(() => {});
     await archiveBrief({ agentName: "permian-weekly", subject, html: htmlBody, narrative: summary, macro: {}, news: newsItems }).catch(() => {});
     await logAgentRun({ agentId: "lp-intel", workflowId: "weekly-market-update", status: emailResult.success ? "success" : "error", summary, market, durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
     return NextResponse.json({ success: emailResult.success, period, market, subject, articles: newsItems.length });
