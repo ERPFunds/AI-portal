@@ -354,13 +354,15 @@ const BROKER_SCHEMA = {
 } as const;
 
 async function extractBrokerListings(broker: string, text: string): Promise<BrokerListing[]> {
+  // One retry — a transient rate-limit/timeout shouldn't silently zero out a whole broker.
+  for (let attempt = 0; attempt < 2; attempt++) {
   try {
     const msg = await anthropic.messages.create({
-      model: "claude-opus-4-8", max_tokens: 8000,
+      model: "claude-opus-4-8", max_tokens: 16000,
       output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
       system: [{ type: "text" as const, text: `Extract every for-sale property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, a short title, and its status. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
 
-status: the availability label shown for the listing (e.g. Active, For Sale, Sold, Under Contract, Pending, Leased, Expired, Off-Market). Copy it verbatim; null if none shown. Still extract every listing regardless of status — do not skip; downstream code decides what to keep.
+status: the availability label shown for the listing. ONLY include listings that are currently ACTIVE / for sale — SKIP entirely any labeled Sold, Under Contract, Pending, Leased, Expired, or Off-Market (do not output them at all). For the active ones you keep, copy the status label verbatim (null if none shown).
 
 propertyType: ALWAYS classify (never leave null — infer from the listing name/details). Use "Land" for vacant/undeveloped land, lots, or acreage with no building (even if zoned commercial/industrial). Use "IOS" for industrial outdoor storage or laydown yards. Use "Industrial"/"Warehouse"/"Flex"/"Shop" for industrial buildings. Use "Multifamily" for apartment/condo complexes or anything with a unit count / "beds" (e.g. a named community like "Puerto Del Rio"), and "Office"/"Retail"/"Hospitality" as applicable. When unsure but it is clearly a residential community, use "Multifamily".
 
@@ -371,7 +373,9 @@ listingUrl: use the URL in square brackets [https://…] whose path matches THIS
     });
     const t = msg.content[0]?.type === "text" ? msg.content[0].text : "";
     return (JSON.parse(t).listings ?? []) as BrokerListing[];
-  } catch (e) { console.error("[market-scan] broker extract failed:", String(e).slice(0, 150)); return []; }
+  } catch (e) { console.error(`[market-scan] broker extract failed (${broker}, attempt ${attempt + 1}):`, String(e).slice(0, 150)); }
+  }
+  return [];
 }
 
 export async function runMarketScan(): Promise<MarketScanSummary> {
@@ -485,7 +489,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   // low concurrency to avoid launching many Chromium instances at once.
   const plainSites = BROKER_SITES.filter((s) => !s.js);
   const jsSites = BROKER_SITES.filter((s) => s.js);
-  const plainResults = await pool(plainSites, 6, processBroker);
+  const plainResults = await pool(plainSites, 4, processBroker);
   const jsResults = await pool(jsSites, 2, processBroker);
   perSource.push(...plainResults, ...jsResults);
 
