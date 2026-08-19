@@ -257,6 +257,18 @@ function detailHref(href: string, base: string): string | null {
   } catch { return null; }
 }
 
+// Verify an IDX-Broker detail page is still a live/active listing. False on 404/410 or when the page
+// reads as unavailable / unknown / sold; true otherwise (including on network error — don't drop on doubt).
+async function idxDetailActive(url: string): Promise<boolean> {
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(7000) });
+    if (r.status === 404 || r.status === 410) return false;
+    if (!r.ok) return true;
+    const html = (await r.text()).toLowerCase();
+    return !/unknown property status|no longer available|this listing is no longer|has been (sold|removed)|off[-\s]?market|status[^a-z]{0,8}(sold|pending|under contract|closed|withdrawn)/i.test(html);
+  } catch { return true; }
+}
+
 // Fetch a broker page and reduce it to text for the extractor. Two things matter for accuracy:
 // keep block boundaries as newlines (so each listing's fields stay grouped, not merged into one soup),
 // and inline each link's destination as "text [https://…]" so the extractor can attach a real
@@ -315,7 +327,7 @@ async function fetchRenderedTextLocal(url: string): Promise<string> {
     });
     const page = await browser.newPage();
     await page.setUserAgent(UA);
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 20000 });
     await new Promise((r) => setTimeout(r, 2500)); // let IDX widgets inject listings
     const txt: string = await page.evaluate(() => {
       const parts = [document.body?.innerText || ""];
@@ -452,15 +464,17 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   const zero = { found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0 };
   const processBroker = async (site: (typeof BROKER_SITES)[number]): Promise<PS> => {
     try {
+      // Cheapest path first: plain fetch (server-rendered). JS/IDX sites try the free self-hosted
+      // browser only — the paid Apify render was dropped: it added up to 150s per site (which pushed
+      // the whole scan past the time limit) for sites that mostly yield nothing anyway.
       let text = await fetchPageText(site.url);
       if (text.length < 400 && site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; }
-      if (text.length < 400 && site.js && token) { try { const t = await fetchRenderedText(site.url, token); if (t.length >= 400) text = t; } catch { /* ignore */ } }
       if (text.length < 400) {
         const why = site.js ? "JS/IDX site — render produced no listings (content likely in a cross-origin frame)" : "no server-rendered listings";
         return { source: `Broker: ${site.name}`, ...zero, skipped: why };
       }
       const found = await extractBrokerListings(site.name, text.slice(0, 80000));
-      const norms: Norm[] = [];
+      let norms: Norm[] = [];
       for (const f of found) {
         // Skip anything not actively for sale — these pages list Sold / Under Contract / Leased /
         // Expired alongside active listings, and we only want live opportunities.
@@ -478,6 +492,15 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
         if (n.propertyType && !/industrial|warehouse|flex|manufactur|distribution|ios|storage|shop|yard/i.test(n.propertyType)) continue;
         if (isErpListing(n)) continue;
         norms.push(n);
+      }
+      // IDX-Broker listings (e.g. Sondra Gomez) don't show status on the marketing page we scrape —
+      // the real status lives on the idxbroker.com detail page. Verify those in parallel and drop any
+      // that 404 or read as unavailable/unknown, so stale IDX listings don't surface as active.
+      const idx = norms.filter((n) => n.listingUrl && /idxbroker\.com/i.test(n.listingUrl));
+      if (idx.length) {
+        const ok = await pool(idx, 5, (n) => idxDetailActive(n.listingUrl!));
+        const dead = new Set(idx.filter((_, i) => !ok[i]).map((n) => n.url));
+        if (dead.size) norms = norms.filter((n) => !dead.has(n.url));
       }
       const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Listed on ${site.name}`, referralKind: "Broker", channel: "Broker site" });
       return { source: `Broker: ${site.name}`, found: found.length, kept: norms.length, inserted: r.inserted, updated: r.updated, duplicates: r.duplicates, skippedExisting: r.skippedExisting };
