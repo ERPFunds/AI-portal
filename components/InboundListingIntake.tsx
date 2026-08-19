@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { BUY_BOXES, type Fit, type Source, type ReferralKind } from '../lib/data/inboundListings'
+import { downloadXlsx, shapeRows } from '../lib/exportXlsx'
 
 // Inbound Listing Intake — live. Pulls forwarded property listings out of the acquisition principals'
 // mailboxes (Meghan / Brennan / William) via the inbound-listings scan, screens each against the
@@ -60,6 +61,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const [marketScanning, setMarketScanning] = useState(false)
   const [scanMsg, setScanMsg] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -95,6 +97,17 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const dismiss = async (id: string) => {
     setRows(rs => rs.filter(r => r.id !== id))
     try { await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }) } catch { /* ignore */ }
+  }
+
+  // Export the currently-shown listings (respecting the market view) to a .xlsx workbook.
+  const exportExcel = async () => {
+    if (exporting) return
+    setExporting(true)
+    try {
+      const cols: [string, string][] = [['received_at', 'Date'], ['state', 'Market'], ['address', 'Address'], ['submarket', 'Submarket'], ['fit', 'Fit'], ['score', 'Score'], ['asking_price', 'Asking Price'], ['sf', 'SF'], ['broker_firm', 'Broker / Firm'], ['broker', 'Broker'], ['referred_by', 'Source'], ['channel', 'Channel'], ['reason', 'Screen Note'], ['listing_url', 'Listing URL'], ['source_mailbox', 'Mailbox']]
+      const out = base.map(r => ({ ...r, received_at: r.received_at ? String(r.received_at).slice(0, 10) : '' }))
+      await downloadXlsx([{ name: `Inbound ${effMarket}`, rows: shapeRows(out, cols) }], `ERP-Inbound-Listings-${effMarket}-${new Date().toISOString().slice(0, 10)}.xlsx`)
+    } finally { setExporting(false) }
   }
 
   // Move a listing into the Deal Pipeline mirror board under a category Meghan picks (no auto-routing
@@ -167,6 +180,10 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
           <button onClick={scanMarket} disabled={marketScanning} title="Scrape LoopNet + Crexi for on-market for-sale industrial matching the Buy Box"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: marketScanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: marketScanning ? .6 : 1 }}>
             {marketScanning ? 'Scanning market…' : '🔎 Scan market'}
+          </button>
+          <button onClick={exportExcel} disabled={exporting || !base.length} title="Export the listings shown to an Excel workbook"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: exporting || !base.length ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting || !base.length ? .5 : 1 }}>
+            {exporting ? 'Exporting…' : '⬇ Export Excel'}
           </button>
         </div>
       </div>

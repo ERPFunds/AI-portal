@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState, useEffect } from 'react'
 import { TX_AS_OF, FL_AS_OF, FL_STRATEGY_NOTES, type TxRow, type FlRow } from '../lib/data/dealPipelineData'
-import PipelineLiveTracker from './PipelineLiveTracker'
+import { downloadXlsx, shapeRows } from '../lib/exportXlsx'
 
 // Deal Pipeline — the two ERP workbooks (TX Permian, FL Space Coast), now editable and portal-managed.
 // Rows live in pipeline_rows (via /api/deal-pipeline/mirror), seeded once from the generated workbook
@@ -13,8 +13,9 @@ import PipelineLiveTracker from './PipelineLiveTracker'
 const NAVY = '#0D2D52'
 
 // Unified category scheme (matches the FL spreadsheet) — groups BOTH boards: TX by `status`, FL by `section`.
-const CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
-const CAT_COLOR: Record<string, string> = { 'Under Review': '#2563eb', 'Prospects': '#d97706', 'Comparables': '#6b7280' }
+// Archive is a disposition, not a stage — set a row to it to move the row into the muted Archive band.
+const CATEGORIES = ['Under Review', 'Prospects', 'Comparables', 'Archive']
+const CAT_COLOR: Record<string, string> = { 'Under Review': '#2563eb', 'Prospects': '#d97706', 'Comparables': '#6b7280', 'Archive': '#94a3b8' }
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && !Number.isNaN(v)
 const money = (v: unknown) => (isNum(v) ? `$${Math.round(v).toLocaleString('en-US')}` : v ? String(v) : '—')
@@ -304,7 +305,6 @@ function coerce(state: 'TX' | 'FL', data: Record<string, unknown>): Record<strin
 
 // =============================== SHELL ===============================
 export default function DealPipelineView() {
-  const [mode, setMode] = useState<'mirror' | 'live'>('mirror')
   const [stateTab, setStateTab] = useState<'TX' | 'FL'>('TX')
   const [query, setQuery] = useState('')
   const [showMarket, setShowMarket] = useState(false)
@@ -325,7 +325,7 @@ export default function DealPipelineView() {
       }
     } catch { /* ignore */ } finally { setLoading(false) }
   }
-  useEffect(() => { if (mode === 'mirror') load(stateTab) }, [mode, stateTab])
+  useEffect(() => { load(stateTab) }, [stateTab])
 
   const save = async () => {
     if (!draft || saving) return
@@ -344,22 +344,24 @@ export default function DealPipelineView() {
     try { await fetch(`/api/deal-pipeline/mirror?id=${encodeURIComponent(String(draft._id))}`, { method: 'DELETE' }); setDraft(null); await load(stateTab) }
     finally { setSaving(false) }
   }
-  function exportCsv() {
-    const rows: Record<string, unknown>[] = stateTab === 'TX' ? txRows : flRows
-    if (!rows.length) return
-    const cols = stateTab === 'TX'
-      ? ['status', 'location', 'owner', 'address', 'tenant', 'source', 'price', 'pricePsf', 'yield', 'acreage', 'sqft', 'yearBuilt', 'nextSteps', 'notes', 'kind']
-      : ['section', 'name', 'status', 'source', 'propertyType', 'location', 'yearBuilt', 'units', 'occupancy', 'capRate', 'sqft', 'acres', 'price', 'psf', 'notes']
-    const esc = (v: unknown) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s }
-    const lines = [cols.join(',')]
-    rows.forEach((r) => lines.push(cols.map((c) => esc(r[c])).join(',')))
-    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `ERP-${stateTab}-Pipeline-${new Date().toISOString().slice(0, 10)}.csv`
-    a.click()
-    URL.revokeObjectURL(url)
+  const [exporting, setExporting] = useState(false)
+  async function exportExcel() {
+    if (exporting) return
+    setExporting(true)
+    try {
+      // Pull both boards fresh so the workbook is complete no matter which tab is active.
+      const fetchRows = async (state: 'TX' | 'FL') => {
+        try { const r = await fetch(`/api/deal-pipeline/mirror?state=${state}`); const d = await r.json(); return r.ok ? (d.items ?? []).map((it: { data: Record<string, unknown> }) => it.data) : [] }
+        catch { return [] }
+      }
+      const [tx, fl] = await Promise.all([fetchRows('TX'), fetchRows('FL')])
+      const txCols: [string, string][] = [['kind', 'Board'], ['status', 'Status'], ['location', 'Location'], ['owner', 'Owner'], ['address', 'Address'], ['tenant', 'Tenant'], ['source', 'Source'], ['price', 'Price'], ['pricePsf', '$ PSF'], ['yield', '% Yield'], ['acreage', 'Acreage'], ['sqft', 'Sq Ft'], ['yearBuilt', 'Year Built'], ['nextSteps', 'Next Steps'], ['notes', 'Notes']]
+      const flCols: [string, string][] = [['section', 'Section'], ['name', 'Name'], ['status', 'Status'], ['source', 'Source'], ['propertyType', 'Property Type'], ['location', 'Location'], ['yearBuilt', 'Year Built'], ['units', 'Units'], ['occupancy', 'Occupancy'], ['capRate', 'Cap Rate'], ['sqft', 'Sq Ft'], ['acres', 'Acres'], ['price', 'Price'], ['psf', 'PSF'], ['notes', 'Notes']]
+      await downloadXlsx(
+        [{ name: 'Texas — Permian', rows: shapeRows(tx, txCols) }, { name: 'Florida — Brevard', rows: shapeRows(fl, flCols) }],
+        `ERP-Deal-Pipeline-${new Date().toISOString().slice(0, 10)}.xlsx`,
+      )
+    } finally { setExporting(false) }
   }
   const move = async (r: TxRowE | FlRowE, field: 'status' | 'section', cat: string) => {
     const { _id, ...data } = r as Record<string, unknown> & { _id: string }
@@ -392,60 +394,47 @@ export default function DealPipelineView() {
       <div style={{ fontSize: 11, color: '#64748b', marginTop: 1 }}>{sub}</div>
     </button>
   )
-  const modeBtn = (id: 'mirror' | 'live', label: string) => (
-    <button onClick={() => setMode(id)} style={{ padding: '7px 16px', borderRadius: 999, cursor: 'pointer', fontSize: 12.5, fontWeight: 600, border: mode === id ? `1px solid ${NAVY}` : '1px solid #e2e8f0', background: mode === id ? NAVY : '#fff', color: mode === id ? '#fff' : '#64748b' }}>{label}</button>
-  )
-
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-        <div>
-          <h2>Deal Pipeline</h2>
-          <p>{mode === 'mirror'
-            ? 'Editable acquisition pipeline (from the ERP workbooks), separated by market. Edit any row — change Status (TX) / Section (FL) to move it between groups.'
-            : 'Editable, portal-managed pipeline (Sourcing → Closed) — feeds the Acquisition Economics views. Auto-add fit inbound listings, or add deals manually.'}</p>
-        </div>
-        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>{modeBtn('mirror', '📊 Workbook')}{modeBtn('live', '✏️ Live Tracker')}</div>
+      <div className="page-header">
+        <h2>Deal Pipeline</h2>
+        <p>Editable acquisition pipeline (from the ERP workbooks), separated by market. Edit any row — change Status (TX) / Section (FL) to move it between groups.</p>
       </div>
 
-      {mode === 'live' ? <PipelineLiveTracker /> : (
-        <>
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
-            {tab('TX', '🛢️  Texas — Permian Basin', 'Midland / Odessa · Pipeline & Market Analysis')}
-            {tab('FL', '🚀  Florida — Brevard', 'Space Coast · Pipeline & Comp Summary')}
-          </div>
+      <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
+        {tab('TX', '🛢️  Texas — Permian Basin', 'Midland / Odessa · Pipeline & Market Analysis')}
+        {tab('FL', '🚀  Florida — Brevard', 'Space Coast · Pipeline & Comp Summary')}
+      </div>
 
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-            {stateTab === 'TX' ? (
-              <>{kpi('Pipeline Deals', String(txPipeline.length))}{kpi('Under Review+', String(txActive), '#2563eb')}{kpi('Prospects', String(txPending), '#d97706')}{kpi('Submarket Inventory', String(txMarket.length), '#0e7490')}</>
-            ) : (
-              <>{kpi('Total Records', String(flRows.length))}{kpi('Targets + Prospects', String(flTargets), '#2563eb')}{kpi('Comparables', String(flRows.filter((r) => r.section.startsWith('Comparable')).length), '#6b7280')}</>
-            )}
-          </div>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
+        {stateTab === 'TX' ? (
+          <>{kpi('Pipeline Deals', String(txPipeline.length))}{kpi('Under Review+', String(txActive), '#2563eb')}{kpi('Prospects', String(txPending), '#d97706')}{kpi('Submarket Inventory', String(txMarket.length), '#0e7490')}</>
+        ) : (
+          <>{kpi('Total Records', String(flRows.length))}{kpi('Targets + Prospects', String(flTargets), '#2563eb')}{kpi('Comparables', String(flRows.filter((r) => r.section.startsWith('Comparable')).length), '#6b7280')}</>
+        )}
+      </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#64748b' }}>
-              <span style={{ fontWeight: 700, color: NAVY }}>{meta.title}</span> · {meta.sub}
-              <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>Source: <span style={{ fontStyle: 'italic' }}>{meta.file}</span>
-              <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>As of {asOf}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              {stateTab === 'TX' && (
-                <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={showMarket} onChange={(e) => setShowMarket(e.target.checked)} />Show submarket inventory
-                </label>
-              )}
-              <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search address, owner, tenant…" style={{ fontSize: 12.5, padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 8, width: 220, maxWidth: '100%' }} />
-              <button onClick={exportCsv} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>⬇ Export</button>
-              <button onClick={openAdd} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add row</button>
-            </div>
-          </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+        <div style={{ fontSize: 12, color: '#64748b' }}>
+          <span style={{ fontWeight: 700, color: NAVY }}>{meta.title}</span> · {meta.sub}
+          <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>Source: <span style={{ fontStyle: 'italic' }}>{meta.file}</span>
+          <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>As of {asOf}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {stateTab === 'TX' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
+              <input type="checkbox" checked={showMarket} onChange={(e) => setShowMarket(e.target.checked)} />Show submarket inventory
+            </label>
+          )}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search address, owner, tenant…" style={{ fontSize: 12.5, padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 8, width: 220, maxWidth: '100%' }} />
+          <button onClick={exportExcel} disabled={exporting} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: exporting ? 'default' : 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting ? .6 : 1 }}>{exporting ? 'Exporting…' : '⬇ Export Excel'}</button>
+          <button onClick={openAdd} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add row</button>
+        </div>
+      </div>
 
-          {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-            : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} />
-              : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} />}
-        </>
-      )}
+      {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
+        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} />
+          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} />}
 
       {draft && <RowEditor draft={draft} onChange={(k, v) => setDraft((d) => (d ? { ...d, [k]: v } : d))} onClose={() => setDraft(null)} onSave={save} onDelete={del} saving={saving} />}
     </div>
