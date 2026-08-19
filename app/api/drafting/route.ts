@@ -87,25 +87,36 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // ── Acquisition research: screened deal flow from broker / CoStar feeds ──
-        if (sources.includes("acquisition")) {
-          const { data: listings } = await supabase
-            .from("loopnet_listings")
-            .select("market, address, property_name, size, available_space, price, property_type, description, url, received_at")
-            .order("received_at", { ascending: false })
-            .limit(25);
-          if (listings?.length) {
-            context += "\n\n--- Acquisition Research — screened deal flow (broker / CoStar listings) ---\n";
-            for (const l of listings as Record<string, string>[]) {
+        // ── Deal Pipeline: deals currently Under Review, synced from the Deal Pipeline board ──
+        if (sources.includes("deal-pipeline")) {
+          // pipeline_rows is RLS-locked → service-role client (same source the Deal Pipeline view reads).
+          const admin = createAdminClient();
+          const { data: rows } = await admin.from("pipeline_rows").select("state, data");
+          const underReview = (rows ?? []).filter((r) => {
+            const d = (r.data ?? {}) as Record<string, unknown>;
+            return r.state === "FL"
+              ? d.section === "Under Review"
+              : d.kind === "pipeline" && ["Under Review", "Under Contract", "Contract Negotiations"].includes(String(d.status));
+          });
+          if (underReview.length) {
+            context += "\n\n--- Deal Pipeline — deals Under Review ---\n";
+            for (const r of underReview) {
+              const d = (r.data ?? {}) as Record<string, unknown>;
+              const title = String(d.address || d.name || d.location || "Deal");
+              const stage = r.state === "FL" ? d.section : d.status;
               const parts = [
-                l.property_name || l.address,
-                l.market ? `Market: ${l.market}` : "",
-                l.size ? `Size: ${l.size}` : "",
-                l.available_space ? `Available: ${l.available_space}` : "",
-                l.price ? `Price: ${l.price}` : "",
-                l.property_type ? `Type: ${l.property_type}` : "",
+                r.state === "TX" ? "Permian (TX)" : "Brevard (FL)",
+                d.location ? `Location: ${d.location}` : "",
+                d.tenant ? `Tenant: ${d.tenant}` : "",
+                d.price ? `Price: $${Number(d.price).toLocaleString()}` : "",
+                d.pricePsf ? `$/SF: ${d.pricePsf}` : (d.psf ? `$/SF: ${d.psf}` : ""),
+                d.yield != null && d.yield !== "" ? `Yield: ${d.yield}` : (d.capRate ? `Cap: ${d.capRate}` : ""),
+                d.sqft ? `SF: ${d.sqft}` : "",
+                d.acreage ? `Acreage: ${d.acreage}` : (d.acres ? `Acres: ${d.acres}` : ""),
+                d.source ? `Source: ${d.source}` : "",
+                stage ? `Stage: ${stage}` : "",
               ].filter(Boolean).join(" · ");
-              context += `\n- ${parts}${l.description ? `\n  ${String(l.description).slice(0, 500)}` : ""}${l.url ? `\n  ${l.url}` : ""}\n`;
+              context += `\n- ${title} — ${parts}${d.nextSteps ? `\n  Next: ${d.nextSteps}` : ""}${d.notes ? `\n  ${String(d.notes).slice(0, 400)}` : ""}\n`;
             }
           }
         }
