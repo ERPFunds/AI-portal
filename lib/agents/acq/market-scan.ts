@@ -158,7 +158,7 @@ function screen(n: Norm, box: Box | undefined): { fit: string; score: number; re
   if (n.sf == null && n.price == null) notes.push("size & price not listed — needs a look to confirm");
   if (n.state === "TX" && PRIORITY_TX_ROADS.test(`${n.address ?? ""} ${n.title ?? ""}`)) { pts += 12; notes.push("on a priority ERP corridor"); }
   const score = Math.min(100, pts);
-  const fit = score >= 80 ? "fit" : score >= 55 ? "borderline" : "no-fit";
+  const fit = score >= 70 ? "fit" : score >= 55 ? "borderline" : "no-fit";
   return { fit, score, reason: `On-market ${n.state ?? ""} industrial for sale — ${notes.join("; ") || "in target market"}.` };
 }
 

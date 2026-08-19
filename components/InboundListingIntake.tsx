@@ -50,6 +50,10 @@ const SOURCE_GROUPS: { label: string; items: string[] }[] = [
   { label: 'Broker sites · National', items: ['Marcus & Millichap'] },
 ]
 const SRC_CHIP: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }
+// Effective fit for the badge/ranking: a score of 70+ is a green "fit", 55+ borderline, else no-fit.
+// Derived from score when present so the thresholds apply to every row regardless of when it was captured.
+const fitOf = (l: { fit: string | null; score: number | null }): string =>
+  l.score != null ? (l.score >= 70 ? 'fit' : l.score >= 55 ? 'borderline' : 'no-fit') : (l.fit ?? 'no-fit')
 const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label: string }> = {
   'fit':        { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Fit' },
   'borderline': { color: '#b45309', bg: '#fffbeb', border: '#fde68a', label: 'Borderline' },
@@ -150,7 +154,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   // When `locked` is set (a market-specific page), the market is fixed and its toggle is hidden.
   const effMarket: 'All' | 'TX' | 'FL' = locked ?? market
   const base = rows.filter(r => effMarket === 'All' || r.state === effMarket)
-  const visible = base.filter(r => fitFilter === 'All' || r.fit === fitFilter)
+  const visible = base.filter(r => fitFilter === 'All' || fitOf(r) === fitFilter)
 
   // Rank by Buy-Box fit: fit → borderline → no-fit, then by quick-score, then most-recent.
   // Duplicates sink to the bottom.
@@ -158,15 +162,15 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const ranked = [...visible].sort((a, b) => {
     const du = (a.status === 'duplicate' ? 1 : 0) - (b.status === 'duplicate' ? 1 : 0)
     if (du) return du
-    const fr = (FIT_RANK[a.fit ?? ''] ?? 3) - (FIT_RANK[b.fit ?? ''] ?? 3)
+    const fr = (FIT_RANK[fitOf(a)] ?? 3) - (FIT_RANK[fitOf(b)] ?? 3)
     if (fr) return fr
     const sc = (b.score ?? 0) - (a.score ?? 0)
     if (sc) return sc
     return String(b.received_at ?? '').localeCompare(String(a.received_at ?? ''))
   })
 
-  const fitCount = base.filter(r => r.fit === 'fit' && r.status !== 'duplicate').length
-  const borderlineCount = base.filter(r => r.fit === 'borderline').length
+  const fitCount = base.filter(r => fitOf(r) === 'fit' && r.status !== 'duplicate').length
+  const borderlineCount = base.filter(r => fitOf(r) === 'borderline').length
 
   const pill = (active: boolean): React.CSSProperties => ({
     fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
@@ -272,7 +276,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
           const dup = l.status === 'duplicate'
           const yieldPct = l.cap_pct ?? (l.in_place_noi && l.asking_price ? (l.in_place_noi / l.asking_price) * 100 : null)
           const psf = l.asking_price && l.sf ? l.asking_price / l.sf : null
-          const fs = fitStyle(l.fit)
+          const fs = fitStyle(fitOf(l))
           const web = !!l.listing_url || l.channel === 'Crexi' || l.channel === 'LoopNet'
           const metrics = [l.sf != null ? l.sf.toLocaleString('en-US') + ' SF' : null, psf != null ? `$${Math.round(psf)}/SF` : null, yieldPct != null ? `${yieldPct.toFixed(1)}% cap` : null].filter(Boolean).join(' · ')
           return (
@@ -289,7 +293,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                   {l.state && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '0 6px', color: '#0e7490' }}>{l.state}</span>}
                   <span style={{ fontSize: 10, fontWeight: 700, background: web ? '#eff6ff' : '#f0fdf4', border: `1px solid ${web ? '#bfdbfe' : '#bbf7d0'}`, borderRadius: 5, padding: '0 6px', color: web ? '#1d4ed8' : '#15803d' }}>{web ? '🔗 Web link' : '✉️ Broker email'}</span>
                   {l.referral_kind && <span style={{ fontSize: 10, background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '0 6px', color: '#6d28d9' }}>{icon(REFERRAL_ICON, l.referral_kind, '📨')} {l.referral_kind}</span>}
-                  {!dup && l.fit !== 'no-fit' && <span style={{ fontSize: 10, fontWeight: 700, color: fs.color }}>{fs.label}</span>}
+                  {!dup && fitOf(l) !== 'no-fit' && <span style={{ fontSize: 10, fontWeight: 700, color: fs.color }}>{fs.label}</span>}
                 </div>
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {l.submarket && <span>{l.submarket}</span>}
