@@ -9,6 +9,7 @@ export type AiRec = { verdict: 'Pursue' | 'Watch' | 'Pass'; rationale: string; a
 export type TxRow = {
   kind: 'pipeline' | 'market'
   aiRec?: AiRec | null
+  listingUrl?: string | null
   status: string
   location: string
   owner: string
@@ -27,6 +28,7 @@ export type TxRow = {
 
 export type FlRow = {
   aiRec?: AiRec | null
+  listingUrl?: string | null
   section: string
   name: string
   status: string

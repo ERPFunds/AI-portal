@@ -126,11 +126,12 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
     setAdding(l.id)
     try {
       const psf = l.asking_price && l.sf ? Math.round((l.asking_price / l.sf) * 100) / 100 : null
-      const notes = [l.reason, l.listing_url].filter(Boolean).join(' — ')
+      const notes = l.reason || ''
+      const listingUrl = l.listing_url || l.source_url || null
       const isFL = l.state === 'FL'
       const data: Record<string, unknown> = isFL
-        ? { section: category, name: l.address || l.submarket || 'Listing', status: '', source: l.referred_by || l.channel || '', propertyType: 'Industrial', location: l.submarket || '', yearBuilt: null, units: null, occupancy: null, capRate: l.cap_pct ?? null, sqft: l.sf ?? null, acres: null, price: l.asking_price ?? null, psf, notes }
-        : { kind: 'pipeline', status: category, location: l.submarket || '', owner: l.broker_firm || l.broker || '', address: l.address || '', tenant: '', source: l.referred_by || l.channel || '', price: l.asking_price ?? null, pricePsf: psf, yield: null, acreage: null, sqft: l.sf ?? null, yearBuilt: null, nextSteps: '', notes }
+        ? { section: category, name: l.address || l.submarket || 'Listing', status: '', source: l.referred_by || l.channel || '', propertyType: 'Industrial', location: l.submarket || '', yearBuilt: null, units: null, occupancy: null, capRate: l.cap_pct ?? null, sqft: l.sf ?? null, acres: null, price: l.asking_price ?? null, psf, notes, listingUrl }
+        : { kind: 'pipeline', status: category, location: l.submarket || '', owner: l.broker_firm || l.broker || '', address: l.address || '', tenant: '', source: l.referred_by || l.channel || '', price: l.asking_price ?? null, pricePsf: psf, yield: null, acreage: null, sqft: l.sf ?? null, yearBuilt: null, nextSteps: '', notes, listingUrl }
       // Auto-generate an AI recommendation for the new deal (best-effort — never block the move on it).
       try {
         const rr = await fetch('/api/deal-pipeline/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deal: data, market: isFL ? 'FL' : 'TX' }) })

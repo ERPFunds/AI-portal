@@ -24,6 +24,19 @@ const pct = (v: unknown) => (isNum(v) ? `${(v * 100).toFixed(v * 100 % 1 === 0 ?
 const num = (v: unknown) => (isNum(v) ? v.toLocaleString('en-US') : v ? String(v) : '—')
 const txt = (v: unknown) => (v === null || v === undefined || v === '' ? '—' : String(v))
 
+// Listing URL — a first-class clickable field. Falls back to a URL embedded in notes,
+// so rows moved over before listingUrl existed still surface their link.
+const URL_RE = /(https?:\/\/[^\s]+)/i
+const findUrl = (r: { listingUrl?: string | null; notes?: string }): string | null => {
+  if (r.listingUrl && /^https?:\/\//i.test(r.listingUrl)) return r.listingUrl
+  const m = (r.notes || '').match(URL_RE)
+  return m ? m[1] : null
+}
+const cleanNotes = (notes?: string) => (notes || '').replace(URL_RE, '').replace(/\s*[—–-]\s*$/, '').trim()
+const listingLink = (url: string | null) => url
+  ? <a href={url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', wordBreak: 'break-all' }}>🔗 Open listing ↗</a>
+  : <span style={{ color: '#cbd5e1' }}>—</span>
+
 const TH: React.CSSProperties = { position: 'sticky', top: 0, zIndex: 2, background: '#f1f5f9', color: '#334155', fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.3px', textAlign: 'left', padding: '7px 9px', borderBottom: '2px solid #cbd5e1', whiteSpace: 'nowrap' }
 const TD: React.CSSProperties = { padding: '6px 9px', fontSize: 12, color: '#1f2937', borderBottom: '1px solid #eef2f7', verticalAlign: 'top' }
 const numTD: React.CSSProperties = { ...TD, textAlign: 'right', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }
@@ -154,7 +167,8 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
                 <Detail label="Sq. Ft.">{num(r.sqft)}</Detail>
                 <Detail label="Year Built">{txt(r.yearBuilt)}</Detail>
                 <Detail label="Next Steps">{txt(r.nextSteps)}</Detail>
-                <Detail label="Notes / Comments">{txt(r.notes)}</Detail>
+                <Detail label="Listing">{listingLink(findUrl(r))}</Detail>
+                <Detail label="Notes / Comments">{txt(cleanNotes(r.notes))}</Detail>
                 <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
               </div>
             </td>
@@ -267,7 +281,8 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
                                 <Detail label="SQFT">{num(r.sqft)}</Detail>
                                 <Detail label="Acres">{num(r.acres)}</Detail>
                                 <Detail label="PSF / P-Acre">{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</Detail>
-                                <Detail label="Notes / Status">{txt(r.notes)}</Detail>
+                                <Detail label="Listing">{listingLink(findUrl(r))}</Detail>
+                                <Detail label="Notes / Status">{txt(cleanNotes(r.notes))}</Detail>
                                 <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
                               </div>
                             </td>
@@ -333,6 +348,7 @@ function RowEditor({ draft, onChange, onClose, onSave, onDelete, saving }: {
               <Field label="Acreage">{inp('acreage')}</Field>
               <Field label="Sq. Ft.">{inp('sqft')}</Field>
               <Field label="Year Built">{inp('yearBuilt')}</Field>
+              <Field label="Listing URL" span>{inp('listingUrl', 'https://…')}</Field>
               <Field label="Next Steps" span>{area('nextSteps')}</Field>
               <Field label="Notes / Comments" span>{area('notes')}</Field>
             </>
@@ -352,6 +368,7 @@ function RowEditor({ draft, onChange, onClose, onSave, onDelete, saving }: {
               <Field label="Acres">{inp('acres')}</Field>
               <Field label="Purchase Price ($)">{inp('price')}</Field>
               <Field label="PSF / P-Acre">{inp('psf')}</Field>
+              <Field label="Listing URL" span>{inp('listingUrl', 'https://…')}</Field>
               <Field label="Notes / Status" span>{area('notes')}</Field>
             </>
           )}
