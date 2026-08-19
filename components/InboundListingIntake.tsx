@@ -50,6 +50,12 @@ const SOURCE_GROUPS: { label: string; items: string[] }[] = [
   { label: 'Broker sites · National', items: ['Marcus & Millichap'] },
 ]
 const SRC_CHIP: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }
+// Whose inbox a forwarded broker email landed in.
+const MAILBOX_NAMES: Record<string, string> = {
+  'mberry@erpfunds.com': 'Meghan', 'bberry@erpfunds.com': 'Brennan', 'wmeyer@erpfunds.com': 'William',
+  'mparad@erpfunds.com': 'Michele', 'hpowell@erpfunds.com': 'Hannah',
+}
+const inboxName = (m: string | null) => (m && (MAILBOX_NAMES[m.toLowerCase()] || m.split('@')[0])) || null
 // Effective fit for the badge/ranking: a score of 70+ is a green "fit", 55+ borderline, else no-fit.
 // Derived from score when present so the thresholds apply to every row regardless of when it was captured.
 const fitOf = (l: { fit: string | null; score: number | null }): string =>
@@ -303,6 +309,9 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                 <div style={{ fontSize: 11, color: '#6b7280', marginTop: 2, display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                   {l.submarket && <span>{l.submarket}</span>}
                   <span>{l.origin === 'discovered' ? `🔎 ${l.referral_kind ?? 'platform'}` : `📨 ${l.referred_by ?? 'unknown'}`}</span>
+                  {l.origin !== 'discovered' && l.source_mailbox && l.source_mailbox !== 'market-scan' && inboxName(l.source_mailbox) && (
+                    <span style={{ background: '#eef2ff', border: '1px solid #c7d2fe', borderRadius: 5, padding: '0 6px', color: '#4338ca', fontWeight: 600 }}>📥 {inboxName(l.source_mailbox)}&apos;s inbox</span>
+                  )}
                   {l.received_at && <span title={new Date(l.received_at).toLocaleString()} style={{ color: '#9ca3af' }}>📅 {new Date(l.received_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
                   {l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Listing ↗</a>}
                   {(l.attachments ?? []).slice(0, 2).map((n, j) => <span key={j} title={n} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0 6px' }}>📎 {n.length > 18 ? n.slice(0, 16) + '…' : n}</span>)}
