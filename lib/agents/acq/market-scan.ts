@@ -68,7 +68,9 @@ const PRIORITY_TX_ROADS = /\b(hwy\.?\s*191|highway\s*191|us[- ]?191|i[- ]?20|int
 
 type Src = "LoopNet" | "Crexi" | "LinkedIn";
 type Norm = {
-  url: string; address: string | null; city: string | null; state: "TX" | "FL" | null;
+  url: string;            // dedup / message_id key (may be a synthetic broker-page anchor)
+  listingUrl?: string | null; // real per-property page to link to; null when we only have a general page
+  address: string | null; city: string | null; state: "TX" | "FL" | null;
   price: number | null; sf: number | null; propertyType: string | null; broker: string | null; title: string | null;
   datePosted: string | null;
 };
@@ -105,7 +107,7 @@ function normalize(it: Record<string, unknown>, src: Src): Norm | null {
   const broker = strOf(it.brokerCompany) || strOf(it.broker) || strOf(it.brokerageName) || strOf(it.company);
   const title = strOf(it.title) || strOf(it.propertyName) || strOf(it.name);
   const datePosted = strOf(it.datePosted) || strOf(it.dateListed) || strOf(it.listedDate) || strOf(it.updatedAt) || strOf(it.postedAt) || null;
-  return { url, address, city, state, price, sf, propertyType, broker, title, datePosted };
+  return { url, listingUrl: url, address, city, state, price, sf, propertyType, broker, title, datePosted };
 }
 
 async function runActor(actor: string, input: unknown, token: string): Promise<Record<string, unknown>[]> {
@@ -198,7 +200,7 @@ async function upsertNorms(
     }
     const { error } = await admin.from("inbound_listings").insert({
       message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
-      origin: "discovered", listing_url: n.url,
+      origin: "discovered", listing_url: n.listingUrl ?? null,
       referred_by: meta.referredBy, referral_kind: meta.referralKind, channel: meta.channel,
       address: n.address, submarket: n.city || market, state: n.state,
       asking_price: n.price, sf: n.sf, broker: n.broker, broker_firm: n.broker,
@@ -391,8 +393,11 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
       for (const f of found) {
         const state = (f.state === "TX" || f.state === "FL") ? f.state : stateFrom(f.address, f.city, f.state);
         if (!state) continue;
-        const url = f.listingUrl && /^https?:/i.test(f.listingUrl) ? f.listingUrl : `${site.url}#${encodeURIComponent((f.address ?? f.title ?? "").slice(0, 60))}`;
-        const n: Norm = { url, address: f.address, city: f.city, state, price: f.price, sf: f.sf, propertyType: f.propertyType, broker: site.name, title: f.title, datePosted: null };
+        // A real per-property detail URL if the extractor found one; else null (don't link to the
+        // broker's general listings page). `url` still needs a unique value for dedup / message_id.
+        const detailUrl = f.listingUrl && /^https?:/i.test(f.listingUrl) && f.listingUrl !== site.url ? f.listingUrl : null;
+        const url = detailUrl ?? `${site.url}#${encodeURIComponent((f.address ?? f.title ?? "").slice(0, 60))}`;
+        const n: Norm = { url, listingUrl: detailUrl, address: f.address, city: f.city, state, price: f.price, sf: f.sf, propertyType: f.propertyType, broker: site.name, title: f.title, datePosted: null };
         const cityL = (n.city || n.address || "").toLowerCase();
         const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
         if (!inMarket) continue;
