@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@sparticuz/chromium": "^149.0.0",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@types/pg": "^8.20.0",
@@ -22,6 +23,7 @@
     "officeparser": "^4.1.2",
     "pg": "^8.22.0",
     "pptxgenjs": "^4.0.1",
+    "puppeteer-core": "^25.8.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.12.7",

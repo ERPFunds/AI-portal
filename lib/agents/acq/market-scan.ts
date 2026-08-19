@@ -22,6 +22,14 @@ const BROKER_SITES: { name: string; url: string; js?: boolean }[] = [
   { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/", js: true }, // Space Coast — IDX/JS
   { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/", js: true }, // Permian — IDX/JS
   { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC", js: true }, // JS SPA
+  // Space Coast (FL) brokers — server-rendered listing pages, free to scrape.
+  { name: "Jack Jeffcoat", url: "https://www.jackjeffcoat.com/commercial.listings" }, // largest Brevard inventory
+  { name: "Space Coast CRE", url: "https://listings.spacecoastcre.com/i/featured-listings" },
+  { name: "MaxLife Commercial", url: "https://maxlifedevelopment.com/commercial-listings?for=commercial-sale&q=Brevard+County" },
+  { name: "JM Real Estate", url: "https://jmrealestate.com/listings/" },
+  { name: "ITG Realty", url: "https://www.itgrealty.com/commercial-properties/" },
+  { name: "Scott Langston", url: "https://scottlangston.com/brevard-county-commercial-property-listings/" }, // industrial-focused
+  { name: "Perrone Properties", url: "https://perroneproperties.com/property-search/" },
 ];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
@@ -213,6 +221,40 @@ async function fetchRenderedText(url: string, token: string): Promise<string> {
   return txt.replace(/\s+/g, " ").trim();
 }
 
+// Render a JS/IDX page with a self-hosted headless Chromium — no external service, no per-run cost.
+// Uses @sparticuz/chromium + puppeteer-core (dynamically imported so a cold path stays light).
+// Returns "" on any failure so callers fall back to the Apify render. Also pulls same-origin iframe
+// text, since IDX widgets often inject listings into an embedded frame.
+async function fetchRenderedTextLocal(url: string): Promise<string> {
+  let browser: Awaited<ReturnType<typeof import("puppeteer-core").default.launch>> | null = null;
+  try {
+    const chromium = (await import("@sparticuz/chromium")).default;
+    const puppeteer = (await import("puppeteer-core")).default;
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      executablePath: await chromium.executablePath(),
+      headless: true,
+    });
+    const page = await browser.newPage();
+    await page.setUserAgent(UA);
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
+    await new Promise((r) => setTimeout(r, 2500)); // let IDX widgets inject listings
+    const txt: string = await page.evaluate(() => {
+      const parts = [document.body?.innerText || ""];
+      for (const f of Array.from(document.querySelectorAll("iframe"))) {
+        try { const d = (f as HTMLIFrameElement).contentDocument; if (d?.body) parts.push(d.body.innerText); } catch { /* cross-origin frame — unreadable */ }
+      }
+      return parts.join("\n");
+    });
+    return String(txt).replace(/\s+/g, " ").trim();
+  } catch (e) {
+    console.error("[market-scan] self-hosted render failed:", String(e).slice(0, 200));
+    return "";
+  } finally {
+    try { await browser?.close(); } catch { /* ignore */ }
+  }
+}
+
 type BrokerListing = { address: string | null; city: string | null; state: string | null; price: number | null; sf: number | null; propertyType: string | null; listingUrl: string | null; title: string | null };
 const BROKER_SCHEMA = {
   type: "object", additionalProperties: false, required: ["listings"],
@@ -315,11 +357,13 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   //    (site.js) render in a headless browser first, falling back to a plain fetch when no token. ──
   for (const site of BROKER_SITES) {
     try {
-      let text = "";
-      if (site.js && token) { try { text = await fetchRenderedText(site.url, token); } catch { /* fall back below */ } }
-      if (text.length < 400) text = await fetchPageText(site.url);
+      // Cheapest path first: plain fetch (server-rendered). For JS/IDX sites, escalate to a
+      // self-hosted headless browser (free), then to Apify render (paid) only as a last resort.
+      let text = await fetchPageText(site.url);
+      if (text.length < 400 && site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; }
+      if (text.length < 400 && site.js && token) { try { const t = await fetchRenderedText(site.url, token); if (t.length >= 400) text = t; } catch { /* ignore */ } }
       if (text.length < 400) {
-        const why = site.js ? (token ? "browser render returned no listings (IDX in a nested frame?)" : "JS site — no APIFY token to render") : "no server-rendered listings";
+        const why = site.js ? "JS/IDX site — render produced no listings (content likely in a cross-origin frame)" : "no server-rendered listings";
         perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: why });
         continue;
       }
