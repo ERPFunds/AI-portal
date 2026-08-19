@@ -30,6 +30,12 @@ const BROKER_SITES: { name: string; url: string; js?: boolean }[] = [
   { name: "ITG Realty", url: "https://www.itgrealty.com/commercial-properties/" },
   { name: "Scott Langston", url: "https://scottlangston.com/brevard-county-commercial-property-listings/" }, // industrial-focused
   { name: "Perrone Properties", url: "https://perroneproperties.com/property-search/" },
+  // Permian (TX) brokers — server-rendered listing pages, free to scrape.
+  { name: "The Real Estate Ranch", url: "https://www.therealestateranch.com/listed-properties/industrial-properties/" }, // largest Permian industrial inventory
+  { name: "VIP Realty (Midland)", url: "https://www.viprealestate.com/midland-commercial-real-estate.php" },
+  { name: "thisRealty", url: "https://thisrealty.com/available-for-sale/" },
+  { name: "Sondra Gomez Realty", url: "https://sgrwelcomehome.com/pages/commercial-real-estate-midland-odessa-tx/" },
+  { name: "Iron Wolf Industrial", url: "https://www.iwirealty.com/", js: true }, // Permian industrial — blocks plain fetch (403), try browser
 ];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
@@ -44,7 +50,9 @@ const LOOPNET_SEARCHES = [
   "https://www.loopnet.com/search/industrial-properties/rockledge-fl/for-sale/",
 ];
 
-const TX_CITIES = ["midland", "odessa"];
+// ERP's Texas market is the Permian Basin around Midland/Odessa — include the nearby towns so
+// server-rendered broker listings there (Gardendale, Big Spring, Andrews…) aren't dropped.
+const TX_CITIES = ["midland", "odessa", "gardendale", "big spring", "andrews", "stanton", "greenwood", "midkiff", "goldsmith", "notrees", "penwell", "west odessa"];
 // ERP's Florida market is Brevard County / Space Coast as a whole — keep the full municipality list
 // so county-wide LoopNet results (Merritt Island, Viera, West Melbourne, the beaches…) aren't dropped.
 const FL_CITIES = [

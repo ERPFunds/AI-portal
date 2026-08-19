@@ -45,7 +45,7 @@ const PIPE_CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
 // Everything the scans pull from, surfaced at the top so it's clear what's being watched.
 const SOURCE_GROUPS: { label: string; items: string[] }[] = [
   { label: 'Market platforms', items: ['LoopNet', 'Crexi', 'LinkedIn'] },
-  { label: 'Broker sites · Permian', items: ['NRG Realty', 'Kirk Strahan', 'Moriah'] },
+  { label: 'Broker sites · Permian', items: ['NRG Realty', 'Kirk Strahan', 'Moriah', 'The Real Estate Ranch', 'VIP Realty', 'thisRealty', 'Sondra Gomez', 'Iron Wolf'] },
   { label: 'Broker sites · Space Coast', items: ['Team LBR', 'Ullian', 'Jack Jeffcoat', 'Space Coast CRE', 'MaxLife', 'JM Real Estate', 'ITG Realty', 'Scott Langston', 'Perrone'] },
   { label: 'Broker sites · National', items: ['Marcus & Millichap'] },
 ]
@@ -184,9 +184,6 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700, color: '#111827' }}>📥 Inbound Listings — {locked === 'TX' ? 'Texas (Permian)' : locked === 'FL' ? 'Florida (Space Coast)' : 'Prospective Deals'}</div>
-          <div style={{ fontSize: 12, color: '#6b7280', marginTop: 2, maxWidth: 640, lineHeight: 1.5 }}>
-            Pulled from Meghan, Brennan &amp; William&apos;s inboxes — listings that brokers or others forwarded them, deduped and screened against the {locked === 'TX' ? 'Texas' : locked === 'FL' ? 'Florida' : ''} Buy Box. A triage gate — not the analytical score.
-          </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
           <button onClick={scan} disabled={scanning} title="Scan Meghan / Brennan / William's inboxes for newly forwarded listings"
