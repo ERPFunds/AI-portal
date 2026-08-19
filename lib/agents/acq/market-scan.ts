@@ -498,12 +498,15 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
       // browser only — the paid Apify render was dropped: it added up to 150s per site (which pushed
       // the whole scan past the time limit) for sites that mostly yield nothing anyway.
       let text = await fetchPageText(site.url);
+      if (text.length < 400 && !site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; } // blocked/JS server-render? try a browser
       if (text.length < 400 && site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; }
       if (text.length < 400) {
-        const why = site.js ? "JS/IDX site — render produced no listings (content likely in a cross-origin frame)" : "no server-rendered listings";
-        return { source: `Broker: ${site.name}`, ...zero, skipped: why };
+        return { source: `Broker: ${site.name}`, ...zero, skipped: `fetched only ${text.length} chars — site blocks our server or renders via JS` };
       }
       const found = await extractBrokerListings(site.name, text.slice(0, 80000));
+      if (found.length === 0) {
+        return { source: `Broker: ${site.name}`, ...zero, skipped: `fetched ${text.length} chars but extractor found 0 listings` };
+      }
       const norms: Norm[] = [];
       for (const f of found) {
         // Skip anything not actively for sale — these pages list Sold / Under Contract / Leased /

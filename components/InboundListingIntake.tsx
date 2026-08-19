@@ -102,7 +102,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         const per = (d.perSource ?? []) as { source: string; inserted?: number; updated?: number; error?: string; skipped?: string }[]
         const ins = per.reduce((s, x) => s + (x.inserted ?? 0), 0)
         const upd = per.reduce((s, x) => s + (x.updated ?? 0), 0)
-        const notes = per.map(x => `${x.source}: ${x.inserted ?? 0} new${x.updated ? `, ${x.updated} updated` : ''}${x.error ? ' (error)' : x.skipped ? ' (skipped)' : ''}`).join(' · ')
+        const notes = per.map(x => `${x.source}: ${x.inserted ?? 0} new${x.updated ? `, ${x.updated} updated` : ''}${x.error ? ` (error: ${x.error})` : x.skipped ? ` (${x.skipped})` : ''}`).join(' · ')
         setScanMsg(`Market scan complete — ${ins} new, ${upd} refreshed. ${notes}`); await load()
       } else setScanMsg(d.error || 'Market scan failed')
     } catch { setScanMsg('Market scan failed') } finally { setMarketScanning(false) }
