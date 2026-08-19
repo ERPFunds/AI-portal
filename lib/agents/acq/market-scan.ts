@@ -132,6 +132,10 @@ const PRICE_FLOOR = 700_000; // discovered listings priced below this are auto-d
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
   const notes: string[] = [];
   const typeHay = `${n.propertyType ?? ""} ${n.title ?? ""}`;
+  // Residential (apartments / condos / houses) is never in scope — auto-dismiss in both markets.
+  if (/\b(apartment|apartments|multi[-\s]?family|multifamily|condo|condos|condominium|duplex|triplex|fourplex|town\s?home|town\s?house|single[-\s]?family|\bsfr\b|residential|mobile\s*home|manufactured\s*home)\b/i.test(typeHay)) {
+    return { fit: "no-fit", score: 10, reason: `${n.propertyType || "Residential"} — residential, not industrial`, drop: true };
+  }
   // Vacant land / lots are auto-dismissed in TX only (FL keeps land / development parcels in-scope).
   // IOS / laydown yards are always kept — those are industrial use, not raw land.
   if (n.state === "TX" && /\b(land|lot|lots|acreage|vacant|unimproved|undeveloped|raw\s+land)\b/i.test(typeHay) && !/\b(ios|yard|laydown|building|warehouse|shop)\b/i.test(typeHay)) {
@@ -174,7 +178,7 @@ function dedupKey(state: string | null, address: string | null): string {
 
 export type MarketScanSummary = {
   ok: boolean;
-  perSource: { source: string; found: number; kept: number; inserted: number; duplicates: number; skippedExisting: number; error?: string; skipped?: string }[];
+  perSource: { source: string; found: number; kept: number; inserted: number; updated: number; duplicates: number; skippedExisting: number; error?: string; skipped?: string }[];
 };
 
 // Dedup vs stored URLs, screen, and insert discovered listings. Shared by the platform + broker paths.
@@ -183,40 +187,57 @@ async function upsertNorms(
   boxBy: Record<string, Box>,
   norms: Norm[],
   meta: { referredBy: string; referralKind: string; channel: string },
-): Promise<{ inserted: number; duplicates: number; skippedExisting: number }> {
+): Promise<{ inserted: number; updated: number; duplicates: number; skippedExisting: number }> {
+  // Look up existing rows by message_id AND by dedup_key (address) so a re-scan refreshes the same
+  // listing in place instead of inserting a duplicate or skipping it.
   const urls = norms.map((n) => n.url);
-  const seen = new Set<string>();
+  const keys = [...new Set(norms.map((n) => dedupKey(n.state, n.address)).filter(Boolean))];
+  const byMsg = new Map<string, { id: string; status: string }>();
+  const byKey = new Map<string, { id: string; status: string }>();
   for (let i = 0; i < urls.length; i += 200) {
-    const { data } = await admin.from("inbound_listings").select("message_id").in("message_id", urls.slice(i, i + 200));
-    (data ?? []).forEach((r: { message_id: string }) => seen.add(r.message_id));
+    const { data } = await admin.from("inbound_listings").select("id, message_id, dedup_key, status").in("message_id", urls.slice(i, i + 200));
+    (data ?? []).forEach((r: { id: string; message_id: string; dedup_key: string | null; status: string }) => { byMsg.set(r.message_id, { id: r.id, status: r.status }); if (r.dedup_key) byKey.set(r.dedup_key, { id: r.id, status: r.status }); });
   }
-  const fresh = norms.filter((n) => !seen.has(n.url));
-  const skippedExisting = norms.length - fresh.length;
-  let inserted = 0, duplicates = 0;
-  for (const n of fresh) {
+  for (let i = 0; i < keys.length; i += 200) {
+    const { data } = await admin.from("inbound_listings").select("id, dedup_key, status").in("dedup_key", keys.slice(i, i + 200));
+    (data ?? []).forEach((r: { id: string; dedup_key: string; status: string }) => { if (!byKey.has(r.dedup_key)) byKey.set(r.dedup_key, { id: r.id, status: r.status }); });
+  }
+
+  let inserted = 0, updated = 0;
+  for (const n of norms) {
     const market = n.state === "TX" ? "Permian Basin" : "Brevard / Space Coast";
     const sc = screen(n, boxBy[n.state!]);
     const key = dedupKey(n.state, n.address);
-    // Non-industrial (Shop/Office/etc.) → insert already dismissed so it never surfaces, but keep the
-    // dedup record so re-scans don't reconsider it.
-    let status = sc.drop ? "dismissed" : "new";
-    if (!sc.drop && n.address) {
-      const { data: dupe } = await admin.from("inbound_listings").select("id, status").eq("dedup_key", key).limit(1).maybeSingle();
-      // If we already have this address: mirror a dismissed original (stay hidden), else flag as duplicate.
-      if (dupe?.id) { if (dupe.status === "dismissed") status = "dismissed"; else { status = "duplicate"; duplicates++; } }
-    }
-    const { error } = await admin.from("inbound_listings").insert({
-      message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
-      origin: "discovered", listing_url: n.listingUrl ?? null,
+    const fields = {
+      listing_url: n.listingUrl ?? null,
       referred_by: meta.referredBy, referral_kind: meta.referralKind, channel: meta.channel,
       address: n.address, submarket: n.city || market, state: n.state,
       asking_price: n.price, sf: n.sf, broker: n.broker, broker_firm: n.broker,
-      fit: sc.fit, score: sc.score, reason: sc.reason, dedup_key: key, status, raw_subject: n.title,
-    });
-    if (!error) inserted++;
-    else console.error("[market-scan] insert failed:", error.message);
+      fit: sc.fit, score: sc.score, reason: sc.reason, raw_subject: n.title,
+      updated_at: new Date().toISOString(),
+    };
+    const existing = byMsg.get(n.url) ?? (key ? byKey.get(key) : undefined);
+    if (existing) {
+      // Refresh in place. Preserve a user/system disposition (dismissed / imported / moved); only a
+      // still-"new" row may flip to dismissed when the fresh screen now drops it (non-industrial etc.).
+      const status = existing.status === "new" ? (sc.drop ? "dismissed" : "new") : existing.status;
+      const { error } = await admin.from("inbound_listings").update({ ...fields, status }).eq("id", existing.id);
+      if (!error) updated++; else console.error("[market-scan] update failed:", error.message);
+      continue;
+    }
+    const status = sc.drop ? "dismissed" : "new";
+    const { data: ins, error } = await admin.from("inbound_listings").insert({
+      message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
+      origin: "discovered", dedup_key: key, status, ...fields,
+    }).select("id").single();
+    if (!error && ins) {
+      inserted++;
+      // Track within this batch so a second listing at the same address updates rather than duplicates.
+      byMsg.set(n.url, { id: ins.id, status });
+      if (key) byKey.set(key, { id: ins.id, status });
+    } else if (error) console.error("[market-scan] insert failed:", error.message);
   }
-  return { inserted, duplicates, skippedExisting };
+  return { inserted, updated, duplicates: 0, skippedExisting: 0 };
 }
 
 // Resolve an href to an absolute URL, but only if it points to a real *per-property* detail page:
@@ -341,7 +362,7 @@ async function extractBrokerListings(broker: string, text: string): Promise<Brok
 
 status: the availability label shown for the listing (e.g. Active, For Sale, Sold, Under Contract, Pending, Leased, Expired, Off-Market). Copy it verbatim; null if none shown. Still extract every listing regardless of status — do not skip; downstream code decides what to keep.
 
-propertyType: classify precisely. Use "Land" for vacant/undeveloped land, lots, or acreage with no building (even if zoned commercial/industrial). Use "IOS" for industrial outdoor storage or laydown yards. Use "Industrial"/"Warehouse"/"Flex"/"Shop" for buildings, and "Office"/"Retail"/"Multifamily" as applicable. A listing with acreage but no building SF is almost always Land.
+propertyType: ALWAYS classify (never leave null — infer from the listing name/details). Use "Land" for vacant/undeveloped land, lots, or acreage with no building (even if zoned commercial/industrial). Use "IOS" for industrial outdoor storage or laydown yards. Use "Industrial"/"Warehouse"/"Flex"/"Shop" for industrial buildings. Use "Multifamily" for apartment/condo complexes or anything with a unit count / "beds" (e.g. a named community like "Puerto Del Rio"), and "Office"/"Retail"/"Hospitality" as applicable. When unsure but it is clearly a residential community, use "Multifamily".
 
 CRITICAL — each listing's fields must come from that listing's own block. The text is grouped roughly one listing per line/section; do not attach one listing's price or SF to a different listing. If a listing shows no price, set price to null (do NOT reuse another listing's price).
 
@@ -394,12 +415,12 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
 
   const perSource: MarketScanSummary["perSource"] = [];
   for (const s of sources) {
-    if (!token) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: "no APIFY token configured" }); continue; }
-    if (!s.actor) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: `${s.source} actor not configured (set ${s.source.toUpperCase()}_APIFY_ACTOR + ${s.source.toUpperCase()}_APIFY_INPUT)` }); continue; }
+    if (!token) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0, skipped: "no APIFY token configured" }); continue; }
+    if (!s.actor) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0, skipped: `${s.source} actor not configured (set ${s.source.toUpperCase()}_APIFY_ACTOR + ${s.source.toUpperCase()}_APIFY_INPUT)` }); continue; }
 
     let items: Record<string, unknown>[];
     try { items = await runActor(s.actor, s.input, token); }
-    catch (e) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, error: String(e).slice(0, 200) }); continue; }
+    catch (e) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0, error: String(e).slice(0, 200) }); continue; }
 
     // Normalize + keep only in-market industrial with a resolvable state.
     const norms: Norm[] = [];
@@ -416,7 +437,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
     }
 
     const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Discovered on ${s.source}`, referralKind: s.source, channel: s.source });
-    perSource.push({ source: s.source, found: items.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
+    perSource.push({ source: s.source, found: items.length, kept: norms.length, inserted: r.inserted, updated: r.updated, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
   }
 
   // ── Broker websites — LLM extraction. Server-rendered pages use a plain fetch; JS/IDX sites
@@ -424,7 +445,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   //    Run them concurrently so the whole list finishes well inside the function time limit — the old
   //    sequential loop timed out before reaching the brokers at the end (e.g. The Real Estate Ranch). ──
   type PS = MarketScanSummary["perSource"][number];
-  const zero = { found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0 };
+  const zero = { found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0 };
   const processBroker = async (site: (typeof BROKER_SITES)[number]): Promise<PS> => {
     try {
       let text = await fetchPageText(site.url);
@@ -455,7 +476,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
         norms.push(n);
       }
       const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Listed on ${site.name}`, referralKind: "Broker", channel: "Broker site" });
-      return { source: `Broker: ${site.name}`, found: found.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting };
+      return { source: `Broker: ${site.name}`, found: found.length, kept: norms.length, inserted: r.inserted, updated: r.updated, duplicates: r.duplicates, skippedExisting: r.skippedExisting };
     } catch (e) {
       return { source: `Broker: ${site.name}`, ...zero, error: String(e).slice(0, 200) };
     }
