@@ -71,7 +71,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
-  const [marketScanning, setMarketScanning] = useState(false)
+  const [marketScanning, setMarketScanning] = useState<false | 'brokers' | 'platforms'>(false)
   const [scanMsg, setScanMsg] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -93,10 +93,10 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
     } catch { setScanMsg('Scan failed') } finally { setScanning(false) }
   }
 
-  const scanMarket = async () => {
-    setMarketScanning(true); setScanMsg(null)
+  const scanMarket = async (source: 'brokers' | 'platforms') => {
+    setMarketScanning(source); setScanMsg(null)
     try {
-      const r = await fetch('/api/inbound-listings/market-scan', { method: 'POST' })
+      const r = await fetch(`/api/inbound-listings/market-scan?source=${source}`, { method: 'POST' })
       const d = await r.json()
       if (r.ok) {
         const per = (d.perSource ?? []) as { source: string; inserted?: number; updated?: number; error?: string; skipped?: string }[]
@@ -195,9 +195,13 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#0D2D52', color: '#fff', cursor: scanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: scanning ? .6 : 1 }}>
             {scanning ? 'Scanning inboxes…' : '✉️ Scan inboxes'}
           </button>
-          <button onClick={scanMarket} disabled={marketScanning} title="Scrape LoopNet + Crexi for on-market for-sale industrial matching the Buy Box"
+          <button onClick={() => scanMarket('brokers')} disabled={!!marketScanning} title="Scrape broker websites for on-market for-sale industrial matching the Buy Box"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: marketScanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: marketScanning ? .6 : 1 }}>
-            {marketScanning ? 'Scanning market…' : '🔎 Scan market'}
+            {marketScanning === 'brokers' ? 'Scanning brokers…' : '🏢 Scan broker sites'}
+          </button>
+          <button onClick={() => scanMarket('platforms')} disabled={!!marketScanning} title="Scrape LoopNet / Crexi / LinkedIn for on-market for-sale industrial matching the Buy Box"
+            style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: marketScanning ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: marketScanning ? .6 : 1 }}>
+            {marketScanning === 'platforms' ? 'Scanning platforms…' : '🔎 Scan platforms'}
           </button>
           <button onClick={exportExcel} disabled={exporting || !base.length} title="Export the listings shown to an Excel workbook"
             style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: exporting || !base.length ? 'default' : 'pointer', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting || !base.length ? .5 : 1 }}>

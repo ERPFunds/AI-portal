@@ -218,9 +218,10 @@ async function upsertNorms(
     };
     const existing = byMsg.get(n.url) ?? (key ? byKey.get(key) : undefined);
     if (existing) {
-      // Refresh in place. Preserve a user/system disposition (dismissed / imported / moved); only a
-      // still-"new" row may flip to dismissed when the fresh screen now drops it (non-industrial etc.).
-      const status = existing.status === "new" ? (sc.drop ? "dismissed" : "new") : existing.status;
+      // Refresh in place. Preserve a user/system disposition (dismissed / imported / moved); a still-"new"
+      // row (or a legacy "duplicate") is re-evaluated and flips to dismissed when the fresh screen drops it.
+      const mutable = existing.status === "new" || existing.status === "duplicate";
+      const status = mutable ? (sc.drop ? "dismissed" : "new") : existing.status;
       const { error } = await admin.from("inbound_listings").update({ ...fields, status }).eq("id", existing.id);
       if (!error) updated++; else console.error("[market-scan] update failed:", error.message);
       continue;
@@ -390,7 +391,9 @@ listingUrl: use the URL in square brackets [https://…] whose path matches THIS
   return [];
 }
 
-export async function runMarketScan(): Promise<MarketScanSummary> {
+// `only` limits the scan to one group: "platforms" (LoopNet/Crexi/LinkedIn via Apify) or "brokers"
+// (broker websites). Omit to run both. Splitting lets the UI scan them independently so neither blocks.
+export async function runMarketScan(only?: "platforms" | "brokers"): Promise<MarketScanSummary> {
   const token = apToken();
   const admin = createAdminClient();
   const { data: boxes } = await admin.from("buy_box").select("market, sf_min, sf_max, price_per_sf_min, price_per_sf_max, deal_size_min, deal_size_max");
@@ -430,7 +433,7 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   ];
 
   const perSource: MarketScanSummary["perSource"] = [];
-  for (const s of sources) {
+  for (const s of only === "brokers" ? [] : sources) {
     if (!token) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0, skipped: "no APIFY token configured" }); continue; }
     if (!s.actor) { perSource.push({ source: s.source, found: 0, kept: 0, inserted: 0, updated: 0, duplicates: 0, skippedExisting: 0, skipped: `${s.source} actor not configured (set ${s.source.toUpperCase()}_APIFY_ACTOR + ${s.source.toUpperCase()}_APIFY_INPUT)` }); continue; }
 
@@ -510,11 +513,13 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   };
   // Plain-fetch sites run with high concurrency (I/O + API bound). Headless-browser (js) sites run at
   // low concurrency to avoid launching many Chromium instances at once.
-  const plainSites = BROKER_SITES.filter((s) => !s.js);
-  const jsSites = BROKER_SITES.filter((s) => s.js);
-  const plainResults = await pool(plainSites, 4, processBroker);
-  const jsResults = await pool(jsSites, 2, processBroker);
-  perSource.push(...plainResults, ...jsResults);
+  if (only !== "platforms") {
+    const plainSites = BROKER_SITES.filter((s) => !s.js);
+    const jsSites = BROKER_SITES.filter((s) => s.js);
+    const plainResults = await pool(plainSites, 4, processBroker);
+    const jsResults = await pool(jsSites, 2, processBroker);
+    perSource.push(...plainResults, ...jsResults);
+  }
 
   return { ok: true, perSource };
 }
