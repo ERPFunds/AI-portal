@@ -41,6 +41,15 @@ type Row = {
 const usd = (n: number) => n >= 1e6 ? `$${(n / 1e6).toFixed(n % 1e6 === 0 ? 0 : 2)}M` : n >= 1e3 ? `$${Math.round(n / 1e3)}K` : `$${Math.round(n)}`
 // Deal Pipeline categories (unified FL scheme) — Meghan picks one when moving a listing to the board.
 const PIPE_CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
+
+// Everything the scans pull from, surfaced at the top so it's clear what's being watched.
+const SOURCE_GROUPS: { label: string; items: string[] }[] = [
+  { label: 'Market platforms', items: ['LoopNet', 'Crexi', 'LinkedIn'] },
+  { label: 'Broker sites · Permian', items: ['NRG Realty', 'Kirk Strahan', 'Moriah'] },
+  { label: 'Broker sites · Space Coast', items: ['Team LBR', 'Ullian', 'Jack Jeffcoat', 'Space Coast CRE', 'MaxLife', 'JM Real Estate', 'ITG Realty', 'Scott Langston', 'Perrone'] },
+  { label: 'Broker sites · National', items: ['Marcus & Millichap'] },
+]
+const SRC_CHIP: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }
 const FIT_STYLE: Record<Fit, { color: string; bg: string; border: string; label: string }> = {
   'fit':        { color: '#16a34a', bg: '#f0fdf4', border: '#86efac', label: 'Fit' },
   'borderline': { color: '#b45309', bg: '#fffbeb', border: '#fde68a', label: 'Borderline' },
@@ -119,9 +128,15 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
       const psf = l.asking_price && l.sf ? Math.round((l.asking_price / l.sf) * 100) / 100 : null
       const notes = [l.reason, l.listing_url].filter(Boolean).join(' — ')
       const isFL = l.state === 'FL'
-      const data = isFL
+      const data: Record<string, unknown> = isFL
         ? { section: category, name: l.address || l.submarket || 'Listing', status: '', source: l.referred_by || l.channel || '', propertyType: 'Industrial', location: l.submarket || '', yearBuilt: null, units: null, occupancy: null, capRate: l.cap_pct ?? null, sqft: l.sf ?? null, acres: null, price: l.asking_price ?? null, psf, notes }
         : { kind: 'pipeline', status: category, location: l.submarket || '', owner: l.broker_firm || l.broker || '', address: l.address || '', tenant: '', source: l.referred_by || l.channel || '', price: l.asking_price ?? null, pricePsf: psf, yield: null, acreage: null, sqft: l.sf ?? null, yearBuilt: null, nextSteps: '', notes }
+      // Auto-generate an AI recommendation for the new deal (best-effort — never block the move on it).
+      try {
+        const rr = await fetch('/api/deal-pipeline/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deal: data, market: isFL ? 'FL' : 'TX' }) })
+        const rd = await rr.json().catch(() => ({}))
+        if (rr.ok && rd.verdict) data.aiRec = { verdict: rd.verdict, rationale: rd.rationale ?? '', at: new Date().toISOString() }
+      } catch { /* recommendation is optional */ }
       const r = await fetch('/api/deal-pipeline/mirror', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ state: isFL ? 'FL' : 'TX', data }) })
       if (r.ok) {
         await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: l.id, status: 'dismissed' }) })
@@ -186,6 +201,20 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
             {exporting ? 'Exporting…' : '⬇ Export Excel'}
           </button>
         </div>
+      </div>
+
+      {/* Where listings come from — mailboxes are the source of record; the rest are proactively scanned. */}
+      <div style={{ border: '1px solid #eef2f7', background: '#fbfcfe', borderRadius: 10, padding: '10px 12px', marginBottom: 12, display: 'flex', flexDirection: 'column', gap: 7, fontSize: 11 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontWeight: 700, color: '#0D2D52', minWidth: 150 }}>Source of record</span>
+          <span style={SRC_CHIP}>Meghan / Brennan / William inboxes · Microsoft Graph</span>
+        </div>
+        {SOURCE_GROUPS.map(g => (
+          <div key={g.label} style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+            <span style={{ fontWeight: 600, color: '#64748b', minWidth: 150 }}>{g.label}</span>
+            {g.items.map(it => <span key={it} style={SRC_CHIP}>{it}</span>)}
+          </div>
+        ))}
       </div>
 
       {scanMsg && (

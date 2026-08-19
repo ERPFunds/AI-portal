@@ -3,8 +3,12 @@
 //   TX — "ERP TX Pipeline & Market Analysis (v.10.28.25).xlsx"  (Permian Basin, as of 2025-10-28)
 // Mirrors the source spreadsheets. Regenerate from the workbooks when they change.
 
+// A cached AI screen of a deal vs the buy box, attached to a pipeline row (data.aiRec).
+export type AiRec = { verdict: 'Pursue' | 'Watch' | 'Pass'; rationale: string; at: string }
+
 export type TxRow = {
   kind: 'pipeline' | 'market'
+  aiRec?: AiRec | null
   status: string
   location: string
   owner: string
@@ -22,6 +26,7 @@ export type TxRow = {
 }
 
 export type FlRow = {
+  aiRec?: AiRec | null
   section: string
   name: string
   status: string

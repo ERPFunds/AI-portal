@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState, useEffect } from 'react'
-import { TX_AS_OF, FL_AS_OF, FL_STRATEGY_NOTES, type TxRow, type FlRow } from '../lib/data/dealPipelineData'
+import { TX_AS_OF, FL_AS_OF, FL_STRATEGY_NOTES, type TxRow, type FlRow, type AiRec } from '../lib/data/dealPipelineData'
 import { downloadXlsx, shapeRows } from '../lib/exportXlsx'
 
 // Deal Pipeline — the two ERP workbooks (TX Permian, FL Space Coast), now editable and portal-managed.
@@ -71,44 +71,103 @@ const catSelect = (val: string | null | undefined, onChange: (v: string) => void
   </select>
 )
 
+// ── AI recommendation UI ──
+const REC_STYLE: Record<string, { bg: string; color: string; border: string }> = {
+  Pursue: { bg: '#f0fdf4', color: '#16a34a', border: '#86efac' },
+  Watch: { bg: '#fffbeb', color: '#b45309', border: '#fde68a' },
+  Pass: { bg: '#f1f5f9', color: '#64748b', border: '#cbd5e1' },
+}
+function RecBadge({ rec, loading }: { rec?: AiRec | null; loading?: boolean }) {
+  if (loading) return <span style={{ fontSize: 11, color: '#94a3b8', fontStyle: 'italic' }}>Analyzing…</span>
+  if (!rec) return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
+  const s = REC_STYLE[rec.verdict] ?? REC_STYLE.Pass
+  return <span title={rec.rationale} style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: s.bg, color: s.color, border: `1px solid ${s.border}`, whiteSpace: 'nowrap' }}>✨ {rec.verdict}</span>
+}
+// One label/value pair inside an expanded detail card.
+function Detail({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div style={{ fontSize: 9.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.5px', marginBottom: 2 }}>{label}</div>
+      <div style={{ fontSize: 12.5, color: '#1f2937', whiteSpace: 'pre-line' }}>{children}</div>
+    </div>
+  )
+}
+// The AI-recommendation panel inside an expanded card — shows the verdict + rationale and a (re)generate button.
+function RecPanel({ rec, loading, onGen }: { rec?: AiRec | null; loading?: boolean; onGen: () => void }) {
+  const s = rec ? (REC_STYLE[rec.verdict] ?? REC_STYLE.Pass) : null
+  return (
+    <div style={{ gridColumn: '1 / -1', marginTop: 4, padding: '10px 12px', borderRadius: 8, background: s ? s.bg : '#f8fafc', border: `1px solid ${s ? s.border : '#e2e8f0'}` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: rec ? 6 : 0 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '.5px' }}>✨ AI Recommendation</span>
+        {rec && <span style={{ fontSize: 11.5, fontWeight: 800, color: s!.color }}>{rec.verdict}</span>}
+        <button onClick={(e) => { e.stopPropagation(); onGen() }} disabled={loading}
+          style={{ marginLeft: 'auto', fontSize: 10.5, fontWeight: 600, padding: '3px 10px', borderRadius: 6, border: '1px solid #cbd5e1', background: '#fff', color: '#475569', cursor: loading ? 'default' : 'pointer', opacity: loading ? .6 : 1 }}>
+          {loading ? 'Analyzing…' : rec ? '↻ Refresh' : '✨ Generate'}
+        </button>
+      </div>
+      {rec && <div style={{ fontSize: 12, color: '#374151', lineHeight: 1.5 }}>{rec.rationale}</div>}
+      {!rec && !loading && <span style={{ fontSize: 11.5, color: '#94a3b8' }}>No recommendation yet — generate one to screen this deal against the buy box.</span>}
+    </div>
+  )
+}
+
 // =============================== TEXAS ===============================
-function TexasPipeline({ rows, query, showMarket, onEdit, onMove }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void }) {
+function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, reccing }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void; onRecommend: (r: TxRowE) => void; reccing: string | null }) {
+  const [open, setOpen] = useState<string | null>(null)
   const q = query.trim().toLowerCase()
   const match = (r: TxRow) => !q || [r.location, r.owner, r.address, r.tenant, r.source, r.notes, r.nextSteps].join(' ').toLowerCase().includes(q)
   const pipeline = useMemo(() => rows.filter((r) => r.kind === 'pipeline' && match(r)), [rows, q])
   const market = useMemo(() => rows.filter((r) => r.kind === 'market' && match(r)), [rows, q])
-  const cols = ['Location', 'Status', 'Owner', 'Address', 'Tenant', 'Source', 'Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.', 'Year Built', 'Next Steps', 'Notes / Comments', '']
-  const rightCols = new Set(['Price', '$ PSF', '% Yield', 'Acreage', 'Sq. Ft.'])
+  // Compact row — the rest of the fields live in the expand-on-click card below each row.
+  const cols = ['', 'Location', 'Address', 'Status', 'Price', 'AI Rec', '']
+  const rightCols = new Set(['Price'])
   const marketByLoc = useMemo(() => {
     const m = new Map<string, TxRowE[]>()
     for (const r of market) { const k = r.location || 'Other'; if (!m.has(k)) m.set(k, []); m.get(k)!.push(r) }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]))
   }, [market])
 
-  const dataRow = (r: TxRowE, i: number) => (
-    <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
-      <td style={{ ...TD, ...stickyTD(i % 2 ? '#fbfcfe' : '#fff'), fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
-      <td style={TD}>{catSelect(r.status, (v) => onMove(r, v))}</td>
-      <td style={TD}>{txt(r.owner)}</td>
-      <td style={{ ...TD, minWidth: 180 }}>{txt(r.address)}</td>
-      <td style={TD}>{txt(r.tenant)}</td>
-      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
-      <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
-      <td style={numTD}>{psf(r.pricePsf)}</td>
-      <td style={numTD}>{pct(r.yield)}</td>
-      <td style={numTD}>{num(r.acreage)}</td>
-      <td style={numTD}>{num(r.sqft)}</td>
-      <td style={{ ...numTD, textAlign: 'left' }}>{txt(r.yearBuilt)}</td>
-      <NoteCell text={r.nextSteps} />
-      <NoteCell text={r.notes} />
-      <td style={{ ...TD, textAlign: 'right' }}>{editBtn(() => onEdit(r))}</td>
-    </tr>
-  )
+  const dataRow = (r: TxRowE, i: number) => {
+    const isOpen = open === r._id
+    const bg = isOpen ? '#f0f9ff' : i % 2 ? '#fbfcfe' : '#fff'
+    return (
+      <React.Fragment key={r._id}>
+        <tr style={{ background: bg, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : r._id)}>
+          <td style={{ ...TD, ...stickyTD(bg), width: 24, textAlign: 'center', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</td>
+          <td style={{ ...TD, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
+          <td style={{ ...TD, minWidth: 200 }}>{txt(r.address)}</td>
+          <td style={TD} onClick={(e) => e.stopPropagation()}>{catSelect(r.status, (v) => onMove(r, v))}</td>
+          <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
+          <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
+          <td style={{ ...TD, textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>{editBtn(() => onEdit(r))}</td>
+        </tr>
+        {isOpen && (
+          <tr style={{ background: '#f0f9ff' }}>
+            <td colSpan={cols.length} style={{ padding: '14px 20px', borderBottom: '2px solid #bae6fd' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+                <Detail label="Owner">{txt(r.owner)}</Detail>
+                <Detail label="Tenant">{txt(r.tenant)}</Detail>
+                <Detail label="Source">{txt(r.source)}</Detail>
+                <Detail label="$ PSF">{psf(r.pricePsf)}</Detail>
+                <Detail label="% Yield">{pct(r.yield)}</Detail>
+                <Detail label="Acreage">{num(r.acreage)}</Detail>
+                <Detail label="Sq. Ft.">{num(r.sqft)}</Detail>
+                <Detail label="Year Built">{txt(r.yearBuilt)}</Detail>
+                <Detail label="Next Steps">{txt(r.nextSteps)}</Detail>
+                <Detail label="Notes / Comments">{txt(r.notes)}</Detail>
+                <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
+              </div>
+            </td>
+          </tr>
+        )}
+      </React.Fragment>
+    )
+  }
 
   return (
     <div>
       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1120 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
             {CATEGORIES.map((st) => {
@@ -161,16 +220,18 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove }: { rows: TxRo
 }
 
 // =============================== FLORIDA ===============================
-function FloridaPipeline({ rows, query, onEdit, onMove }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void }) {
+function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void; onRecommend: (r: FlRowE) => void; reccing: string | null }) {
+  const [open, setOpen] = useState<string | null>(null)
   const q = query.trim().toLowerCase()
   const match = (r: FlRow) => !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
   const list = useMemo(() => rows.filter(match), [rows, q])
-  const cols = ['Name', 'Status', 'Source', 'Property Type', 'Location', 'Year Built', 'Units', 'Occup.', 'Cap Rate', 'SQFT', 'Acres', 'Purchase Price', 'PSF / P-Acre', 'Notes / Status', '']
-  const rightCols = new Set(['Year Built', 'Units', 'Occup.', 'Cap Rate', 'SQFT', 'Acres', 'Purchase Price', 'PSF / P-Acre'])
+  // Compact row — the rest of the fields live in the expand-on-click card below each row.
+  const cols = ['', 'Name', 'Property Type', 'Purchase Price', 'AI Rec', '']
+  const rightCols = new Set(['Purchase Price'])
   return (
     <div>
       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
-        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 1160 }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 760 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
             {CATEGORIES.map((sec) => {
@@ -179,25 +240,42 @@ function FloridaPipeline({ rows, query, onEdit, onMove }: { rows: FlRowE[]; quer
               return (
                 <React.Fragment key={sec}>
                   <tr><td colSpan={cols.length} style={{ padding: 0 }}><StatusBand label={sec} color={CAT_COLOR[sec] || '#6b7280'} count={g.length} /></td></tr>
-                  {g.map((r, i) => (
-                    <tr key={r._id} style={{ background: i % 2 ? '#fbfcfe' : '#fff' }}>
-                      <td style={{ ...TD, ...stickyTD(i % 2 ? '#fbfcfe' : '#fff'), fontWeight: 600, color: NAVY, minWidth: 170, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
-                      <td style={TD}>{txt(r.status)}</td>
-                      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.source)}</td>
-                      <td style={TD}>{txt(r.propertyType)}</td>
-                      <td style={{ ...TD, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
-                      <td style={{ ...numTD, textAlign: 'left' }}>{txt(r.yearBuilt)}</td>
-                      <td style={numTD}>{num(r.units)}</td>
-                      <td style={numTD}>{pct(r.occupancy)}</td>
-                      <td style={numTD}>{pct(r.capRate)}</td>
-                      <td style={numTD}>{num(r.sqft)}</td>
-                      <td style={numTD}>{num(r.acres)}</td>
-                      <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
-                      <td style={numTD}>{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</td>
-                      <NoteCell text={r.notes} />
-                      <td style={{ ...TD, textAlign: 'right' }}>{editBtn(() => onEdit(r))}</td>
-                    </tr>
-                  ))}
+                  {g.map((r, i) => {
+                    const isOpen = open === r._id
+                    const bg = isOpen ? '#f0f9ff' : i % 2 ? '#fbfcfe' : '#fff'
+                    return (
+                      <React.Fragment key={r._id}>
+                        <tr style={{ background: bg, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : r._id)}>
+                          <td style={{ ...TD, ...stickyTD(bg), width: 24, textAlign: 'center', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</td>
+                          <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 190, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
+                          <td style={TD}>{txt(r.propertyType)}</td>
+                          <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
+                          <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
+                          <td style={{ ...TD, textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>{editBtn(() => onEdit(r))}</td>
+                        </tr>
+                        {isOpen && (
+                          <tr style={{ background: '#f0f9ff' }}>
+                            <td colSpan={cols.length} style={{ padding: '14px 20px', borderBottom: '2px solid #bae6fd' }}>
+                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+                                <Detail label="Status">{txt(r.status)}</Detail>
+                                <Detail label="Source">{txt(r.source)}</Detail>
+                                <Detail label="Location">{txt(r.location)}</Detail>
+                                <Detail label="Year Built">{txt(r.yearBuilt)}</Detail>
+                                <Detail label="Units">{num(r.units)}</Detail>
+                                <Detail label="Occupancy">{pct(r.occupancy)}</Detail>
+                                <Detail label="Cap Rate">{pct(r.capRate)}</Detail>
+                                <Detail label="SQFT">{num(r.sqft)}</Detail>
+                                <Detail label="Acres">{num(r.acres)}</Detail>
+                                <Detail label="PSF / P-Acre">{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</Detail>
+                                <Detail label="Notes / Status">{txt(r.notes)}</Detail>
+                                <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    )
+                  })}
                 </React.Fragment>
               )
             })}
@@ -371,6 +449,23 @@ export default function DealPipelineView() {
   const openEdit = (r: TxRowE | FlRowE) => setDraft({ ...r, _state: stateTab })
   const openAdd = () => setDraft(stateTab === 'TX' ? { _state: 'TX', kind: 'pipeline', status: 'Under Review' } : { _state: 'FL', section: 'Under Review' })
 
+  // Generate (or refresh) an AI recommendation for a single row and cache it on the row's data.
+  const [reccing, setReccing] = useState<string | null>(null)
+  const recommend = async (r: TxRowE | FlRowE) => {
+    if (reccing) return
+    const { _id, aiRec: _drop, ...data } = r as Record<string, unknown> & { _id: string }
+    setReccing(_id)
+    try {
+      const res = await fetch('/api/deal-pipeline/recommend', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ deal: data, market: stateTab }) })
+      const d = await res.json().catch(() => ({}))
+      if (res.ok && d.verdict) {
+        const newData = { ...data, aiRec: { verdict: d.verdict, rationale: d.rationale ?? '', at: new Date().toISOString() } }
+        await fetch('/api/deal-pipeline/mirror', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: _id, data: newData }) })
+        await load(stateTab)
+      }
+    } finally { setReccing(null) }
+  }
+
   const txPipeline = txRows.filter((r) => r.kind === 'pipeline')
   const txMarket = txRows.filter((r) => r.kind === 'market')
   const txActive = txPipeline.filter((r) => ['Under Contract', 'Contract Negotiations', 'Under Review'].includes(r.status)).length
@@ -433,8 +528,8 @@ export default function DealPipelineView() {
       </div>
 
       {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} />
-          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} />}
+        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} onRecommend={recommend} reccing={reccing} />
+          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} onRecommend={recommend} reccing={reccing} />}
 
       {draft && <RowEditor draft={draft} onChange={(k, v) => setDraft((d) => (d ? { ...d, [k]: v } : d))} onClose={() => setDraft(null)} onSave={save} onDelete={del} saving={saving} />}
     </div>
