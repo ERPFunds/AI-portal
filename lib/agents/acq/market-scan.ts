@@ -310,12 +310,12 @@ async function fetchRenderedTextLocal(url: string): Promise<string> {
   }
 }
 
-type BrokerListing = { address: string | null; city: string | null; state: string | null; price: number | null; sf: number | null; propertyType: string | null; listingUrl: string | null; title: string | null };
+type BrokerListing = { address: string | null; city: string | null; state: string | null; price: number | null; sf: number | null; propertyType: string | null; listingUrl: string | null; title: string | null; status: string | null };
 const BROKER_SCHEMA = {
   type: "object", additionalProperties: false, required: ["listings"],
   properties: { listings: { type: "array", items: {
     type: "object", additionalProperties: false,
-    required: ["address", "city", "state", "price", "sf", "propertyType", "listingUrl", "title"],
+    required: ["address", "city", "state", "price", "sf", "propertyType", "listingUrl", "title", "status"],
     properties: {
       address: { anyOf: [{ type: "string" }, { type: "null" }] },
       city: { anyOf: [{ type: "string" }, { type: "null" }] },
@@ -325,6 +325,7 @@ const BROKER_SCHEMA = {
       propertyType: { anyOf: [{ type: "string" }, { type: "null" }] },
       listingUrl: { anyOf: [{ type: "string" }, { type: "null" }] },
       title: { anyOf: [{ type: "string" }, { type: "null" }] },
+      status: { anyOf: [{ type: "string" }, { type: "null" }], description: "availability label shown, e.g. Active, Sold, Under Contract, Leased, Expired" },
     },
   } } },
 } as const;
@@ -334,7 +335,9 @@ async function extractBrokerListings(broker: string, text: string): Promise<Brok
     const msg = await anthropic.messages.create({
       model: "claude-opus-4-8", max_tokens: 8000,
       output_config: { format: { type: "json_schema", schema: BROKER_SCHEMA } },
-      system: [{ type: "text" as const, text: `Extract every for-sale/for-lease property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, and a short title. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
+      system: [{ type: "text" as const, text: `Extract every for-sale property listing shown on this ${broker} listings page: street address, city, US state (TX/FL/Other), asking price USD, building SF, property type, the listing's detail URL, a short title, and its status. Only what's on the page; use null when a field is absent — never guess or carry a value over from a neighboring listing.
+
+status: the availability label shown for the listing (e.g. Active, For Sale, Sold, Under Contract, Pending, Leased, Expired, Off-Market). Copy it verbatim; null if none shown. Still extract every listing regardless of status — do not skip; downstream code decides what to keep.
 
 propertyType: classify precisely. Use "Land" for vacant/undeveloped land, lots, or acreage with no building (even if zoned commercial/industrial). Use "IOS" for industrial outdoor storage or laydown yards. Use "Industrial"/"Warehouse"/"Flex"/"Shop" for buildings, and "Office"/"Retail"/"Multifamily" as applicable. A listing with acreage but no building SF is almost always Land.
 
@@ -428,9 +431,12 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
         perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: why });
         continue;
       }
-      const found = await extractBrokerListings(site.name, text.slice(0, 40000));
+      const found = await extractBrokerListings(site.name, text.slice(0, 80000));
       const norms: Norm[] = [];
       for (const f of found) {
+        // Skip anything not actively for sale — these pages list Sold / Under Contract / Leased /
+        // Expired alongside active listings, and we only want live opportunities.
+        if (f.status && /\b(sold|under\s*contract|pending|leased|expired|off[-\s]?market|closed|withdrawn)\b/i.test(f.status)) continue;
         const state = (f.state === "TX" || f.state === "FL") ? f.state : stateFrom(f.address, f.city, f.state);
         if (!state) continue;
         // A real per-property detail URL if the extractor found one; else null (don't link to the
