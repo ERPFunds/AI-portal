@@ -74,6 +74,11 @@ function StatusBand({ label, color, count, sub }: { label: string; color: string
 const editBtn = (onClick: () => void) => (
   <button onClick={(e) => { e.stopPropagation(); onClick() }} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', color: '#374151', whiteSpace: 'nowrap' }}>✎ Edit</button>
 )
+// Quick archive / restore for a row — toggles its group to/from Archive without opening the editor.
+const archiveBtn = (isArchived: boolean, onClick: () => void) => (
+  <button onClick={(e) => { e.stopPropagation(); onClick() }} title={isArchived ? 'Restore to Under Review' : 'Archive this deal'}
+    style={{ background: 'none', border: `1px solid ${isArchived ? '#cbd5e1' : '#e2e8f0'}`, borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', color: '#64748b', whiteSpace: 'nowrap', marginRight: 6 }}>{isArchived ? '↩ Restore' : '🗄 Archive'}</button>
+)
 
 // Inline category dropdown — changing it moves the row between groups (decline/move), no save needed.
 const catSelect = (val: string | null | undefined, onChange: (v: string) => void) => (
@@ -152,7 +157,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
           <td style={TD} onClick={(e) => e.stopPropagation()}>{catSelect(r.status, (v) => onMove(r, v))}</td>
           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
           <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
-          <td style={{ ...TD, textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>{editBtn(() => onEdit(r))}</td>
+          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{archiveBtn(r.status === 'Archive', () => onMove(r, r.status === 'Archive' ? 'Under Review' : 'Archive'))}{editBtn(() => onEdit(r))}</td>
         </tr>
         {isOpen && (
           <tr style={{ background: '#f0f9ff' }}>
@@ -265,7 +270,7 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
                           <td style={TD}>{txt(r.propertyType)}</td>
                           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
                           <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
-                          <td style={{ ...TD, textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>{editBtn(() => onEdit(r))}</td>
+                          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{archiveBtn(r.section === 'Archive', () => onMove(r, r.section === 'Archive' ? 'Under Review' : 'Archive'))}{editBtn(() => onEdit(r))}</td>
                         </tr>
                         {isOpen && (
                           <tr style={{ background: '#f0f9ff' }}>
