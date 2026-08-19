@@ -14,26 +14,27 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 // Broker websites scraped directly (server-rendered pages → LLM extraction). JS-only sites are
 // skipped-with-note until a browser scraper is wired. Extend this list to add brokers.
-// js:true → render with a headless browser (Apify) before extraction; otherwise a plain fetch is enough.
-const BROKER_SITES: { name: string; url: string; js?: boolean }[] = [
-  { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/" },
-  { name: "Team LBR", url: "https://teamlbr.com/search-properties/" },
+// js:true → render with a headless browser before extraction. proxy:true → the site blocks Vercel's
+// datacenter IP (bot protection), so fetch through Apify residential proxies (needs APIFY token).
+const BROKER_SITES: { name: string; url: string; js?: boolean; proxy?: boolean }[] = [
+  { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/", proxy: true },
+  { name: "Team LBR", url: "https://teamlbr.com/search-properties/", proxy: true },
   { name: "Kirk Strahan Realty", url: "https://www.strahancommercialproperties.com/for-sale" }, // Permian — server-rendered
   { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/", js: true }, // Space Coast — IDX/JS
   { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/", js: true }, // Permian — IDX/JS
   { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC", js: true }, // JS SPA
-  // Space Coast (FL) brokers — server-rendered listing pages, free to scrape.
+  // Space Coast (FL) brokers.
   { name: "Jack Jeffcoat", url: "https://www.jackjeffcoat.com/commercial.listings" }, // largest Brevard inventory
   { name: "Space Coast CRE", url: "https://listings.spacecoastcre.com/i/featured-listings" },
   { name: "MaxLife Commercial", url: "https://maxlifedevelopment.com/commercial-listings?for=commercial-sale&q=Brevard+County" },
-  { name: "JM Real Estate", url: "https://jmrealestate.com/listings/" },
+  { name: "JM Real Estate", url: "https://jmrealestate.com/listings/", proxy: true },
   { name: "ITG Realty", url: "https://www.itgrealty.com/commercial-properties/" },
   { name: "Scott Langston", url: "https://scottlangston.com/brevard-county-commercial-property-listings/" }, // industrial-focused
-  { name: "Perrone Properties", url: "https://perroneproperties.com/property-search/" },
-  // Permian (TX) brokers — server-rendered listing pages, free to scrape.
+  { name: "Perrone Properties", url: "https://perroneproperties.com/property-search/", proxy: true },
+  // Permian (TX) brokers.
   { name: "The Real Estate Ranch", url: "https://www.therealestateranch.com/listed-properties/industrial-properties/" }, // largest Permian industrial inventory
-  { name: "VIP Realty (Midland)", url: "https://www.viprealestate.com/midland-commercial-real-estate.php" },
-  { name: "thisRealty", url: "https://thisrealty.com/available-for-sale/" },
+  { name: "VIP Realty (Midland)", url: "https://www.viprealestate.com/midland-commercial-real-estate.php", proxy: true },
+  { name: "thisRealty", url: "https://thisrealty.com/available-for-sale/", proxy: true },
   { name: "Sondra Gomez Realty", url: "https://sgrwelcomehome.com/pages/commercial-real-estate-midland-odessa-tx/" },
   { name: "Iron Wolf Industrial", url: "https://www.iwirealty.com/", js: true }, // Permian industrial — blocks plain fetch (403), try browser
 ];
@@ -300,22 +301,47 @@ async function verifyDetail(url: string): Promise<{ category: string; forSale: b
 // keep block boundaries as newlines (so each listing's fields stay grouped, not merged into one soup),
 // and inline each link's destination as "text [https://…]" so the extractor can attach a real
 // per-property detail URL to each listing. JS-only pages still return little text.
+// Reduce raw HTML to listing-friendly text: inline detail-page links as "text [url]" and keep block
+// boundaries as newlines so each listing stays visually grouped for the extractor.
+function htmlToText(html: string, baseUrl: string): string {
+  let h = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
+  h = h.replace(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
+    const text = String(inner).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const abs = detailHref(String(href), baseUrl);
+    return abs ? ` ${text} [${abs}] ` : ` ${text} `;
+  });
+  h = h.replace(/<\/(div|li|tr|p|h[1-6]|article|section|td)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n");
+  return h
+    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ")
+    .replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").replace(/[ \t]*\n[ \t]*/g, "\n").trim();
+}
+
 async function fetchPageText(url: string): Promise<string> {
   const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html,application/xhtml+xml" }, cache: "no-store", signal: AbortSignal.timeout(20000) });
   if (!r.ok) return "";
-  let html = await r.text();
-  html = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ");
-  // Inline anchor destinations that lead to a distinct detail page.
-  html = html.replace(/<a\b[^>]*\bhref\s*=\s*["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi, (_m, href, inner) => {
-    const text = String(inner).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-    const abs = detailHref(String(href), url);
-    return abs ? ` ${text} [${abs}] ` : ` ${text} `;
-  });
-  // Turn block-level boundaries into newlines so listings stay visually separated.
-  html = html.replace(/<\/(div|li|tr|p|h[1-6]|article|section|td)>/gi, "\n").replace(/<br\s*\/?>/gi, "\n");
-  return html
-    .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ")
-    .replace(/[ \t]+/g, " ").replace(/\n{2,}/g, "\n").replace(/[ \t]*\n[ \t]*/g, "\n").trim();
+  return htmlToText(await r.text(), url);
+}
+
+// Fetch a bot-protected page through Apify residential proxies (real browser) — for sites that block
+// Vercel's datacenter IP. Returns listing-friendly text, or "" if unavailable/misconfigured.
+async function fetchViaApifyProxy(url: string, token: string): Promise<string> {
+  const actor = process.env.BROKER_PROXY_APIFY_ACTOR || "apify~website-content-crawler";
+  const input = process.env.BROKER_PROXY_APIFY_INPUT
+    ? { ...JSON.parse(process.env.BROKER_PROXY_APIFY_INPUT), startUrls: [{ url }] }
+    : {
+        startUrls: [{ url }],
+        crawlerType: "playwright:firefox",
+        maxCrawlPages: 1, maxCrawlDepth: 0,
+        saveHtml: true, saveMarkdown: false,
+        proxyConfiguration: { useApifyProxy: true, apifyProxyGroups: ["RESIDENTIAL"] },
+      };
+  try {
+    const items = await runActor(actor, input, token);
+    const it = items[0] as Record<string, unknown> | undefined;
+    const html = strOf(it?.html);
+    if (html) return htmlToText(html, url);
+    return (strOf(it?.text) || strOf(it?.markdown) || "").replace(/\s+/g, " ").trim();
+  } catch (e) { console.error("[market-scan] proxy fetch failed:", String(e).slice(0, 150)); return ""; }
 }
 
 // Render a JS/IDX broker page in a headless browser (Apify) and return its text.
@@ -499,10 +525,12 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
       // browser only — the paid Apify render was dropped: it added up to 150s per site (which pushed
       // the whole scan past the time limit) for sites that mostly yield nothing anyway.
       let text = await fetchPageText(site.url);
-      if (text.length < 400 && !site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; } // blocked/JS server-render? try a browser
-      if (text.length < 400 && site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; }
+      // Bot-protected sites (proxy:true) block Vercel's IP — go straight to residential proxy when a token exists.
+      if (text.length < 400 && site.proxy && token) { const t = await fetchViaApifyProxy(site.url, token); if (t.length >= 400) text = t; }
+      if (text.length < 400) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; } // otherwise try the free headless browser
       if (text.length < 400) {
-        return { source: `Broker: ${site.name}`, ...zero, skipped: `fetched only ${text.length} chars — site blocks our server or renders via JS` };
+        const why = site.proxy && !token ? "site blocks our server — needs APIFY residential proxy (token not set)" : `fetched only ${text.length} chars — site blocks our server or renders via JS`;
+        return { source: `Broker: ${site.name}`, ...zero, skipped: why };
       }
       const found = await extractBrokerListings(site.name, text.slice(0, 80000));
       if (found.length === 0) {
