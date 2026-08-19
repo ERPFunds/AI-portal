@@ -70,6 +70,7 @@ type Src = "LoopNet" | "Crexi" | "LinkedIn";
 type Norm = {
   url: string;            // dedup / message_id key (may be a synthetic broker-page anchor)
   listingUrl?: string | null; // real per-property page to link to; null when we only have a general page
+  dropReason?: string | null; // set by detail-page verification → force-dismiss on upsert
   address: string | null; city: string | null; state: "TX" | "FL" | null;
   price: number | null; sf: number | null; propertyType: string | null; broker: string | null; title: string | null;
   datePosted: string | null;
@@ -206,7 +207,9 @@ async function upsertNorms(
   let inserted = 0, updated = 0;
   for (const n of norms) {
     const market = n.state === "TX" ? "Permian Basin" : "Brevard / Space Coast";
-    const sc = screen(n, boxBy[n.state!]);
+    // A detail-page verification failure (non-industrial / not-for-sale) force-dismisses the listing,
+    // overriding the buy-box screen — this also dismisses the row in place on a re-scan.
+    const sc = n.dropReason ? { fit: "no-fit", score: 8, reason: n.dropReason, drop: true } : screen(n, boxBy[n.state!]);
     const key = dedupKey(n.state, n.address);
     const fields = {
       listing_url: n.listingUrl ?? null,
@@ -258,16 +261,38 @@ function detailHref(href: string, base: string): string | null {
   } catch { return null; }
 }
 
-// Verify an IDX-Broker detail page is still a live/active listing. False on 404/410 or when the page
-// reads as unavailable / unknown / sold; true otherwise (including on network error — don't drop on doubt).
-async function idxDetailActive(url: string): Promise<boolean> {
+// Verify a listing's detail page — the index/card often hides the real property type and status
+// (e.g. a "retail frontage" land parcel listed under Industrial, or an IDX page showing "unknown").
+// Returns a classification, or null when we couldn't fetch/parse (caller keeps the listing on doubt).
+const DETAIL_SCHEMA = {
+  type: "object", additionalProperties: false, required: ["category", "forSale"],
+  properties: {
+    category: { type: "string", enum: ["industrial", "ios", "land", "retail", "office", "residential", "other", "unknown"] },
+    forSale: { type: "boolean", description: "true only if actively for sale; false if sold / under contract / pending / leased / expired / off-market / status unknown" },
+  },
+} as const;
+async function verifyDetail(url: string): Promise<{ category: string; forSale: boolean } | null> {
+  let text = "";
   try {
-    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(7000) });
-    if (r.status === 404 || r.status === 410) return false;
-    if (!r.ok) return true;
-    const html = (await r.text()).toLowerCase();
-    return !/unknown property status|no longer available|this listing is no longer|has been (sold|removed)|off[-\s]?market|status[^a-z]{0,8}(sold|pending|under contract|closed|withdrawn)/i.test(html);
-  } catch { return true; }
+    const r = await fetch(url, { headers: { "User-Agent": UA, Accept: "text/html" }, redirect: "follow", signal: AbortSignal.timeout(8000) });
+    if (r.status === 404 || r.status === 410) return { category: "unknown", forSale: false }; // page gone → not active
+    if (!r.ok) return null;
+    text = (await r.text())
+      .replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+      .replace(/<[^>]+>/g, " ").replace(/&nbsp;|&amp;|&#\d+;/g, " ").replace(/\s+/g, " ").trim().slice(0, 8000);
+  } catch { return null; }
+  if (text.length < 200) return null;
+  try {
+    const msg = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001", max_tokens: 200,
+      output_config: { format: { type: "json_schema", schema: DETAIL_SCHEMA } },
+      system: [{ type: "text" as const, text: `Classify this commercial real-estate listing DETAIL page by what the property actually IS, ignoring incidental mentions. category: "industrial" (warehouse/flex/manufacturing/distribution building), "ios" (industrial outdoor storage / laydown yard), "land" (vacant land, a lot, or a development parcel with NO building — even if zoned commercial/industrial/MF or marketed as "retail frontage"), "retail", "office", "residential" (apartments/condos/houses/multifamily), "other", or "unknown". forSale: true only if actively for sale; false if sold, under contract, pending, leased, expired, off-market, or the status is unknown.` }],
+      messages: [{ role: "user", content: text }],
+    });
+    const t = msg.content[0]?.type === "text" ? msg.content[0].text : "{}";
+    const p = JSON.parse(t);
+    return { category: String(p.category ?? "unknown"), forSale: p.forSale !== false };
+  } catch { return null; }
 }
 
 // Fetch a broker page and reduce it to text for the extractor. Two things matter for accuracy:
@@ -477,7 +502,7 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
         return { source: `Broker: ${site.name}`, ...zero, skipped: why };
       }
       const found = await extractBrokerListings(site.name, text.slice(0, 80000));
-      let norms: Norm[] = [];
+      const norms: Norm[] = [];
       for (const f of found) {
         // Skip anything not actively for sale — these pages list Sold / Under Contract / Leased /
         // Expired alongside active listings, and we only want live opportunities.
@@ -496,14 +521,19 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
         if (isErpListing(n)) continue;
         norms.push(n);
       }
-      // IDX-Broker listings (e.g. Sondra Gomez) don't show status on the marketing page we scrape —
-      // the real status lives on the idxbroker.com detail page. Verify those in parallel and drop any
-      // that 404 or read as unavailable/unknown, so stale IDX listings don't surface as active.
-      const idx = norms.filter((n) => n.listingUrl && /idxbroker\.com/i.test(n.listingUrl));
-      if (idx.length) {
-        const ok = await pool(idx, 5, (n) => idxDetailActive(n.listingUrl!));
-        const dead = new Set(idx.filter((_, i) => !ok[i]).map((n) => n.url));
-        if (dead.size) norms = norms.filter((n) => !dead.has(n.url));
+      // Verify each listing's detail page (type + active status) — the index page often hides the
+      // truth (retail/land parcels listed under Industrial, IDX pages showing "unknown"). Runs in
+      // parallel; disqualified listings are marked dropReason so upsert dismisses them (in place on a
+      // re-scan too). A null result (couldn't fetch/parse) keeps the listing.
+      const withUrl = norms.filter((n) => n.listingUrl);
+      if (withUrl.length) {
+        const vs = await pool(withUrl, 6, (n) => verifyDetail(n.listingUrl!));
+        withUrl.forEach((n, i) => {
+          const v = vs[i]; if (!v) return;
+          if (!v.forSale) n.dropReason = "no longer for sale (per detail page)";
+          else if (["retail", "office", "residential", "other"].includes(v.category)) n.dropReason = `${v.category} — not industrial (per detail page)`;
+          else if (v.category === "land" && n.state === "TX") n.dropReason = "vacant land — not a building (per detail page, TX)";
+        });
       }
       const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Listed on ${site.name}`, referralKind: "Broker", channel: "Broker site" });
       return { source: `Broker: ${site.name}`, found: found.length, kept: norms.length, inserted: r.inserted, updated: r.updated, duplicates: r.duplicates, skippedExisting: r.skippedExisting };
