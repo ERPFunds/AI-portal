@@ -260,15 +260,15 @@ Write with data density and specificity. Synthesize what the articles tell you a
 </body>
 </html>`;
 
-    archiveBrief({ agentName: "brevard-submarket-watch", subject, html, narrative, macro: {}, news }).catch(() => {});
+    await archiveBrief({ agentName: "brevard-submarket-watch", subject, html, narrative, macro: {}, news }).catch(() => {});
     const emailResult = await sendEmailViaGraph({ subject, htmlBody: html });
     saveNewsletterToSharePoint({ market: "Brevard", briefType: "Submarket Watch", htmlBody: html }).catch(() => {});
-    logAgentRun({ agentId: "lp-intel", workflowId: "brevard-submarket-watch", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
+    await logAgentRun({ agentId: "lp-intel", workflowId: "brevard-submarket-watch", status: emailResult.success ? "success" : "error", summary: narrative.slice(0, 300), market: "brevard", durationMs: Date.now() - startMs, errorMessage: emailResult.success ? undefined : emailResult.message }).catch(() => {});
 
     return NextResponse.json({ success: emailResult.success, articles: news.length, subject });
   } catch (error) {
     console.error("Brevard Submarket Watch error:", error);
-    logAgentRun({ agentId: "lp-intel", workflowId: "brevard-submarket-watch", status: "error", market: "brevard", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});
+    await logAgentRun({ agentId: "lp-intel", workflowId: "brevard-submarket-watch", status: "error", market: "brevard", durationMs: Date.now() - startMs, errorMessage: String(error) }).catch(() => {});
     return NextResponse.json({ error: "Brevard Submarket Watch generation failed" }, { status: 500 });
   }
 }
