@@ -123,12 +123,16 @@ async function runActor(actor: string, input: unknown, token: string): Promise<R
 
 type Box = { sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; deal_size_min: number | null; deal_size_max: number | null };
 
+const PRICE_FLOOR = 700_000; // discovered listings priced below this are auto-dismissed (houses / sub-scale)
+
 // Deterministic Buy-Box screen for a discovered listing (no LLM — the fields are already structured).
-// `drop` marks a listing we should auto-dismiss on insert (non-industrial — e.g. Shop/Office).
+// `drop` marks a listing we should auto-dismiss on insert (non-industrial — e.g. Shop/Office, or sub-floor price).
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
   const notes: string[] = [];
   const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage|yard/i.test(n.propertyType);
   if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex`, drop: true };
+  // Sub-$700K in these markets is almost always a house or a sub-scale parcel — auto-dismiss.
+  if (n.price != null && n.price < PRICE_FLOOR) return { fit: "no-fit", score: 10, reason: `$${(n.price / 1e6).toFixed(2)}M — below the $${(PRICE_FLOOR / 1000)}K minimum`, drop: true };
   let pts = 40; // in-market industrial for-sale
   const psf = n.price && n.sf ? n.price / n.sf : null;
   if (n.sf == null) {
