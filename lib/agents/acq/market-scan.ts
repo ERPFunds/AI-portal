@@ -116,10 +116,11 @@ async function runActor(actor: string, input: unknown, token: string): Promise<R
 type Box = { sf_min: number | null; sf_max: number | null; price_per_sf_min: number | null; price_per_sf_max: number | null; deal_size_min: number | null; deal_size_max: number | null };
 
 // Deterministic Buy-Box screen for a discovered listing (no LLM — the fields are already structured).
-function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string } {
+// `drop` marks a listing we should auto-dismiss on insert (non-industrial — e.g. Shop/Office).
+function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
   const notes: string[] = [];
-  const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage/i.test(n.propertyType);
-  if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex` };
+  const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage|yard/i.test(n.propertyType);
+  if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex`, drop: true };
   let pts = 40; // in-market industrial for-sale
   const psf = n.price && n.sf ? n.price / n.sf : null;
   if (n.sf == null) {
@@ -176,8 +177,10 @@ async function upsertNorms(
     const market = n.state === "TX" ? "Permian Basin" : "Brevard / Space Coast";
     const sc = screen(n, boxBy[n.state!]);
     const key = dedupKey(n.state, n.address);
-    let status = "new";
-    if (n.address) {
+    // Non-industrial (Shop/Office/etc.) → insert already dismissed so it never surfaces, but keep the
+    // dedup record so re-scans don't reconsider it.
+    let status = sc.drop ? "dismissed" : "new";
+    if (!sc.drop && n.address) {
       const { data: dupe } = await admin.from("inbound_listings").select("id").eq("dedup_key", key).limit(1).maybeSingle();
       if (dupe?.id) { status = "duplicate"; duplicates++; }
     }
