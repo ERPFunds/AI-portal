@@ -201,8 +201,9 @@ async function upsertNorms(
     // dedup record so re-scans don't reconsider it.
     let status = sc.drop ? "dismissed" : "new";
     if (!sc.drop && n.address) {
-      const { data: dupe } = await admin.from("inbound_listings").select("id").eq("dedup_key", key).limit(1).maybeSingle();
-      if (dupe?.id) { status = "duplicate"; duplicates++; }
+      const { data: dupe } = await admin.from("inbound_listings").select("id, status").eq("dedup_key", key).limit(1).maybeSingle();
+      // If we already have this address: mirror a dismissed original (stay hidden), else flag as duplicate.
+      if (dupe?.id) { if (dupe.status === "dismissed") status = "dismissed"; else { status = "duplicate"; duplicates++; } }
     }
     const { error } = await admin.from("inbound_listings").insert({
       message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
@@ -419,18 +420,19 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
   }
 
   // ── Broker websites — LLM extraction. Server-rendered pages use a plain fetch; JS/IDX sites
-  //    (site.js) render in a headless browser first, falling back to a plain fetch when no token. ──
-  for (const site of BROKER_SITES) {
+  //    (site.js) render in a headless browser first, falling back to a plain fetch when no token.
+  //    Run them concurrently so the whole list finishes well inside the function time limit — the old
+  //    sequential loop timed out before reaching the brokers at the end (e.g. The Real Estate Ranch). ──
+  type PS = MarketScanSummary["perSource"][number];
+  const zero = { found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0 };
+  const processBroker = async (site: (typeof BROKER_SITES)[number]): Promise<PS> => {
     try {
-      // Cheapest path first: plain fetch (server-rendered). For JS/IDX sites, escalate to a
-      // self-hosted headless browser (free), then to Apify render (paid) only as a last resort.
       let text = await fetchPageText(site.url);
       if (text.length < 400 && site.js) { const t = await fetchRenderedTextLocal(site.url); if (t.length >= 400) text = t; }
       if (text.length < 400 && site.js && token) { try { const t = await fetchRenderedText(site.url, token); if (t.length >= 400) text = t; } catch { /* ignore */ } }
       if (text.length < 400) {
         const why = site.js ? "JS/IDX site — render produced no listings (content likely in a cross-origin frame)" : "no server-rendered listings";
-        perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, skipped: why });
-        continue;
+        return { source: `Broker: ${site.name}`, ...zero, skipped: why };
       }
       const found = await extractBrokerListings(site.name, text.slice(0, 80000));
       const norms: Norm[] = [];
@@ -453,11 +455,27 @@ export async function runMarketScan(): Promise<MarketScanSummary> {
         norms.push(n);
       }
       const r = await upsertNorms(admin, boxBy, norms, { referredBy: `Listed on ${site.name}`, referralKind: "Broker", channel: "Broker site" });
-      perSource.push({ source: `Broker: ${site.name}`, found: found.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting });
+      return { source: `Broker: ${site.name}`, found: found.length, kept: norms.length - r.skippedExisting, inserted: r.inserted, duplicates: r.duplicates, skippedExisting: r.skippedExisting };
     } catch (e) {
-      perSource.push({ source: `Broker: ${site.name}`, found: 0, kept: 0, inserted: 0, duplicates: 0, skippedExisting: 0, error: String(e).slice(0, 200) });
+      return { source: `Broker: ${site.name}`, ...zero, error: String(e).slice(0, 200) };
     }
-  }
+  };
+  // Plain-fetch sites run with high concurrency (I/O + API bound). Headless-browser (js) sites run at
+  // low concurrency to avoid launching many Chromium instances at once.
+  const plainSites = BROKER_SITES.filter((s) => !s.js);
+  const jsSites = BROKER_SITES.filter((s) => s.js);
+  const plainResults = await pool(plainSites, 6, processBroker);
+  const jsResults = await pool(jsSites, 2, processBroker);
+  perSource.push(...plainResults, ...jsResults);
 
   return { ok: true, perSource };
+}
+
+// Run `fn` over `items` with at most `limit` in flight at once; preserves input order in the result.
+async function pool<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  const worker = async () => { while (next < items.length) { const i = next++; out[i] = await fn(items[i]); } };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
 }
