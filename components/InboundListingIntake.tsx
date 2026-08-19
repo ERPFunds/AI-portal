@@ -127,7 +127,7 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
     try {
       const psf = l.asking_price && l.sf ? Math.round((l.asking_price / l.sf) * 100) / 100 : null
       const notes = l.reason || ''
-      const listingUrl = l.listing_url || l.source_url || null
+      const listingUrl = l.listing_url || null // only a real web link — Outlook message links aren't accessible
       const isFL = l.state === 'FL'
       const data: Record<string, unknown> = isFL
         ? { section: category, name: l.address || l.submarket || 'Listing', status: '', source: l.referred_by || l.channel || '', propertyType: 'Industrial', location: l.submarket || '', yearBuilt: null, units: null, occupancy: null, capRate: l.cap_pct ?? null, sqft: l.sf ?? null, acres: null, price: l.asking_price ?? null, psf, notes, listingUrl }
@@ -299,7 +299,6 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
                   <span>{l.origin === 'discovered' ? `🔎 ${l.referral_kind ?? 'platform'}` : `📨 ${l.referred_by ?? 'unknown'}`}</span>
                   {l.received_at && <span title={new Date(l.received_at).toLocaleString()} style={{ color: '#9ca3af' }}>📅 {new Date(l.received_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>}
                   {l.listing_url && <a href={l.listing_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Listing ↗</a>}
-                  {l.source_url && <a href={l.source_url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Email ↗</a>}
                   {(l.attachments ?? []).slice(0, 2).map((n, j) => <span key={j} title={n} style={{ background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '0 6px' }}>📎 {n.length > 18 ? n.slice(0, 16) + '…' : n}</span>)}
                 </div>
                 {l.reason && !dup && <div title={l.reason} style={{ fontSize: 11, color: '#6b7280', marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.reason}</div>}
