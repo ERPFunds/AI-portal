@@ -36,6 +36,8 @@ export async function POST(req: NextRequest) {
         !!f && typeof (f as { id?: unknown }).id === "string")
     : [];
   const outline: string[] = Array.isArray(body.outline) ? body.outline.filter((o: unknown) => typeof o === "string" && o.trim()) : [];
+  // Deal Pipeline rows (pipeline_rows ids) the user picked; empty = all Under Review.
+  const dealPipelineIds: string[] = Array.isArray(body.dealPipelineIds) ? body.dealPipelineIds.map(String) : [];
 
   if (!prompt.trim()) return NextResponse.json({ error: "prompt required" }, { status: 400 });
 
@@ -91,13 +93,15 @@ export async function POST(req: NextRequest) {
         if (sources.includes("deal-pipeline")) {
           // pipeline_rows is RLS-locked → service-role client (same source the Deal Pipeline view reads).
           const admin = createAdminClient();
-          const { data: rows } = await admin.from("pipeline_rows").select("state, data");
-          const underReview = (rows ?? []).filter((r) => {
+          const { data: rows } = await admin.from("pipeline_rows").select("id, state, data");
+          let underReview = (rows ?? []).filter((r) => {
             const d = (r.data ?? {}) as Record<string, unknown>;
             return r.state === "FL"
               ? d.section === "Under Review"
               : d.kind === "pipeline" && ["Under Review", "Under Contract", "Contract Negotiations"].includes(String(d.status));
           });
+          // If the user picked specific deals, ground only on those; otherwise use all Under Review.
+          if (dealPipelineIds.length) underReview = underReview.filter((r) => dealPipelineIds.includes(String(r.id)));
           if (underReview.length) {
             context += "\n\n--- Deal Pipeline — deals Under Review ---\n";
             for (const r of underReview) {

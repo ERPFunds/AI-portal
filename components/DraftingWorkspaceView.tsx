@@ -181,6 +181,11 @@ export default function DraftingWorkspaceView() {
   const [researchError, setResearchError] = useState('')
   const [viewingResearch, setViewingResearch] = useState<{ id: string; name: string } | null>(null)
   const [selectedResearchFileIds, setSelectedResearchFileIds] = useState<Set<string>>(new Set())
+  // Deal Pipeline — Under Review deals, synced live from the Deal Pipeline board.
+  const [dealRows, setDealRows] = useState<{ id: string; label: string; sub: string }[]>([])
+  const [dealLoading, setDealLoading] = useState(false)
+  const [dealError, setDealError] = useState('')
+  const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const abortRef = useRef<AbortController | null>(null)
 
@@ -209,6 +214,40 @@ export default function DraftingWorkspaceView() {
       .catch(e => setResearchError(String(e)))
       .finally(() => setResearchLoading(false))
   }, [useResearch]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!useDealPipeline) return
+    if (dealRows.length > 0) return
+    setDealLoading(true); setDealError('')
+    const norm = (items: { id: string; data: Record<string, unknown> }[], state: 'TX' | 'FL') =>
+      (items ?? [])
+        .filter((it) => {
+          const d = it.data ?? {}
+          return state === 'FL'
+            ? d.section === 'Under Review'
+            : d.kind === 'pipeline' && ['Under Review', 'Under Contract', 'Contract Negotiations'].includes(String(d.status))
+        })
+        .map((it) => {
+          const d = it.data ?? {}
+          const label = String(d.address || d.name || d.location || 'Deal')
+          const stage = state === 'FL' ? d.section : d.status
+          const sub = [state === 'TX' ? 'Permian (TX)' : 'Brevard (FL)', d.location, stage, d.price ? `$${Number(d.price).toLocaleString()}` : '']
+            .filter(Boolean).join(' · ')
+          return { id: String(it.id), label, sub }
+        })
+    Promise.all([
+      fetch('/api/deal-pipeline/mirror?state=TX').then(r => r.json()).catch(() => ({ items: [] })),
+      fetch('/api/deal-pipeline/mirror?state=FL').then(r => r.json()).catch(() => ({ items: [] })),
+    ])
+      .then(([tx, fl]) => {
+        const rows = [...norm(tx.items, 'TX'), ...norm(fl.items, 'FL')]
+        setDealRows(rows)
+        setSelectedDealIds(new Set(rows.map(r => r.id)))
+        if (tx.error || fl.error) setDealError(tx.error || fl.error)
+      })
+      .catch(e => setDealError(String(e)))
+      .finally(() => setDealLoading(false))
+  }, [useDealPipeline]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (docType !== 'newsletter') return
@@ -288,6 +327,7 @@ export default function DraftingWorkspaceView() {
           outline: (skill.outline ?? []).filter((o) => outlineSections.includes(o)),
           sources: [...(useKb ? ['kb'] : []), ...(useDealPipeline ? ['deal-pipeline'] : [])],
           kbFileIds: [...selectedKbFileIds],
+          dealPipelineIds: useDealPipeline ? [...selectedDealIds] : [],
           attachmentText: attachment?.text ?? '',
           attachmentName: attachment?.name ?? '',
           newsletterNarrative: newsletters.find(n => n.id === selectedNewsletterId)?.narrative ?? '',
@@ -332,7 +372,7 @@ export default function DraftingWorkspaceView() {
     } finally {
       setStreaming(false)
     }
-  }, [docType, prompt, useKb, useDealPipeline, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, researchFiles, newsletters, selectedNewsletterId])
+  }, [docType, prompt, useKb, useDealPipeline, useNewsletter, useResearch, attachment, streaming, outlineSections, selectedKbFileIds, selectedResearchFileIds, selectedDealIds, researchFiles, newsletters, selectedNewsletterId])
 
   const stop = () => abortRef.current?.abort()
 
@@ -552,6 +592,50 @@ export default function DraftingWorkspaceView() {
           )}
           {selectedKbFileIds.size === 0 && !kbFilesLoading && kbFiles.length > 0 && (
             <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>No files selected — will use 6 most recent</div>
+          )}
+        </div>
+      )}
+
+      {/* Deal Pipeline picker — Under Review deals synced from the Deal Pipeline board */}
+      {useDealPipeline && (
+        <div style={s.card}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <span style={s.label}>Deal Pipeline — Under Review</span>
+            {dealRows.length > 0 && (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={() => setSelectedDealIds(new Set(dealRows.map(r => r.id)))} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#374151', cursor: 'pointer' }}>All</button>
+                <button onClick={() => setSelectedDealIds(new Set())} style={{ fontSize: 11, padding: '3px 10px', borderRadius: 5, border: '1px solid #e5e7eb', background: '#fff', color: '#9ca3af', cursor: 'pointer' }}>None</button>
+              </div>
+            )}
+          </div>
+          {dealLoading && <div style={{ fontSize: 13, color: '#9ca3af' }}>Loading deals…</div>}
+          {!dealLoading && dealError && <div style={{ fontSize: 13, color: '#dc2626' }}>{dealError}</div>}
+          {!dealLoading && !dealError && dealRows.length === 0 && (
+            <div style={{ fontSize: 13, color: '#9ca3af' }}>No deals are Under Review in the Deal Pipeline right now.</div>
+          )}
+          {!dealLoading && dealRows.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 220, overflowY: 'auto' }}>
+              {dealRows.map(r => {
+                const checked = selectedDealIds.has(r.id)
+                return (
+                  <label key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 6, cursor: 'pointer', background: checked ? '#eff6ff' : 'transparent', border: `1px solid ${checked ? '#bfdbfe' : 'transparent'}` }}>
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => setSelectedDealIds(prev => { const next = new Set(prev); checked ? next.delete(r.id) : next.add(r.id); return next })}
+                      style={{ accentColor: '#1d4ed8', width: 14, height: 14, flexShrink: 0 }}
+                    />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.label}</div>
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{r.sub}</div>
+                    </div>
+                  </label>
+                )
+              })}
+            </div>
+          )}
+          {selectedDealIds.size === 0 && !dealLoading && dealRows.length > 0 && (
+            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>No deals selected — will use all Under Review.</div>
           )}
         </div>
       )}
