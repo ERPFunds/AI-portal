@@ -2702,7 +2702,7 @@ function LpDirectoryView() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
               <thead>
                 <tr style={{ background: '#f8fafc' }}>
-                  {['LP Name', 'Type', 'Prior Fund', 'Stage', 'LP Primary Contact', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
+                  {['LP Name', 'Type', 'Prior Fund', 'Stage', 'Broker / Advisor', 'Target', 'Committed', 'Last Interaction', 'Reach Out', 'Notes', ''].map(h => (
                     <th key={h} style={{ textAlign: 'left', fontSize: 10, color: '#9ca3af', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.4px', padding: '10px 14px', borderBottom: '1px solid #e5e7eb', ...(h === '' ? { position: 'sticky', right: 0, background: '#f8fafc', boxShadow: '-6px 0 8px -6px rgba(0,0,0,0.15)', zIndex: 3 } : {}) }}>
                       {h}
                       {h === 'Last Interaction' && <span style={{ marginLeft: 4, background: '#eff6ff', color: '#3b82f6', borderRadius: 3, padding: '1px 4px', fontWeight: 600, fontSize: 9 }}>IR</span>}
@@ -2763,22 +2763,6 @@ function LpDirectoryView() {
                           const c = STAGE_COLOR[lp.sfStage] ?? { bg: '#f3f4f6', color: '#6b7280' }
                           return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c.bg, color: c.color, whiteSpace: 'nowrap' }}>{lp.sfStage}</span>
                         })() : <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>}
-                      </td>
-
-                      {/* LP Primary Contact — the LP's own contact + firm, from Salesforce (read-only) */}
-                      <td style={{ padding: '11px 14px', maxWidth: 180 }}>
-                        {(() => {
-                          const contact = lp.sfBrokerContact
-                          const firm = lp.sfBrokerCompany
-                          return (firm || contact) ? (
-                            <>
-                              {contact && <div style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{contact}</div>}
-                              {firm && <div style={{ fontSize: 10, color: '#9ca3af', marginTop: 2 }}>{firm}</div>}
-                            </>
-                          ) : (
-                            <span style={{ color: '#d1d5db', fontSize: 12 }}>—</span>
-                          )
-                        })()}
                       </td>
 
                       {/* Broker / Advisor — real broker from the LP's Salesforce Opportunity; editable override saved to the schedule */}
