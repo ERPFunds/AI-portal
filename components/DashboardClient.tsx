@@ -4024,10 +4024,11 @@ function VacanciesView() {
   )
 }
 
-const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', quicklook_last: null, hvac_last: null, fire_last: null, crane_last: null, insurance_expiry: null }
+const EMPTY_WO: WorkOrder = { id: 0, address: '', tenant: '', phase1_last: null, quicklook_last: null, hvac_last: null, fire_last: null, crane_last: null, insurance_expiry: null }
 
-type InspKey = 'quicklook_last' | 'hvac_last' | 'fire_last' | 'crane_last'
+type InspKey = 'phase1_last' | 'quicklook_last' | 'hvac_last' | 'fire_last' | 'crane_last'
 const INSP_TYPES: { key: InspKey; label: string; bg: string; color: string; craneOnly?: boolean }[] = [
+  { key: 'phase1_last',    label: '🌎 Phase 1',   bg: '#f0fdf4', color: '#15803d' },
   { key: 'quicklook_last', label: '🔍 Quicklook', bg: '#f0fdfa', color: '#0d9488' },
   { key: 'hvac_last',      label: '❄️ HVAC',      bg: '#eff6ff', color: '#2563eb' },
   { key: 'fire_last',      label: '🔥 Fire',      bg: '#fff7ed', color: '#ea580c' },
@@ -4140,6 +4141,7 @@ function WorkOrdersView() {
   function exportCsv() {
     const cols: [string, (w: WorkOrder) => any][] = [
       ['Property', w => w.address], ['Tenant', w => w.tenant],
+      ['Phase 1', w => w.phase1_last],
       ['Quicklook Last', w => w.quicklook_last], ['HVAC Last', w => w.hvac_last], ['Fire Last', w => w.fire_last],
       ['Crane Last', w => w.has_crane ? w.crane_last : ''],
       ['Insurance COI Expiry', w => w.insurance_expiry],
@@ -4256,6 +4258,7 @@ function WorkOrdersView() {
         <EditModal title={isNew ? 'Add property' : `Edit — ${draft.address || 'property'}`} onClose={() => { setDraft(null); setSaveError(null) }} onSave={saveDraft} saving={saving} error={saveError}>
           <MField label="Property / Address" span><input style={mInput} value={draft.address} onChange={e => upd({ address: e.target.value })} /></MField>
           <MField label="Tenant" span><input style={mInput} value={draft.tenant} onChange={e => upd({ tenant: e.target.value })} /></MField>
+          <MField label="🌎 Phase 1 — date"><input type="date" style={mInput} value={draft.phase1_last ?? ''} onChange={e => upd({ phase1_last: e.target.value || null })} /></MField>
           <MField label="🔍 Quicklook — last done"><input type="date" style={mInput} value={draft.quicklook_last ?? ''} onChange={e => upd({ quicklook_last: e.target.value || null })} /></MField>
           <MField label="❄️ HVAC — last done"><input type="date" style={mInput} value={draft.hvac_last ?? ''} onChange={e => upd({ hvac_last: e.target.value || null })} /></MField>
           <MField label="🔥 Fire — last done"><input type="date" style={mInput} value={draft.fire_last ?? ''} onChange={e => upd({ fire_last: e.target.value || null })} /></MField>

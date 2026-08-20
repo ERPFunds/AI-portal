@@ -2,6 +2,7 @@ export interface WorkOrder {
   id: number
   address: string
   tenant: string
+  phase1_last?: string | null
   quicklook_last?: string | null
   hvac_last?: string | null
   fire_last?: string | null
