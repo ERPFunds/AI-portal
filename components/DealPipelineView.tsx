@@ -134,8 +134,9 @@ function RecPanel({ rec, loading, onGen }: { rec?: AiRec | null; loading?: boole
 }
 
 // =============================== TEXAS ===============================
-function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void; onRecommend: (r: TxRowE) => void; onRestore: (r: TxRowE) => void; reccing: string | null }) {
+function TexasPipeline({ rows, query, showMarket, showArchive, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: TxRowE[]; query: string; showMarket: boolean; showArchive: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void; onRecommend: (r: TxRowE) => void; onRestore: (r: TxRowE) => void; reccing: string | null }) {
   const [open, setOpen] = useState<string | null>(null)
+  const groups = showArchive ? ['Archive'] : CATEGORIES.filter((c) => c !== 'Archive')
   const q = query.trim().toLowerCase()
   const match = (r: TxRow) => !q || [r.location, r.owner, r.address, r.tenant, r.source, r.notes, r.nextSteps].join(' ').toLowerCase().includes(q)
   const pipeline = useMemo(() => rows.filter((r) => r.kind === 'pipeline' && match(r)), [rows, q])
@@ -194,7 +195,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, o
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 720 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
-            {CATEGORIES.map((st) => {
+            {groups.map((st) => {
               const g = pipeline.filter((r) => r.status === st)
               if (!g.length) return null
               return (
@@ -204,7 +205,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, o
                 </React.Fragment>
               )
             })}
-            {pipeline.length === 0 && <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>No pipeline deals{query ? ` match “${query}”` : ''}.</td></tr>}
+            {pipeline.filter((r) => groups.includes(r.status)).length === 0 && <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>{showArchive ? 'Nothing in Archive.' : `No pipeline deals${query ? ' match “' + query + '”' : ''}.`}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -244,8 +245,9 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, o
 }
 
 // =============================== FLORIDA ===============================
-function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void; onRecommend: (r: FlRowE) => void; onRestore: (r: FlRowE) => void; reccing: string | null }) {
+function FloridaPipeline({ rows, query, showArchive, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: FlRowE[]; query: string; showArchive: boolean; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void; onRecommend: (r: FlRowE) => void; onRestore: (r: FlRowE) => void; reccing: string | null }) {
   const [open, setOpen] = useState<string | null>(null)
+  const groups = showArchive ? ['Archive'] : CATEGORIES.filter((c) => c !== 'Archive')
   const q = query.trim().toLowerCase()
   const match = (r: FlRow) => !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
   const list = useMemo(() => rows.filter(match), [rows, q])
@@ -258,7 +260,7 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, onRestore, 
         <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: 760 }}>
           <thead><tr>{cols.map((c, i) => <th key={i} style={i === 0 ? STICKY_TH : rightCols.has(c) ? { ...TH, textAlign: 'right' } : TH}>{c}</th>)}</tr></thead>
           <tbody>
-            {CATEGORIES.map((sec) => {
+            {groups.map((sec) => {
               const g = list.filter((r) => r.section === sec)
               if (!g.length) return null
               return (
@@ -303,7 +305,7 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, onRestore, 
                 </React.Fragment>
               )
             })}
-            {list.length === 0 && <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>No properties{query ? ` match “${query}”` : ''}.</td></tr>}
+            {list.filter((r) => groups.includes(r.section)).length === 0 && <tr><td colSpan={cols.length} style={{ ...TD, textAlign: 'center', color: '#9ca3af', padding: 24 }}>{showArchive ? 'Nothing in Archive.' : `No properties${query ? ' match “' + query + '”' : ''}.`}</td></tr>}
           </tbody>
         </table>
       </div>
@@ -412,6 +414,7 @@ export default function DealPipelineView() {
   const [stateTab, setStateTab] = useState<'TX' | 'FL'>('TX')
   const [query, setQuery] = useState('')
   const [showMarket, setShowMarket] = useState(false)
+  const [showArchive, setShowArchive] = useState(false)
   const [txRows, setTxRows] = useState<TxRowE[]>([])
   const [flRows, setFlRows] = useState<FlRowE[]>([])
   const [loading, setLoading] = useState(false)
@@ -504,6 +507,7 @@ export default function DealPipelineView() {
   const txActive = txPipeline.filter((r) => ['Under Contract', 'Contract Negotiations', 'Under Review'].includes(r.status)).length
   const txPending = txPipeline.filter((r) => r.status === 'Prospects').length
   const flTargets = flRows.filter((r) => r.section === 'Under Review' || r.section === 'Prospects').length
+  const archivedCount = stateTab === 'TX' ? txRows.filter((r) => r.status === 'Archive').length : flRows.filter((r) => r.section === 'Archive').length
 
   const asOf = stateTab === 'TX' ? TX_AS_OF : FL_AS_OF
   const meta = stateTab === 'TX'
@@ -549,20 +553,24 @@ export default function DealPipelineView() {
           <span style={{ margin: '0 8px', color: '#cbd5e1' }}>|</span>As of {asOf}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {stateTab === 'TX' && (
+          {stateTab === 'TX' && !showArchive && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#475569', cursor: 'pointer' }}>
               <input type="checkbox" checked={showMarket} onChange={(e) => setShowMarket(e.target.checked)} />Show submarket inventory
             </label>
           )}
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search address, owner, tenant…" style={{ fontSize: 12.5, padding: '7px 11px', border: '1px solid #e2e8f0', borderRadius: 8, width: 220, maxWidth: '100%' }} />
-          <button onClick={exportExcel} disabled={exporting} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: exporting ? 'default' : 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting ? .6 : 1 }}>{exporting ? 'Exporting…' : '⬇ Export Excel'}</button>
-          <button onClick={openAdd} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add row</button>
+          <button onClick={() => setShowArchive((v) => !v)} title="View archived / dismissed items"
+            style={{ padding: '8px 14px', borderRadius: 8, border: showArchive ? `1px solid ${NAVY}` : '1px solid #e2e8f0', background: showArchive ? NAVY : '#fff', color: showArchive ? '#fff' : '#64748b', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {showArchive ? '← Back to pipeline' : `🗄 Archive${archivedCount ? ` (${archivedCount})` : ''}`}
+          </button>
+          {!showArchive && <button onClick={exportExcel} disabled={exporting} style={{ padding: '8px 14px', borderRadius: 8, border: '1px solid #0D2D52', background: '#fff', color: '#0D2D52', cursor: exporting ? 'default' : 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', opacity: exporting ? .6 : 1 }}>{exporting ? 'Exporting…' : '⬇ Export Excel'}</button>}
+          {!showArchive && <button onClick={openAdd} style={{ padding: '8px 14px', borderRadius: 8, border: 'none', background: NAVY, color: '#fff', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>+ Add row</button>}
         </div>
       </div>
 
       {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />
-          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />}
+        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} showArchive={showArchive} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />
+          : <FloridaPipeline rows={flRows} query={query} showArchive={showArchive} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />}
 
       {draft && <RowEditor draft={draft} onChange={(k, v) => setDraft((d) => (d ? { ...d, [k]: v } : d))} onClose={() => setDraft(null)} onSave={save} onDelete={del} saving={saving} />}
     </div>
