@@ -276,7 +276,7 @@ const DETAIL_SCHEMA = {
   type: "object", additionalProperties: false, required: ["category", "forSale"],
   properties: {
     category: { type: "string", enum: ["industrial", "ios", "land", "retail", "office", "residential", "other", "unknown"] },
-    forSale: { type: "boolean", description: "true only if actively for sale; false if sold / under contract / pending / leased / expired / off-market / status unknown" },
+    forSale: { type: "boolean", description: "false ONLY if the page explicitly shows the listing is Sold / Under Contract / Pending / Leased / Expired / Off-Market. If no status is shown, or it's ambiguous, return true (it's on the broker's for-sale listings, so assume active)." },
   },
 } as const;
 async function verifyDetail(url: string): Promise<{ category: string; forSale: boolean } | null> {
@@ -294,7 +294,7 @@ async function verifyDetail(url: string): Promise<{ category: string; forSale: b
     const msg = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001", max_tokens: 200,
       output_config: { format: { type: "json_schema", schema: DETAIL_SCHEMA } },
-      system: [{ type: "text" as const, text: `Classify this commercial real-estate listing DETAIL page by what the property actually IS, ignoring incidental mentions. category: "industrial" (warehouse/flex/manufacturing/distribution building), "ios" (industrial outdoor storage / laydown yard), "land" (vacant land, a lot, or a development parcel with NO building — even if zoned commercial/industrial/MF or marketed as "retail frontage"), "retail", "office", "residential" (apartments/condos/houses/multifamily), "other", or "unknown". forSale: true only if actively for sale; false if sold, under contract, pending, leased, expired, off-market, or the status is unknown.` }],
+      system: [{ type: "text" as const, text: `Classify this commercial real-estate listing DETAIL page by what the property actually IS, ignoring incidental mentions. category: "industrial" (warehouse/flex/manufacturing/distribution building), "ios" (industrial outdoor storage / laydown yard), "land" (vacant land, a lot, or a development parcel with NO building — even if zoned commercial/industrial/MF or marketed as "retail frontage"), "retail", "office", "residential" (apartments/condos/houses/multifamily), "other", or "unknown". forSale: return FALSE only if the page explicitly shows the listing is Sold / Under Contract / Pending / Leased / Expired / Off-Market. If no explicit status is shown, or it's ambiguous, return TRUE — it's on the broker's for-sale listings, so assume active. Do NOT infer "not for sale" from a missing status.` }],
       messages: [{ role: "user", content: text }],
     });
     const t = msg.content[0]?.type === "text" ? msg.content[0].text : "{}";
@@ -571,7 +571,7 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
         withUrl.forEach((n, i) => {
           const v = vs[i]; if (!v) return;
           if (!v.forSale) n.dropReason = "no longer for sale (per detail page)";
-          else if (["retail", "office", "residential", "other"].includes(v.category)) n.dropReason = `${v.category} — not industrial (per detail page)`;
+          else if (["retail", "office", "residential"].includes(v.category)) n.dropReason = `${v.category} — not industrial (per detail page)`;
           else if (v.category === "land" && n.state === "TX") n.dropReason = "vacant land — not a building (per detail page, TX)";
         });
       }
