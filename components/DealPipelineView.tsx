@@ -74,6 +74,10 @@ function StatusBand({ label, color, count, sub }: { label: string; color: string
 const editBtn = (onClick: () => void) => (
   <button onClick={(e) => { e.stopPropagation(); onClick() }} style={{ background: 'none', border: '1px solid #d1d5db', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', color: '#374151', whiteSpace: 'nowrap' }}>✎ Edit</button>
 )
+// Restore a dismissed-inbound Archive row back to the Inbound Listings tab.
+const restoreBtn = (onClick: () => void) => (
+  <button onClick={(e) => { e.stopPropagation(); onClick() }} title="Restore to Inbound Listings" style={{ background: 'none', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 9px', fontSize: 11, cursor: 'pointer', color: '#1d4ed8', whiteSpace: 'nowrap' }}>↩ Restore</button>
+)
 // Quick archive / restore for a row — toggles its group to/from Archive without opening the editor.
 const archiveBtn = (isArchived: boolean, onClick: () => void) => (
   <button onClick={(e) => { e.stopPropagation(); onClick() }} title={isArchived ? 'Restore to Under Review' : 'Archive this deal'}
@@ -130,7 +134,7 @@ function RecPanel({ rec, loading, onGen }: { rec?: AiRec | null; loading?: boole
 }
 
 // =============================== TEXAS ===============================
-function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, reccing }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void; onRecommend: (r: TxRowE) => void; reccing: string | null }) {
+function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: TxRowE[]; query: string; showMarket: boolean; onEdit: (r: TxRowE) => void; onMove: (r: TxRowE, cat: string) => void; onRecommend: (r: TxRowE) => void; onRestore: (r: TxRowE) => void; reccing: string | null }) {
   const [open, setOpen] = useState<string | null>(null)
   const q = query.trim().toLowerCase()
   const match = (r: TxRow) => !q || [r.location, r.owner, r.address, r.tenant, r.source, r.notes, r.nextSteps].join(' ').toLowerCase().includes(q)
@@ -159,7 +163,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
           <td style={numTD}>{psf(r.pricePsf)}</td>
           <td style={TD}>{listingLink(findUrl(r))}</td>
-          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? null : editBtn(() => onEdit(r))}</td>
+          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? restoreBtn(() => onRestore(r)) : editBtn(() => onEdit(r))}</td>
         </tr>
         {isOpen && (
           <tr style={{ background: '#f0f9ff' }}>
@@ -240,7 +244,7 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
 }
 
 // =============================== FLORIDA ===============================
-function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void; onRecommend: (r: FlRowE) => void; reccing: string | null }) {
+function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, onRestore, reccing }: { rows: FlRowE[]; query: string; onEdit: (r: FlRowE) => void; onMove: (r: FlRowE, cat: string) => void; onRecommend: (r: FlRowE) => void; onRestore: (r: FlRowE) => void; reccing: string | null }) {
   const [open, setOpen] = useState<string | null>(null)
   const q = query.trim().toLowerCase()
   const match = (r: FlRow) => !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
@@ -272,7 +276,7 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
                           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
                           <td style={numTD}>{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</td>
                           <td style={TD}>{listingLink(findUrl(r))}</td>
-                          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? null : editBtn(() => onEdit(r))}</td>
+                          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? restoreBtn(() => onRestore(r)) : editBtn(() => onEdit(r))}</td>
                         </tr>
                         {isOpen && (
                           <tr style={{ background: '#f0f9ff' }}>
@@ -471,6 +475,13 @@ export default function DealPipelineView() {
   const openEdit = (r: TxRowE | FlRowE) => setDraft({ ...r, _state: stateTab })
   const openAdd = () => setDraft(stateTab === 'TX' ? { _state: 'TX', kind: 'pipeline', status: 'Under Review' } : { _state: 'FL', section: 'Under Review' })
 
+  // Un-dismiss a dismissed-inbound Archive row → it returns to the Inbound Listings tab.
+  const restoreInbound = async (r: TxRowE | FlRowE) => {
+    const id = String((r as { _id: string })._id).replace(/^inbound:/, '')
+    await fetch('/api/inbound-listings', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'new' }) })
+    await load(stateTab)
+  }
+
   // Generate (or refresh) an AI recommendation for a single row and cache it on the row's data.
   const [reccing, setReccing] = useState<string | null>(null)
   const recommend = async (r: TxRowE | FlRowE) => {
@@ -550,8 +561,8 @@ export default function DealPipelineView() {
       </div>
 
       {loading ? <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>Loading…</div>
-        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} onRecommend={recommend} reccing={reccing} />
-          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} onRecommend={recommend} reccing={reccing} />}
+        : stateTab === 'TX' ? <TexasPipeline rows={txRows} query={query} showMarket={showMarket} onEdit={openEdit} onMove={(r, cat) => move(r, 'status', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />
+          : <FloridaPipeline rows={flRows} query={query} onEdit={openEdit} onMove={(r, cat) => move(r, 'section', cat)} onRecommend={recommend} onRestore={restoreInbound} reccing={reccing} />}
 
       {draft && <RowEditor draft={draft} onChange={(k, v) => setDraft((d) => (d ? { ...d, [k]: v } : d))} onClose={() => setDraft(null)} onSave={save} onDelete={del} saving={saving} />}
     </div>
