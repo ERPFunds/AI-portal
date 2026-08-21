@@ -45,9 +45,9 @@ const PIPE_CATEGORIES = ['Under Review', 'Prospects', 'Comparables']
 // Everything the scans pull from, surfaced at the top so it's clear what's being watched.
 const SOURCE_GROUPS: { label: string; items: string[] }[] = [
   { label: 'Market platforms', items: ['LoopNet', 'Crexi', 'LinkedIn'] },
-  { label: 'Broker sites · Permian', items: ['NRG Realty', 'Kirk Strahan', 'Moriah', 'The Real Estate Ranch', 'VIP Realty', 'thisRealty', 'Sondra Gomez', 'Iron Wolf'] },
+  { label: 'Broker sites · Permian', items: ['NRG Realty', 'Moriah', 'The Real Estate Ranch', 'VIP Realty', 'thisRealty'] },
   { label: 'Broker sites · Space Coast', items: ['Team LBR', 'Ullian', 'Jack Jeffcoat', 'Space Coast CRE', 'MaxLife', 'JM Real Estate', 'ITG Realty', 'Scott Langston', 'Perrone'] },
-  { label: 'Broker sites · National', items: ['Marcus & Millichap'] },
+  { label: 'Broker sites · National', items: ['Marcus & Millichap', 'CBRE', 'JLL', 'Colliers'] },
 ]
 const SRC_CHIP: React.CSSProperties = { background: '#fff', border: '1px solid #e5e7eb', borderRadius: 6, padding: '2px 8px', color: '#475569', whiteSpace: 'nowrap' }
 // Whose inbox a forwarded broker email landed in.

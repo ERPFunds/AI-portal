@@ -38,22 +38,25 @@ export type BuyBox = { markets: string; assetClass: string; sf: string; psf: str
 // (3001/3105 CR 1255 and 9105 I-20): ~$50–185/SF, all-cash, underwritten to a ~10% stabilized
 // unlevered yield rather than an in-place cap floor. The FL (Space Coast) box stays illustrative
 // until there's FL portfolio/transaction data to anchor it.
+// Unified criteria across both markets (only geography differs). Broad "Industrial" asset class so
+// sub-types (warehouse / flex / distribution / IOS / manufacturing) aren't screened out. SF up to
+// 300k catches portfolio sales; deal size up to $30M.
 export const BUY_BOXES: Record<Listing['state'], BuyBox> = {
   TX: {
     markets: 'Permian — Midland/Odessa',
-    assetClass: 'Single- & multi-tenant NNN industrial / flex',
-    sf: '5k–70k SF',
-    psf: '$50–$185/SF',
+    assetClass: 'Industrial (all sub-types)',
+    sf: '5k–300k SF',
+    psf: '$50–$200/SF',
     yieldTarget: '~10% stabilized yield',
-    dealSize: '≤ ~$3M core',
+    dealSize: '$1M–$30M',
   },
   FL: {
     markets: 'Brevard / Space Coast',
-    assetClass: 'Industrial / IOS',
-    sf: '15k–120k SF',
-    psf: '$50–$120/SF',
-    yieldTarget: 'cap ≥ 6.5%',
-    dealSize: '≤ $8M',
+    assetClass: 'Industrial (all sub-types)',
+    sf: '5k–300k SF',
+    psf: '$50–$200/SF',
+    yieldTarget: '~10% stabilized yield',
+    dealSize: '$1M–$30M',
   },
 }
 

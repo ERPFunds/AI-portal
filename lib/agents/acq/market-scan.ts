@@ -19,10 +19,13 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 const BROKER_SITES: { name: string; url: string; js?: boolean; proxy?: boolean }[] = [
   { name: "NRG Realty Group", url: "https://www.nrgrealtygroup.com/property-listings/", proxy: true },
   { name: "Team LBR", url: "https://teamlbr.com/search-properties/", proxy: true },
-  { name: "Kirk Strahan Realty", url: "https://www.strahancommercialproperties.com/for-sale" }, // Permian — server-rendered
   { name: "Ullian Realty", url: "https://ullianrealty.com/our-listings/", js: true }, // Space Coast — IDX/JS
   { name: "Moriah Brokerage", url: "https://moriahbrokerageservices.com/", js: true }, // Permian — IDX/JS
+  // National platforms — big JS/SPA sites behind bot protection; scanned via residential proxy, filtered to our markets.
   { name: "Marcus & Millichap", url: "https://www.marcusmillichap.com/properties#pageNumber=1&stb=orderdate,DESC", js: true }, // JS SPA
+  { name: "CBRE", url: "https://www.cbre.com/properties/properties-for-sale?propertytype=Industrial", proxy: true },
+  { name: "JLL", url: "https://property.jll.com/search?tenureType=sale&propertyType=Industrial", proxy: true },
+  { name: "Colliers", url: "https://www.colliers.com/en-us/properties?type=forsale&assetclass=Industrial", proxy: true },
   // Space Coast (FL) brokers.
   { name: "Jack Jeffcoat", url: "https://www.jackjeffcoat.com/commercial.listings" }, // largest Brevard inventory
   { name: "Space Coast CRE", url: "https://listings.spacecoastcre.com/i/featured-listings" },
@@ -35,8 +38,6 @@ const BROKER_SITES: { name: string; url: string; js?: boolean; proxy?: boolean }
   { name: "The Real Estate Ranch", url: "https://www.therealestateranch.com/listed-properties/industrial-properties/" }, // largest Permian industrial inventory
   { name: "VIP Realty (Midland)", url: "https://www.viprealestate.com/midland-commercial-real-estate.php", proxy: true },
   { name: "thisRealty", url: "https://thisrealty.com/available-for-sale/", proxy: true },
-  { name: "Sondra Gomez Realty", url: "https://sgrwelcomehome.com/pages/commercial-real-estate-midland-odessa-tx/" },
-  { name: "Iron Wolf Industrial", url: "https://www.iwirealty.com/", js: true }, // Permian industrial — blocks plain fetch (403), try browser
 ];
 
 // For-sale industrial searches scoped to ERP's two markets. Override per-source input via env.
@@ -129,6 +130,11 @@ type Box = { sf_min: number | null; sf_max: number | null; price_per_sf_min: num
 
 const PRICE_FLOOR = 700_000; // discovered listings priced below this are auto-dismissed (houses / sub-scale)
 
+// Broad "Industrial" match — every industrial sub-type counts, so a property marketed under a specific
+// label (warehouse, flex, distribution, IOS, manufacturing, etc.) isn't squeezed out. Used everywhere
+// we gate on asset type so the rule is identical across all sources.
+const INDUSTRIAL_RE = /industrial|warehouse|flex|manufactur|distribution|logistics|\bios\b|outdoor storage|laydown|storage|\byard\b|shop|truck\s*terminal|terminal|cold\s*storage|refrigerat|r&d|business\s*park/i;
+
 // Deterministic Buy-Box screen for a discovered listing (no LLM — the fields are already structured).
 // `drop` marks a listing we should auto-dismiss on insert (non-industrial — e.g. Shop/Office, or sub-floor price).
 function screen(n: Norm, box: Box | undefined): { fit: string; score: number; reason: string; drop?: boolean } {
@@ -143,8 +149,8 @@ function screen(n: Norm, box: Box | undefined): { fit: string; score: number; re
   if (n.state === "TX" && /\b(land|lot|lots|acreage|vacant|unimproved|undeveloped|raw\s+land)\b/i.test(typeHay) && !/\b(ios|yard|laydown|building|warehouse|shop)\b/i.test(typeHay)) {
     return { fit: "no-fit", score: 12, reason: `${n.propertyType || "Land"} — vacant land, not a building (TX)`, drop: true };
   }
-  const industrial = !n.propertyType || /industrial|warehouse|flex|manufactur|distribution|ios|storage|yard/i.test(n.propertyType);
-  if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial/flex`, drop: true };
+  const industrial = !n.propertyType || INDUSTRIAL_RE.test(n.propertyType);
+  if (!industrial) return { fit: "no-fit", score: 15, reason: `${n.propertyType} — not industrial`, drop: true };
   // Sub-$700K in these markets is almost always a house or a sub-scale parcel — auto-dismiss.
   if (n.price != null && n.price < PRICE_FLOOR) return { fit: "no-fit", score: 10, reason: `$${(n.price / 1e6).toFixed(2)}M — below the $${(PRICE_FLOOR / 1000)}K minimum`, drop: true };
   let pts = 40; // in-market industrial for-sale
@@ -503,7 +509,7 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
       const cityL = (n.city || n.address || "").toLowerCase();
       const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
       if (!inMarket) continue;
-      if (n.propertyType && !/industrial|warehouse|flex|manufactur|distribution|ios|storage|shop|yard/i.test(n.propertyType)) continue; // industrial only — skip retail/office/etc.
+      if (n.propertyType && !INDUSTRIAL_RE.test(n.propertyType)) continue; // industrial only — skip retail/office/etc.
       if (isErpListing(n)) continue; // don't surface ERP's own listings
       if (n.datePosted) { const t = Date.parse(n.datePosted); if (!Number.isNaN(t) && t < cutoff) continue; } // older than ~1 month
       norms.push(n);
@@ -551,7 +557,7 @@ export async function runMarketScan(only?: "platforms" | "brokers"): Promise<Mar
         const cityL = (n.city || n.address || "").toLowerCase();
         const inMarket = n.state === "TX" ? TX_CITIES.some((c) => cityL.includes(c)) : FL_CITIES.some((c) => cityL.includes(c));
         if (!inMarket) continue;
-        if (n.propertyType && !/industrial|warehouse|flex|manufactur|distribution|ios|storage|shop|yard/i.test(n.propertyType)) continue;
+        if (n.propertyType && !INDUSTRIAL_RE.test(n.propertyType)) continue;
         if (isErpListing(n)) continue;
         norms.push(n);
       }
