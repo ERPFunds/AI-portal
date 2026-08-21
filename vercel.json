@@ -62,8 +62,12 @@
       "schedule": "0 14,18,22 * * *"
     },
     {
-      "path": "/api/cron/market-scan",
-      "schedule": "0 15 * * 1"
+      "path": "/api/cron/market-scan?only=brokers",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/market-scan?only=platforms",
+      "schedule": "20 15 * * 1"
     },
     {
       "path": "/api/cron/leasing-scan",

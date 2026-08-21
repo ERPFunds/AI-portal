@@ -4,14 +4,17 @@ import { runMarketScan } from "@/lib/agents/acq/market-scan";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Scheduled market scan (see vercel.json) — weekly proactive sourcing sweep of LoopNet + Crexi.
+// Scheduled market scan (see vercel.json). ?only=brokers scans broker websites; ?only=platforms scans
+// LoopNet/Crexi/LinkedIn; omitted runs both. Broker sites run daily, platforms weekly (separate crons).
 // Gated on CRON_SECRET; Vercel adds the matching Authorization header to scheduled invocations.
 export async function GET(req: NextRequest) {
   if (req.headers.get("authorization") !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const p = req.nextUrl.searchParams.get("only");
+  const only = p === "brokers" || p === "platforms" ? p : undefined;
   try {
-    return NextResponse.json(await runMarketScan());
+    return NextResponse.json(await runMarketScan(only));
   } catch (e) {
     return NextResponse.json({ ok: false, error: String(e).slice(0, 300) }, { status: 502 });
   }
