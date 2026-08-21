@@ -27,7 +27,22 @@ export async function GET(req: NextRequest) {
   await seedIfEmpty(admin, state);
   const { data, error } = await admin.from("pipeline_rows").select("id, sort_order, data").eq("state", state).order("sort_order", { ascending: true });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+
+  // Dismissed inbound listings surface (read-only) in the pipeline's Archive band, so nothing removed
+  // from Inbound is truly lost — it's reviewable in one place. Marked _src:'inbound' for the UI.
+  const { data: dism } = await admin.from("inbound_listings")
+    .select("id, address, submarket, asking_price, sf, broker_firm, broker, referred_by, channel, reason, listing_url, raw_subject, updated_at")
+    .eq("state", state).eq("status", "dismissed")
+    .order("updated_at", { ascending: false }).limit(200);
+  const archived = (dism ?? []).map((l, i) => {
+    const label = l.address || l.raw_subject || "Listing";
+    const src = l.referred_by || l.channel || "";
+    const data = state === "TX"
+      ? { kind: "pipeline", status: "Archive", _src: "inbound", location: l.submarket || "", owner: l.broker_firm || l.broker || "", address: label, tenant: "", source: src, price: l.asking_price, pricePsf: null, yield: null, acreage: null, sqft: l.sf, yearBuilt: null, nextSteps: "", notes: l.reason || "", listingUrl: l.listing_url }
+      : { section: "Archive", _src: "inbound", name: label, status: "", source: src, propertyType: "Industrial", location: l.submarket || "", yearBuilt: null, units: null, occupancy: null, capRate: null, sqft: l.sf, acres: null, price: l.asking_price, psf: null, notes: l.reason || "", listingUrl: l.listing_url };
+    return { id: `inbound:${l.id}`, sort_order: 1_000_000 + i, data };
+  });
+  return NextResponse.json({ items: [...(data ?? []), ...archived] });
 }
 
 export async function POST(req: NextRequest) {

@@ -10,6 +10,7 @@ export type TxRow = {
   kind: 'pipeline' | 'market'
   aiRec?: AiRec | null
   listingUrl?: string | null
+  _src?: 'inbound' // a dismissed inbound listing surfaced read-only in the Archive band
   status: string
   location: string
   owner: string
@@ -29,6 +30,7 @@ export type TxRow = {
 export type FlRow = {
   aiRec?: AiRec | null
   listingUrl?: string | null
+  _src?: 'inbound' // a dismissed inbound listing surfaced read-only in the Archive band
   section: string
   name: string
   status: string

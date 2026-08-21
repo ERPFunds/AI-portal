@@ -137,8 +137,8 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
   const pipeline = useMemo(() => rows.filter((r) => r.kind === 'pipeline' && match(r)), [rows, q])
   const market = useMemo(() => rows.filter((r) => r.kind === 'market' && match(r)), [rows, q])
   // Compact row — the rest of the fields live in the expand-on-click card below each row.
-  const cols = ['', 'Location', 'Address', 'Status', 'Price', 'AI Rec', '']
-  const rightCols = new Set(['Price'])
+  const cols = ['', 'Address', 'Price', '$ PSF', 'Listing', '']
+  const rightCols = new Set(['Price', '$ PSF'])
   const marketByLoc = useMemo(() => {
     const m = new Map<string, TxRowE[]>()
     for (const r of market) { const k = r.location || 'Other'; if (!m.has(k)) m.set(k, []); m.get(k)!.push(r) }
@@ -152,29 +152,30 @@ function TexasPipeline({ rows, query, showMarket, onEdit, onMove, onRecommend, r
       <React.Fragment key={r._id}>
         <tr style={{ background: bg, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : r._id)}>
           <td style={{ ...TD, ...stickyTD(bg), width: 24, textAlign: 'center', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</td>
-          <td style={{ ...TD, fontWeight: 600, color: NAVY, whiteSpace: 'nowrap' }}>{txt(r.location)}</td>
-          <td style={{ ...TD, minWidth: 200 }}>{txt(r.address)}</td>
-          <td style={TD} onClick={(e) => e.stopPropagation()}>{catSelect(r.status, (v) => onMove(r, v))}</td>
+          <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 210, whiteSpace: 'pre-line' }}>
+            {txt(r.address)}
+            <div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? <span style={{ fontSize: 11, color: '#94a3b8' }}>Archive · from inbound</span> : catSelect(r.status, (v) => onMove(r, v))}</div>
+          </td>
           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
-          <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
-          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{archiveBtn(r.status === 'Archive', () => onMove(r, r.status === 'Archive' ? 'Under Review' : 'Archive'))}{editBtn(() => onEdit(r))}</td>
+          <td style={numTD}>{psf(r.pricePsf)}</td>
+          <td style={TD}>{listingLink(findUrl(r))}</td>
+          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? null : editBtn(() => onEdit(r))}</td>
         </tr>
         {isOpen && (
           <tr style={{ background: '#f0f9ff' }}>
             <td colSpan={cols.length} style={{ padding: '14px 20px', borderBottom: '2px solid #bae6fd' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 16 }}>
+                <Detail label="Location">{txt(r.location)}</Detail>
                 <Detail label="Owner">{txt(r.owner)}</Detail>
                 <Detail label="Tenant">{txt(r.tenant)}</Detail>
                 <Detail label="Source">{txt(r.source)}</Detail>
-                <Detail label="$ PSF">{psf(r.pricePsf)}</Detail>
                 <Detail label="% Yield">{pct(r.yield)}</Detail>
                 <Detail label="Acreage">{num(r.acreage)}</Detail>
                 <Detail label="Sq. Ft.">{num(r.sqft)}</Detail>
                 <Detail label="Year Built">{txt(r.yearBuilt)}</Detail>
                 <Detail label="Next Steps">{txt(r.nextSteps)}</Detail>
-                <Detail label="Listing">{listingLink(findUrl(r))}</Detail>
                 <Detail label="Notes / Comments">{txt(cleanNotes(r.notes))}</Detail>
-                <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
+                {r._src !== 'inbound' && <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />}
               </div>
             </td>
           </tr>
@@ -245,8 +246,8 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
   const match = (r: FlRow) => !q || [r.name, r.status, r.source, r.propertyType, r.location, r.notes].join(' ').toLowerCase().includes(q)
   const list = useMemo(() => rows.filter(match), [rows, q])
   // Compact row — the rest of the fields live in the expand-on-click card below each row.
-  const cols = ['', 'Name', 'Property Type', 'Purchase Price', 'AI Rec', '']
-  const rightCols = new Set(['Purchase Price'])
+  const cols = ['', 'Name', 'Property Type', 'Purchase Price', 'PSF / P-Acre', 'Listing', '']
+  const rightCols = new Set(['Purchase Price', 'PSF / P-Acre'])
   return (
     <div>
       <div style={{ overflowX: 'auto', border: '1px solid #e2e8f0', borderRadius: 12, background: '#fff' }}>
@@ -266,11 +267,12 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
                       <React.Fragment key={r._id}>
                         <tr style={{ background: bg, cursor: 'pointer' }} onClick={() => setOpen(isOpen ? null : r._id)}>
                           <td style={{ ...TD, ...stickyTD(bg), width: 24, textAlign: 'center', color: '#94a3b8' }}>{isOpen ? '▲' : '▼'}</td>
-                          <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 190, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>{catSelect(r.section, (v) => onMove(r, v))}</div></td>
+                          <td style={{ ...TD, fontWeight: 600, color: NAVY, minWidth: 190, whiteSpace: 'pre-line' }}>{txt(r.name)}<div style={{ marginTop: 4 }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? <span style={{ fontSize: 11, color: '#94a3b8' }}>Archive · from inbound</span> : catSelect(r.section, (v) => onMove(r, v))}</div></td>
                           <td style={TD}>{txt(r.propertyType)}</td>
                           <td style={{ ...numTD, fontWeight: 600 }}>{money(r.price)}</td>
-                          <td style={TD}><RecBadge rec={r.aiRec} loading={reccing === r._id} /></td>
-                          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{archiveBtn(r.section === 'Archive', () => onMove(r, r.section === 'Archive' ? 'Under Review' : 'Archive'))}{editBtn(() => onEdit(r))}</td>
+                          <td style={numTD}>{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</td>
+                          <td style={TD}>{listingLink(findUrl(r))}</td>
+                          <td style={{ ...TD, textAlign: 'right', whiteSpace: 'nowrap' }} onClick={(e) => e.stopPropagation()}>{r._src === 'inbound' ? null : editBtn(() => onEdit(r))}</td>
                         </tr>
                         {isOpen && (
                           <tr style={{ background: '#f0f9ff' }}>
@@ -285,10 +287,8 @@ function FloridaPipeline({ rows, query, onEdit, onMove, onRecommend, reccing }: 
                                 <Detail label="Cap Rate">{pct(r.capRate)}</Detail>
                                 <Detail label="SQFT">{num(r.sqft)}</Detail>
                                 <Detail label="Acres">{num(r.acres)}</Detail>
-                                <Detail label="PSF / P-Acre">{isNum(r.psf) ? psf(r.psf) : txt(r.psf)}</Detail>
-                                <Detail label="Listing">{listingLink(findUrl(r))}</Detail>
                                 <Detail label="Notes / Status">{txt(cleanNotes(r.notes))}</Detail>
-                                <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />
+                                {r._src !== 'inbound' && <RecPanel rec={r.aiRec} loading={reccing === r._id} onGen={() => onRecommend(r)} />}
                               </div>
                             </td>
                           </tr>
