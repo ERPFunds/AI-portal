@@ -34,7 +34,11 @@ export async function GET(req: NextRequest) {
     .select("id, address, submarket, asking_price, sf, broker_firm, broker, referred_by, channel, reason, listing_url, raw_subject, updated_at")
     .eq("state", state).eq("status", "dismissed")
     .order("updated_at", { ascending: false }).limit(200);
-  const archived = (dism ?? []).map((l, i) => {
+  // Hide auto-filtered junk (sub-$700K / land / non-industrial / off-market) from the Archive — those
+  // are screener rejects, not decisions worth reviewing. The rows stay in the table (dedup intact); we
+  // just don't surface them here. Meaningful dismissals (manual passes, forwarded emails) still show.
+  const isJunk = (reason: string | null) => !!reason && /below the \$700|vacant land|not industrial|residential|per detail page/i.test(reason);
+  const archived = (dism ?? []).filter((l) => !isJunk(l.reason)).map((l, i) => {
     const label = l.address || l.raw_subject || "Listing";
     const src = l.referred_by || l.channel || "";
     const data = state === "TX"
