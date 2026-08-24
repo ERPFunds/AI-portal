@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // (the table is RLS-locked); every request is gated on an authenticated portal user first.
 
 const COLS =
-  "id, source_mailbox, received_at, origin, listing_url, source_url, attachments, referred_by, referral_kind, channel, address, submarket, state, asking_price, sf, in_place_noi, cap_pct, broker, broker_firm, fit, score, reason, dedup_key, status, raw_subject, preview, created_at";
+  "id, source_mailbox, received_at, origin, listing_url, source_url, attachments, referred_by, referral_kind, channel, address, submarket, state, asking_price, sf, in_place_noi, cap_pct, broker, broker_firm, fit, score, reason, dedup_key, status, raw_subject, preview, created_at, dismissed_at, dismissed_by";
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
@@ -38,10 +38,16 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const id = String(body.id ?? "");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-  const status = body.status === "new" ? "new" : "dismissed";
+  const restoring = body.status === "new";
+  const now = new Date().toISOString();
+
+  // Audit who/when: a person dismissing is stamped with their email; restoring clears the audit.
+  const patch = restoring
+    ? { status: "new", dismissed_at: null, dismissed_by: null, updated_at: now }
+    : { status: "dismissed", dismissed_at: now, dismissed_by: user.email ?? user.id, updated_at: now };
 
   const admin = createAdminClient();
-  const { error } = await admin.from("inbound_listings").update({ status, updated_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await admin.from("inbound_listings").update(patch).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

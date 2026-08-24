@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
   // Dismissed inbound listings surface (read-only) in the pipeline's Archive band, so nothing removed
   // from Inbound is truly lost — it's reviewable in one place. Marked _src:'inbound' for the UI.
   const { data: dism } = await admin.from("inbound_listings")
-    .select("id, address, submarket, asking_price, sf, broker_firm, broker, referred_by, channel, reason, listing_url, raw_subject, updated_at")
+    .select("id, address, submarket, asking_price, sf, broker_firm, broker, referred_by, channel, reason, listing_url, raw_subject, updated_at, dismissed_at, dismissed_by")
     .eq("state", state).eq("status", "dismissed")
     .order("updated_at", { ascending: false }).limit(200);
   // Hide auto-filtered junk (sub-$700K / land / non-industrial / off-market) from the Archive — those
@@ -41,9 +41,14 @@ export async function GET(req: NextRequest) {
   const archived = (dism ?? []).filter((l) => !isJunk(l.reason)).map((l, i) => {
     const label = l.address || l.raw_subject || "Listing";
     const src = l.referred_by || l.channel || "";
+    // Attribution: who dismissed it and when (person email, or "auto-screened" / "pre-audit").
+    const who = l.dismissed_by === "screener" ? "auto-screened" : l.dismissed_by === "unknown (pre-audit)" ? "pre-audit" : l.dismissed_by || null;
+    const when = l.dismissed_at ? String(l.dismissed_at).slice(0, 10) : null;
+    const stamp = who ? `Dismissed by ${who}${when ? ` on ${when}` : ""}` : null;
+    const notes = [stamp, l.reason].filter(Boolean).join(" · ");
     const data = state === "TX"
-      ? { kind: "pipeline", status: "Archive", _src: "inbound", location: l.submarket || "", owner: l.broker_firm || l.broker || "", address: label, tenant: "", source: src, price: l.asking_price, pricePsf: null, yield: null, acreage: null, sqft: l.sf, yearBuilt: null, nextSteps: "", notes: l.reason || "", listingUrl: l.listing_url }
-      : { section: "Archive", _src: "inbound", name: label, status: "", source: src, propertyType: "Industrial", location: l.submarket || "", yearBuilt: null, units: null, occupancy: null, capRate: null, sqft: l.sf, acres: null, price: l.asking_price, psf: null, notes: l.reason || "", listingUrl: l.listing_url };
+      ? { kind: "pipeline", status: "Archive", _src: "inbound", location: l.submarket || "", owner: l.broker_firm || l.broker || "", address: label, tenant: "", source: src, price: l.asking_price, pricePsf: null, yield: null, acreage: null, sqft: l.sf, yearBuilt: null, nextSteps: "", notes, listingUrl: l.listing_url }
+      : { section: "Archive", _src: "inbound", name: label, status: "", source: src, propertyType: "Industrial", location: l.submarket || "", yearBuilt: null, units: null, occupancy: null, capRate: null, sqft: l.sf, acres: null, price: l.asking_price, psf: null, notes, listingUrl: l.listing_url };
     return { id: `inbound:${l.id}`, sort_order: 1_000_000 + i, data };
   });
   return NextResponse.json({ items: [...(data ?? []), ...archived] });

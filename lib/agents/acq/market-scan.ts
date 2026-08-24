@@ -232,7 +232,9 @@ async function upsertNorms(
       // row (or a legacy "duplicate") is re-evaluated and flips to dismissed when the fresh screen drops it.
       const mutable = existing.status === "new" || existing.status === "duplicate";
       const status = mutable ? (sc.drop ? "dismissed" : "new") : existing.status;
-      const { error } = await admin.from("inbound_listings").update({ ...fields, status }).eq("id", existing.id);
+      // Audit only when THIS screen dismisses a mutable row; never overwrite an existing (person) dismissal.
+      const audit = mutable && status === "dismissed" ? { dismissed_at: fields.updated_at, dismissed_by: "screener" } : {};
+      const { error } = await admin.from("inbound_listings").update({ ...fields, status, ...audit }).eq("id", existing.id);
       if (!error) updated++; else console.error("[market-scan] update failed:", error.message);
       continue;
     }
@@ -240,6 +242,7 @@ async function upsertNorms(
     const { data: ins, error } = await admin.from("inbound_listings").insert({
       message_id: n.url, source_mailbox: "market-scan", received_at: new Date().toISOString(),
       origin: "discovered", dedup_key: key, status, ...fields,
+      ...(status === "dismissed" ? { dismissed_at: fields.updated_at, dismissed_by: "screener" } : {}),
     }).select("id").single();
     if (!error && ins) {
       inserted++;
