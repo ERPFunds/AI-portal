@@ -81,10 +81,11 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
   const [scanMsg, setScanMsg] = useState<string | null>(null)
   const [adding, setAdding] = useState<string | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [dismissed, setDismissed] = useState(0)
 
   const load = async () => {
     setLoading(true)
-    try { const r = await fetch('/api/inbound-listings'); const d = await r.json(); if (r.ok) setRows(d.items ?? []) }
+    try { const r = await fetch('/api/inbound-listings'); const d = await r.json(); if (r.ok) { setRows(d.items ?? []); setDismissed(d.dismissed ?? 0) } }
     catch { /* ignore */ } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [])
@@ -254,6 +255,10 @@ export default function InboundListingIntake({ market: locked }: { market?: 'TX'
         {kpi('Listings', String(base.length))}
         {kpi('Fit', String(fitCount), '#16a34a')}
         {kpi('Borderline', String(borderlineCount), '#b45309')}
+        <div title="Dismissed listings are kept in the Deal Pipeline → Archive; they never reappear in Inbound." style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: '12px 16px', flex: 1, minWidth: 120 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 600, color: '#6b7280', textTransform: 'uppercase', letterSpacing: '.4px' }}>Dismissed → Archive</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: '#94a3b8', marginTop: 4 }}>{dismissed}</div>
+        </div>
       </div>
 
       {/* Filters */}

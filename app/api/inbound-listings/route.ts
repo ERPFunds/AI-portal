@@ -21,7 +21,12 @@ export async function GET(req: NextRequest) {
   if (market === "TX" || market === "FL") q = q.eq("state", market);
   const { data, error } = await q;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+
+  // How many have been dismissed (they live, reviewable, in the Pipeline Archive) — for the header metric.
+  let dq = admin.from("inbound_listings").select("id", { count: "exact", head: true }).eq("status", "dismissed");
+  if (market === "TX" || market === "FL") dq = dq.eq("state", market);
+  const { count: dismissed } = await dq;
+  return NextResponse.json({ items: data ?? [], dismissed: dismissed ?? 0 });
 }
 
 // Dismiss a listing (hide it from the tab). { id, status? }
