@@ -179,6 +179,8 @@ export interface LpSfData {
   contactEmail: string | null;    // LP primary contact's email (for last-interaction matching)
   advisorEmail: string | null;    // broker/advisor rep's email
   stage: string | null;           // the LP Opportunity's StageName (SF sales stage)
+  amount: number | null;          // the LP Opportunity's Amount (target/expected commitment)
+  closeDate: string | null;       // the LP Opportunity's CloseDate (YYYY-MM-DD)
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -356,6 +358,8 @@ export async function fetchLpSalesforceData(
         contactEmail: null,
         advisorEmail: null,
         stage: null,
+        amount: null,
+        closeDate: null,
       };
       idToKey[id] = key;
       matched++;
@@ -374,7 +378,7 @@ export async function fetchLpSalesforceData(
   for (let i = 0; i < accIds.length; i += 200) {
     const idList = accIds.slice(i, i + 200).map((id) => `'${id}'`).join(",");
     try {
-      const oq = `SELECT AccountId, Type, StageName, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
+      const oq = `SELECT AccountId, Type, StageName, Amount, CloseDate, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Broker_Dealer__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE AccountId IN (${idList}) ORDER BY CreatedDate DESC`;
       const ores = await sfFetch(`/query?q=${encodeURIComponent(oq)}`);
       if (!ores.ok) { console.log("[lp-opp] query", ores.status, (await ores.text()).slice(0, 150)); continue; }
       for (const o of (((await ores.json()).records ?? []) as Record<string, unknown>[])) {
@@ -384,6 +388,8 @@ export async function fetchLpSalesforceData(
         if (!row) continue;
         if (!row.lpType && o.Type != null && String(o.Type).trim()) row.lpType = String(o.Type);
         if (!row.stage && o.StageName != null && String(o.StageName).trim()) row.stage = String(o.StageName);
+        if (row.amount == null && o.Amount != null) row.amount = toNum(o.Amount);
+        if (!row.closeDate && o.CloseDate != null && String(o.CloseDate).trim()) row.closeDate = String(o.CloseDate);
         const firm = rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r) || rel(o.Partner_Broker_Dealer__r);
         const repName = rel(o.Partner_Advisor_Contact__r);
         const repEmail = (o.Partner_Advisor_Contact__r as { Email?: unknown } | null)?.Email;

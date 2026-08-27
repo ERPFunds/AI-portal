@@ -24,6 +24,8 @@ import DealVendorDesk from './DealVendorDesk'
 import NewsletterAnalyticsView from './NewsletterAnalyticsView'
 import LinkedInRepurposeView from './LinkedInRepurposeView'
 import TenantCommsView from './TenantCommsView'
+import InvestorCrmView from './investor-crm/InvestorCrmView'
+import DstVendorsView from './investor-crm/DstVendorsView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -343,6 +345,9 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
       />
     ),
     lp: <LpDirectoryView />,
+    'investor-crm-pe': <InvestorCrmView program="PE" />,
+    'investor-crm-dst': <InvestorCrmView program="DST" />,
+    'dst-vendors': <DstVendorsView />,
     'capital-raise': <CapitalRaiseView />,
     'ir-qa': <QaReviewView />,
     'distribution-lists': <DistributionListsView />,
