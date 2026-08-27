@@ -26,6 +26,7 @@ import LinkedInRepurposeView from './LinkedInRepurposeView'
 import TenantCommsView from './TenantCommsView'
 import InvestorCrmView from './investor-crm/InvestorCrmView'
 import DstVendorsView from './investor-crm/DstVendorsView'
+import TenantCrmView from './tenant-crm/TenantCrmView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -323,6 +324,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'leasing-inquiries': <LeasingInquiriesView />,
     workorders: <WorkOrdersView />,
     'tenant-comms': <TenantCommsView />,
+    'tenant-crm': <TenantCrmView />,
     leasing: <LeasingView />,
     'lease-processing': <LeaseProcessingView />,
     fincontrols: <FinControlsView />,
