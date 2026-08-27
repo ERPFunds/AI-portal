@@ -9,7 +9,6 @@ import type { LpRecord } from '@/app/api/lp-directory/route'
 // accounting (called/uncalled/NAV) lives in the fund admin portal, not here.
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
-const TIERS = ['Anchor', 'Core', 'Prospect']
 const OWNERS = ['Meghan Berry', 'William Meyer', 'Michele Parad', 'Pippi Espinoza']
 
 const DST_GROUP = 'DST / 1031'
@@ -60,12 +59,6 @@ function effectiveCommitted(lp: LpRecord): number {
   if (lp.group === DST_GROUP && lp.commitmentUsd > 0) return lp.commitmentUsd
   return 0
 }
-function tierStyle(tier?: string | null): { color: string; bg: string } {
-  if (tier === 'Anchor') return { color: '#9a6b12', bg: '#fbefd4' }
-  if (tier === 'Core') return { color: '#0f766e', bg: '#e4f2ef' }
-  if (tier === 'Prospect') return { color: '#6b7280', bg: '#f1f2f4' }
-  return { color: '#9ca3af', bg: '#f4f5f7' }
-}
 function stageColor(stage?: string | null): string {
   const i = FUNNEL_STAGES.indexOf(stage || '')
   if (i < 0) return '#9ca3af'
@@ -74,11 +67,13 @@ function stageColor(stage?: string | null): string {
   return '#5b6472'                 // early
 }
 
-// LP-directory tagging: the investor's Type derived from its group.
+// LP-directory tagging: the investor's Type derived from its group + commitment status.
+// Fund IV investors split into committed LPs vs prospects (targets not yet committed).
 function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
   if (lp.group === DST_GROUP) return { label: 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
-  return { label: 'Fund IV LP Target', bg: '#eff6ff', color: '#1d4ed8' }
+  if (effectiveCommitted(lp) > 0) return { label: 'Fund IV LP', bg: '#eff6ff', color: '#1d4ed8' }
+  return { label: 'Fund IV Prospect', bg: '#e5f2eb', color: '#197a52' }
 }
 
 export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) {
@@ -149,7 +144,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
   function exportCsv() {
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Investor', 'Account (SF)', 'Type', 'Prior Funds', 'Program', 'Tier', 'Funnel Stage', 'Committed', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
+    const cols = ['Investor', 'Account (SF)', 'Type', 'Prior Funds', 'Program', 'Funnel Stage', 'Committed', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
     const lines = rows.map(lp => {
       const ov = overlayFor(lp)
       const target = lp.sfAmount ?? (lp.commitmentUsd > 0 ? lp.commitmentUsd : null)
@@ -159,7 +154,6 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
         typeTag(lp).label,
         (lp.priorFunds || []).join(', '),
         program,
-        ov?.tier || '',
         ov?.funnel_stage || '',
         effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
         target != null ? fmtUsd(target) : '',
@@ -341,7 +335,6 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   const key = normKey(lp.investor)
   const [tab, setTab] = useState<'overview' | 'meetings' | 'emails' | 'docs'>('overview')
   const [stage, setStage] = useState(overlay?.funnel_stage ?? '')
-  const [tier, setTier] = useState(overlay?.tier ?? '')
   const [owner, setOwner] = useState(overlay?.owner ?? '')
   const [source, setSource] = useState(overlay?.source ?? '')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
@@ -355,7 +348,6 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   const email = lp.resolvedEmail || lp.email || ''
   const committed = effectiveCommitted(lp)
   const targetAmount = lp.sfAmount ?? (lp.commitmentUsd || null)
-  const ts = tierStyle(tier)
 
   useEffect(() => {
     // Meetings from the IR dialogue log
@@ -382,7 +374,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
     try {
       const res = await fetch('/api/investor-crm', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investor: lp.investor, program, funnel_stage: stage, tier, owner, source, ...patch }),
+        body: JSON.stringify({ investor: lp.investor, program, funnel_stage: stage, owner, source, ...patch }),
       })
       const j = await res.json()
       if (!res.ok || j.error) { setSaveMsg(`Save failed: ${j.error ?? res.status}`); return }
@@ -447,7 +439,6 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
               <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid #eef0f2' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af', marginBottom: 5 }}>Total Committed Capital</div>
                 <div style={{ fontSize: 30, fontWeight: 700, color: '#0f766e', fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{fmtUsd(committed)}</div>
-                {tier && <div style={{ display: 'inline-block', marginTop: 10, fontSize: 12, fontWeight: 700, color: ts.color, background: ts.bg, padding: '3px 12px', borderRadius: 20 }}>{tier} LP</div>}
               </div>
 
               {email
@@ -461,12 +452,6 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                 <select value={stage} onChange={e => { setStage(e.target.value); saveOverlay({ funnel_stage: e.target.value }) }} style={selCss}>
                   <option value="">— set stage —</option>
                   {FUNNEL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </RailField>
-              <RailField label="LP Tier">
-                <select value={tier} onChange={e => { setTier(e.target.value); saveOverlay({ tier: e.target.value }) }} style={selCss}>
-                  <option value="">— set tier —</option>
-                  {TIERS.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </RailField>
               <RailField label="Target Amount"><div style={railVal}>{fmtUsd(targetAmount)}</div></RailField>
