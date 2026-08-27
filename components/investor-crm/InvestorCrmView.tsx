@@ -190,7 +190,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const [groupByAccount, setGroupByAccount] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const NO_ACCOUNT = '(No account in Salesforce)'
-  const colCount = program === 'DST' ? 7 : 6
+  const colCount = program === 'DST' ? 6 : 5
   const accountGroups = useMemo(() => {
     const m = new Map<string, LpRecord[]>()
     for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
@@ -201,7 +201,6 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
 
   const renderRow = (lp: LpRecord, key: string | number) => {
     const ov = overlayFor(lp)
-    const ts = tierStyle(ov?.tier)
     const stage = ov?.funnel_stage
     const ds = daysSince(lp.lastInteraction?.date)
     return (
@@ -220,9 +219,6 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
             {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
           </div>
         </td>
-        <td style={tdCss}>{ov?.tier
-          ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: ts.color, background: ts.bg }}>{ov.tier}</span>
-          : <span style={{ color: '#d1d5db' }}>—</span>}</td>
         <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
         <td style={tdCss}>{stage
           ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor(stage) }} />{stage}</span>
@@ -282,7 +278,6 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
                 <tr style={{ background: '#f8f9fb', textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
                   <th style={thCss}>Investor</th>
                   <th style={thCss}>Tags</th>
-                  <th style={thCss}>Tier</th>
                   <th style={thCss}>Committed</th>
                   <th style={thCss}>Stage</th>
                   {program === 'DST' && <th style={thCss}>Advisor / Broker</th>}
