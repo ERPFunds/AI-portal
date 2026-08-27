@@ -181,6 +181,7 @@ export interface LpSfData {
   stage: string | null;           // the LP Opportunity's StageName (SF sales stage)
   amount: number | null;          // the LP Opportunity's Amount (target/expected commitment)
   closeDate: string | null;       // the LP Opportunity's CloseDate (YYYY-MM-DD)
+  company: string | null;         // the Account's Parent Account name (the company/household it rolls up to)
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -202,6 +203,7 @@ export interface DstInvestor {
   directEmail: string | null;    // the investor's OWN email (not the broker)
   stage: string | null;
   crmId: string | null;
+  company: string | null;        // the Account's Parent Account name (company/household)
 }
 
 /** Custodian-wrapped IRA accounts read like "STRATA Trust Company Custodian FBO (Jane Doe) IRA
@@ -329,7 +331,7 @@ export async function fetchLpSalesforceData(
   fieldMap.brokerCompany = "Contact[primaryContact].Account.Name";
   fieldMap.brokerContact = "Contact[primaryContact].Name";
 
-  const acctSel = ["Id", "Name"];
+  const acctSel = ["Id", "Name", "Parent.Name"];
   if (lpTypeAcc) acctSel.push(lpTypeAcc.expr);
   if (calledName) acctSel.push(calledName);
   if (distribName) acctSel.push(distribName);
@@ -360,6 +362,7 @@ export async function fetchLpSalesforceData(
         stage: null,
         amount: null,
         closeDate: null,
+        company: (() => { const p = rec.Parent as { Name?: unknown } | null; return p?.Name != null && String(p.Name).trim() ? String(p.Name) : null; })(),
       };
       idToKey[id] = key;
       matched++;
@@ -405,11 +408,11 @@ export async function fetchLpSalesforceData(
   //     so common surnames (Brown, Davis) don't cross-attribute.
   const scheduleSet = new Set(clean.map((n) => n.toLowerCase().trim()));
   // DST/1031 investors: broker-book accounts that aren't Fund IV schedule LPs, keyed by account.
-  const dstByAcct = new Map<string, { name: string; id: string | null; firm: string; rep: string | null; repEmail: string | null; amountUsd: number; stage: string | null }>();
+  const dstByAcct = new Map<string, { name: string; id: string | null; firm: string; rep: string | null; repEmail: string | null; amountUsd: number; stage: string | null; company: string | null }>();
   const brokerBook: { toks: Set<string>; firm: string; rep: string | null; repEmail: string | null; acct: string }[] = [];
   try {
     let path: string | null = `/query?q=${encodeURIComponent(
-      "SELECT Account.Id, Account.Name, Amount, StageName, Partner_Broker_Dealer__r.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE Partner_Broker_Dealer__c != null OR Partner_Advisor__c != null OR Partner_Brokerage__c != null"
+      "SELECT Account.Id, Account.Name, Account.Parent.Name, Amount, StageName, Partner_Broker_Dealer__r.Name, Partner_Advisor__r.Name, Partner_Brokerage__r.Name, Partner_Advisor_Contact__r.Name, Partner_Advisor_Contact__r.Email FROM Opportunity WHERE Partner_Broker_Dealer__c != null OR Partner_Advisor__c != null OR Partner_Brokerage__c != null"
     )}`;
     let guard = 0;
     while (path && guard++ < 25) {
@@ -427,12 +430,13 @@ export async function fetchLpSalesforceData(
         // Surface as a DST/1031 investor row when it isn't already a Fund IV schedule LP.
         const key = acct.toLowerCase().trim();
         if (!scheduleSet.has(key)) {
-          const acctObj = o.Account as { Id?: unknown } | null;
+          const acctObj = o.Account as { Id?: unknown; Parent?: { Name?: unknown } } | null;
           const amt = toNum(o.Amount) ?? 0;
           const stage = o.StageName != null && String(o.StageName).trim() ? String(o.StageName) : null;
+          const company = acctObj?.Parent?.Name != null && String(acctObj.Parent.Name).trim() ? String(acctObj.Parent.Name) : null;
           const ex = dstByAcct.get(key);
-          if (!ex) dstByAcct.set(key, { name: acct, id: acctObj?.Id != null ? String(acctObj.Id) : null, firm, rep, repEmail, amountUsd: amt, stage });
-          else { ex.amountUsd += amt; if (!ex.rep) ex.rep = rep; if (!ex.repEmail) ex.repEmail = repEmail; if (!ex.stage) ex.stage = stage; }
+          if (!ex) dstByAcct.set(key, { name: acct, id: acctObj?.Id != null ? String(acctObj.Id) : null, firm, rep, repEmail, amountUsd: amt, stage, company });
+          else { ex.amountUsd += amt; if (!ex.rep) ex.rep = rep; if (!ex.repEmail) ex.repEmail = repEmail; if (!ex.stage) ex.stage = stage; if (!ex.company) ex.company = company; }
         }
       }
       path = j.done === false && j.nextRecordsUrl ? String(j.nextRecordsUrl).replace(/^.*\/services\/data\/v[\d.]+/, "") : null;
@@ -548,8 +552,18 @@ export async function fetchLpSalesforceData(
       directEmail: direct?.email ?? null,
       stage: d.stage,
       crmId: d.id,
+      company: d.company,
     };
   });
+  // Coverage diagnostic for the Investor CRM "group by account" (SF parent-account / company).
+  console.log("[lp-company]", JSON.stringify({
+    fundIvWithCompany: Object.values(byName).filter((r) => r.company).length,
+    fundIvTotal: Object.keys(byName).length,
+    dstWithCompany: dstInvestors.filter((d) => d.company).length,
+    dstTotal: dstInvestors.length,
+    sampleFundIv: Object.values(byName).filter((r) => r.company).slice(0, 8).map((r) => r.company),
+    sampleDst: dstInvestors.filter((d) => d.company).slice(0, 8).map((d) => ({ n: d.investor, co: d.company })),
+  }).slice(0, 1500));
   console.log("[lp-dst]", JSON.stringify({
     count: dstInvestors.length,
     accountsWithDirectEmail: directEmailCount,

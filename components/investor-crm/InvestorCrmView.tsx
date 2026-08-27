@@ -128,12 +128,13 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
   function exportCsv() {
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Investor', 'Type', 'Prior Funds', 'Program', 'Tier', 'Funnel Stage', 'Committed', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
+    const cols = ['Investor', 'Account (SF)', 'Type', 'Prior Funds', 'Program', 'Tier', 'Funnel Stage', 'Committed', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
     const lines = rows.map(lp => {
       const ov = overlayFor(lp)
       const target = lp.sfAmount ?? (lp.commitmentUsd > 0 ? lp.commitmentUsd : null)
       return [
         lp.investor,
+        lp.sfCompany || '',
         typeTag(lp).label,
         (lp.priorFunds || []).join(', '),
         program,
@@ -164,6 +165,57 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const accent = program === 'DST' ? '#8a5a1a' : '#26324a'
   const committedLabel = program === 'DST' ? 'DST COMMITTED' : 'FUND IV COMMITTED'
 
+  // Group-by-account (the investor's Salesforce parent-account / company).
+  const [groupByAccount, setGroupByAccount] = useState(false)
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const NO_ACCOUNT = '(No account in Salesforce)'
+  const colCount = program === 'DST' ? 7 : 6
+  const accountGroups = useMemo(() => {
+    const m = new Map<string, LpRecord[]>()
+    for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
+    return [...m.entries()]
+      .map(([name, lps]) => ({ name, lps, committed: lps.reduce((s, l) => s + effectiveCommitted(l), 0) }))
+      .sort((a, b) => a.name === NO_ACCOUNT ? 1 : b.name === NO_ACCOUNT ? -1 : (b.committed - a.committed) || a.name.localeCompare(b.name))
+  }, [rows])
+
+  const renderRow = (lp: LpRecord, key: string | number) => {
+    const ov = overlayFor(lp)
+    const ts = tierStyle(ov?.tier)
+    const stage = ov?.funnel_stage
+    const ds = daysSince(lp.lastInteraction?.date)
+    return (
+      <tr key={key} onClick={() => setSelected(lp)}
+        style={{ borderTop: '1px solid #f0f1f3', cursor: 'pointer' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+        <td style={tdCss}>
+          <div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div>
+          <div style={{ fontSize: 12, color: '#9ca3af' }}>{[lp.contact, lp.resolvedEmail || lp.email].filter(Boolean).join(' · ')}</div>
+        </td>
+        <td style={tdCss}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 220 }}>
+            {(() => { const t = typeTag(lp); return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span> })()}
+            {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
+            {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
+          </div>
+        </td>
+        <td style={tdCss}>{ov?.tier
+          ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: ts.color, background: ts.bg }}>{ov.tier}</span>
+          : <span style={{ color: '#d1d5db' }}>—</span>}</td>
+        <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
+        <td style={tdCss}>{stage
+          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor(stage) }} />{stage}</span>
+          : <span style={{ color: '#d1d5db' }}>—</span>}</td>
+        {program === 'DST' && <td style={tdCss}>{(lp.brokerFirm || lp.sfAdvisorFirm)
+          ? <div><div style={{ fontSize: 13 }}>{lp.brokerFirm || lp.sfAdvisorFirm}</div><div style={{ fontSize: 12, color: '#9ca3af' }}>{lp.brokerContact || lp.sfAdvisorContact}</div></div>
+          : <span style={{ color: '#d1d5db' }}>—</span>}</td>}
+        <td style={tdCss}>{lp.lastInteraction
+          ? <div><div style={{ fontSize: 13 }}>{fmtDate(lp.lastInteraction.date)}</div>{ds != null && <div style={{ fontSize: 11, fontWeight: 600, color: ds <= 14 ? '#197a52' : ds <= 45 ? '#9a5b12' : '#b91c1c' }}>{ds}d ago</div>}</div>
+          : <span style={{ color: '#d1d5db' }}>No contact logged</span>}</td>
+      </tr>
+    )
+  }
+
   return (
     <div style={{ padding: '4px 2px' }}>
       {/* Header */}
@@ -191,6 +243,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
           placeholder="Search investors, contacts, email…"
           style={{ flex: 1, minWidth: 220, maxWidth: 360, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
         />
+        <button onClick={() => setGroupByAccount(v => !v)} style={{ border: `1px solid ${groupByAccount ? '#c7d2fe' : '#d1d5db'}`, background: groupByAccount ? '#eef2ff' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: groupByAccount ? '#3730a3' : '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>☰ {groupByAccount ? 'Grouped by account' : 'Group by account'}</button>
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
       </div>
 
@@ -213,44 +266,26 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
                 </tr>
               </thead>
               <tbody>
-                {rows.map((lp, i) => {
-                  const ov = overlayFor(lp)
-                  const ts = tierStyle(ov?.tier)
-                  const stage = ov?.funnel_stage
-                  const ds = daysSince(lp.lastInteraction?.date)
-                  return (
-                    <tr key={i} onClick={() => setSelected(lp)}
-                      style={{ borderTop: '1px solid #f0f1f3', cursor: 'pointer' }}
-                      onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
-                      onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-                      <td style={tdCss}>
-                        <div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div>
-                        <div style={{ fontSize: 12, color: '#9ca3af' }}>{[lp.contact, lp.resolvedEmail || lp.email].filter(Boolean).join(' · ')}</div>
-                      </td>
-                      <td style={tdCss}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 220 }}>
-                          {(() => { const t = typeTag(lp); return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span> })()}
-                          {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
-                          {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
-                        </div>
-                      </td>
-                      <td style={tdCss}>{ov?.tier
-                        ? <span style={{ fontSize: 11.5, fontWeight: 700, padding: '2px 9px', borderRadius: 20, color: ts.color, background: ts.bg }}>{ov.tier}</span>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                      <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
-                      <td style={tdCss}>{stage
-                        ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor(stage) }} />{stage}</span>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                      {program === 'DST' && <td style={tdCss}>{(lp.brokerFirm || lp.sfAdvisorFirm)
-                        ? <div><div style={{ fontSize: 13 }}>{lp.brokerFirm || lp.sfAdvisorFirm}</div><div style={{ fontSize: 12, color: '#9ca3af' }}>{lp.brokerContact || lp.sfAdvisorContact}</div></div>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}</td>}
-                      <td style={tdCss}>{lp.lastInteraction
-                        ? <div><div style={{ fontSize: 13 }}>{fmtDate(lp.lastInteraction.date)}</div>{ds != null && <div style={{ fontSize: 11, fontWeight: 600, color: ds <= 14 ? '#197a52' : ds <= 45 ? '#9a5b12' : '#b91c1c' }}>{ds}d ago</div>}</div>
-                        : <span style={{ color: '#d1d5db' }}>No contact logged</span>}</td>
-                    </tr>
-                  )
-                })}
-                {rows.length === 0 && <tr><td colSpan={program === 'DST' ? 7 : 6} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No investors match.</td></tr>}
+                {groupByAccount
+                  ? accountGroups.flatMap(g => {
+                      const open = !collapsed.has(g.name)
+                      const header = (
+                        <tr key={'h:' + g.name} onClick={() => setCollapsed(prev => { const n = new Set(prev); if (n.has(g.name)) n.delete(g.name); else n.add(g.name); return n })}
+                          style={{ background: '#f3f5f8', cursor: 'pointer', borderTop: '2px solid #e5e7eb' }}>
+                          <td colSpan={colCount} style={{ padding: '10px 14px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{ color: '#6b7280', width: 12 }}>{open ? '▾' : '▸'}</span>
+                              <span style={{ fontWeight: 700, color: g.name === NO_ACCOUNT ? '#9ca3af' : '#1a2233' }}>{g.name}</span>
+                              <span style={{ fontSize: 12, color: '#6b7280' }}>{g.lps.length} investor{g.lps.length === 1 ? '' : 's'}</span>
+                              <span style={{ marginLeft: 'auto', fontWeight: 700, color: '#0f766e', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(g.committed)}</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )
+                      return open ? [header, ...g.lps.map(lp => renderRow(lp, g.name + '|' + lp.investor))] : [header]
+                    })
+                  : rows.map((lp, i) => renderRow(lp, i))}
+                {rows.length === 0 && <tr><td colSpan={colCount} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No investors match.</td></tr>}
               </tbody>
             </table>
           </div>

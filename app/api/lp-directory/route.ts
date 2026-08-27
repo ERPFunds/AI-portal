@@ -158,6 +158,7 @@ export interface LpRecord {
   sfStage?: string | null;       // the LP Opportunity's Salesforce StageName
   sfAmount?: number | null;      // the LP Opportunity's Amount (target/expected commitment)
   sfCloseDate?: string | null;   // the LP Opportunity's CloseDate (YYYY-MM-DD)
+  sfCompany?: string | null;     // the SF Account's Parent Account name (company/household to group by)
   priorFunds?: string[];         // which prior ERP funds this investor was part of (e.g. ["Fund II","Fund III"])
 }
 
@@ -410,6 +411,7 @@ export async function GET(req: NextRequest) {
           lp.sfStage = sf.stage;
           lp.sfAmount = sf.amount;
           lp.sfCloseDate = sf.closeDate;
+          lp.sfCompany = sf.company;
           if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
@@ -432,6 +434,7 @@ export async function GET(req: NextRequest) {
             sfStage: d.stage,
             sfAmount: d.commitmentUsd || null,
             sfCloseDate: null,
+            sfCompany: d.company,
             sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
