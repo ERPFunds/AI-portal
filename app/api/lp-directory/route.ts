@@ -156,6 +156,8 @@ export interface LpRecord {
   resolvedEmail: string | null; // best-known email (schedule → SF contact → past correspondence)
   committedUsd?: number | null;  // hard-committed so far (portal-stored; blank for uncommitted targets)
   sfStage?: string | null;       // the LP Opportunity's Salesforce StageName
+  sfAmount?: number | null;      // the LP Opportunity's Amount (target/expected commitment)
+  sfCloseDate?: string | null;   // the LP Opportunity's CloseDate (YYYY-MM-DD)
   priorFunds?: string[];         // which prior ERP funds this investor was part of (e.g. ["Fund II","Fund III"])
 }
 
@@ -406,6 +408,8 @@ export async function GET(req: NextRequest) {
           lp.sfAdvisorFirm = sf.advisorFirm;
           lp.sfAdvisorContact = sf.advisorContact;
           lp.sfStage = sf.stage;
+          lp.sfAmount = sf.amount;
+          lp.sfCloseDate = sf.closeDate;
           if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
@@ -426,6 +430,8 @@ export async function GET(req: NextRequest) {
             group: "DST / 1031",
             lastInteraction: null,
             sfStage: d.stage,
+            sfAmount: d.commitmentUsd || null,
+            sfCloseDate: null,
             sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
