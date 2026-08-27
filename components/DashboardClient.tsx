@@ -30,6 +30,23 @@ import TenantCrmView from './tenant-crm/TenantCrmView'
 import ContractorsView from './directories/ContractorsView'
 import LendersView from './directories/LendersView'
 
+// Per-section accent colors for the sidebar, so each section's tabs read as a color band.
+const SECTION_COLORS: Record<string, string> = {
+  'Command': '#3EB5C4',
+  'Overview': '#3EB5C4',
+  'Investor': '#5B9BD5',
+  'Investor CRM': '#0F766E',
+  'Acquisitions': '#C4873E',
+  'Property': '#3DAE7A',
+  'Leasing': '#9B72E0',
+  'Finance & Admin': '#E0785B',
+  'Finance': '#E0785B',
+  'Operations': '#6366F1',
+  'Docs': '#8A8F98',
+  'Platform': '#8A8F98',
+}
+const sectionColor = (s: string) => SECTION_COLORS[s] ?? '#8A8F98'
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Props {
@@ -244,11 +261,13 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   // ─── Sidebar ────────────────────────────────────────────────────────────────
 
   let sbSection = ''
+  let sbColor = '#8A8F98'
   const sidebar = (
     <div className="sidebar">
       {sidebarItems.map((item, i) => {
         if ('section' in item) {
           sbSection = item.section
+          sbColor = sectionColor(item.section)
           const isCollapsed = collapsedSections.has(item.section)
           return (
             <div
@@ -259,23 +278,26 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
                 if (n.has(item.section)) n.delete(item.section); else n.add(item.section)
                 return n
               })}
-              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: sbColor }}
             >
               <span>{item.section}</span>
-              <span style={{ fontSize: 9, opacity: 0.55 }}>{isCollapsed ? '▸' : '▾'}</span>
+              <span style={{ fontSize: 9, opacity: 0.6 }}>{isCollapsed ? '▸' : '▾'}</span>
             </div>
           )
         }
         if (collapsedSections.has(sbSection)) return null
+        const active = currentView === item.view
+        const color = sbColor
         return (
           <div
             key={i}
-            className={`nav-item ${currentView === item.view ? 'active' : ''}`}
+            className={`nav-item ${active ? 'active' : ''}`}
             onClick={() => setCurrentView(item.view)}
+            style={{ borderLeft: `3px solid ${color}`, background: active ? `${color}1f` : undefined }}
           >
-            <span className="nav-icon">{item.icon}</span>
+            <span className="nav-icon" style={{ color }}>{item.icon}</span>
             {item.label}
-            <span className="nav-dot" />
+            <span className="nav-dot" style={{ background: color }} />
           </div>
         )
       })}
