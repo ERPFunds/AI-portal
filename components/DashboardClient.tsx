@@ -27,6 +27,8 @@ import TenantCommsView from './TenantCommsView'
 import InvestorCrmView from './investor-crm/InvestorCrmView'
 import DstVendorsView from './investor-crm/DstVendorsView'
 import TenantCrmView from './tenant-crm/TenantCrmView'
+import ContractorsView from './directories/ContractorsView'
+import LendersView from './directories/LendersView'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -146,6 +148,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
   const defaultView = viewItems.find((i) => i.view === 'dashboard')?.view ?? viewItems[0]?.view ?? 'dashboard'
 
   const [currentView, setCurrentView] = useState(defaultView)
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set())
   const [drawerAgentId, setDrawerAgentId] = useState<string | null>(null)
   const [drawerTab, setDrawerTab] = useState('workflows')
   const [inboxAgentFilter, setInboxAgentFilter] = useState('All')
@@ -240,12 +243,30 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
 
   // ─── Sidebar ────────────────────────────────────────────────────────────────
 
+  let sbSection = ''
   const sidebar = (
     <div className="sidebar">
       {sidebarItems.map((item, i) => {
         if ('section' in item) {
-          return <div key={i} className="sidebar-section">{item.section}</div>
+          sbSection = item.section
+          const isCollapsed = collapsedSections.has(item.section)
+          return (
+            <div
+              key={i}
+              className="sidebar-section"
+              onClick={() => setCollapsedSections(prev => {
+                const n = new Set(prev)
+                if (n.has(item.section)) n.delete(item.section); else n.add(item.section)
+                return n
+              })}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <span>{item.section}</span>
+              <span style={{ fontSize: 9, opacity: 0.55 }}>{isCollapsed ? '▸' : '▾'}</span>
+            </div>
+          )
         }
+        if (collapsedSections.has(sbSection)) return null
         return (
           <div
             key={i}
@@ -321,6 +342,8 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     financial: <FinancialView />,
     rentroll: <RentRollView />,
     vacancies: <VacanciesView />,
+    contractors: <ContractorsView />,
+    lenders: <LendersView />,
     'leasing-inquiries': <LeasingInquiriesView />,
     workorders: <WorkOrdersView />,
     'tenant-comms': <TenantCommsView />,
