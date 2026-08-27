@@ -88,6 +88,8 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<LpRecord | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -123,6 +125,25 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
 
   function onOverlaySaved(key: string, ov: Overlay) {
     setOverlays(prev => ({ ...prev, [key]: { ...prev[key], ...ov } }))
+  }
+
+  // Force the heavy Salesforce/SharePoint recompute (same as the LP Directory "Sync" button),
+  // then refresh overlays. Reports company-account coverage inline so grouping can be verified.
+  async function syncSalesforce() {
+    setSyncing(true); setSyncMsg(null)
+    try {
+      const [lpRes, ovRes] = await Promise.all([fetch('/api/lp-directory?refresh=1'), fetch('/api/investor-crm')])
+      const lpJson = await lpRes.json()
+      if (!lpRes.ok || lpJson.error) { setSyncMsg({ ok: false, text: lpJson.error ?? `Sync failed (${lpRes.status})` }); return }
+      const nextLps: LpRecord[] = Array.isArray(lpJson.lps) ? lpJson.lps : []
+      setLps(nextLps)
+      const ovJson = await ovRes.json().catch(() => ({}))
+      setOverlays(ovJson.overlays ?? {})
+      const inProg = nextLps.filter(l => program === 'DST' ? l.group === DST_GROUP : l.group !== DST_GROUP)
+      const withCo = inProg.filter(l => (l.sfCompany || '').trim()).length
+      setSyncMsg({ ok: true, text: `Synced. ${withCo} of ${inProg.length} ${program} investors have a Salesforce company account.` })
+    } catch (e) { setSyncMsg({ ok: false, text: `Sync failed: ${String(e)}` }) }
+    finally { setSyncing(false) }
   }
 
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
@@ -245,7 +266,10 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
         />
         <button onClick={() => setGroupByAccount(v => !v)} style={{ border: `1px solid ${groupByAccount ? '#c7d2fe' : '#d1d5db'}`, background: groupByAccount ? '#eef2ff' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: groupByAccount ? '#3730a3' : '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>☰ {groupByAccount ? 'Grouped by account' : 'Group by account'}</button>
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
+        <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>
       </div>
+      {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
+      {syncing && <div style={{ marginBottom: 12, fontSize: 12.5, color: '#9ca3af' }}>Pulling the commitment schedule + Salesforce + mailbox scan — this can take up to a minute.</div>}
 
       {loading && <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading investors…</div>}
       {error && <div style={{ padding: 16, background: '#fef2f2', color: '#b91c1c', borderRadius: 8, marginBottom: 12 }}>{error}</div>}
