@@ -35,7 +35,7 @@ body{font-family:'Montserrat','Gotham',system-ui,sans-serif;background:#ffffff;c
 
 /* ── SIDEBAR ── */
 .sidebar{width:220px;background:#f8fafc;border-right:1px solid #e5e7eb;display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
-.sidebar-section{padding:16px 14px 4px;font-size:10px;font-weight:700;color:#9ca3af;letter-spacing:1.2px;text-transform:uppercase}
+.sidebar-section{padding:18px 14px 6px;font-size:13px;font-weight:700;color:#9ca3af;letter-spacing:.9px;text-transform:uppercase}
 .nav-item{display:flex;align-items:center;gap:10px;padding:8px 14px;font-size:13px;color:#6b7280;cursor:pointer;border-radius:6px;margin:1px 4px;transition:all .15s}
 .nav-item:hover{background:#e8f0f2;color:#111827}
 .nav-item.active{background:#e8f0f2;color:#111827;font-weight:600}

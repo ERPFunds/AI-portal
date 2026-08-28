@@ -281,7 +281,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
               style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: sbColor }}
             >
               <span>{item.section}</span>
-              <span style={{ fontSize: 9, opacity: 0.6 }}>{isCollapsed ? '▸' : '▾'}</span>
+              <span style={{ fontSize: 11, opacity: 0.6 }}>{isCollapsed ? '▸' : '▾'}</span>
             </div>
           )
         }
