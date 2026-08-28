@@ -38,6 +38,7 @@ const SECTION_COLORS: Record<string, string> = {
   'Investor CRM': '#0F766E',
   'Acquisitions': '#C4873E',
   'Property': '#3DAE7A',
+  'Property CRM': '#2E8B6B',
   'Leasing': '#9B72E0',
   'Finance & Admin': '#E0785B',
   'Finance': '#E0785B',
