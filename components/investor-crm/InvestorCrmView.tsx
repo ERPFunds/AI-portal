@@ -13,6 +13,25 @@ const OWNERS = ['Meghan Berry', 'William Meyer', 'Michele Parad', 'Pippi Espinoz
 
 const DST_GROUP = 'DST / 1031'
 
+// Which IR mailbox corresponds with an LP is the Graph-derived signal for who owns the
+// relationship in practice. team@ is shared, so it never implies an individual owner.
+const MAILBOX_OWNERS: Record<string, string> = {
+  'mberry@erpfunds.com': 'Meghan Berry',
+  'wmeyer@erpfunds.com': 'William Meyer',
+  'mparad@erpfunds.com': 'Michele Parad',
+  'pespinoza@erpfunds.com': 'Pippi Espinoza',
+}
+
+// Relationship owner: a manual override wins, then the Salesforce account owner,
+// then whoever actually corresponds with the LP (from the mailbox scan).
+function resolveOwner(lp: LpRecord, manual?: string | null): { name: string; source: 'manual' | 'salesforce' | 'email' | 'none' } {
+  if (manual && manual.trim()) return { name: manual.trim(), source: 'manual' }
+  if (lp.sfOwner && lp.sfOwner.trim()) return { name: lp.sfOwner.trim(), source: 'salesforce' }
+  const mb = (lp.lastInteraction?.mailbox || '').toLowerCase()
+  if (mb && MAILBOX_OWNERS[mb]) return { name: MAILBOX_OWNERS[mb], source: 'email' }
+  return { name: '', source: 'none' }
+}
+
 interface Overlay {
   investor_key: string
   program?: string | null
@@ -136,8 +155,9 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
       const ovJson = await ovRes.json().catch(() => ({}))
       setOverlays(ovJson.overlays ?? {})
       const inProg = nextLps.filter(l => program === 'DST' ? l.group === DST_GROUP : l.group !== DST_GROUP)
-      const withCo = inProg.filter(l => (l.sfCompany || '').trim()).length
-      setSyncMsg({ ok: true, text: `Synced. ${withCo} of ${inProg.length} ${program} investors have a Salesforce company account.` })
+      const withSf = inProg.filter(l => (l.sfOwner || '').trim()).length
+      const withAny = inProg.filter(l => resolveOwner(l, overlays[normKey(l.investor)]?.owner).name).length
+      setSyncMsg({ ok: true, text: `Synced. Relationship owner known for ${withAny} of ${inProg.length} ${program} investors (${withSf} from Salesforce, the rest inferred from email activity).` })
     } catch (e) { setSyncMsg({ ok: false, text: `Sync failed: ${String(e)}` }) }
     finally { setSyncing(false) }
   }
@@ -159,7 +179,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
         effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
         target != null ? fmtUsd(target) : '',
         lp.sfCloseDate || '',
-        ov?.owner || '',
+        resolveOwner(lp, ov?.owner).name,
         ov?.source || '',
         lp.brokerFirm || lp.sfAdvisorFirm || '',
         lp.brokerContact || lp.sfAdvisorContact || '',
@@ -348,6 +368,8 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   const committed = effectiveCommitted(lp)
   const targetAmount = (overlay?.target_amount != null ? Number(overlay.target_amount) : null) ?? lp.sfAmount ?? (lp.commitmentUsd || null)
   const closeDate = overlay?.expected_close || lp.sfCloseDate || null
+  const resolvedOwner = resolveOwner(lp, overlay?.owner)
+  const ownerOptions = [...new Set([...OWNERS, resolvedOwner.name].filter(Boolean))].sort()
   const [targetDraft, setTargetDraft] = useState(targetAmount != null ? String(targetAmount) : '')
   const [closeDraft, setCloseDraft] = useState(closeDate ?? '')
 
@@ -452,10 +474,15 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                   style={{ ...selCss, cursor: 'text' }} />
               </RailField>
               <RailField label="Relationship Owner">
-                <select value={owner} onChange={e => { setOwner(e.target.value); saveOverlay({ owner: e.target.value }) }} style={selCss}>
+                <select value={owner || resolvedOwner.name} onChange={e => { setOwner(e.target.value); saveOverlay({ owner: e.target.value }) }} style={selCss}>
                   <option value="">— unassigned —</option>
-                  {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+                  {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
                 </select>
+                {!owner && resolvedOwner.source !== 'none' && (
+                  <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 3 }}>
+                    Auto — {resolvedOwner.source === 'salesforce' ? 'Salesforce account owner' : 'from email activity'}
+                  </div>
+                )}
               </RailField>
               {program === 'DST' && (
                 <RailField label="Advisor / Broker">

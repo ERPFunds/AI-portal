@@ -142,7 +142,7 @@ export interface LpRecord {
   date: string;
   notes: string;
   group: string;
-  lastInteraction: { date: string; note: string; source: "ir" | "sf" | "email" } | null;
+  lastInteraction: { date: string; note: string; source: "ir" | "sf" | "email"; mailbox?: string } | null;
   sfLpType: string | null;
   sfCalled: number | null;
   sfDistributions: number | null;
@@ -159,6 +159,7 @@ export interface LpRecord {
   sfAmount?: number | null;      // the LP Opportunity's Amount (target/expected commitment)
   sfCloseDate?: string | null;   // the LP Opportunity's CloseDate (YYYY-MM-DD)
   sfCompany?: string | null;     // the SF Account's Parent Account name (company/household to group by)
+  sfOwner?: string | null;       // the SF Account owner (relationship owner of record)
   priorFunds?: string[];         // which prior ERP funds this investor was part of (e.g. ["Fund II","Fund III"])
 }
 
@@ -412,6 +413,7 @@ export async function GET(req: NextRequest) {
           lp.sfAmount = sf.amount;
           lp.sfCloseDate = sf.closeDate;
           lp.sfCompany = sf.company;
+          lp.sfOwner = sf.owner;
           if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
@@ -435,6 +437,7 @@ export async function GET(req: NextRequest) {
             sfAmount: d.commitmentUsd || null,
             sfCloseDate: null,
             sfCompany: d.company,
+            sfOwner: d.owner,
             sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,
@@ -524,7 +527,7 @@ export async function GET(req: NextRequest) {
           const who = best.counterparty ? ` ${best.counterparty}` : "";
           const subj = best.subject ? ` · ${best.subject}` : "";
           const prev = best.preview ? ` — ${best.preview.slice(0, 140)}` : "";
-          lp.lastInteraction = { date: best.date, note: `${dir}${who}${subj}${prev} (${best.mailbox})`, source: "email" };
+          lp.lastInteraction = { date: best.date, note: `${dir}${who}${subj}${prev} (${best.mailbox})`, source: "email", mailbox: best.mailbox };
           if (!lp.resolvedEmail && best.counterpartyEmail) lp.resolvedEmail = best.counterpartyEmail;
           if (laLog.length < 15) laLog.push(`${lp.investor} <= ${best.direction} ${best.counterparty}`);
         }
