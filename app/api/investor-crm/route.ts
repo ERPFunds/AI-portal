@@ -17,7 +17,7 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, investor_type, entity, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, updated_by, updated_at";
 
 const normKey = (investor: string) => investor.trim().toLowerCase();
 
@@ -57,8 +57,17 @@ export async function PATCH(req: NextRequest) {
   if (body.tier !== undefined) { const t = body.tier ? String(body.tier).trim() : ""; row.tier = t && TIERS.includes(t) ? t : (t || null); }
   if (body.owner !== undefined) row.owner = body.owner ? String(body.owner).trim() : null;
   if (body.source !== undefined) row.source = body.source ? String(body.source).trim() : null;
-  if (body.investor_type !== undefined) row.investor_type = body.investor_type ? String(body.investor_type).trim() : null;
   if (body.entity !== undefined) row.entity = body.entity ? String(body.entity).trim() : null;
+  // Portal overrides for the SF Opportunity Amount / CloseDate shown on the record.
+  if (body.target_amount !== undefined) {
+    const raw = String(body.target_amount ?? "").replace(/[$,\s]/g, "");
+    const n = raw ? Number(raw) : NaN;
+    row.target_amount = Number.isFinite(n) && n > 0 ? n : null;
+  }
+  if (body.expected_close !== undefined) {
+    const d = String(body.expected_close ?? "").slice(0, 10);
+    row.expected_close = /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
+  }
 
   const { data, error } = await supabase
     .from("investor_crm")

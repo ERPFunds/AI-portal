@@ -20,9 +20,11 @@ interface Overlay {
   tier?: string | null
   owner?: string | null
   source?: string | null
-  investor_type?: string | null
   entity?: string | null
+  target_amount?: number | string | null
+  expected_close?: string | null
 }
+interface Person { name: string; email: string | null; phone: string | null; company: string | null; location: string | null; funds: string[] }
 interface Meeting {
   id: string
   meeting_date: string | null
@@ -35,7 +37,6 @@ interface Meeting {
   next_touch_suggestion: string | null
   onedrive_url: string | null
 }
-interface DistList { id: string; name: string; description: string | null; program: string | null; member_count: number }
 
 const normKey = (s: string) => (s || '').trim().toLowerCase()
 function fmtUsd(n: number | null | undefined): string {
@@ -341,13 +342,30 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   const [saving, setSaving] = useState(false)
 
   const [meetings, setMeetings] = useState<Meeting[] | null>(null)
-  const [lists, setLists] = useState<DistList[]>([])
-  const [memberIds, setMemberIds] = useState<string[]>([])
-  const [listBusy, setListBusy] = useState(false)
+  const [people, setPeople] = useState<Person[] | null>(null)
 
   const email = lp.resolvedEmail || lp.email || ''
   const committed = effectiveCommitted(lp)
-  const targetAmount = lp.sfAmount ?? (lp.commitmentUsd || null)
+  const targetAmount = (overlay?.target_amount != null ? Number(overlay.target_amount) : null) ?? lp.sfAmount ?? (lp.commitmentUsd || null)
+  const closeDate = overlay?.expected_close || lp.sfCloseDate || null
+  const [targetDraft, setTargetDraft] = useState(targetAmount != null ? String(targetAmount) : '')
+  const [closeDraft, setCloseDraft] = useState(closeDate ?? '')
+
+  // One-line rollup of the account for the summary card.
+  const summaryText = (() => {
+    const t = typeTag(lp).label
+    const parts: string[] = []
+    parts.push(committed > 0
+      ? `${lp.investor} is a ${t} with ${fmtUsd(committed)} committed${targetAmount ? ` against a ${fmtUsd(targetAmount)} target` : ''}.`
+      : `${lp.investor} is a ${t}${targetAmount ? ` with a ${fmtUsd(targetAmount)} target` : ''} — no commitment recorded yet.`)
+    if (lp.priorFunds?.length) parts.push(`Prior investor in ${lp.priorFunds.join(' and ')}.`)
+    if (stage) parts.push(`Currently at the ${stage} stage.`)
+    const firm = lp.brokerFirm || lp.sfAdvisorFirm
+    if (firm) parts.push(`Introduced through ${firm}.`)
+    const ds = daysSince(lp.lastInteraction?.date)
+    parts.push(ds != null ? `Last contact was ${ds} day${ds === 1 ? '' : 's'} ago.` : 'No contact logged yet.')
+    return parts.join(' ')
+  })()
 
   useEffect(() => {
     // Meetings from the IR dialogue log
@@ -355,19 +373,13 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
     params.set('investor', lp.investor)
     if (email) params.set('email', email)
     fetch(`/api/investor-crm/meetings?${params}`).then(r => r.json()).then(j => setMeetings(j.meetings ?? [])).catch(() => setMeetings([]))
-    // Distribution lists + this investor's memberships
-    loadLists()
+    // People under this account (the individuals tied to the investing entity)
+    setPeople(null)
+    fetch(`/api/investor-crm/people?investor=${encodeURIComponent(lp.investor)}`)
+      .then(r => r.json()).then(j => setPeople(j.people ?? [])).catch(() => setPeople([]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [lp.investor])
 
-  async function loadLists() {
-    try {
-      const r = await fetch(`/api/investor-crm/lists?investor_key=${encodeURIComponent(key)}`)
-      const j = await r.json()
-      setLists(j.lists ?? [])
-      setMemberIds(j.memberIds ?? [])
-    } catch { /* non-fatal */ }
-  }
 
   async function saveOverlay(patch: Partial<Overlay>) {
     setSaving(true); setSaveMsg(null)
@@ -385,31 +397,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
     finally { setSaving(false) }
   }
 
-  async function toggleList(listId: string) {
-    setListBusy(true)
-    try {
-      if (memberIds.includes(listId)) {
-        await fetch(`/api/investor-crm/lists?list_id=${listId}&investor_key=${encodeURIComponent(key)}`, { method: 'DELETE' })
-        setMemberIds(ids => ids.filter(id => id !== listId))
-      } else {
-        await fetch('/api/investor-crm/lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'add-member', list_id: listId, investor: lp.investor }) })
-        setMemberIds(ids => [...ids, listId])
-      }
-    } catch { /* non-fatal */ }
-    finally { setListBusy(false) }
-  }
 
-  async function createList() {
-    const name = window.prompt('New distribution list name:')
-    if (!name || !name.trim()) return
-    setListBusy(true)
-    try {
-      const r = await fetch('/api/investor-crm/lists', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'create-list', name: name.trim(), program }) })
-      const j = await r.json()
-      if (j.list) { setLists(ls => [...ls, j.list]); await toggleList(j.list.id) }
-    } catch { /* non-fatal */ }
-    finally { setListBusy(false) }
-  }
 
   const initials = lp.investor.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
@@ -454,8 +442,15 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                   {FUNNEL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
               </RailField>
-              <RailField label="Target Amount"><div style={railVal}>{fmtUsd(targetAmount)}</div></RailField>
-              <RailField label="Expected Close"><div style={railVal}>{fmtDate(lp.sfCloseDate)}</div></RailField>
+              <RailField label="Target Amount">
+                <input value={targetDraft} onChange={e => setTargetDraft(e.target.value)}
+                  onBlur={() => saveOverlay({ target_amount: targetDraft })}
+                  placeholder="e.g. 1,000,000" style={{ ...selCss, cursor: 'text' }} />
+              </RailField>
+              <RailField label="Expected Close">
+                <input type="date" value={closeDraft} onChange={e => { setCloseDraft(e.target.value); saveOverlay({ expected_close: e.target.value }) }}
+                  style={{ ...selCss, cursor: 'text' }} />
+              </RailField>
               <RailField label="Relationship Owner">
                 <select value={owner} onChange={e => { setOwner(e.target.value); saveOverlay({ owner: e.target.value }) }} style={selCss}>
                   <option value="">— unassigned —</option>
@@ -490,36 +485,55 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
             {tab === 'overview' && (
               <>
                 <div style={{ ...cardCss, padding: 20 }}>
-                  <div style={sectTitle}>Contact Details</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
-                    <Field k="Email" v={email || '—'} />
-                    <Field k="Investor Type" v={overlay?.investor_type || lp.sfLpType || '—'} />
-                    <Field k="Investing Entity" v={overlay?.entity || lp.investor} />
-                    <Field k="Source" v={source || '—'} />
-                    <Field k="Program" v={program === 'DST' ? 'DST / 1031' : 'PE — Fund IV'} />
-                    <Field k="Group" v={lp.group} />
+                  <div style={sectTitle}>Account Summary</div>
+                  <div style={{ fontSize: 14.5, color: '#374151', lineHeight: 1.55 }}>{summaryText}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 16 }}>
+                    <Stat label="Committed" value={committed ? fmtUsd(committed) : '—'} accent="#0f766e" />
+                    <Stat label="Target" value={fmtUsd(targetAmount)} />
+                    <Stat label="People" value={people == null ? '·' : String(people.length)} />
+                    <Stat label="Last Contact" value={lp.lastInteraction ? `${daysSince(lp.lastInteraction.date)}d ago` : '—'} />
                   </div>
                 </div>
 
                 <div style={{ ...cardCss, padding: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div style={sectTitle}>📋 Distribution Lists</div>
-                    <button onClick={createList} disabled={listBusy} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}>+ New list</button>
+                  <div style={sectTitle}>Account Details</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
+                    <Field k="Account (Entity)" v={lp.investor} />
+                    <Field k="Primary Contact" v={lp.contact || '—'} />
+                    <Field k="Email" v={email || '—'} />
+                    <Field k="Source" v={source || '—'} />
+                    <Field k="Program" v={program === 'DST' ? 'DST / 1031' : 'PE — Fund IV'} />
+                    <Field k="Group" v={lp.group} />
+                    <Field k="Prior Funds" v={lp.priorFunds?.length ? lp.priorFunds.join(', ') : '—'} />
                   </div>
-                  {lists.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13 }}>No lists yet — create one to start grouping investors.</div>}
+                  {lp.notes && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Notes</div>
+                    <div style={{ fontSize: 14, color: '#374151', marginTop: 4 }}>{lp.notes}</div>
+                  </div>}
+                </div>
+
+                <div style={{ ...cardCss, padding: 20 }}>
+                  <div style={sectTitle}>People Under This Account {people && people.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{people.length}</span>}</div>
+                  {people == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
+                  {people && people.length === 0 && (
+                    <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
+                      No individual contacts on file for this entity.{lp.contact ? ` Primary contact of record: ${lp.contact}.` : ''}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {lists.map(l => {
-                      const on = memberIds.includes(l.id)
-                      return (
-                        <label key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8, border: `1px solid ${on ? '#0f766e' : '#e5e7eb'}`, background: on ? '#f0f9f7' : '#fff', cursor: 'pointer' }}>
-                          <input type="checkbox" checked={on} onChange={() => toggleList(l.id)} disabled={listBusy} />
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, fontSize: 14 }}>{l.name}</div>
-                            <div style={{ fontSize: 12, color: '#9ca3af' }}>{l.member_count} member{l.member_count === 1 ? '' : 's'}{l.description ? ` · ${l.description}` : ''}</div>
+                    {people?.map((pn, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <span style={{ fontWeight: 600, fontSize: 14.5 }}>{pn.name}</span>
+                            {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
                           </div>
-                        </label>
-                      )
-                    })}
+                          <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 2 }}>{[pn.email, pn.phone].filter(Boolean).join(' · ') || '—'}</div>
+                          {(pn.company || pn.location) && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{[pn.company, pn.location].filter(Boolean).join(' · ')}</div>}
+                        </div>
+                        {pn.email && <a href={`mailto:${pn.email}`} style={{ fontSize: 12.5, fontWeight: 600, color: '#0e7490', textDecoration: 'none', whiteSpace: 'nowrap' }}>Email</a>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>
@@ -572,6 +586,14 @@ function RailField({ label, children }: { label: string; children: React.ReactNo
     <div style={{ padding: '11px 0', borderBottom: '1px solid #f0f1f3' }}>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</div>
       {children}
+    </div>
+  )
+}
+function Stat({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div style={{ background: '#f8f9fb', border: '1px solid #eef0f2', borderRadius: 10, padding: '10px 12px' }}>
+      <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: accent ?? '#1a2233', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{value}</div>
     </div>
   )
 }
