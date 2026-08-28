@@ -58,6 +58,7 @@ interface Meeting {
 }
 
 const normKey = (s: string) => (s || '').trim().toLowerCase()
+const normEntity = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 function fmtUsd(n: number | null | undefined): string {
   if (n == null || !isFinite(n) || n === 0) return '—'
   return '$' + Math.round(n).toLocaleString('en-US')
@@ -103,6 +104,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<LpRecord | null>(null)
+  const [contactCounts, setContactCounts] = useState<Record<string, number>>({})
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -124,6 +126,12 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   }, [])
 
   useEffect(() => { load() }, [load])
+
+  // How many individuals sit under each investing entity (for the Contact(s) column).
+  useEffect(() => {
+    fetch('/api/investor-crm/people')
+      .then(r => r.json()).then(j => setContactCounts(j.counts ?? {})).catch(() => {})
+  }, [])
 
   const overlayFor = useCallback((lp: LpRecord): Overlay | undefined => overlays[normKey(lp.investor)], [overlays])
 
@@ -165,18 +173,19 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
   function exportCsv() {
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Investor', 'Account (SF)', 'Type', 'Prior Funds', 'Program', 'Funnel Stage', 'Committed', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
+    const cols = ['Fund', 'Investor', 'Contact', 'Commitment', 'Notes', 'Prior Funds', 'Program', 'Funnel Stage', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
     const lines = rows.map(lp => {
       const ov = overlayFor(lp)
       const target = lp.sfAmount ?? (lp.commitmentUsd > 0 ? lp.commitmentUsd : null)
       return [
-        lp.investor,
-        lp.sfCompany || '',
         typeTag(lp).label,
+        lp.investor,
+        lp.contact || '',
+        effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
+        lp.notes || '',
         (lp.priorFunds || []).join(', '),
         program,
         ov?.funnel_stage || '',
-        effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
         target != null ? fmtUsd(target) : '',
         lp.sfCloseDate || '',
         resolveOwner(lp, ov?.owner).name,
@@ -205,7 +214,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const [groupByAccount, setGroupByAccount] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const NO_ACCOUNT = '(No account in Salesforce)'
-  const colCount = program === 'DST' ? 6 : 5
+  const colCount = 6
   const accountGroups = useMemo(() => {
     const m = new Map<string, LpRecord[]>()
     for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
@@ -215,35 +224,48 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   }, [rows])
 
   const renderRow = (lp: LpRecord, key: string | number) => {
-    const ov = overlayFor(lp)
-    const stage = ov?.funnel_stage
-    const ds = daysSince(lp.lastInteraction?.date)
+    const t = typeTag(lp)
+    const contactEmail = lp.resolvedEmail || lp.email || ''
+    const extra = (contactCounts[normEntity(lp.investor)] ?? 0) - 1
     return (
       <tr key={key} onClick={() => setSelected(lp)}
         style={{ borderTop: '1px solid #f0f1f3', cursor: 'pointer' }}
         onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
         onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
+        {/* Fund */}
         <td style={tdCss}>
-          <div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div>
-          <div style={{ fontSize: 12, color: '#9ca3af' }}>{[lp.contact, lp.resolvedEmail || lp.email].filter(Boolean).join(' · ')}</div>
-        </td>
-        <td style={tdCss}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 220 }}>
-            {(() => { const t = typeTag(lp); return <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span> })()}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 170 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span>
             {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
             {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
           </div>
         </td>
-        <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
-        <td style={tdCss}>{stage
-          ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151' }}><span style={{ width: 8, height: 8, borderRadius: '50%', background: stageColor(stage) }} />{stage}</span>
-          : <span style={{ color: '#d1d5db' }}>—</span>}</td>
-        {program === 'DST' && <td style={tdCss}>{(lp.brokerFirm || lp.sfAdvisorFirm)
-          ? <div><div style={{ fontSize: 13 }}>{lp.brokerFirm || lp.sfAdvisorFirm}</div><div style={{ fontSize: 12, color: '#9ca3af' }}>{lp.brokerContact || lp.sfAdvisorContact}</div></div>
-          : <span style={{ color: '#d1d5db' }}>—</span>}</td>}
-        <td style={tdCss}>{lp.lastInteraction
-          ? <div><div style={{ fontSize: 13 }}>{fmtDate(lp.lastInteraction.date)}</div>{ds != null && <div style={{ fontSize: 11, fontWeight: 600, color: ds <= 14 ? '#197a52' : ds <= 45 ? '#9a5b12' : '#b91c1c' }}>{ds}d ago</div>}</div>
-          : <span style={{ color: '#d1d5db' }}>No contact logged</span>}</td>
+        {/* Investor (the account / entity) */}
+        <td style={tdCss}><div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div></td>
+        {/* Contact(s) */}
+        <td style={tdCss}>
+          {lp.contact || contactEmail
+            ? <div>
+                <div style={{ fontSize: 13, color: '#374151' }}>{lp.contact || '—'}</div>
+                {contactEmail && <div style={{ fontSize: 12, color: '#9ca3af' }}>{contactEmail}</div>}
+                {extra > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', marginTop: 2 }}>+{extra} more</div>}
+              </div>
+            : <span style={{ color: '#d1d5db' }}>—</span>}
+        </td>
+        {/* Commitment */}
+        <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
+        {/* Notes */}
+        <td style={{ ...tdCss, maxWidth: 260 }}>
+          {lp.notes ? <span style={{ fontSize: 12.5, color: '#6b7280' }}>{lp.notes}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+        </td>
+        {/* Email / Edit */}
+        <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
+          {contactEmail
+            ? <a href={`mailto:${contactEmail}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
+                onClick={e => e.stopPropagation()} style={rowBtn}>Email</a>
+            : <span style={{ ...rowBtn, color: '#d1d5db', cursor: 'default' }}>Email</span>}
+          <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, border: 0, background: 'none' }}>Edit</button>
+        </td>
       </tr>
     )
   }
@@ -291,12 +313,12 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ background: '#f8f9fb', textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
+                  <th style={thCss}>Fund</th>
                   <th style={thCss}>Investor</th>
-                  <th style={thCss}>Tags</th>
-                  <th style={thCss}>Committed</th>
-                  <th style={thCss}>Stage</th>
-                  {program === 'DST' && <th style={thCss}>Advisor / Broker</th>}
-                  <th style={thCss}>Last Contact</th>
+                  <th style={thCss}>Contact(s)</th>
+                  <th style={thCss}>Commitment</th>
+                  <th style={thCss}>Notes</th>
+                  <th style={thCss}></th>
                 </tr>
               </thead>
               <tbody>
@@ -340,6 +362,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   )
 }
 
+const rowBtn: React.CSSProperties = { fontWeight: 600, fontSize: 13, color: '#0e7490', padding: '0 6px', textDecoration: 'none', cursor: 'pointer' }
 const thCss: React.CSSProperties = { padding: '10px 14px', fontWeight: 700, whiteSpace: 'nowrap' }
 const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' }
 
@@ -354,7 +377,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   onSaved: (key: string, ov: Overlay) => void
 }) {
   const key = normKey(lp.investor)
-  const [tab, setTab] = useState<'overview' | 'meetings' | 'emails' | 'docs'>('overview')
+  const [tab, setTab] = useState<'overview' | 'meetings' | 'docs'>('overview')
   const [stage, setStage] = useState(overlay?.funnel_stage ?? '')
   const [owner, setOwner] = useState(overlay?.owner ?? '')
   const [source, setSource] = useState(overlay?.source ?? '')
@@ -385,7 +408,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
     const firm = lp.brokerFirm || lp.sfAdvisorFirm
     if (firm) parts.push(`Introduced through ${firm}.`)
     const ds = daysSince(lp.lastInteraction?.date)
-    parts.push(ds != null ? `Last contact was ${ds} day${ds === 1 ? '' : 's'} ago.` : 'No contact logged yet.')
+    if (ds != null) parts.push(`Last contact was ${ds} day${ds === 1 ? '' : 's'} ago.`)
     return parts.join(' ')
   })()
 
@@ -504,7 +527,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
           {/* MAIN */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb' }}>
-              {([['overview', 'Overview'], ['meetings', `Meetings${meetings ? ` (${meetings.length})` : ''}`], ['emails', 'Emails'], ['docs', 'Subscription Docs']] as const).map(([k, label]) => (
+              {([['overview', 'Overview'], ['meetings', `Meetings${meetings ? ` (${meetings.length})` : ''}`], ['docs', 'Subscription Docs']] as const).map(([k, label]) => (
                 <button key={k} onClick={() => setTab(k)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, color: tab === k ? '#1a2233' : '#9ca3af', padding: '10px 14px', borderBottom: tab === k ? '2px solid #0f766e' : '2px solid transparent', marginBottom: -1 }}>{label}</button>
               ))}
             </div>
@@ -590,9 +613,6 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
               </div>
             )}
 
-            {tab === 'emails' && (
-              <div style={{ ...cardCss, padding: 40, textAlign: 'center', color: '#9ca3af' }}>Threaded email history (IR email log &amp; mailbox scan) — coming next.</div>
-            )}
             {tab === 'docs' && (
               <div style={{ ...cardCss, padding: 40, textAlign: 'center', color: '#9ca3af' }}>Subscription documents — sub-docs, K-1s, statements (links to fund admin) — coming next.</div>
             )}

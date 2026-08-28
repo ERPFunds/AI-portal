@@ -25,12 +25,28 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
 
   const investor = (req.nextUrl.searchParams.get("investor") ?? "").trim();
-  if (!investor) return NextResponse.json({ error: "investor required" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("lp_prior_contacts")
     .select("investor_name, fund_label, first_name, last_name, email, company, city, state, phone");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  if (!investor) {
+    const perEntity = new Map<string, Set<string>>();
+    for (const r of (data ?? []) as PriorRow[]) {
+      const k = norm(r.investor_name);
+      if (!k) continue;
+      const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim();
+      const email = (r.email || "").trim();
+      const id = email ? `e:${email.toLowerCase()}` : `n:${norm(name)}`;
+      if (id === "n:") continue;
+      if (!perEntity.has(k)) perEntity.set(k, new Set());
+      perEntity.get(k)!.add(id);
+    }
+    const counts: Record<string, number> = {};
+    for (const [k, set] of perEntity) counts[k] = set.size;
+    return NextResponse.json({ counts });
+  }
 
   const target = norm(investor);
   const rows = ((data ?? []) as PriorRow[]).filter((r) => norm(r.investor_name) === target);
