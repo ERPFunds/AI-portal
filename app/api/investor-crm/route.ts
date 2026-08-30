@@ -17,7 +17,7 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, fund, committed_usd, contact, email, phone, notes, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, committed_usd, contact, email, phone, notes, updated_by, updated_at";
 
 const normKey = (investor: string) => investor.trim().toLowerCase();
 const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
@@ -71,6 +71,7 @@ export async function PATCH(req: NextRequest) {
     row.target_amount = Number.isFinite(n) && n > 0 ? n : null;
   }
   if (body.archived !== undefined) row.archived = !!body.archived;
+  if (body.is_lp !== undefined) row.is_lp = !!body.is_lp;
   if (body.fund !== undefined) row.fund = str(body.fund);
   if (body.contact !== undefined) row.contact = str(body.contact);
   if (body.email !== undefined) row.email = str(body.email);

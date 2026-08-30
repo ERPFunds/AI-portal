@@ -46,6 +46,7 @@ interface Overlay {
   expected_close?: string | null
   archived?: boolean
   portal_created?: boolean
+  is_lp?: boolean
   fund?: string | null
   committed_usd?: number | string | null
   contact?: string | null
@@ -127,7 +128,13 @@ function overlayToLp(ov: Overlay): LpRecord {
 function fundsOf(lp: LpRecord): string[] {
   const out: string[] = []
   if (lp.group === DST_GROUP) out.push('DST / 1031')
-  else if (lp.group !== 'Prior Fund LPs') out.push(/fund|dst/i.test(lp.group || '') ? lp.group : 'Fund IV')
+  else if (lp.group !== 'Prior Fund LPs') {
+    const g = lp.group || ''
+    // An investor in several funds is stored as 'Fund II, Fund III' — count them under each
+    // fund rather than inventing a combined option.
+    if (/fund|dst/i.test(g)) for (const part of g.split(',').map(x => x.trim()).filter(Boolean)) { if (!out.includes(part)) out.push(part) }
+    else out.push('Fund IV')
+  }
   for (const pf of lp.priorFunds ?? []) if (!out.includes(pf)) out.push(pf)
   return out
 }
@@ -153,12 +160,12 @@ const COLUMN_DEFS: ColDef[] = [
 
 // LP-directory tagging: the investor's Type derived from its group + commitment status.
 // Fund IV investors split into committed LPs vs prospects (targets not yet committed).
-function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
+function typeTag(lp: LpRecord, isLp = false): { label: string; bg: string; color: string } {
   if (lp.group === DST_GROUP) return { label: 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
   // The record's own fund (imported records carry theirs); Fund IV is the default for the live raise.
   const fund = /fund|dst/i.test(lp.group || '') ? lp.group : 'Fund IV'
-  return effectiveCommitted(lp) > 0
+  return effectiveCommitted(lp) > 0 || isLp
     ? { label: `${fund} LP`, bg: '#eff6ff', color: '#1d4ed8' }
     : { label: `${fund} Prospect`, bg: '#e5f2eb', color: '#197a52' }
 }
@@ -246,7 +253,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     return [...lps, ...portal]
       .filter(lp => !overlays[normKey(lp.investor)]?.archived)
       .filter(inProgram)
-      .filter(lp => mode === 'all' ? true : mode === 'lps' ? effectiveCommitted(lp) > 0 : effectiveCommitted(lp) === 0)
+      .filter(lp => {
+        if (mode === 'all') return true
+        const isLp = effectiveCommitted(lp) > 0 || !!overlays[normKey(lp.investor)]?.is_lp
+        return mode === 'lps' ? isLp : !isLp
+      })
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
       .sort((a, b) => {
@@ -381,7 +392,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   }
 
   const renderRow = (lp: LpRecord, key: string | number) => {
-    const t = typeTag(lp)
+    const t = typeTag(lp, !!overlays[normKey(lp.investor)]?.is_lp)
     const contactEmail = lp.resolvedEmail || lp.email || ''
     const pc = contactPrimary[normEntity(lp.investor)]
     return (
@@ -426,7 +437,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
           {contactEmail
             ? <a href={`mailto:${contactEmail}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
-                onClick={e => e.stopPropagation()} style={rowBtn}>Email</a>
+                onClick={e => e.stopPropagation()} style={emailBtn}>Email</a>
             : <span style={{ ...rowBtn, color: '#cbd5e1', background: '#f8fafc', borderColor: '#e2e8f0', cursor: 'default' }}>Email</span>}
           <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, color: '#374151', background: '#f8fafc', borderColor: '#e2e8f0' }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); archiveInvestor(lp) }} title="Hide from the CRM"
@@ -670,6 +681,7 @@ function VendorLink({ name, onOpen }: { name: string; onOpen: (n: string) => voi
 }
 
 // Row actions render as real buttons rather than text links.
+const emailBtn: React.CSSProperties = { display: 'inline-block', fontWeight: 600, fontSize: 12.5, color: '#fff', background: '#2563eb', border: '1px solid #1d4ed8', borderRadius: 7, padding: '5px 13px', marginLeft: 6, textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.4 }
 const rowBtn: React.CSSProperties = { display: 'inline-block', fontWeight: 600, fontSize: 12.5, color: '#0e7490', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 7, padding: '5px 11px', marginLeft: 6, textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.4 }
 const thCss: React.CSSProperties = { padding: '10px 14px', fontWeight: 700, whiteSpace: 'nowrap' }
 const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' }
