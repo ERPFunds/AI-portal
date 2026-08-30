@@ -101,6 +101,25 @@ function fundsOf(lp: LpRecord): string[] {
   return out
 }
 
+// The table's columns. Each knows how to render nothing (renderRow does that) but how to be
+// filtered and sorted, so every column gets both for free.
+interface ColDef {
+  key: string; label: string; dstOnly?: boolean
+  text: (lp: LpRecord) => string
+  sort: (lp: LpRecord) => string | number
+}
+const bdOf = (lp: LpRecord) => lp.sfBrokerDealer || lp.brokerFirm || lp.sfAdvisorFirm || ''
+const advOf = (lp: LpRecord) => lp.brokerContact || lp.sfAdvisorContact || ''
+const COLUMN_DEFS: ColDef[] = [
+  { key: 'fund', label: 'Fund', text: lp => [typeTag(lp).label, ...(lp.priorFunds ?? []), lp.commitType || ''].join(' '), sort: lp => typeTag(lp).label },
+  { key: 'investor', label: 'Investor', text: lp => lp.investor, sort: lp => lp.investor.toLowerCase() },
+  { key: 'contacts', label: 'Contact(s)', text: lp => [lp.contact, lp.resolvedEmail || lp.email].filter(Boolean).join(' '), sort: lp => (lp.contact || '').toLowerCase() },
+  { key: 'commitment', label: 'Commitment', text: lp => String(effectiveCommitted(lp) || ''), sort: lp => effectiveCommitted(lp) },
+  { key: 'brokerDealer', label: 'Broker Dealer / RIA', dstOnly: true, text: bdOf, sort: lp => bdOf(lp).toLowerCase() },
+  { key: 'advisor', label: 'Advisor', dstOnly: true, text: advOf, sort: lp => advOf(lp).toLowerCase() },
+  { key: 'notes', label: 'Notes', text: lp => lp.notes || '', sort: lp => (lp.notes || '').toLowerCase() },
+]
+
 // LP-directory tagging: the investor's Type derived from its group + commitment status.
 // Fund IV investors split into committed LPs vs prospects (targets not yet committed).
 function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
@@ -119,6 +138,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [fundFilter, setFundFilter] = useState('All')
+  const [colFilters, setColFilters] = useState<Record<string, string>>({})
+  const [sortKey, setSortKey] = useState('commitment')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<LpRecord | null>(null)
   const [contactCounts, setContactCounts] = useState<Record<string, number>>({})
   const [syncing, setSyncing] = useState(false)
@@ -149,6 +171,12 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .then(r => r.json()).then(j => setContactCounts(j.counts ?? {})).catch(() => {})
   }, [])
 
+  const columns = useMemo(() => COLUMN_DEFS.filter(c => !c.dstOnly || program === 'DST'), [program])
+  function toggleSort(key: string) {
+    if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortKey(key); setSortDir(key === 'commitment' ? 'desc' : 'asc') }
+  }
+
   const overlayFor = useCallback((lp: LpRecord): Overlay | undefined => overlays[normKey(lp.investor)], [overlays])
 
   const rows = useMemo(() => {
@@ -159,8 +187,19 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .filter(lp => mode === 'all' ? true : mode === 'lps' ? effectiveCommitted(lp) > 0 : effectiveCommitted(lp) === 0)
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
-      .sort((a, b) => effectiveCommitted(b) - effectiveCommitted(a) || a.investor.localeCompare(b.investor))
-  }, [lps, program, search, fundFilter, mode])
+      .filter(lp => columns.every(c => {
+        const f = (colFilters[c.key] ?? '').trim().toLowerCase()
+        return !f || c.text(lp).toLowerCase().includes(f)
+      }))
+      .sort((a, b) => {
+        const c = columns.find(x => x.key === sortKey) ?? columns[0]
+        const av = c.sort(a), bv = c.sort(b)
+        const r = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
+        return sortDir === 'asc' ? r : -r
+      })
+  }, [lps, program, search, fundFilter, mode, columns, colFilters, sortKey, sortDir])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -370,14 +409,34 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ background: '#f8f9fb', textAlign: 'left', color: '#6b7280', fontSize: 11, textTransform: 'uppercase', letterSpacing: '.05em' }}>
-                  <th style={thCss}>Fund</th>
-                  <th style={thCss}>Investor</th>
-                  <th style={thCss}>Contact(s)</th>
-                  <th style={thCss}>Commitment</th>
-                  {program === 'DST' && <th style={thCss}>Broker Dealer / RIA</th>}
-                  {program === 'DST' && <th style={thCss}>Advisor</th>}
-                  <th style={thCss}>Notes</th>
+                  {columns.map(c => (
+                    <th key={c.key} style={{ ...thCss, cursor: 'pointer', userSelect: 'none' }}
+                      onClick={() => toggleSort(c.key)} title={`Sort by ${c.label}`}>
+                      {c.label}
+                      <span style={{ marginLeft: 4, opacity: sortKey === c.key ? 1 : 0.25 }}>
+                        {sortKey === c.key ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </th>
+                  ))}
                   <th style={thCss}></th>
+                </tr>
+                <tr style={{ background: '#fff', borderTop: '1px solid #f0f1f3' }}>
+                  {columns.map(c => (
+                    <th key={c.key} style={{ padding: '6px 10px', fontWeight: 400 }}>
+                      <input
+                        value={colFilters[c.key] ?? ''}
+                        onChange={e => setColFilters(f => ({ ...f, [c.key]: e.target.value }))}
+                        placeholder="Filter…"
+                        style={{ width: '100%', minWidth: 70, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, color: '#374151' }}
+                      />
+                    </th>
+                  ))}
+                  <th style={{ padding: '6px 10px', textAlign: 'right' }}>
+                    {Object.values(colFilters).some(v => (v ?? '').trim()) && (
+                      <button onClick={() => setColFilters({})}
+                        style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: '#0e7490' }}>Clear</button>
+                    )}
+                  </th>
                 </tr>
               </thead>
               <tbody>
