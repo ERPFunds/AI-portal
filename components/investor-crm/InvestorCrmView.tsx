@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import type { LpRecord } from '@/app/api/lp-directory/route'
+import ImportModal from './ImportModal'
 
 // ── Investor CRM ──────────────────────────────────────────────────────────────
 // A relationship + fundraising CRM built on the live LP-directory data. Two populations
@@ -171,6 +172,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [funds, setFunds] = useState<Fund[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
+  const [showImport, setShowImport] = useState(false)
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState('commitment')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -480,6 +482,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
         <button onClick={() => setShowAdd(true)}
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
+        <button onClick={() => setShowImport(true)}
+          style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
         <button onClick={() => setShowFunds(true)}
           style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>Manage funds</button>
         <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>
@@ -559,6 +563,14 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           funds={fundOptions}
           onCancel={() => setShowAdd(false)}
           onSaved={ov => { setOverlays(prev => ({ ...prev, [normKey(ov.investor ?? '')]: ov })); setShowAdd(false) }}
+        />
+      )}
+      {showImport && (
+        <ImportModal
+          program={program}
+          defaultFund={fundFilter !== 'All' ? fundFilter : undefined}
+          onClose={() => setShowImport(false)}
+          onDone={() => { load(); loadFunds() }}
         />
       )}
       {showFunds && <ManageFundsModal funds={funds} program={program} onClose={() => setShowFunds(false)} onChanged={loadFunds} />}
