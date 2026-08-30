@@ -215,9 +215,14 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   // The Contact(s) column only appears once there are contacts in the portal store — while it's
   // empty (e.g. after a reset, before an import) the column is hidden rather than shown blank.
   const hasContacts = Object.keys(contactPrimary).length > 0
+  // PE Prospects are all Fund IV by definition, so the Fund column is dropped there.
+  const hideFund = program === 'PE' && mode === 'prospects'
   const columns = useMemo(
-    () => COLUMN_DEFS.filter(c => (!c.dstOnly || program === 'DST') && (c.key !== 'contacts' || hasContacts)),
-    [program, hasContacts]
+    () => COLUMN_DEFS.filter(c =>
+      (!c.dstOnly || program === 'DST') &&
+      (c.key !== 'contacts' || hasContacts) &&
+      (c.key !== 'fund' || !hideFund)),
+    [program, hasContacts, hideFund]
   )
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
