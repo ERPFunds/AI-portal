@@ -52,6 +52,19 @@ export async function PATCH(req: NextRequest) {
   const investor = String(body.investor ?? "").trim();
   if (!investor) return NextResponse.json({ error: "investor required" }, { status: 400 });
 
+  // Renaming the entity moves the record and its contacts to a new key.
+  const renameTo = String(body.rename_to ?? "").trim();
+  if (renameTo && normKey(renameTo) !== normKey(investor)) {
+    const newKey = normKey(renameTo);
+    const { data: clash } = await supabase.from("investor_crm").select("investor_key").eq("investor_key", newKey).maybeSingle();
+    if (clash) return NextResponse.json({ error: "An investor with that name already exists" }, { status: 409 });
+    await supabase.from("investor_contacts").update({ investor_key: newKey, investor: renameTo }).eq("investor_key", normKey(investor));
+    const { data: moved, error: mErr } = await supabase.from("investor_crm")
+      .update({ investor_key: newKey, investor: renameTo, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() })
+      .eq("investor_key", normKey(investor)).select(COLS).single();
+    if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
+    return NextResponse.json({ overlay: moved });
+  }
   const row: Record<string, unknown> = {
     investor_key: normKey(investor),
     investor,

@@ -1424,3 +1424,29 @@ export async function listRecentAgentAdditions(sinceIso: string): Promise<AgentA
   } catch { /* non-fatal */ }
   return { contacts, tasks };
 }
+
+/** Contacts under the named Accounts — used to backfill investor contact details from
+ *  Salesforce before the platform is retired. Returns account name -> its people. */
+export async function fetchContactsForAccounts(
+  names: string[],
+): Promise<Record<string, { name: string; email: string | null; phone: string | null; mobile: string | null; title: string | null }[]>> {
+  const out: Record<string, { name: string; email: string | null; phone: string | null; mobile: string | null; title: string | null }[]> = {};
+  const clean = [...new Set(names.map((n) => n.trim()).filter(Boolean))];
+  for (let i = 0; i < clean.length; i += 100) {
+    const inList = clean.slice(i, i + 100).map((n) => `'${soql(n)}'`).join(",");
+    const q = `SELECT Account.Name, Name, Email, Phone, MobilePhone, Title FROM Contact WHERE Account.Name IN (${inList})`;
+    const res = await sfFetch(`/query?q=${encodeURIComponent(q)}`);
+    if (!res.ok) { console.log("[sf-backfill] query", res.status, (await res.text()).slice(0, 150)); continue; }
+    for (const c of (((await res.json()).records ?? []) as Record<string, unknown>[])) {
+      const acct = (c.Account as { Name?: unknown } | null)?.Name;
+      const key = acct != null ? String(acct) : "";
+      if (!key) continue;
+      const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
+      (out[key] ||= []).push({
+        name: String(c.Name ?? "").trim(),
+        email: str(c.Email), phone: str(c.Phone), mobile: str(c.MobilePhone), title: str(c.Title),
+      });
+    }
+  }
+  return out;
+}

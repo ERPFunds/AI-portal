@@ -47,6 +47,7 @@ interface Overlay {
   archived?: boolean
   portal_created?: boolean
   is_lp?: boolean
+  investor_type?: string | null
   fund?: string | null
   committed_usd?: number | string | null
   contact?: string | null
@@ -187,6 +188,21 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
   const [showImport, setShowImport] = useState(false)
+  const [backfilling, setBackfilling] = useState(false)
+
+  // One-time pull of contacts Salesforce still holds for investors our spreadsheets left blank.
+  async function sfBackfill() {
+    if (!window.confirm('Pull contact details from Salesforce for investors with no email on file? Existing contacts are left untouched.')) return
+    setBackfilling(true); setSyncMsg(null)
+    try {
+      const res = await fetch('/api/investor-crm/sf-backfill', { method: 'POST' })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setSyncMsg({ ok: false, text: j.error ?? `Backfill failed (${res.status})` }); return }
+      setSyncMsg({ ok: true, text: `Salesforce filled ${j.filled} contacts across ${j.matched} of ${j.considered} investors that had no email.` })
+      load()
+    } catch (e) { setSyncMsg({ ok: false, text: `Backfill failed: ${String(e)}` }) }
+    finally { setBackfilling(false) }
+  }
   const [sortKey, setSortKey] = useState('commitment')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<LpRecord | null>(null)
@@ -399,7 +415,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
 
   const renderRow = (lp: LpRecord, key: string | number) => {
     const t = typeTag(lp, !!overlays[normKey(lp.investor)]?.is_lp)
-    const contactEmail = lp.resolvedEmail || lp.email || ''
+    const contactEmail = contactPrimary[normEntity(lp.investor)]?.email || lp.resolvedEmail || lp.email || ''
     const pc = contactPrimary[normEntity(lp.investor)]
     return (
       <tr key={key} onClick={() => setSelected(lp)}
@@ -494,6 +510,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
         <button onClick={() => setShowImport(true)}
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
+        {program === 'PE' && <button onClick={sfBackfill} disabled={backfilling}
+          title="Fill missing contacts/emails from Salesforce before it is retired"
+          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: backfilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+          {backfilling ? 'Pulling…' : '⇩ Fill from Salesforce'}</button>}
         <button onClick={() => setShowFunds(true)}
           style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>
         {program === 'DST' && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
@@ -717,6 +737,31 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   const [people, setPeople] = useState<Person[] | null>(null)
   const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
   const [docs, setDocs] = useState<InvestorDoc[] | null>(null)
+  const [acct, setAcct] = useState({
+    investor: lp.investor,
+    investor_type: overlay?.investor_type ?? lp.sfLpType ?? '',
+    source: overlay?.source ?? '',
+    owner: overlay?.owner ?? '',
+    fund: overlay?.fund ?? '',
+    committed_usd: overlay?.committed_usd != null ? String(overlay.committed_usd) : String(effectiveCommitted(lp) || ''),
+    phone: overlay?.phone ?? lp.phone ?? '',
+    website: overlay?.website ?? '',
+    address: overlay?.address ?? '',
+  })
+  // Every account field is editable; the entity name is the record's key, so renaming it
+  // is sent as a rename rather than a plain field update.
+  async function saveAccount(patch: Record<string, string>) {
+    setAcct(a => ({ ...a, ...patch }))
+    const body: Record<string, unknown> = { investor: lp.investor, program, ...patch }
+    if (patch.investor !== undefined) { body.investor = lp.investor; body.rename_to = patch.investor }
+    try {
+      const res = await fetch('/api/investor-crm', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const j = await res.json()
+      if (!res.ok || j.error) { setSaveMsg(`Save failed: ${j.error ?? res.status}`); return }
+      onSaved(key, j.overlay)
+      setSaveMsg('Saved'); setTimeout(() => setSaveMsg(null), 1500)
+    } catch (e) { setSaveMsg(`Save failed: ${String(e)}`) }
+  }
   const [notesDraft, setNotesDraft] = useState(overlay?.notes ?? lp.notes ?? '')
   const [notesSaved, setNotesSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -857,7 +902,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
 
               {email
                 ? <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`} style={{ display: 'block', marginTop: 16, padding: 11, borderRadius: 9, background: '#2563eb', color: '#fff', fontWeight: 600, textDecoration: 'none' }}>✉ Send Email</a>
-                : <div style={{ marginTop: 16, padding: 11, borderRadius: 9, background: '#f1f2f4', color: '#9ca3af', fontWeight: 600 }}>No email on file</div>}
+                : null}
             </div>
 
             {/* editable rail fields */}
@@ -929,14 +974,16 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                 <div style={{ ...cardCss, padding: 20 }}>
                   <div style={sectTitle}>Account Details</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
-                    <Field k="Account (Entity)" v={lp.investor} />
+                    <EditField k="Account (Entity)" value={acct.investor} onSave={v => saveAccount({ investor: v })} />
                     <Field k="Primary Contact" v={people?.find(x => x.is_primary)?.name || people?.[0]?.name || '—'} />
-                    <Field k="Email" v={email || '—'} />
-                    <Field k="Source" v={source || '—'} />
-                    <Field k="Program" v={program === 'DST' ? 'DST / 1031' : 'PE — Fund IV'} />
-                    <Field k="Group" v={lp.group} />
-                    <Field k="Prior Funds" v={lp.priorFunds?.length ? lp.priorFunds.join(', ') : '—'} />
-                    <Field k="Address" v={overlay?.address || '—'} />
+                    <EditField k="Investor Type" value={acct.investor_type} onSave={v => saveAccount({ investor_type: v })} />
+                    <EditField k="Source" value={acct.source} onSave={v => saveAccount({ source: v })} />
+                    <EditField k="Owner" value={acct.owner} onSave={v => saveAccount({ owner: v })} />
+                    <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />
+                    <EditField k="Committed" value={acct.committed_usd} onSave={v => saveAccount({ committed_usd: v })} />
+                    <EditField k="Phone" value={acct.phone} onSave={v => saveAccount({ phone: v })} />
+                    <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
+                    <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
                   </div>
                   <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1124,6 +1171,25 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
     <div style={{ background: '#f8f9fb', border: '1px solid #eef0f2', borderRadius: 10, padding: '10px 12px' }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 700, color: accent ?? '#1a2233', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{value}</div>
+    </div>
+  )
+}
+function EditField({ k, value, onSave, full }: { k: string; value: string; onSave: (v: string) => void; full?: boolean }) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => { setDraft(value) }, [value])
+  return (
+    <div style={{ gridColumn: full ? '1 / -1' : undefined }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{k}</div>
+      <input
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={() => { if (draft !== value) onSave(draft) }}
+        placeholder="—"
+        style={{ width: '100%', marginTop: 3, padding: '6px 9px', borderRadius: 7, border: '1px solid transparent',
+                 fontSize: 15, color: '#1a2233', fontWeight: 500, fontFamily: 'inherit', background: '#f8fafc' }}
+        onFocus={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#fff' }}
+        onBlurCapture={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = '#f8fafc' }}
+      />
     </div>
   )
 }
