@@ -270,7 +270,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     const portal = Object.values(overlays)
       .filter(ov => ov.portal_created && !ov.archived && (ov.program ?? 'PE') === program)
       .map(overlayToLp)
-    return [...lps, ...portal]
+    const base = program === 'DST' ? lps : []
+    return [...base, ...portal]
       .filter(lp => !overlays[normKey(lp.investor)]?.archived)
       .filter(inProgram)
       .filter(lp => {
