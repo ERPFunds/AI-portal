@@ -43,7 +43,11 @@ interface Overlay {
   target_amount?: number | string | null
   expected_close?: string | null
 }
-interface Person { name: string; email: string | null; phone: string | null; company: string | null; location: string | null; funds: string[] }
+interface Person {
+  match_key: string; id: string | null; name: string; title: string | null; email: string | null
+  phone_office: string | null; phone_cell: string | null; address: string | null
+  notes: string | null; is_primary: boolean; company: string | null; funds: string[]
+}
 interface Meeting {
   id: string
   meeting_date: string | null
@@ -88,6 +92,15 @@ function stageColor(stage?: string | null): string {
   return '#5b6472'                 // early
 }
 
+// Every fund an investor is associated with — the current fund plus any prior ones.
+function fundsOf(lp: LpRecord): string[] {
+  const out: string[] = []
+  if (lp.group === DST_GROUP) out.push('DST / 1031')
+  else if (lp.group !== 'Prior Fund LPs') out.push('Fund IV')
+  for (const pf of lp.priorFunds ?? []) if (!out.includes(pf)) out.push(pf)
+  return out
+}
+
 // LP-directory tagging: the investor's Type derived from its group + commitment status.
 // Fund IV investors split into committed LPs vs prospects (targets not yet committed).
 function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
@@ -103,6 +116,7 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [fundFilter, setFundFilter] = useState('All')
   const [selected, setSelected] = useState<LpRecord | null>(null)
   const [contactCounts, setContactCounts] = useState<Record<string, number>>({})
   const [syncing, setSyncing] = useState(false)
@@ -140,9 +154,20 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
     const q = search.trim().toLowerCase()
     return lps
       .filter(inProgram)
+      .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
       .sort((a, b) => effectiveCommitted(b) - effectiveCommitted(a) || a.investor.localeCompare(b.investor))
-  }, [lps, program, search])
+  }, [lps, program, search, fundFilter])
+
+  // Fund options present in this program, newest fund first.
+  const fundOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const lp of lps) {
+      if (program === 'DST' ? lp.group !== DST_GROUP : lp.group === DST_GROUP) continue
+      for (const f of fundsOf(lp)) set.add(f)
+    }
+    return [...set].sort().reverse()
+  }, [lps, program])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
 
@@ -297,6 +322,11 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
           placeholder="Search investors, contacts, email…"
           style={{ flex: 1, minWidth: 220, maxWidth: 360, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
         />
+        <select value={fundFilter} onChange={e => setFundFilter(e.target.value)}
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+          <option value="All">All funds</option>
+          {fundOptions.map(f => <option key={f} value={f}>{f}</option>)}
+        </select>
         <button onClick={() => setGroupByAccount(v => !v)} style={{ border: `1px solid ${groupByAccount ? '#c7d2fe' : '#d1d5db'}`, background: groupByAccount ? '#eef2ff' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: groupByAccount ? '#3730a3' : '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>☰ {groupByAccount ? 'Grouped by account' : 'Group by account'}</button>
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
         <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>
@@ -386,6 +416,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
 
   const [meetings, setMeetings] = useState<Meeting[] | null>(null)
   const [people, setPeople] = useState<Person[] | null>(null)
+  const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
 
   const email = lp.resolvedEmail || lp.email || ''
   const committed = effectiveCommitted(lp)
@@ -443,6 +474,27 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   }
 
 
+
+  async function loadPeople() {
+    try {
+      const r = await fetch(`/api/investor-crm/people?investor=${encodeURIComponent(lp.investor)}`)
+      const j = await r.json(); setPeople(j.people ?? [])
+    } catch { setPeople([]) }
+  }
+  async function saveContact(d: Partial<Person>) {
+    const res = await fetch('/api/investor-crm/people', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...d, investor: lp.investor }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
+    setEditingContact(null); loadPeople()
+  }
+  async function deleteContact(id: string) {
+    if (!window.confirm('Remove this contact?')) return
+    const res = await fetch(`/api/investor-crm/people?id=${id}`, { method: 'DELETE' })
+    if (res.ok) loadPeople()
+  }
 
   const initials = lp.investor.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
@@ -563,7 +615,10 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                 </div>
 
                 <div style={{ ...cardCss, padding: 20 }}>
-                  <div style={sectTitle}>People Under This Account {people && people.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{people.length}</span>}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={sectTitle}>People Under This Account {people && people.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{people.length}</span>}</div>
+                    <button onClick={() => setEditingContact({})} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}>+ Add contact</button>
+                  </div>
                   {people == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
                   {people && people.length === 0 && (
                     <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
@@ -571,17 +626,29 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                     </div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {people?.map((pn, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                            <span style={{ fontWeight: 600, fontSize: 14.5 }}>{pn.name}</span>
-                            {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
+                    {people?.map((pn) => (
+                      <div key={pn.match_key} style={{ padding: '11px 13px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 600, fontSize: 14.5 }}>{pn.name}</span>
+                              {pn.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
+                              {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
+                            </div>
+                            {pn.title && <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 1 }}>{pn.title}</div>}
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '2px 16px', marginTop: 6 }}>
+                              <ContactBit label="Email" value={pn.email} href={pn.email ? `mailto:${pn.email}` : undefined} />
+                              <ContactBit label="Office" value={pn.phone_office} />
+                              <ContactBit label="Cell" value={pn.phone_cell} />
+                              <ContactBit label="Address" value={pn.address} />
+                            </div>
+                            {pn.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{pn.notes}</div>}
                           </div>
-                          <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 2 }}>{[pn.email, pn.phone].filter(Boolean).join(' · ') || '—'}</div>
-                          {(pn.company || pn.location) && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{[pn.company, pn.location].filter(Boolean).join(' · ')}</div>}
+                          <div style={{ display: 'flex', gap: 6 }}>
+                            <button onClick={() => setEditingContact(pn)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0e7490' }}>Edit</button>
+                            {pn.id && <button onClick={() => deleteContact(pn.id!)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>✕</button>}
+                          </div>
                         </div>
-                        {pn.email && <a href={`mailto:${pn.email}`} style={{ fontSize: 12.5, fontWeight: 600, color: '#0e7490', textDecoration: 'none', whiteSpace: 'nowrap' }}>Email</a>}
                       </div>
                     ))}
                   </div>
@@ -617,6 +684,53 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
               <div style={{ ...cardCss, padding: 40, textAlign: 'center', color: '#9ca3af' }}>Subscription documents — sub-docs, K-1s, statements (links to fund admin) — coming next.</div>
             )}
           </div>
+        </div>
+      </div>
+      {editingContact && <ContactModal draft={editingContact} onCancel={() => setEditingContact(null)} onSave={saveContact} />}
+    </div>
+  )
+}
+
+// One labelled contact detail (email / office / cell / address).
+function ContactBit({ label, value, href }: { label: string; value: string | null; href?: string }) {
+  if (!value) return null
+  return (
+    <div style={{ fontSize: 12.5, color: '#6b7280' }}>
+      <span style={{ color: '#b6bcc6', fontWeight: 600 }}>{label}: </span>
+      {href ? <a href={href} style={{ color: '#0e7490', textDecoration: 'none' }}>{value}</a> : value}
+    </div>
+  )
+}
+
+function ContactModal({ draft, onCancel, onSave }: { draft: Partial<Person>; onCancel: () => void; onSave: (d: Partial<Person>) => void }) {
+  const [d, setD] = useState<Partial<Person>>(draft)
+  const set = (k: keyof Person, v: string | boolean) => setD(prev => ({ ...prev, [k]: v }))
+  const fld = (label: string, k: keyof Person, full?: boolean) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: full ? '1 / -1' : undefined }}>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</span>
+      <input value={(d[k] as string) || ''} onChange={e => set(k, e.target.value)}
+        style={{ width: '100%', padding: '9px 11px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit' }} />
+    </label>
+  )
+  return (
+    <div onClick={onCancel} style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(560px, 96vw)', maxHeight: '90vh', overflowY: 'auto', background: '#fff', borderRadius: 14, padding: 24 }}>
+        <h2 style={{ margin: '0 0 16px', fontSize: 19, fontWeight: 700, color: '#1a2233' }}>{draft.match_key ? 'Edit Contact' : 'Add Contact'}</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {fld('Name', 'name')}
+          {fld('Title', 'title')}
+          {fld('Email', 'email', true)}
+          {fld('Office Phone', 'phone_office')}
+          {fld('Cell Phone', 'phone_cell')}
+          {fld('Address', 'address', true)}
+          {fld('Notes', 'notes', true)}
+          <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#374151', fontWeight: 600 }}>
+            <input type="checkbox" checked={!!d.is_primary} onChange={e => set('is_primary', e.target.checked)} /> Primary contact for this account
+          </label>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button onClick={onCancel} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 9, padding: '9px 16px', fontWeight: 600, cursor: 'pointer', color: '#374151' }}>Cancel</button>
+          <button onClick={() => { if (!String(d.name ?? '').trim()) { alert('Name is required'); return } onSave(d) }} style={{ border: 0, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '9px 18px', fontWeight: 600, cursor: 'pointer' }}>Save</button>
         </div>
       </div>
     </div>

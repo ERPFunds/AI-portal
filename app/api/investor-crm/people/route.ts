@@ -17,6 +17,12 @@ interface PriorRow {
 }
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+const OVL = "id, investor_key, match_key, name, title, email, phone_office, phone_cell, address, notes, is_primary";
+interface Ovl {
+  id: string; investor_key: string; match_key: string; name: string; title: string | null;
+  email: string | null; phone_office: string | null; phone_cell: string | null;
+  address: string | null; notes: string | null; is_primary: boolean;
+}
 
 export async function GET(req: NextRequest) {
   const auth = await createClient();
@@ -77,9 +83,81 @@ export async function GET(req: NextRequest) {
     if (!p.company && r.company) p.company = r.company.trim();
   }
 
-  const people = [...byPerson.values()]
-    .map((p) => ({ ...p, funds: [...p.funds].sort() }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // Layer the portal-owned contact detail (title / office+cell / address) over the import,
+  // and include any contacts added by hand that aren't in the imported list.
+  const { data: ovlRows } = await supabase
+    .from("investor_contacts").select(OVL).eq("investor_key", target);
+  const ovl = new Map<string, Ovl>();
+  for (const r of ((ovlRows ?? []) as Ovl[])) ovl.set(r.match_key, r);
+
+  const people = [...byPerson.entries()].map(([key, p]) => {
+    const ov = ovl.get(key);
+    if (ov) ovl.delete(key);
+    return {
+      match_key: key,
+      id: ov?.id ?? null,
+      name: ov?.name || p.name,
+      title: ov?.title ?? null,
+      email: ov?.email || p.email,
+      phone_office: ov?.phone_office ?? null,
+      phone_cell: ov?.phone_cell ?? p.phone,
+      address: ov?.address ?? p.location,
+      notes: ov?.notes ?? null,
+      is_primary: ov?.is_primary ?? false,
+      company: p.company,
+      funds: [...p.funds].sort(),
+    };
+  });
+  // Hand-added contacts with no imported counterpart
+  for (const ov of ovl.values()) {
+    people.push({
+      match_key: ov.match_key, id: ov.id, name: ov.name, title: ov.title, email: ov.email,
+      phone_office: ov.phone_office, phone_cell: ov.phone_cell, address: ov.address,
+      notes: ov.notes, is_primary: ov.is_primary, company: null, funds: [],
+    });
+  }
+  people.sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.name.localeCompare(b.name));
 
   return NextResponse.json({ people, entity: investor });
+}
+
+// Create or update one contact's portal-owned detail for an account.
+export async function PATCH(req: NextRequest) {
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
+
+  const body = await req.json().catch(() => ({}));
+  const investor = String(body.investor ?? "").trim();
+  const name = String(body.name ?? "").trim();
+  if (!investor || !name) return NextResponse.json({ error: "investor and name required" }, { status: 400 });
+
+  const email = String(body.email ?? "").trim();
+  const matchKey = String(body.match_key ?? "").trim() || (email ? `e:${email.toLowerCase()}` : `n:${norm(name)}`);
+  const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
+
+  const { data, error } = await supabase.from("investor_contacts").upsert({
+    investor_key: norm(investor), investor, match_key: matchKey, name,
+    title: str(body.title), email: email || null,
+    phone_office: str(body.phone_office), phone_cell: str(body.phone_cell),
+    address: str(body.address), notes: str(body.notes),
+    is_primary: !!body.is_primary,
+    updated_by: user.email ?? user.id, updated_at: new Date().toISOString(),
+  }, { onConflict: "investor_key,match_key" }).select(OVL).single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ contact: data });
+}
+
+// Remove a hand-added contact (imported people reappear from the import).
+export async function DELETE(req: NextRequest) {
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const { error } = await supabase.from("investor_contacts").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
