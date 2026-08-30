@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
       .select("id, file_id, filename, size_bytes, mime_type, project_tag, category, uploaded_by, expires_at, created_at")
       .order("created_at", { ascending: false });
     if (category) query = query.eq("category", category);
+    const projectTag = req.nextUrl.searchParams.get("project_tag");
+    if (projectTag) query = query.eq("project_tag", projectTag);
     const { data, error } = await query;
     if (error) {
       console.error("File list error:", error);

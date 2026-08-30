@@ -52,8 +52,11 @@ interface Overlay {
   contact?: string | null
   email?: string | null
   phone?: string | null
+  address?: string | null
+  website?: string | null
   notes?: string | null
 }
+interface InvestorDoc { id: string; file_id: string; filename: string; size_bytes: number; created_at: string; uploaded_by: string | null }
 interface Fund { id: string; name: string; program: string | null }
 interface Person {
   match_key: string; id: string | null; name: string; title: string | null; email: string | null
@@ -277,8 +280,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       if (program === 'DST' ? lp.group !== DST_GROUP : lp.group === DST_GROUP) continue
       for (const f of fundsOf(lp)) set.add(f)
     }
-    for (const f of funds) if (!f.program || f.program === program) set.add(f.name)
-    return [...set].sort().reverse()
+    // Managed funds lead, in their configured order; anything else seen in the data follows.
+    const managed = funds.filter(f => !f.program || f.program === program).map(f => f.name)
+    const derived = [...set].filter(n => !managed.includes(n)).sort()
+    return [...managed, ...derived]
   }, [lps, program, funds])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
@@ -440,10 +445,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
                 onClick={e => e.stopPropagation()} style={emailBtn}>Email</a>
             : <span style={{ ...rowBtn, color: '#cbd5e1', background: '#f8fafc', borderColor: '#e2e8f0', cursor: 'default' }}>Email</span>}
           <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, color: '#374151', background: '#f8fafc', borderColor: '#e2e8f0' }}>Edit</button>
-          <button onClick={e => { e.stopPropagation(); archiveInvestor(lp) }} title="Hide from the CRM"
+          {!isLpDirectory && <button onClick={e => { e.stopPropagation(); archiveInvestor(lp) }} title="Hide from the CRM"
             style={{ ...rowBtn, color: '#b91c1c', background: '#fef2f2', borderColor: '#fecaca' }}>
             {overlays[normKey(lp.investor)]?.portal_created ? 'Delete' : 'Archive'}
-          </button>
+          </button>}
         </td>
       </tr>
     )
@@ -487,8 +492,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
         <button onClick={() => setShowImport(true)}
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
-        {!isLpDirectory && <button onClick={() => setShowFunds(true)}
-          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>Manage funds</button>}
+        <button onClick={() => setShowFunds(true)}
+          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>
         {!isLpDirectory && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
@@ -546,6 +551,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <InvestorDrawer
           lp={selected}
           program={program}
+          isLpDirectory={isLpDirectory}
           overlay={overlayFor(selected)}
           accent={accent}
           onClose={() => setSelected(null)}
@@ -688,9 +694,10 @@ const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' 
 
 // ── Detail drawer ─────────────────────────────────────────────────────────────
 
-function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
+function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, onSaved }: {
   lp: LpRecord
   program: 'PE' | 'DST'
+  isLpDirectory?: boolean
   overlay?: Overlay
   accent: string
   onClose: () => void
@@ -707,6 +714,9 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   const [meetings, setMeetings] = useState<Meeting[] | null>(null)
   const [people, setPeople] = useState<Person[] | null>(null)
   const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
+  const [docs, setDocs] = useState<InvestorDoc[] | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const docTag = `investor:${key}`
 
   const email = lp.resolvedEmail || lp.email || ''
   const committed = effectiveCommitted(lp)
@@ -764,6 +774,31 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
   }
 
 
+
+  const loadDocs = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/files/list?project_tag=${encodeURIComponent(`investor:${key}`)}`)
+      const j = await r.json(); setDocs(j.files ?? [])
+    } catch { setDocs([]) }
+  }, [key])
+  useEffect(() => { loadDocs() }, [loadDocs])
+
+  async function uploadDocs(files: FileList | null) {
+    if (!files?.length) return
+    setUploading(true)
+    try {
+      for (const file of Array.from(files)) {
+        const fd = new FormData()
+        fd.append('file', file)
+        fd.append('projectTag', docTag)
+        fd.append('category', 'Investor Docs')
+        fd.append('uploadedBy', lp.investor)
+        const res = await fetch('/api/files/upload', { method: 'POST', body: fd })
+        if (!res.ok) { const j = await res.json().catch(() => ({})); alert(`${file.name}: ${j.error ?? res.status}`) }
+      }
+      await loadDocs()
+    } finally { setUploading(false) }
+  }
 
   async function loadPeople() {
     try {
@@ -823,21 +858,21 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
 
             {/* editable rail fields */}
             <div style={{ ...cardCss, padding: '4px 18px 10px' }}>
-              <RailField label="Fundraising Stage">
+              {!isLpDirectory && <RailField label="Fundraising Stage">
                 <select value={stage} onChange={e => { setStage(e.target.value); saveOverlay({ funnel_stage: e.target.value }) }} style={selCss}>
                   <option value="">— set stage —</option>
                   {FUNNEL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
-              </RailField>
-              <RailField label="Target Amount">
+              </RailField>}
+              {!isLpDirectory && <RailField label="Target Amount">
                 <input value={targetDraft} onChange={e => setTargetDraft(e.target.value)}
                   onBlur={() => saveOverlay({ target_amount: targetDraft })}
                   placeholder="e.g. 1,000,000" style={{ ...selCss, cursor: 'text' }} />
-              </RailField>
-              <RailField label="Expected Close">
+              </RailField>}
+              {!isLpDirectory && <RailField label="Expected Close">
                 <input type="date" value={closeDraft} onChange={e => { setCloseDraft(e.target.value); saveOverlay({ expected_close: e.target.value }) }}
                   style={{ ...selCss, cursor: 'text' }} />
-              </RailField>
+              </RailField>}
               <RailField label="Relationship Owner">
                 <select value={owner || resolvedOwner.name} onChange={e => { setOwner(e.target.value); saveOverlay({ owner: e.target.value }) }} style={selCss}>
                   <option value="">— unassigned —</option>
@@ -858,10 +893,10 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
               <RailField label="Source">
                 <input value={source} onChange={e => setSource(e.target.value)} onBlur={() => saveOverlay({ source })} placeholder="e.g. Referral, Conference…" style={{ ...selCss, cursor: 'text' }} />
               </RailField>
-              <RailField label="Last Contact">
+              {!isLpDirectory && <RailField label="Last Contact">
                 <div style={railVal}>{lp.lastInteraction ? fmtDate(lp.lastInteraction.date) : 'No contact logged'}</div>
                 {lp.lastInteraction?.note && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{lp.lastInteraction.note.slice(0, 120)}</div>}
-              </RailField>
+              </RailField>}
               {saveMsg && <div style={{ fontSize: 12, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c', padding: '6px 0', fontWeight: 600 }}>{saving ? 'Saving…' : saveMsg}</div>}
             </div>
           </aside>
@@ -869,7 +904,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
           {/* MAIN */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb' }}>
-              {([['overview', 'Overview'], ['meetings', `Meetings${meetings ? ` (${meetings.length})` : ''}`], ['docs', 'Subscription Docs']] as const).map(([k, label]) => (
+              {([['overview', 'Overview'], ['meetings', `Meetings${meetings ? ` (${meetings.length})` : ''}`], ['docs', 'Docs']] as const).map(([k, label]) => (
                 <button key={k} onClick={() => setTab(k)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, color: tab === k ? '#1a2233' : '#9ca3af', padding: '10px 14px', borderBottom: tab === k ? '2px solid #0f766e' : '2px solid transparent', marginBottom: -1 }}>{label}</button>
               ))}
             </div>
@@ -881,9 +916,9 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                   <div style={{ fontSize: 14.5, color: '#374151', lineHeight: 1.55 }}>{summaryText}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 16 }}>
                     <Stat label="Committed" value={committed ? fmtUsd(committed) : '—'} accent="#0f766e" />
-                    <Stat label="Target" value={fmtUsd(targetAmount)} />
+                    {!isLpDirectory && <Stat label="Target" value={fmtUsd(targetAmount)} />}
                     <Stat label="People" value={people == null ? '·' : String(people.length)} />
-                    <Stat label="Last Contact" value={lp.lastInteraction ? `${daysSince(lp.lastInteraction.date)}d ago` : '—'} />
+                    {!isLpDirectory && <Stat label="Last Contact" value={lp.lastInteraction ? `${daysSince(lp.lastInteraction.date)}d ago` : '—'} />}
                   </div>
                 </div>
 
@@ -897,6 +932,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                     <Field k="Program" v={program === 'DST' ? 'DST / 1031' : 'PE — Fund IV'} />
                     <Field k="Group" v={lp.group} />
                     <Field k="Prior Funds" v={lp.priorFunds?.length ? lp.priorFunds.join(', ') : '—'} />
+                    <Field k="Address" v={overlay?.address || '—'} />
                   </div>
                   {lp.notes && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Notes</div>
@@ -925,8 +961,8 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                               {pn.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
                               {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
                             </div>
-                            {pn.title && <div style={{ fontSize: 12.5, color: '#6b7280', marginTop: 1 }}>{pn.title}</div>}
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '2px 16px', marginTop: 6 }}>
+                              <ContactBit label="Title" value={pn.title} />
                               <ContactBit label="Email" value={pn.email} href={pn.email ? `mailto:${pn.email}` : undefined} />
                               <ContactBit label="Office" value={pn.phone_office} />
                               <ContactBit label="Cell" value={pn.phone_cell} />
@@ -971,7 +1007,35 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
             )}
 
             {tab === 'docs' && (
-              <div style={{ ...cardCss, padding: 40, textAlign: 'center', color: '#9ca3af' }}>Subscription documents — sub-docs, K-1s, statements (links to fund admin) — coming next.</div>
+              <div style={{ ...cardCss, padding: 20 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <div style={sectTitle}>Documents {docs && docs.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{docs.length}</span>}</div>
+                  <label style={{ border: '1px solid #0f766e', background: uploading ? '#f0f9f7' : '#fff', color: '#0f766e', borderRadius: 8, padding: '6px 13px', cursor: uploading ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>
+                    {uploading ? 'Uploading…' : '⤒ Upload'}
+                    <input type="file" multiple style={{ display: 'none' }} disabled={uploading}
+                      onChange={e => { uploadDocs(e.target.files); e.target.value = '' }} />
+                  </label>
+                </div>
+                {docs == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
+                {docs && docs.length === 0 && (
+                  <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
+                    No documents yet — sub-docs, K-1s and statements for this investor can be uploaded here.
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {docs?.map(d => (
+                    <div key={d.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
+                      <span style={{ fontSize: 16 }}>📄</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.filename}</div>
+                        <div style={{ fontSize: 12, color: '#9ca3af' }}>
+                          {Math.max(1, Math.round((d.size_bytes ?? 0) / 1024))} KB · {fmtDate(d.created_at)}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -983,11 +1047,12 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
 
 // One labelled contact detail (email / office / cell / address).
 function ContactBit({ label, value, href }: { label: string; value: string | null; href?: string }) {
-  if (!value) return null
   return (
     <div style={{ fontSize: 12.5, color: '#6b7280' }}>
       <span style={{ color: '#b6bcc6', fontWeight: 600 }}>{label}: </span>
-      {href ? <a href={href} style={{ color: '#0e7490', textDecoration: 'none' }}>{value}</a> : value}
+      {!value ? <span style={{ color: '#d1d5db' }}>—</span>
+        : href ? <a href={href} style={{ color: '#0e7490', textDecoration: 'none' }}>{value}</a>
+        : value}
     </div>
   )
 }
