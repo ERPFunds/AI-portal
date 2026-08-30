@@ -156,8 +156,11 @@ const COLUMN_DEFS: ColDef[] = [
 function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
   if (lp.group === DST_GROUP) return { label: 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
-  if (effectiveCommitted(lp) > 0) return { label: 'Fund IV LP', bg: '#eff6ff', color: '#1d4ed8' }
-  return { label: 'Fund IV Prospect', bg: '#e5f2eb', color: '#197a52' }
+  // The record's own fund (imported records carry theirs); Fund IV is the default for the live raise.
+  const fund = /fund|dst/i.test(lp.group || '') ? lp.group : 'Fund IV'
+  return effectiveCommitted(lp) > 0
+    ? { label: `${fund} LP`, bg: '#eff6ff', color: '#1d4ed8' }
+    : { label: `${fund} Prospect`, bg: '#e5f2eb', color: '#197a52' }
 }
 
 // mode splits each population by whether capital has actually been committed:
