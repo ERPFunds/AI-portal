@@ -150,11 +150,15 @@ async function parseWorkbook(file: File): Promise<Parsed> {
           })
         }
       } else if (contactName) {
-        // LP-directory shape: one primary contact, with any "(Windstar)" affiliation split out.
-        const m = contactName.match(/^(.*?)\s*\(([^)]+)\)\s*$/)
-        contacts.push({
-          investor, name: (m ? m[1] : contactName).trim(),
-          notes: m ? `Via ${m[2].trim()}` : null, is_primary: true,
+        // LP-directory shape: a single Primary Contact cell that often names two people
+        // ("Dan Hord & Michael McWilliams"). Split them so each becomes its own contact
+        // rather than one combined row that later duplicates the individuals.
+        contactName.split('&').map(x => x.trim()).filter(Boolean).forEach((part, idx) => {
+          const m = part.match(/^(.*?)\s*\(([^)]+)\)\s*$/)
+          contacts.push({
+            investor, name: (m ? m[1] : part).trim(),
+            notes: m ? `Via ${m[2].trim()}` : null, is_primary: idx === 0,
+          })
         })
       }
     }
