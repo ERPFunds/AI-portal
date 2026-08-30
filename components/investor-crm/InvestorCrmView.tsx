@@ -143,7 +143,7 @@ const advOf = (lp: LpRecord) => lp.brokerContact || lp.sfAdvisorContact || ''
 const COLUMN_DEFS: ColDef[] = [
   { key: 'fund', label: 'Fund', text: lp => [typeTag(lp).label, ...(lp.priorFunds ?? []), lp.commitType || ''].join(' '), sort: lp => typeTag(lp).label },
   { key: 'investor', label: 'Investor', text: lp => lp.investor, sort: lp => lp.investor.toLowerCase() },
-  { key: 'contacts', label: 'Contact(s)', text: lp => [lp.contact, lp.resolvedEmail || lp.email].filter(Boolean).join(' '), sort: lp => (lp.contact || '').toLowerCase() },
+  { key: 'contacts', label: 'Contact(s)', text: () => '', sort: () => '' },
   { key: 'commitment', label: 'Commitment', text: lp => String(effectiveCommitted(lp) || ''), sort: lp => effectiveCommitted(lp) },
   { key: 'brokerDealer', label: 'Broker Dealer / RIA', dstOnly: true, text: bdOf, sort: lp => bdOf(lp).toLowerCase() },
   { key: 'advisor', label: 'Advisor', dstOnly: true, text: advOf, sort: lp => advOf(lp).toLowerCase() },
@@ -176,6 +176,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<LpRecord | null>(null)
   const [contactCounts, setContactCounts] = useState<Record<string, number>>({})
+  const [contactPrimary, setContactPrimary] = useState<Record<string, { name: string; email: string; more: number }>>({})
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
@@ -206,7 +207,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   // How many individuals sit under each investing entity (for the Contact(s) column).
   useEffect(() => {
     fetch('/api/investor-crm/people')
-      .then(r => r.json()).then(j => setContactCounts(j.counts ?? {})).catch(() => {})
+      .then(r => r.json())
+      .then(j => { setContactCounts(j.counts ?? {}); setContactPrimary(j.primary ?? {}) })
+      .catch(() => {})
   }, [])
 
   const columns = useMemo(() => COLUMN_DEFS.filter(c => !c.dstOnly || program === 'DST'), [program])
@@ -298,7 +301,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       return [
         typeTag(lp).label,
         lp.investor,
-        lp.contact || '',
+        '',
         effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
         lp.sfBrokerDealer || lp.brokerFirm || lp.sfAdvisorFirm || '',
         lp.brokerContact || lp.sfAdvisorContact || '',
@@ -374,7 +377,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const renderRow = (lp: LpRecord, key: string | number) => {
     const t = typeTag(lp)
     const contactEmail = lp.resolvedEmail || lp.email || ''
-    const extra = (contactCounts[normEntity(lp.investor)] ?? 0) - 1
+    const pc = contactPrimary[normEntity(lp.investor)]
     return (
       <tr key={key} onClick={() => setSelected(lp)}
         style={{ borderTop: '1px solid #f0f1f3', cursor: 'pointer' }}
@@ -390,13 +393,13 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         </td>
         {/* Investor (the account / entity) */}
         <td style={tdCss}><div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div></td>
-        {/* Contact(s) */}
+        {/* Contact(s) — from the portal contact store only */}
         <td style={tdCss}>
-          {lp.contact || contactEmail
+          {pc
             ? <div>
-                <div style={{ fontSize: 13, color: '#374151' }}>{lp.contact || '—'}</div>
-                {contactEmail && <div style={{ fontSize: 12, color: '#9ca3af' }}>{contactEmail}</div>}
-                {extra > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', marginTop: 2 }}>+{extra} more</div>}
+                <div style={{ fontSize: 13, color: '#374151' }}>{pc.name || pc.email || '—'}</div>
+                {pc.name && pc.email && <div style={{ fontSize: 12, color: '#9ca3af' }}>{pc.email}</div>}
+                {pc.more > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', marginTop: 2 }}>+{pc.more} more</div>}
               </div>
             : <span style={{ color: '#d1d5db' }}>—</span>}
         </td>
@@ -808,7 +811,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
             <div style={{ ...cardCss, padding: 20, textAlign: 'center' }}>
               <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto 12px', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: 25, background: `linear-gradient(150deg, ${accent}, #1a2233)` }}>{initials}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2233', lineHeight: 1.15 }}>{lp.investor}</div>
-              {lp.contact && <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>{lp.contact}</div>}
+
               {email && <div style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 2, wordBreak: 'break-all' }}>{email}</div>}
 
               <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
@@ -896,7 +899,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                   <div style={sectTitle}>Account Details</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
                     <Field k="Account (Entity)" v={lp.investor} />
-                    <Field k="Primary Contact" v={lp.contact || '—'} />
+                    <Field k="Primary Contact" v={people?.find(x => x.is_primary)?.name || people?.[0]?.name || '—'} />
                     <Field k="Email" v={email || '—'} />
                     <Field k="Source" v={source || '—'} />
                     <Field k="Program" v={program === 'DST' ? 'DST / 1031' : 'PE — Fund IV'} />
@@ -917,7 +920,7 @@ function InvestorDrawer({ lp, program, overlay, accent, onClose, onSaved }: {
                   {people == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
                   {people && people.length === 0 && (
                     <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
-                      No individual contacts on file for this entity.{lp.contact ? ` Primary contact of record: ${lp.contact}.` : ''}
+                      No individual contacts on file for this entity.
                     </div>
                   )}
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

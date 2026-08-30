@@ -38,20 +38,35 @@ export async function GET(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   if (!investor) {
-    const perEntity = new Map<string, Set<string>>();
+    // Contacts across every entity: the imported list plus anything entered in the portal.
+    const perEntity = new Map<string, Map<string, { name: string; email: string; primary: boolean }>>();
+    const put = (k: string, id: string, v: { name: string; email: string; primary: boolean }) => {
+      if (!k || !id || id === "n:") return;
+      if (!perEntity.has(k)) perEntity.set(k, new Map());
+      const m = perEntity.get(k)!;
+      const prev = m.get(id);
+      if (!prev || (v.primary && !prev.primary)) m.set(id, v);
+    };
     for (const r of (data ?? []) as PriorRow[]) {
-      const k = norm(r.investor_name);
-      if (!k) continue;
       const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim();
       const email = (r.email || "").trim();
-      const id = email ? `e:${email.toLowerCase()}` : `n:${norm(name)}`;
-      if (id === "n:") continue;
-      if (!perEntity.has(k)) perEntity.set(k, new Set());
-      perEntity.get(k)!.add(id);
+      put(norm(r.investor_name), email ? `e:${email.toLowerCase()}` : `n:${norm(name)}`, { name, email, primary: false });
     }
+    const { data: allOvl } = await supabase
+      .from("investor_contacts").select("investor_key, match_key, name, email, is_primary");
+    for (const r of ((allOvl ?? []) as { investor_key: string; match_key: string; name: string; email: string | null; is_primary: boolean }[])) {
+      put(r.investor_key, r.match_key, { name: r.name, email: r.email ?? "", primary: !!r.is_primary });
+    }
+
     const counts: Record<string, number> = {};
-    for (const [k, set] of perEntity) counts[k] = set.size;
-    return NextResponse.json({ counts });
+    const primary: Record<string, { name: string; email: string; more: number }> = {};
+    for (const [k, m] of perEntity) {
+      const list = [...m.values()];
+      counts[k] = list.length;
+      const pick = list.find((x) => x.primary) ?? list.find((x) => x.email) ?? list[0];
+      if (pick) primary[k] = { name: pick.name, email: pick.email, more: list.length - 1 };
+    }
+    return NextResponse.json({ counts, primary });
   }
 
   const target = norm(investor);
