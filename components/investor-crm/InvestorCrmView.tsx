@@ -166,8 +166,9 @@ const COLUMN_DEFS: ColDef[] = [
 function typeTag(lp: LpRecord, isLp = false): { label: string; bg: string; color: string } {
   if (lp.group === DST_GROUP) return { label: 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
-  // The record's own fund (imported records carry theirs); Fund IV is the default for the live raise.
-  const fund = /fund|dst/i.test(lp.group || '') ? lp.group : 'Fund IV'
+  // The record's own fund. An investor in several funds is stored as "Fund II, Fund III" —
+  // the tag names the first, and the Fund column adds a chip for each of the others.
+  const fund = fundsOf(lp)[0] ?? 'Fund IV'
   return effectiveCommitted(lp) > 0 || isLp
     ? { label: `${fund} LP`, bg: '#eff6ff', color: '#1d4ed8' }
     : { label: `${fund} Prospect`, bg: '#e5f2eb', color: '#197a52' }
@@ -409,6 +410,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <td style={tdCss}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 170 }}>
             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span>
+            {fundsOf(lp).slice(1).map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', whiteSpace: 'nowrap' }}>{f}</span>)}
             {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
             {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
           </div>
@@ -494,7 +496,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
         <button onClick={() => setShowFunds(true)}
           style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>
-        {!isLpDirectory && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
+        {program === 'DST' && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
       {syncing && <div style={{ marginBottom: 12, fontSize: 12.5, color: '#9ca3af' }}>Pulling the commitment schedule + Salesforce + mailbox scan — this can take up to a minute.</div>}
@@ -852,7 +854,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
               </div>
 
               {email
-                ? <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`} style={{ display: 'block', marginTop: 16, padding: 11, borderRadius: 9, background: accent, color: '#fff', fontWeight: 600, textDecoration: 'none' }}>✉ Send Email</a>
+                ? <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`} style={{ display: 'block', marginTop: 16, padding: 11, borderRadius: 9, background: '#2563eb', color: '#fff', fontWeight: 600, textDecoration: 'none' }}>✉ Send Email</a>
                 : <div style={{ marginTop: 16, padding: 11, borderRadius: 9, background: '#f1f2f4', color: '#9ca3af', fontWeight: 600 }}>No email on file</div>}
             </div>
 
@@ -1051,7 +1053,7 @@ function ContactBit({ label, value, href }: { label: string; value: string | nul
     <div style={{ fontSize: 12.5, color: '#6b7280' }}>
       <span style={{ color: '#b6bcc6', fontWeight: 600 }}>{label}: </span>
       {!value ? <span style={{ color: '#d1d5db' }}>—</span>
-        : href ? <a href={href} style={{ color: '#0e7490', textDecoration: 'none' }}>{value}</a>
+        : href ? <a href={href} style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none' }}>{value}</a>
         : value}
     </div>
   )
