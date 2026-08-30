@@ -717,6 +717,8 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   const [people, setPeople] = useState<Person[] | null>(null)
   const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
   const [docs, setDocs] = useState<InvestorDoc[] | null>(null)
+  const [notesDraft, setNotesDraft] = useState(overlay?.notes ?? lp.notes ?? '')
+  const [notesSaved, setNotesSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
   const docTag = `investor:${key}`
 
@@ -936,10 +938,20 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <Field k="Prior Funds" v={lp.priorFunds?.length ? lp.priorFunds.join(', ') : '—'} />
                     <Field k="Address" v={overlay?.address || '—'} />
                   </div>
-                  {lp.notes && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Notes</div>
-                    <div style={{ fontSize: 14, color: '#374151', marginTop: 4 }}>{lp.notes}</div>
-                  </div>}
+                  <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Notes</div>
+                      {notesSaved && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#197a52' }}>Saved</span>}
+                    </div>
+                    <textarea
+                      value={notesDraft}
+                      onChange={e => setNotesDraft(e.target.value)}
+                      onBlur={() => { if (notesDraft !== (overlay?.notes ?? lp.notes ?? '')) { saveOverlay({ notes: notesDraft }); setNotesSaved(true); setTimeout(() => setNotesSaved(false), 1500) } }}
+                      placeholder="Add a note about this account…"
+                      rows={3}
+                      style={{ width: '100%', marginTop: 6, padding: '9px 11px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical' }}
+                    />
+                  </div>
                 </div>
 
                 <div style={{ ...cardCss, padding: 20 }}>
