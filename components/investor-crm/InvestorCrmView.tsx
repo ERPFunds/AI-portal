@@ -176,7 +176,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [colFilters, setColFilters] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState('commitment')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<LpRecord | null>(null)
@@ -222,6 +221,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const hasContacts = Object.keys(contactPrimary).length > 0
   // PE Prospects are all Fund IV by definition, so the Fund column is dropped there.
   const hideFund = program === 'PE' && mode === 'prospects'
+  // The LP Directory is portal-owned now, so it carries no Salesforce sync or fund admin.
+  const isLpDirectory = program === 'PE' && mode === 'lps'
   const columns = useMemo(
     () => COLUMN_DEFS.filter(c =>
       (!c.dstOnly || program === 'DST') &&
@@ -248,10 +249,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .filter(lp => mode === 'all' ? true : mode === 'lps' ? effectiveCommitted(lp) > 0 : effectiveCommitted(lp) === 0)
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
-      .filter(lp => columns.every(c => {
-        const f = (colFilters[c.key] ?? '').trim().toLowerCase()
-        return !f || c.text(lp).toLowerCase().includes(f)
-      }))
       .sort((a, b) => {
         const c = columns.find(x => x.key === sortKey) ?? columns[0]
         const av = c.sort(a), bv = c.sort(b)
@@ -260,7 +257,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, overlays, program, search, fundFilter, mode, columns, colFilters, sortKey, sortDir])
+  }, [lps, overlays, program, search, fundFilter, mode, columns, sortKey, sortDir])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -347,7 +344,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   }
 
   const accent = program === 'DST' ? '#8a5a1a' : '#26324a'
-  const committedLabel = mode === 'prospects' ? 'TOTAL TARGET' : program === 'DST' ? 'DST COMMITTED' : 'FUND IV COMMITTED'
+  // Label what the figure actually totals: the filtered fund, or everything in view.
+  const committedLabel = mode === 'prospects' ? 'TOTAL TARGET'
+    : fundFilter !== 'All' ? fundFilter.toUpperCase() + ' COMMITTED'
+    : program === 'DST' ? 'DST COMMITTED'
+    : 'TOTAL COMMITTED'
 
   // Group-by-account (the investor's Salesforce parent-account / company).
   const [groupByAccount, setGroupByAccount] = useState(false)
@@ -437,10 +438,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           {contactEmail
             ? <a href={`mailto:${contactEmail}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
                 onClick={e => e.stopPropagation()} style={rowBtn}>Email</a>
-            : <span style={{ ...rowBtn, color: '#d1d5db', cursor: 'default' }}>Email</span>}
-          <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, border: 0, background: 'none' }}>Edit</button>
+            : <span style={{ ...rowBtn, color: '#cbd5e1', background: '#f8fafc', borderColor: '#e2e8f0', cursor: 'default' }}>Email</span>}
+          <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, color: '#374151', background: '#f8fafc', borderColor: '#e2e8f0' }}>Edit</button>
           <button onClick={e => { e.stopPropagation(); archiveInvestor(lp) }} title="Hide from the CRM"
-            style={{ ...rowBtn, border: 0, background: 'none', color: '#b91c1c' }}>
+            style={{ ...rowBtn, color: '#b91c1c', background: '#fef2f2', borderColor: '#fecaca' }}>
             {overlays[normKey(lp.investor)]?.portal_created ? 'Delete' : 'Archive'}
           </button>
         </td>
@@ -487,9 +488,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
         <button onClick={() => setShowImport(true)}
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
-        <button onClick={() => setShowFunds(true)}
-          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>Manage funds</button>
-        <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>
+        {!isLpDirectory && <button onClick={() => setShowFunds(true)}
+          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>Manage funds</button>}
+        {!isLpDirectory && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
       {syncing && <div style={{ marginBottom: 12, fontSize: 12.5, color: '#9ca3af' }}>Pulling the commitment schedule + Salesforce + mailbox scan — this can take up to a minute.</div>}
@@ -513,24 +514,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
                     </th>
                   ))}
                   <th style={thCss}></th>
-                </tr>
-                <tr style={{ background: '#fff', borderTop: '1px solid #f0f1f3' }}>
-                  {columns.map(c => (
-                    <th key={c.key} style={{ padding: '6px 10px', fontWeight: 400 }}>
-                      <input
-                        value={colFilters[c.key] ?? ''}
-                        onChange={e => setColFilters(f => ({ ...f, [c.key]: e.target.value }))}
-                        placeholder="Filter…"
-                        style={{ width: '100%', minWidth: 70, padding: '5px 8px', borderRadius: 6, border: '1px solid #e5e7eb', fontSize: 12, color: '#374151' }}
-                      />
-                    </th>
-                  ))}
-                  <th style={{ padding: '6px 10px', textAlign: 'right' }}>
-                    {Object.values(colFilters).some(v => (v ?? '').trim()) && (
-                      <button onClick={() => setColFilters({})}
-                        style={{ border: 0, background: 'none', cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: '#0e7490' }}>Clear</button>
-                    )}
-                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -716,7 +699,8 @@ function VendorLink({ name, onOpen }: { name: string; onOpen: (n: string) => voi
   )
 }
 
-const rowBtn: React.CSSProperties = { fontWeight: 600, fontSize: 13, color: '#0e7490', padding: '0 6px', textDecoration: 'none', cursor: 'pointer' }
+// Row actions render as real buttons rather than text links.
+const rowBtn: React.CSSProperties = { display: 'inline-block', fontWeight: 600, fontSize: 12.5, color: '#0e7490', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 7, padding: '5px 11px', marginLeft: 6, textDecoration: 'none', cursor: 'pointer', whiteSpace: 'nowrap', lineHeight: 1.4 }
 const thCss: React.CSSProperties = { padding: '10px 14px', fontWeight: 700, whiteSpace: 'nowrap' }
 const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' }
 

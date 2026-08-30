@@ -24,7 +24,7 @@ interface OtherRow {
   phone?: string | null; phone_cell?: string | null; address?: string | null
   owner?: string | null; notes?: string | null
 }
-interface Parsed { investors: InvestorRow[]; contacts: ContactRow[]; others: OtherRow[]; sheet: string; shape: string }
+interface Parsed { investors: InvestorRow[]; contacts: ContactRow[]; others: OtherRow[]; sheet: string; shape: string; contactsOnly: boolean }
 
 // Exports mix record types in a "Description" column; only investor rows belong in the CRM lists.
 const OTHER_CATEGORIES: Record<string, string> = {
@@ -47,7 +47,7 @@ function findHeader(rows: unknown[][]): { idx: number; col: Record<string, numbe
   const want: Record<string, RegExp> = {
     investor: /^(investor|accountname|account|entity|lpname|name)$/,
     contact: /^(primarycontact|contact)$/,
-    commitment: /^(commitment|committed|amount)$/,
+    commitment: /^(commitment|committed|amount|totalcommitment|totalcommitted)$/,
     lead: /^(lead|owner|relationshipowner)$/,
     notes: /^(notes|note)$/,
     nextsteps: /^nextsteps$/,
@@ -159,10 +159,15 @@ async function parseWorkbook(file: File): Promise<Parsed> {
       }
     }
 
+    // A people export with no commitment column is a contact list for investors we already
+    // hold — the rows are keyed by person, so they get attached rather than creating investors.
+    const contactsOnly = hasPeople && col.commitment === undefined
     if (investors.size || others.length) {
       return {
-        investors: [...investors.values()], contacts, others, sheet,
-        shape: hasPeople ? 'prospect export (multiple contacts per account)' : 'LP directory (one primary contact)',
+        investors: [...investors.values()], contacts, others, sheet, contactsOnly,
+        shape: contactsOnly ? 'contact list (attached to existing investors)'
+          : hasPeople ? 'prospect export (multiple contacts per account)'
+          : 'LP directory (one primary contact)',
       }
     }
   }
@@ -178,6 +183,7 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [result, setResult] = useState<string | null>(null)
+  const [unmatched, setUnmatched] = useState<string[]>([])
 
   async function pick(file: File | undefined) {
     if (!file) return
@@ -197,14 +203,20 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
         body: JSON.stringify({
           source: fileName.replace(/\.[^.]+$/, '').slice(0, 40),
           program,
-          investors: parsed.investors.map(v => ({ ...v, fund: fund || null, program })),
+          investors: parsed.contactsOnly ? [] : parsed.investors.map(v => ({ ...v, fund: fund || null, program })),
           contacts: parsed.contacts,
           others: parsed.others,
+          attach_by_name: parsed.contactsOnly,
         }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.error) { setError(j.error ?? `Import failed (${res.status})`); return }
-      setResult(`Imported ${j.investors} investors, ${j.contacts} contacts${j.others ? ` and ${j.others} records into Other` : ''}.`)
+      setResult(
+        `Imported ${j.investors} investors, ${j.contacts} contacts` +
+        (j.others ? ` and ${j.others} records into Other` : '') + '.' +
+        (j.unmatched ? ` ${j.unmatched} contacts could not be matched to an investor and were skipped.` : '')
+      )
+      if (j.unmatchedSample?.length) setUnmatched(j.unmatchedSample)
       onDone()
     } catch (e) { setError(String(e)) }
     finally { setBusy(false) }
@@ -232,16 +244,19 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
         {parsed && (
           <div style={{ marginTop: 16 }}>
             <div style={{ padding: 12, background: '#f0f9f7', border: '1px solid #cfe9e3', borderRadius: 8, fontSize: 13.5, color: '#134e4a' }}>
-              Found <b>{parsed.investors.length}</b> investors and <b>{parsed.contacts.length}</b> contacts
-              in <b>{parsed.sheet}</b> — {parsed.shape}.
+              {parsed.contactsOnly
+                ? <>Found <b>{parsed.contacts.length}</b> contacts in <b>{parsed.sheet}</b> — {parsed.shape}.
+                   They&apos;ll be matched to investors already in the CRM by account and contact name.</>
+                : <>Found <b>{parsed.investors.length}</b> investors and <b>{parsed.contacts.length}</b> contacts
+                   in <b>{parsed.sheet}</b> — {parsed.shape}.</>}
               {parsed.others.length > 0 && <> Plus <b>{parsed.others.length}</b> non-investor records
               (lenders, law firms, vendors) which go to the <b>Other</b> directory.</>}
             </div>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 14 }}>
+            {!parsed.contactsOnly && <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 14 }}>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Tag these investors with a fund</span>
               <input value={fund} onChange={e => setFund(e.target.value)} placeholder="e.g. Fund II — leave blank for none"
                 style={{ padding: '9px 11px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }} />
-            </label>
+            </label>}
             <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
               Imported as {program === 'DST' ? 'DST' : 'PE'} records. Those with a commitment appear in
               the LP Directory; those without appear in Prospects.
@@ -250,6 +265,12 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
         )}
 
         {result && <div style={{ marginTop: 14, fontSize: 13.5, fontWeight: 600, color: '#197a52' }}>{result}</div>}
+        {unmatched.length > 0 && (
+          <div style={{ marginTop: 10, padding: 12, background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, fontSize: 12.5, color: '#92400e' }}>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Not matched to an investor</div>
+            <div style={{ maxHeight: 150, overflowY: 'auto' }}>{unmatched.join(' · ')}</div>
+          </div>
+        )}
 
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
           <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 9, padding: '9px 16px', fontWeight: 600, cursor: 'pointer', color: '#374151' }}>

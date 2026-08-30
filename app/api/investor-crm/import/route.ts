@@ -71,6 +71,42 @@ export async function POST(req: NextRequest) {
   }
 
   const by = `import:${label}`;
+  // A contacts-only export keys rows by the person, not the investing entity, so each contact
+  // has to be matched onto an existing investor: same entity name, an entity the account name
+  // is a prefix of ("Buck Horn" -> "Buck Horn, L.P."), or an investor whose primary contact
+  // names that person. Anything unmatched is reported rather than guessed at.
+  const attachByName = !!body.attach_by_name;
+  const matchIndex: { key: string; investor: string; contactWords: Set<string>; entityWords: Set<string> }[] = [];
+  if (attachByName) {
+    const { data: existing } = await supabase
+      .from("investor_crm").select("investor_key, investor, contact").eq("archived", false);
+    for (const r of ((existing ?? []) as { investor_key: string; investor: string; contact: string | null }[])) {
+      matchIndex.push({
+        key: r.investor_key,
+        investor: r.investor,
+        contactWords: new Set(norm(r.contact ?? "").split(" ").filter(Boolean)),
+        entityWords: new Set(norm(r.investor).split(" ").filter(Boolean)),
+      });
+    }
+  }
+  const unmatched: string[] = [];
+  function resolveInvestor(rawAccount: string, personName: string): string | null {
+    const acct = norm(rawAccount);
+    if (!matchIndex.length) return null;
+    const exact = matchIndex.find((m) => m.key === acct);
+    if (exact) return exact.investor;
+    const prefix = matchIndex.find((m) => m.key.startsWith(acct + " ") || acct.startsWith(m.key + " "));
+    if (prefix) return prefix.investor;
+    const words = norm(personName).split(" ").filter(Boolean);
+    if (words.length >= 2) {
+      const first = words[0], last = words[words.length - 1];
+      const byContact = matchIndex.find((m) => m.contactWords.has(first) && m.contactWords.has(last));
+      if (byContact) return byContact.investor;
+      const byEntity = matchIndex.find((m) => m.entityWords.has(first) && m.entityWords.has(last));
+      if (byEntity) return byEntity.investor;
+    }
+    return null;
+  }
   const program = body.program === "DST" ? "DST" : "PE";
 
   // Investors — keyed by normalized entity name, so a re-import updates in place.
@@ -98,7 +134,11 @@ export async function POST(req: NextRequest) {
   const contactRows = contactsIn
     .filter((c) => String(c.investor ?? "").trim() && (String(c.name ?? "").trim() || String(c.email ?? "").trim()))
     .map((c) => {
-      const investor = String(c.investor).trim();
+      const raw = String(c.investor).trim();
+      const person = String(c.name ?? "").trim();
+      const resolved = attachByName ? resolveInvestor(raw, person) : raw;
+      if (!resolved) { unmatched.push(`${person || raw} [${raw}]`); return null; }
+      const investor = resolved;
       const email = String(c.email ?? "").trim();
       const name = String(c.name ?? "").trim() || email;
       const key = norm(investor);
@@ -113,7 +153,13 @@ export async function POST(req: NextRequest) {
       };
     })
     // the unique key is (investor_key, match_key) — drop in-payload duplicates
-    .filter((c) => { const k = `${c.investor_key}|${c.match_key}`; if (seen.has(k)) return false; seen.add(k); return true; });
+    .filter((c): c is NonNullable<typeof c> => {
+      if (!c) return false;
+      const k = `${c.investor_key}|${c.match_key}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
 
   // Non-investor rows (lenders, law firms, vendors) go to the Other directory.
   const seenOther = new Set<string>();
@@ -144,7 +190,10 @@ export async function POST(req: NextRequest) {
     const investors = await upsertAll(supabase, "investor_crm", investorRows, "investor_key");
     const contacts = await upsertAll(supabase, "investor_contacts", contactRows, "investor_key,match_key");
     const others = await upsertAll(supabase, "crm_other", otherRows, "name_key,match_key");
-    return NextResponse.json({ ok: true, investors, contacts, others, funds: funds.length });
+    return NextResponse.json({
+      ok: true, investors, contacts, others, funds: funds.length,
+      unmatched: unmatched.length, unmatchedSample: unmatched.slice(0, 25),
+    });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 400) }, { status: 500 });
   }
