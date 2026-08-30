@@ -212,7 +212,13 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .catch(() => {})
   }, [])
 
-  const columns = useMemo(() => COLUMN_DEFS.filter(c => !c.dstOnly || program === 'DST'), [program])
+  // The Contact(s) column only appears once there are contacts in the portal store — while it's
+  // empty (e.g. after a reset, before an import) the column is hidden rather than shown blank.
+  const hasContacts = Object.keys(contactPrimary).length > 0
+  const columns = useMemo(
+    () => COLUMN_DEFS.filter(c => (!c.dstOnly || program === 'DST') && (c.key !== 'contacts' || hasContacts)),
+    [program, hasContacts]
+  )
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
     else { setSortKey(key); setSortDir(key === 'commitment' ? 'desc' : 'asc') }
@@ -337,7 +343,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [groupByAccount, setGroupByAccount] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const NO_ACCOUNT = '(No account in Salesforce)'
-  const colCount = program === 'DST' ? 8 : 6
+  const colCount = columns.length + 1
   const accountGroups = useMemo(() => {
     const m = new Map<string, LpRecord[]>()
     for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
