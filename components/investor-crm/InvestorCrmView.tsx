@@ -350,18 +350,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     : program === 'DST' ? 'DST COMMITTED'
     : 'TOTAL COMMITTED'
 
-  // Group-by-account (the investor's Salesforce parent-account / company).
-  const [groupByAccount, setGroupByAccount] = useState(false)
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
-  const NO_ACCOUNT = '(No account in Salesforce)'
   const colCount = columns.length + 1
-  const accountGroups = useMemo(() => {
-    const m = new Map<string, LpRecord[]>()
-    for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
-    return [...m.entries()]
-      .map(([name, lps]) => ({ name, lps, committed: lps.reduce((s, l) => s + effectiveCommitted(l), 0) }))
-      .sort((a, b) => a.name === NO_ACCOUNT ? 1 : b.name === NO_ACCOUNT ? -1 : (b.committed - a.committed) || a.name.localeCompare(b.name))
-  }, [rows])
 
   async function archiveInvestor(lp: LpRecord) {
     const ov = overlays[normKey(lp.investor)]
@@ -482,7 +471,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           <option value="All">All funds</option>
           {fundOptions.map(f => <option key={f} value={f}>{f}</option>)}
         </select>
-        <button onClick={() => setGroupByAccount(v => !v)} style={{ border: `1px solid ${groupByAccount ? '#c7d2fe' : '#d1d5db'}`, background: groupByAccount ? '#eef2ff' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: groupByAccount ? '#3730a3' : '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>☰ {groupByAccount ? 'Grouped by account' : 'Group by account'}</button>
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
         <button onClick={() => setShowAdd(true)}
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
@@ -517,25 +505,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
                 </tr>
               </thead>
               <tbody>
-                {groupByAccount
-                  ? accountGroups.flatMap(g => {
-                      const open = !collapsed.has(g.name)
-                      const header = (
-                        <tr key={'h:' + g.name} onClick={() => setCollapsed(prev => { const n = new Set(prev); if (n.has(g.name)) n.delete(g.name); else n.add(g.name); return n })}
-                          style={{ background: '#f3f5f8', cursor: 'pointer', borderTop: '2px solid #e5e7eb' }}>
-                          <td colSpan={colCount} style={{ padding: '10px 14px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                              <span style={{ color: '#6b7280', width: 12 }}>{open ? '▾' : '▸'}</span>
-                              <span style={{ fontWeight: 700, color: g.name === NO_ACCOUNT ? '#9ca3af' : '#1a2233' }}>{g.name}</span>
-                              <span style={{ fontSize: 12, color: '#6b7280' }}>{g.lps.length} investor{g.lps.length === 1 ? '' : 's'}</span>
-                              <span style={{ marginLeft: 'auto', fontWeight: 700, color: '#0f766e', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(g.committed)}</span>
-                            </div>
-                          </td>
-                        </tr>
-                      )
-                      return open ? [header, ...g.lps.map(lp => renderRow(lp, g.name + '|' + lp.investor))] : [header]
-                    })
-                  : rows.map((lp, i) => renderRow(lp, i))}
+                {rows.map((lp, i) => renderRow(lp, i))}
                 {rows.length === 0 && <tr><td colSpan={colCount} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No investors match.</td></tr>}
               </tbody>
             </table>
