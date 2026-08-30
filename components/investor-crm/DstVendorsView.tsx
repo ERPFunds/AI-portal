@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 // Intermediaries, title/escrow, property managers, lenders, legal, etc. Separate
 // from investors and from the Admin/Broker vendor desks.
 
-const VENDOR_TYPES = ['Qualified Intermediary', 'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other']
+const VENDOR_TYPES = ['Broker Dealer', 'RIA', 'Advisor', 'Qualified Intermediary', 'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other']
 const STATUSES = ['Preferred', 'Active', 'Inactive']
 
 interface Vendor {

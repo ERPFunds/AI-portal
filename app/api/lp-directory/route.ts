@@ -160,6 +160,7 @@ export interface LpRecord {
   sfCloseDate?: string | null;   // the LP Opportunity's CloseDate (YYYY-MM-DD)
   sfCompany?: string | null;     // the SF Account's Parent Account name (company/household to group by)
   sfOwner?: string | null;       // the SF Account owner (relationship owner of record)
+  sfBrokerDealer?: string | null; // the Partner Broker-Dealer / Brokerage (RIA / BD firm)
   priorFunds?: string[];         // which prior ERP funds this investor was part of (e.g. ["Fund II","Fund III"])
 }
 
@@ -414,6 +415,7 @@ export async function GET(req: NextRequest) {
           lp.sfCloseDate = sf.closeDate;
           lp.sfCompany = sf.company;
           lp.sfOwner = sf.owner;
+          lp.sfBrokerDealer = sf.brokerDealer;
           if (!lp.resolvedEmail && sf.contactEmail) lp.resolvedEmail = sf.contactEmail;
           const emails = [sf.contactEmail, sf.advisorEmail, lp.email]
             .map((e) => (e || "").toLowerCase().trim())
@@ -438,6 +440,7 @@ export async function GET(req: NextRequest) {
             sfCloseDate: null,
             sfCompany: d.company,
             sfOwner: d.owner,
+            sfBrokerDealer: d.brokerDealer,
             sfLpType: d.stage, sfCalled: null, sfDistributions: null, sfCrmId: d.crmId,
             sfBrokerCompany: null, sfBrokerContact: null,
             sfAdvisorFirm: d.advisorFirm, sfAdvisorContact: d.advisorContact,

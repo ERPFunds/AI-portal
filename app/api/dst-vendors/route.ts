@@ -9,6 +9,7 @@ export const dynamic = "force-dynamic";
 // Portal-managed, team-wide. RLS-locked → service-role client.
 
 const VENDOR_TYPES = [
+  "Broker Dealer", "RIA", "Advisor",
   "Qualified Intermediary", "Title/Escrow", "Property Manager", "Lender",
   "Legal/Counsel", "Insurance", "Inspection/Appraisal", "Other",
 ];

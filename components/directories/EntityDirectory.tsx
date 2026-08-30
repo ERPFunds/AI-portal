@@ -20,6 +20,8 @@ export interface DirConfig {
   columns: DirColumn[]
   fields: DirField[]
   searchKeys: string[]
+  /** sessionStorage key another view can set to pre-filter this directory */
+  sessionKey?: string
   defaults?: Record<string, string>
 }
 
@@ -56,6 +58,15 @@ export default function EntityDirectory({ config }: { config: DirConfig }) {
     finally { setLoading(false) }
   }, [config.api])
   useEffect(() => { load() }, [load])
+
+  // Another view (e.g. the DST investor list) can hand us a name to filter on.
+  useEffect(() => {
+    if (!config.sessionKey) return
+    try {
+      const v = window.sessionStorage.getItem(config.sessionKey)
+      if (v) { setSearch(v); window.sessionStorage.removeItem(config.sessionKey) }
+    } catch { /* storage unavailable */ }
+  }, [config.sessionKey])
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()

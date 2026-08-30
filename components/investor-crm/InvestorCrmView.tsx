@@ -112,7 +112,7 @@ function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
 
 // mode splits each population by whether capital has actually been committed:
 // 'lps' = committed, 'prospects' = no commitment recorded yet, 'all' = both.
-export default function InvestorCrmView({ program, mode = 'all' }: { program: 'PE' | 'DST'; mode?: 'lps' | 'prospects' | 'all' }) {
+export default function InvestorCrmView({ program, mode = 'all', onNavigate }: { program: 'PE' | 'DST'; mode?: 'lps' | 'prospects' | 'all'; onNavigate?: (view: string) => void }) {
   const [lps, setLps] = useState<LpRecord[]>([])
   const [overlays, setOverlays] = useState<Record<string, Overlay>>({})
   const [loading, setLoading] = useState(true)
@@ -209,7 +209,7 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
   function exportCsv() {
     const esc = (v: string) => `"${(v ?? '').replace(/"/g, '""')}"`
-    const cols = ['Fund', 'Investor', 'Contact', 'Commitment', 'Notes', 'Prior Funds', 'Program', 'Funnel Stage', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
+    const cols = ['Fund', 'Investor', 'Contact', 'Commitment', 'Broker Dealer / RIA', 'Advisor', 'Notes', 'Prior Funds', 'Program', 'Funnel Stage', 'Target', 'Expected Close', 'Owner', 'Source', 'Broker/Advisor Firm', 'Broker/Advisor Rep', 'Email', 'Phone', 'Last Interaction']
     const lines = rows.map(lp => {
       const ov = overlayFor(lp)
       const target = lp.sfAmount ?? (lp.commitmentUsd > 0 ? lp.commitmentUsd : null)
@@ -218,6 +218,8 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
         lp.investor,
         lp.contact || '',
         effectiveCommitted(lp) ? fmtUsd(effectiveCommitted(lp)) : '',
+        lp.sfBrokerDealer || lp.brokerFirm || lp.sfAdvisorFirm || '',
+        lp.brokerContact || lp.sfAdvisorContact || '',
         lp.notes || '',
         (lp.priorFunds || []).join(', '),
         program,
@@ -250,7 +252,7 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
   const [groupByAccount, setGroupByAccount] = useState(false)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
   const NO_ACCOUNT = '(No account in Salesforce)'
-  const colCount = 6
+  const colCount = program === 'DST' ? 8 : 6
   const accountGroups = useMemo(() => {
     const m = new Map<string, LpRecord[]>()
     for (const lp of rows) { const k = (lp.sfCompany || '').trim() || NO_ACCOUNT; if (!m.has(k)) m.set(k, []); m.get(k)!.push(lp) }
@@ -258,6 +260,12 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
       .map(([name, lps]) => ({ name, lps, committed: lps.reduce((s, l) => s + effectiveCommitted(l), 0) }))
       .sort((a, b) => a.name === NO_ACCOUNT ? 1 : b.name === NO_ACCOUNT ? -1 : (b.committed - a.committed) || a.name.localeCompare(b.name))
   }, [rows])
+
+  // Jump to the DST Vendor directory, pre-filtered to this broker-dealer / advisor.
+  function openVendor(name: string) {
+    try { window.sessionStorage.setItem('dstVendorFilter', name) } catch { /* storage unavailable */ }
+    onNavigate?.('dst-vendors')
+  }
 
   const renderRow = (lp: LpRecord, key: string | number) => {
     const t = typeTag(lp)
@@ -290,6 +298,13 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
         </td>
         {/* Commitment */}
         <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
+        {/* Broker Dealer / RIA + Advisor — both link into the DST Vendor directory */}
+        {program === 'DST' && <td style={tdCss}>
+          <VendorLink name={lp.sfBrokerDealer || lp.brokerFirm || lp.sfAdvisorFirm || ''} onOpen={openVendor} />
+        </td>}
+        {program === 'DST' && <td style={tdCss}>
+          <VendorLink name={lp.brokerContact || lp.sfAdvisorContact || ''} onOpen={openVendor} />
+        </td>}
         {/* Notes */}
         <td style={{ ...tdCss, maxWidth: 260 }}>
           {lp.notes ? <span style={{ fontSize: 12.5, color: '#6b7280' }}>{lp.notes}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
@@ -359,6 +374,8 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
                   <th style={thCss}>Investor</th>
                   <th style={thCss}>Contact(s)</th>
                   <th style={thCss}>Commitment</th>
+                  {program === 'DST' && <th style={thCss}>Broker Dealer / RIA</th>}
+                  {program === 'DST' && <th style={thCss}>Advisor</th>}
                   <th style={thCss}>Notes</th>
                   <th style={thCss}></th>
                 </tr>
@@ -401,6 +418,18 @@ export default function InvestorCrmView({ program, mode = 'all' }: { program: 'P
         />
       )}
     </div>
+  )
+}
+
+// A broker-dealer / advisor name that opens the DST Vendor directory filtered to it.
+function VendorLink({ name, onOpen }: { name: string; onOpen: (n: string) => void }) {
+  if (!name) return <span style={{ color: '#d1d5db' }}>—</span>
+  return (
+    <button
+      onClick={e => { e.stopPropagation(); onOpen(name) }}
+      title="Open in the DST Vendor directory"
+      style={{ border: 0, background: 'none', padding: 0, textAlign: 'left', fontSize: 13, fontWeight: 600, color: '#0e7490', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}
+    >{name}</button>
   )
 }
 

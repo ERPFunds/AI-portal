@@ -393,10 +393,9 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
       />
     ),
     lp: <LpDirectoryView />,
-    'crm-lp-directory': <InvestorCrmView program="PE" mode="lps" />,
-    'crm-pe-prospects': <InvestorCrmView program="PE" mode="prospects" />,
-    'crm-dst-investors': <InvestorCrmView program="DST" mode="lps" />,
-    'crm-dst-prospects': <InvestorCrmView program="DST" mode="prospects" />,
+    'crm-lp-directory': <InvestorCrmView program="PE" mode="lps" onNavigate={setCurrentView} />,
+    'crm-pe-prospects': <InvestorCrmView program="PE" mode="prospects" onNavigate={setCurrentView} />,
+    'crm-dst-investors': <InvestorCrmView program="DST" mode="lps" onNavigate={setCurrentView} />,
     'dst-vendors': <DstVendorsView />,
     'capital-raise': <CapitalRaiseView />,
     'ir-qa': <QaReviewView />,

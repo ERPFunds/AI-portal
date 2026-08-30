@@ -183,6 +183,7 @@ export interface LpSfData {
   closeDate: string | null;       // the LP Opportunity's CloseDate (YYYY-MM-DD)
   company: string | null;         // the Account's Parent Account name (the company/household it rolls up to)
   owner: string | null;           // the Salesforce Account owner (relationship owner of record)
+  brokerDealer: string | null;    // Partner Broker-Dealer / Brokerage (the RIA / BD firm)
 }
 export interface LpSfFieldMap {
   lpType: string | null;
@@ -206,6 +207,7 @@ export interface DstInvestor {
   crmId: string | null;
   company: string | null;        // the Account's Parent Account name (company/household)
   owner: string | null;          // the Salesforce Account owner
+  brokerDealer: string | null;   // Partner Broker-Dealer / Brokerage (the RIA / BD firm)
 }
 
 /** Custodian-wrapped IRA accounts read like "STRATA Trust Company Custodian FBO (Jane Doe) IRA
@@ -366,6 +368,7 @@ export async function fetchLpSalesforceData(
         closeDate: null,
         company: (() => { const p = rec.Parent as { Name?: unknown } | null; return p?.Name != null && String(p.Name).trim() ? String(p.Name) : null; })(),
         owner: (() => { const w = rec.Owner as { Name?: unknown } | null; return w?.Name != null && String(w.Name).trim() ? String(w.Name) : null; })(),
+        brokerDealer: null,
       };
       idToKey[id] = key;
       matched++;
@@ -397,6 +400,8 @@ export async function fetchLpSalesforceData(
         if (row.amount == null && o.Amount != null) row.amount = toNum(o.Amount);
         if (!row.closeDate && o.CloseDate != null && String(o.CloseDate).trim()) row.closeDate = String(o.CloseDate);
         const firm = rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r) || rel(o.Partner_Broker_Dealer__r);
+        const bd = rel(o.Partner_Broker_Dealer__r) || rel(o.Partner_Brokerage__r);
+        if (bd && !row.brokerDealer) row.brokerDealer = bd;
         const repName = rel(o.Partner_Advisor_Contact__r);
         const repEmail = (o.Partner_Advisor_Contact__r as { Email?: unknown } | null)?.Email;
         if (firm && !row.advisorFirm) row.advisorFirm = firm;
@@ -411,7 +416,7 @@ export async function fetchLpSalesforceData(
   //     so common surnames (Brown, Davis) don't cross-attribute.
   const scheduleSet = new Set(clean.map((n) => n.toLowerCase().trim()));
   // DST/1031 investors: broker-book accounts that aren't Fund IV schedule LPs, keyed by account.
-  const dstByAcct = new Map<string, { name: string; id: string | null; firm: string; rep: string | null; repEmail: string | null; amountUsd: number; stage: string | null; company: string | null; owner: string | null }>();
+  const dstByAcct = new Map<string, { name: string; id: string | null; firm: string; rep: string | null; repEmail: string | null; amountUsd: number; stage: string | null; company: string | null; owner: string | null; brokerDealer: string | null }>();
   const brokerBook: { toks: Set<string>; firm: string; rep: string | null; repEmail: string | null; acct: string }[] = [];
   try {
     let path: string | null = `/query?q=${encodeURIComponent(
@@ -425,6 +430,7 @@ export async function fetchLpSalesforceData(
       for (const o of ((j.records ?? []) as Record<string, unknown>[])) {
         const acct = rel(o.Account);
         const firm = rel(o.Partner_Broker_Dealer__r) || rel(o.Partner_Advisor__r) || rel(o.Partner_Brokerage__r);
+        const bd = rel(o.Partner_Broker_Dealer__r) || rel(o.Partner_Brokerage__r);
         if (!acct || !firm) continue;
         const repRec = o.Partner_Advisor_Contact__r as { Email?: unknown } | null;
         const rep = rel(o.Partner_Advisor_Contact__r);
@@ -439,8 +445,8 @@ export async function fetchLpSalesforceData(
           const company = acctObj?.Parent?.Name != null && String(acctObj.Parent.Name).trim() ? String(acctObj.Parent.Name) : null;
           const owner = acctObj?.Owner?.Name != null && String(acctObj.Owner.Name).trim() ? String(acctObj.Owner.Name) : null;
           const ex = dstByAcct.get(key);
-          if (!ex) dstByAcct.set(key, { name: acct, id: acctObj?.Id != null ? String(acctObj.Id) : null, firm, rep, repEmail, amountUsd: amt, stage, company, owner });
-          else { ex.amountUsd += amt; if (!ex.rep) ex.rep = rep; if (!ex.repEmail) ex.repEmail = repEmail; if (!ex.stage) ex.stage = stage; if (!ex.company) ex.company = company; if (!ex.owner) ex.owner = owner; }
+          if (!ex) dstByAcct.set(key, { name: acct, id: acctObj?.Id != null ? String(acctObj.Id) : null, firm, rep, repEmail, amountUsd: amt, stage, company, owner, brokerDealer: bd });
+          else { ex.amountUsd += amt; if (!ex.rep) ex.rep = rep; if (!ex.repEmail) ex.repEmail = repEmail; if (!ex.stage) ex.stage = stage; if (!ex.company) ex.company = company; if (!ex.owner) ex.owner = owner; if (!ex.brokerDealer) ex.brokerDealer = bd; }
         }
       }
       path = j.done === false && j.nextRecordsUrl ? String(j.nextRecordsUrl).replace(/^.*\/services\/data\/v[\d.]+/, "") : null;
@@ -558,6 +564,7 @@ export async function fetchLpSalesforceData(
       crmId: d.id,
       company: d.company,
       owner: d.owner,
+      brokerDealer: d.brokerDealer,
     };
   });
   // Coverage diagnostic for the Investor CRM "group by account" (SF parent-account / company).
