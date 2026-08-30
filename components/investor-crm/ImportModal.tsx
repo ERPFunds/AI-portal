@@ -19,7 +19,17 @@ interface ContactRow {
   phone_office?: string | null; phone_cell?: string | null; address?: string | null
   notes?: string | null; is_primary?: boolean
 }
-interface Parsed { investors: InvestorRow[]; contacts: ContactRow[]; sheet: string; shape: string }
+interface OtherRow {
+  name: string; category: string; contact?: string | null; title?: string | null; email?: string | null
+  phone?: string | null; phone_cell?: string | null; address?: string | null
+  owner?: string | null; notes?: string | null
+}
+interface Parsed { investors: InvestorRow[]; contacts: ContactRow[]; others: OtherRow[]; sheet: string; shape: string }
+
+// Exports mix record types in a "Description" column; only investor rows belong in the CRM lists.
+const OTHER_CATEGORIES: Record<string, string> = {
+  lender: 'Lender', 'law firm': 'Law Firm', lawfirm: 'Law Firm', vendor: 'Vendor',
+}
 
 const T = (v: unknown) => String(v ?? '').trim()
 const clean = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '')
@@ -39,11 +49,12 @@ function findHeader(rows: unknown[][]): { idx: number; col: Record<string, numbe
     contact: /^(primarycontact|contact)$/,
     commitment: /^(commitment|committed|amount)$/,
     lead: /^(lead|owner|relationshipowner)$/,
-    notes: /^(notes|note|description)$/,
+    notes: /^(notes|note)$/,
     nextsteps: /^nextsteps$/,
     first: /^(firstname|first)$/,
     last: /^(lastname|last)$/,
     title: /^title$/,
+    kind: /^(description|recordtype|type)$/,
     phone: /^(phone|officephone|work)$/,
     mobile: /^(mobile|cell|cellphone)$/,
     email: /^(email|emailaddress)$/,
@@ -80,6 +91,7 @@ async function parseWorkbook(file: File): Promise<Parsed> {
 
     const investors = new Map<string, InvestorRow>()
     const contacts: ContactRow[] = []
+    const others: OtherRow[] = []
     const hasPeople = col.first !== undefined || col.last !== undefined || col.email !== undefined
     let sectionDate: string | null = null
 
@@ -87,6 +99,21 @@ async function parseWorkbook(file: File): Promise<Parsed> {
       const r = rows[i] ?? []
       const investor = at(r, 'investor')
       if (!investor || /^(grand\s+|sub\s*)?total\b/i.test(investor)) continue
+
+      // Route non-investor records (lenders, law firms, vendors) to the Other directory.
+      const kind = OTHER_CATEGORIES[at(r, 'kind').toLowerCase()]
+      if (kind) {
+        const person = [at(r, 'first'), at(r, 'last')].filter(Boolean).join(' ').trim() || at(r, 'contact')
+        const addr = [at(r, 'street'), at(r, 'city'), [at(r, 'state'), at(r, 'zip')].filter(Boolean).join(' ')]
+          .filter(Boolean).join(', ')
+        others.push({
+          name: investor, category: kind, contact: person || null, title: at(r, 'title') || null,
+          email: at(r, 'email') || null, phone: at(r, 'phone') || null, phone_cell: at(r, 'mobile') || null,
+          address: addr || null, owner: at(r, 'lead') || null,
+          notes: [at(r, 'notes'), at(r, 'nextsteps')].filter(Boolean).join(' | ') || null,
+        })
+        continue
+      }
 
       const contactName = at(r, 'contact')
       const rawAmount = col.commitment === undefined ? '' : T(r[col.commitment])
@@ -132,9 +159,9 @@ async function parseWorkbook(file: File): Promise<Parsed> {
       }
     }
 
-    if (investors.size) {
+    if (investors.size || others.length) {
       return {
-        investors: [...investors.values()], contacts, sheet,
+        investors: [...investors.values()], contacts, others, sheet,
         shape: hasPeople ? 'prospect export (multiple contacts per account)' : 'LP directory (one primary contact)',
       }
     }
@@ -172,11 +199,12 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
           program,
           investors: parsed.investors.map(v => ({ ...v, fund: fund || null, program })),
           contacts: parsed.contacts,
+          others: parsed.others,
         }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.error) { setError(j.error ?? `Import failed (${res.status})`); return }
-      setResult(`Imported ${j.investors} investors and ${j.contacts} contacts.`)
+      setResult(`Imported ${j.investors} investors, ${j.contacts} contacts${j.others ? ` and ${j.others} records into Other` : ''}.`)
       onDone()
     } catch (e) { setError(String(e)) }
     finally { setBusy(false) }
@@ -206,6 +234,8 @@ export default function ImportModal({ program, defaultFund, onClose, onDone }: {
             <div style={{ padding: 12, background: '#f0f9f7', border: '1px solid #cfe9e3', borderRadius: 8, fontSize: 13.5, color: '#134e4a' }}>
               Found <b>{parsed.investors.length}</b> investors and <b>{parsed.contacts.length}</b> contacts
               in <b>{parsed.sheet}</b> — {parsed.shape}.
+              {parsed.others.length > 0 && <> Plus <b>{parsed.others.length}</b> non-investor records
+              (lenders, law firms, vendors) which go to the <b>Other</b> directory.</>}
             </div>
             <label style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 14 }}>
               <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Tag these investors with a fund</span>

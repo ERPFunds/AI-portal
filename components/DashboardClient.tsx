@@ -27,6 +27,7 @@ import TenantCommsView from './TenantCommsView'
 import InvestorCrmView from './investor-crm/InvestorCrmView'
 import DstVendorsView from './investor-crm/DstVendorsView'
 import CrmContactCaptureView from './investor-crm/ContactCaptureView'
+import CrmOtherDirectoryView from './investor-crm/OtherDirectoryView'
 import TenantCrmView from './tenant-crm/TenantCrmView'
 import ContractorsView from './directories/ContractorsView'
 import LendersView from './directories/LendersView'
@@ -399,6 +400,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'crm-dst-investors': <InvestorCrmView program="DST" mode="lps" onNavigate={setCurrentView} />,
     'dst-vendors': <DstVendorsView />,
     'crm-contact-capture': <CrmContactCaptureView />,
+    'crm-other': <CrmOtherDirectoryView />,
     'capital-raise': <CapitalRaiseView />,
     'ir-qa': <QaReviewView />,
     'distribution-lists': <DistributionListsView />,

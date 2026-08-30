@@ -15,6 +15,11 @@ interface InvestorIn {
   committed_usd?: number | string | null; target_amount?: number | string | null;
   contact?: string | null; notes?: string | null; owner?: string | null; expected_close?: string | null;
 }
+interface OtherIn {
+  name?: string; category?: string | null; contact?: string | null; title?: string | null;
+  email?: string | null; phone?: string | null; phone_cell?: string | null;
+  address?: string | null; owner?: string | null; notes?: string | null;
+}
 interface ContactIn {
   investor?: string; name?: string; title?: string | null; email?: string | null;
   phone_office?: string | null; phone_cell?: string | null; address?: string | null;
@@ -60,7 +65,8 @@ export async function POST(req: NextRequest) {
   const label = String(body.source ?? "import").slice(0, 40);
   const investorsIn: InvestorIn[] = Array.isArray(body.investors) ? body.investors : [];
   const contactsIn: ContactIn[] = Array.isArray(body.contacts) ? body.contacts : [];
-  if (!investorsIn.length && !contactsIn.length) {
+  const othersIn: OtherIn[] = Array.isArray(body.others) ? body.others : [];
+  if (!investorsIn.length && !contactsIn.length && !othersIn.length) {
     return NextResponse.json({ error: "Nothing to import" }, { status: 400 });
   }
 
@@ -109,6 +115,26 @@ export async function POST(req: NextRequest) {
     // the unique key is (investor_key, match_key) — drop in-payload duplicates
     .filter((c) => { const k = `${c.investor_key}|${c.match_key}`; if (seen.has(k)) return false; seen.add(k); return true; });
 
+  // Non-investor rows (lenders, law firms, vendors) go to the Other directory.
+  const seenOther = new Set<string>();
+  const otherRows = othersIn
+    .filter((o) => String(o.name ?? "").trim())
+    .map((o) => {
+      const name = String(o.name).trim();
+      const email = String(o.email ?? "").trim();
+      const contact = String(o.contact ?? "").trim();
+      return {
+        name_key: norm(name), name,
+        match_key: email ? `e:${email.toLowerCase()}` : `n:${norm(contact || name)}`,
+        category: str(o.category) ?? "Other",
+        contact: contact || null, title: str(o.title), email: email || null,
+        phone: str(o.phone), phone_cell: str(o.phone_cell), address: str(o.address),
+        owner: str(o.owner), notes: str(o.notes),
+        created_by: by, updated_by: by, updated_at: new Date().toISOString(),
+      };
+    })
+    .filter((o) => { const k = `${o.name_key}|${o.match_key}`; if (seenOther.has(k)) return false; seenOther.add(k); return true; });
+
   try {
     const funds = [...new Set(investorRows.map((r) => r.fund).filter(Boolean))] as string[];
     if (funds.length) {
@@ -117,7 +143,8 @@ export async function POST(req: NextRequest) {
     }
     const investors = await upsertAll(supabase, "investor_crm", investorRows, "investor_key");
     const contacts = await upsertAll(supabase, "investor_contacts", contactRows, "investor_key,match_key");
-    return NextResponse.json({ ok: true, investors, contacts, funds: funds.length });
+    const others = await upsertAll(supabase, "crm_other", otherRows, "name_key,match_key");
+    return NextResponse.json({ ok: true, investors, contacts, others, funds: funds.length });
   } catch (e) {
     return NextResponse.json({ error: String(e).slice(0, 400) }, { status: 500 });
   }
