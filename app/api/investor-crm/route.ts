@@ -17,9 +17,15 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, fund, committed_usd, contact, email, phone, notes, updated_by, updated_at";
 
 const normKey = (investor: string) => investor.trim().toLowerCase();
+const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
+const money = (v: unknown) => {
+  const raw = String(v ?? "").replace(/[$,\s]/g, "");
+  const n = raw ? Number(raw) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+};
 
 export async function GET() {
   const auth = await createClient();
@@ -64,6 +70,13 @@ export async function PATCH(req: NextRequest) {
     const n = raw ? Number(raw) : NaN;
     row.target_amount = Number.isFinite(n) && n > 0 ? n : null;
   }
+  if (body.archived !== undefined) row.archived = !!body.archived;
+  if (body.fund !== undefined) row.fund = str(body.fund);
+  if (body.contact !== undefined) row.contact = str(body.contact);
+  if (body.email !== undefined) row.email = str(body.email);
+  if (body.phone !== undefined) row.phone = str(body.phone);
+  if (body.notes !== undefined) row.notes = str(body.notes);
+  if (body.committed_usd !== undefined) row.committed_usd = money(body.committed_usd);
   if (body.expected_close !== undefined) {
     const d = String(body.expected_close ?? "").slice(0, 10);
     row.expected_close = /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null;
@@ -76,4 +89,65 @@ export async function PATCH(req: NextRequest) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ overlay: data });
+}
+
+// Create an investor in the portal. Salesforce is being offboarded, so nothing is written
+// externally — the portal is the system of record for these records.
+export async function POST(req: NextRequest) {
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
+
+  const body = await req.json().catch(() => ({}));
+  const investor = String(body.investor ?? "").trim();
+  if (!investor) return NextResponse.json({ error: "investor name is required" }, { status: 400 });
+
+  const key = normKey(investor);
+  const { data: existing } = await supabase
+    .from("investor_crm").select("investor_key").eq("investor_key", key).maybeSingle();
+  if (existing) return NextResponse.json({ error: "An investor with that name already exists" }, { status: 409 });
+
+  const { data, error } = await supabase.from("investor_crm").insert({
+    investor_key: key,
+    investor,
+    program: ["PE", "DST"].includes(body.program) ? body.program : "PE",
+    portal_created: true,
+    archived: false,
+    fund: str(body.fund),
+    funnel_stage: FUNNEL_STAGES.includes(body.funnel_stage) ? body.funnel_stage : null,
+    committed_usd: money(body.committed_usd),
+    target_amount: money(body.target_amount),
+    contact: str(body.contact),
+    email: str(body.email),
+    phone: str(body.phone),
+    notes: str(body.notes),
+    owner: str(body.owner),
+    updated_by: user.email ?? user.id,
+  }).select(COLS).single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ overlay: data });
+}
+
+// Remove a portal-created investor outright. Imported investors are archived via
+// PATCH { archived: true } instead — the portal never edits the source systems.
+export async function DELETE(req: NextRequest) {
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
+
+  const key = (req.nextUrl.searchParams.get("investor_key") ?? "").trim().toLowerCase();
+  if (!key) return NextResponse.json({ error: "investor_key required" }, { status: 400 });
+
+  const { data: row } = await supabase
+    .from("investor_crm").select("investor_key, portal_created").eq("investor_key", key).maybeSingle();
+  if (!row) return NextResponse.json({ error: "not found" }, { status: 404 });
+  if (!(row as { portal_created?: boolean }).portal_created) {
+    return NextResponse.json({ error: "This investor came from an import — archive it instead." }, { status: 400 });
+  }
+
+  const { error } = await supabase.from("investor_crm").delete().eq("investor_key", key);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

@@ -34,6 +34,7 @@ function resolveOwner(lp: LpRecord, manual?: string | null): { name: string; sou
 
 interface Overlay {
   investor_key: string
+  investor?: string | null
   program?: string | null
   funnel_stage?: string | null
   tier?: string | null
@@ -42,7 +43,16 @@ interface Overlay {
   entity?: string | null
   target_amount?: number | string | null
   expected_close?: string | null
+  archived?: boolean
+  portal_created?: boolean
+  fund?: string | null
+  committed_usd?: number | string | null
+  contact?: string | null
+  email?: string | null
+  phone?: string | null
+  notes?: string | null
 }
+interface Fund { id: string; name: string; program: string | null }
 interface Person {
   match_key: string; id: string | null; name: string; title: string | null; email: string | null
   phone_office: string | null; phone_cell: string | null; address: string | null
@@ -92,11 +102,31 @@ function stageColor(stage?: string | null): string {
   return '#5b6472'                 // early
 }
 
+// An investor created in the portal, shaped like an imported record so the list, filters,
+// sorting and the detail drawer all treat it identically.
+function overlayToLp(ov: Overlay): LpRecord {
+  const isDst = ov.program === 'DST'
+  return {
+    investor: ov.investor ?? '',
+    commitment: '', commitmentUsd: Number(ov.target_amount ?? 0) || 0, commitType: '',
+    contact: ov.contact ?? '', email: ov.email ?? '', phone: ov.phone ?? '',
+    date: '', notes: ov.notes ?? '',
+    group: isDst ? DST_GROUP : (ov.fund || 'Fund IV'),
+    lastInteraction: null,
+    sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
+    sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
+    brokerFirm: '', brokerContact: '',
+    resolvedEmail: ov.email ?? null,
+    committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : null,
+    priorFunds: [],
+  }
+}
+
 // Every fund an investor is associated with — the current fund plus any prior ones.
 function fundsOf(lp: LpRecord): string[] {
   const out: string[] = []
   if (lp.group === DST_GROUP) out.push('DST / 1031')
-  else if (lp.group !== 'Prior Fund LPs') out.push('Fund IV')
+  else if (lp.group !== 'Prior Fund LPs') out.push(/fund|dst/i.test(lp.group || '') ? lp.group : 'Fund IV')
   for (const pf of lp.priorFunds ?? []) if (!out.includes(pf)) out.push(pf)
   return out
 }
@@ -138,6 +168,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [fundFilter, setFundFilter] = useState('All')
+  const [funds, setFunds] = useState<Fund[]>([])
+  const [showAdd, setShowAdd] = useState(false)
+  const [showFunds, setShowFunds] = useState(false)
   const [colFilters, setColFilters] = useState<Record<string, string>>({})
   const [sortKey, setSortKey] = useState('commitment')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -165,6 +198,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
 
   useEffect(() => { load() }, [load])
 
+  const loadFunds = useCallback(async () => {
+    try { const r = await fetch('/api/crm-funds'); const j = await r.json(); setFunds(j.funds ?? []) } catch { /* non-fatal */ }
+  }, [])
+  useEffect(() => { loadFunds() }, [loadFunds])
+
   // How many individuals sit under each investing entity (for the Contact(s) column).
   useEffect(() => {
     fetch('/api/investor-crm/people')
@@ -182,7 +220,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const rows = useMemo(() => {
     const inProgram = (lp: LpRecord) => program === 'DST' ? lp.group === DST_GROUP : lp.group !== DST_GROUP
     const q = search.trim().toLowerCase()
-    return lps
+    const portal = Object.values(overlays)
+      .filter(ov => ov.portal_created && !ov.archived && (ov.program ?? 'PE') === program)
+      .map(overlayToLp)
+    return [...lps, ...portal]
+      .filter(lp => !overlays[normKey(lp.investor)]?.archived)
       .filter(inProgram)
       .filter(lp => mode === 'all' ? true : mode === 'lps' ? effectiveCommitted(lp) > 0 : effectiveCommitted(lp) === 0)
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
@@ -199,7 +241,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, program, search, fundFilter, mode, columns, colFilters, sortKey, sortDir])
+  }, [lps, overlays, program, search, fundFilter, mode, columns, colFilters, sortKey, sortDir])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -208,8 +250,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       if (program === 'DST' ? lp.group !== DST_GROUP : lp.group === DST_GROUP) continue
       for (const f of fundsOf(lp)) set.add(f)
     }
+    for (const f of funds) if (!f.program || f.program === program) set.add(f.name)
     return [...set].sort().reverse()
-  }, [lps, program])
+  }, [lps, program, funds])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
   const totalTarget = useMemo(() => rows.reduce((s, lp) => s + (lp.sfAmount ?? lp.commitmentUsd ?? 0), 0), [rows])
@@ -300,6 +343,28 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .sort((a, b) => a.name === NO_ACCOUNT ? 1 : b.name === NO_ACCOUNT ? -1 : (b.committed - a.committed) || a.name.localeCompare(b.name))
   }, [rows])
 
+  async function archiveInvestor(lp: LpRecord) {
+    const ov = overlays[normKey(lp.investor)]
+    const portalOwned = !!ov?.portal_created
+    const msg = portalOwned
+      ? `Delete "${lp.investor}"? This investor exists only in the portal, so it will be removed for good.`
+      : `Archive "${lp.investor}"? It stays in the source data but is hidden from the CRM. You can restore it later.`
+    if (!window.confirm(msg)) return
+    try {
+      if (portalOwned) {
+        await fetch(`/api/investor-crm?investor_key=${encodeURIComponent(normKey(lp.investor))}`, { method: 'DELETE' })
+        setOverlays(prev => { const n = { ...prev }; delete n[normKey(lp.investor)]; return n })
+      } else {
+        const res = await fetch('/api/investor-crm', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ investor: lp.investor, program, archived: true }),
+        })
+        const j = await res.json()
+        if (j.overlay) setOverlays(prev => ({ ...prev, [normKey(lp.investor)]: j.overlay }))
+      }
+    } catch (e) { alert(`Failed: ${String(e)}`) }
+  }
+
   // Jump to the DST Vendor directory, pre-filtered to this broker-dealer / advisor.
   function openVendor(name: string) {
     try { window.sessionStorage.setItem('dstVendorFilter', name) } catch { /* storage unavailable */ }
@@ -355,6 +420,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
                 onClick={e => e.stopPropagation()} style={rowBtn}>Email</a>
             : <span style={{ ...rowBtn, color: '#d1d5db', cursor: 'default' }}>Email</span>}
           <button onClick={e => { e.stopPropagation(); setSelected(lp) }} style={{ ...rowBtn, border: 0, background: 'none' }}>Edit</button>
+          <button onClick={e => { e.stopPropagation(); archiveInvestor(lp) }} title="Hide from the CRM"
+            style={{ ...rowBtn, border: 0, background: 'none', color: '#b91c1c' }}>
+            {overlays[normKey(lp.investor)]?.portal_created ? 'Delete' : 'Archive'}
+          </button>
         </td>
       </tr>
     )
@@ -395,6 +464,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         </select>
         <button onClick={() => setGroupByAccount(v => !v)} style={{ border: `1px solid ${groupByAccount ? '#c7d2fe' : '#d1d5db'}`, background: groupByAccount ? '#eef2ff' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: groupByAccount ? '#3730a3' : '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>☰ {groupByAccount ? 'Grouped by account' : 'Group by account'}</button>
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
+        <button onClick={() => setShowAdd(true)}
+          style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
+        <button onClick={() => setShowFunds(true)}
+          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>Manage funds</button>
         <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
@@ -466,6 +539,16 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         </div>
       )}
 
+      {showAdd && (
+        <AddInvestorModal
+          program={program}
+          funds={fundOptions}
+          onCancel={() => setShowAdd(false)}
+          onSaved={ov => { setOverlays(prev => ({ ...prev, [normKey(ov.investor ?? '')]: ov })); setShowAdd(false) }}
+        />
+      )}
+      {showFunds && <ManageFundsModal funds={funds} program={program} onClose={() => setShowFunds(false)} onChanged={loadFunds} />}
+
       {selected && (
         <InvestorDrawer
           lp={selected}
@@ -479,6 +562,118 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     </div>
   )
 }
+
+function AddInvestorModal({ program, funds, onCancel, onSaved }: {
+  program: 'PE' | 'DST'; funds: string[]; onCancel: () => void; onSaved: (ov: Overlay) => void
+}) {
+  const [d, setD] = useState<Record<string, string>>({ fund: funds[0] ?? '' })
+  const [busy, setBusy] = useState(false)
+  const set = (k: string, v: string) => setD(p => ({ ...p, [k]: v }))
+  const fld = (label: string, k: string, full?: boolean, ph?: string) => (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: full ? '1 / -1' : undefined }}>
+      <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</span>
+      <input value={d[k] ?? ''} onChange={e => set(k, e.target.value)} placeholder={ph} style={modalInput} />
+    </label>
+  )
+  async function save() {
+    if (!(d.investor ?? '').trim()) { alert('Investor name is required'); return }
+    setBusy(true)
+    try {
+      const res = await fetch('/api/investor-crm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...d, program }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { alert(`Could not add: ${j.error ?? res.status}`); return }
+      onSaved(j.overlay)
+    } catch (e) { alert(`Could not add: ${String(e)}`) }
+    finally { setBusy(false) }
+  }
+  return (
+    <div onClick={onCancel} style={modalBackdrop}>
+      <div onClick={e => e.stopPropagation()} style={modalCard}>
+        <h2 style={modalTitle}>Add {program === 'DST' ? 'DST Investor' : 'Investor'}</h2>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+          {fld('Investor / Entity Name', 'investor', true)}
+          <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Fund</span>
+            <select value={d.fund ?? ''} onChange={e => set('fund', e.target.value)} style={modalInput}>
+              <option value="">— none —</option>
+              {funds.map(f => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </label>
+          {fld('Commitment', 'committed_usd', false, '1,000,000')}
+          {fld('Primary Contact', 'contact')}
+          {fld('Email', 'email')}
+          {fld('Phone', 'phone')}
+          {fld('Target Amount', 'target_amount', false, '1,000,000')}
+          {fld('Notes', 'notes', true)}
+        </div>
+        <div style={modalActions}>
+          <button onClick={onCancel} style={modalGhost}>Cancel</button>
+          <button onClick={save} disabled={busy} style={{ ...modalPrimary, opacity: busy ? 0.6 : 1 }}>{busy ? 'Adding…' : 'Add Investor'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ManageFundsModal({ funds, program, onClose, onChanged }: {
+  funds: Fund[]; program: 'PE' | 'DST'; onClose: () => void; onChanged: () => void
+}) {
+  const [name, setName] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function add() {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      const res = await fetch('/api/crm-funds', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.trim(), program }),
+      })
+      const j = await res.json()
+      if (!res.ok || j.error) { alert(`Could not add: ${j.error ?? res.status}`); return }
+      setName(''); onChanged()
+    } finally { setBusy(false) }
+  }
+  async function remove(f: Fund) {
+    if (!window.confirm(`Delete the fund "${f.name}"? Investors keep their data — they just lose this label.`)) return
+    setBusy(true)
+    try { await fetch(`/api/crm-funds?id=${f.id}`, { method: 'DELETE' }); onChanged() }
+    finally { setBusy(false) }
+  }
+  return (
+    <div onClick={onClose} style={modalBackdrop}>
+      <div onClick={e => e.stopPropagation()} style={modalCard}>
+        <h2 style={modalTitle}>Manage Funds</h2>
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Fund V, DST III"
+            onKeyDown={e => { if (e.key === 'Enter') add() }} style={{ ...modalInput, flex: 1 }} />
+          <button onClick={add} disabled={busy || !name.trim()} style={modalPrimary}>Add</button>
+        </div>
+        {funds.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13.5 }}>No funds defined yet. Add the ones you use to tag investors.</div>}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {funds.map(f => (
+            <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: '1px solid #eef0f2', borderRadius: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{f.name}</span>
+              {f.program && <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{f.program}</span>}
+              <button onClick={() => remove(f)} disabled={busy} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>Delete</button>
+            </div>
+          ))}
+        </div>
+        <div style={modalActions}><button onClick={onClose} style={modalGhost}>Done</button></div>
+      </div>
+    </div>
+  )
+}
+
+const modalBackdrop: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(15,20,32,.5)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }
+const modalCard: React.CSSProperties = { width: 'min(560px, 96vw)', maxHeight: '90vh', overflowY: 'auto', background: '#fff', borderRadius: 14, padding: 24 }
+const modalTitle: React.CSSProperties = { margin: '0 0 16px', fontSize: 19, fontWeight: 700, color: '#1a2233' }
+const modalActions: React.CSSProperties = { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }
+const modalInput: React.CSSProperties = { width: '100%', padding: '9px 11px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit' }
+const modalGhost: React.CSSProperties = { border: '1px solid #d1d5db', background: '#fff', borderRadius: 9, padding: '9px 16px', fontWeight: 600, cursor: 'pointer', color: '#374151' }
+const modalPrimary: React.CSSProperties = { border: 0, background: '#0f766e', color: '#fff', borderRadius: 9, padding: '9px 18px', fontWeight: 600, cursor: 'pointer' }
 
 // A broker-dealer / advisor name that opens the DST Vendor directory filtered to it.
 function VendorLink({ name, onOpen }: { name: string; onOpen: (n: string) => void }) {
