@@ -110,7 +110,9 @@ function typeTag(lp: LpRecord): { label: string; bg: string; color: string } {
   return { label: 'Fund IV Prospect', bg: '#e5f2eb', color: '#197a52' }
 }
 
-export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) {
+// mode splits each population by whether capital has actually been committed:
+// 'lps' = committed, 'prospects' = no commitment recorded yet, 'all' = both.
+export default function InvestorCrmView({ program, mode = 'all' }: { program: 'PE' | 'DST'; mode?: 'lps' | 'prospects' | 'all' }) {
   const [lps, setLps] = useState<LpRecord[]>([])
   const [overlays, setOverlays] = useState<Record<string, Overlay>>({})
   const [loading, setLoading] = useState(true)
@@ -154,10 +156,11 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
     const q = search.trim().toLowerCase()
     return lps
       .filter(inProgram)
+      .filter(lp => mode === 'all' ? true : mode === 'lps' ? effectiveCommitted(lp) > 0 : effectiveCommitted(lp) === 0)
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
       .sort((a, b) => effectiveCommitted(b) - effectiveCommitted(a) || a.investor.localeCompare(b.investor))
-  }, [lps, program, search, fundFilter])
+  }, [lps, program, search, fundFilter, mode])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -170,6 +173,14 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
   }, [lps, program])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
+  const totalTarget = useMemo(() => rows.reduce((s, lp) => s + (lp.sfAmount ?? lp.commitmentUsd ?? 0), 0), [rows])
+
+  // Heading + headline metric per view.
+  const heading = mode === 'lps' ? (program === 'DST' ? 'DST Investors' : 'LP Directory')
+    : mode === 'prospects' ? (program === 'DST' ? 'DST Prospects' : 'PE Prospects')
+    : (program === 'DST' ? 'DST Investors' : 'PE Investors')
+  const subtitle = mode === 'lps' ? 'Committed limited partners'
+    : mode === 'prospects' ? 'Targets with no commitment recorded yet' : ''
 
   function onOverlaySaved(key: string, ov: Overlay) {
     setOverlays(prev => ({ ...prev, [key]: { ...prev[key], ...ov } }))
@@ -227,13 +238,13 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `${program}-Investors-${new Date().toISOString().slice(0, 10)}.csv`
+    a.download = `${heading.replace(/\s+/g, '-')}-${new Date().toISOString().slice(0, 10)}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
 
   const accent = program === 'DST' ? '#8a5a1a' : '#26324a'
-  const committedLabel = program === 'DST' ? 'DST COMMITTED' : 'FUND IV COMMITTED'
+  const committedLabel = mode === 'prospects' ? 'TOTAL TARGET' : program === 'DST' ? 'DST COMMITTED' : 'FUND IV COMMITTED'
 
   // Group-by-account (the investor's Salesforce parent-account / company).
   const [groupByAccount, setGroupByAccount] = useState(false)
@@ -301,16 +312,17 @@ export default function InvestorCrmView({ program }: { program: 'PE' | 'DST' }) 
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#9ca3af' }}>Investor CRM</div>
-          <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>{program === 'DST' ? 'DST Investors' : 'PE Investors'}</h1>
+          <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>{heading}</h1>
+          {subtitle && <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{subtitle}</div>}
         </div>
         <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>INVESTORS</div>
+            <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>{mode === 'prospects' ? 'PROSPECTS' : 'INVESTORS'}</div>
             <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2233' }}>{rows.length}</div>
           </div>
           <div style={{ textAlign: 'right' }}>
             <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>{committedLabel}</div>
-            <div style={{ fontSize: 20, fontWeight: 700, color: '#0f766e' }}>{fmtUsd(totalCommitted)}</div>
+            <div style={{ fontSize: 20, fontWeight: 700, color: '#0f766e' }}>{fmtUsd(mode === 'prospects' ? totalTarget : totalCommitted)}</div>
           </div>
         </div>
       </div>
