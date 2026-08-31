@@ -412,19 +412,20 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         style={{ borderTop: '1px solid #f0f1f3', cursor: 'pointer' }}
         onMouseEnter={e => (e.currentTarget.style.background = '#f8fafc')}
         onMouseLeave={e => (e.currentTarget.style.background = '#fff')}>
-        {/* Fund */}
-        <td style={tdCss}>
+        {/* Fund — hidden where every record is the same fund, so the cells must drop too,
+            otherwise each row sits one column left of its header. */}
+        {!hideFund && <td style={tdCss}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 170 }}>
             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span>
             {fundsOf(lp).slice(1).map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', whiteSpace: 'nowrap' }}>{f}</span>)}
             {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
             {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
           </div>
-        </td>
+        </td>}
         {/* Investor (the account / entity) */}
         <td style={tdCss}><div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div></td>
         {/* Contact(s) — from the portal contact store only */}
-        <td style={tdCss}>
+        {hasContacts && <td style={tdCss}>
           {pc
             ? <div>
                 <div style={{ fontSize: 13, color: '#374151' }}>{pc.name || pc.email || '—'}</div>
@@ -432,7 +433,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
                 {pc.more > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', marginTop: 2 }}>+{pc.more} more</div>}
               </div>
             : <span style={{ color: '#d1d5db' }}>—</span>}
-        </td>
+        </td>}
         {/* Commitment */}
         <td style={{ ...tdCss, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color: effectiveCommitted(lp) ? '#0f766e' : '#d1d5db' }}>{fmtUsd(effectiveCommitted(lp))}</td>
         {/* Broker Dealer / RIA + Advisor — both link into the DST Vendor directory */}
