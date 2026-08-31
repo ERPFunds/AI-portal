@@ -779,9 +779,20 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.error) { setAboutMsg(`Research failed: ${j.error ?? res.status}`); return }
       const r = j.results?.[0]
-      if (!r?.about) { setAboutMsg('Nothing specific found on the public web — add a line by hand.'); return }
+      // The route also fills website and address where the record had none — mirror that
+      // into the account fields so the drawer shows it without a reload.
+      const filled: Record<string, string> = {}
+      if (r?.website && !acct.website) filled.website = r.website
+      if (r?.address && !acct.address) filled.address = r.address
+      if (Object.keys(filled).length) setAcct(a => ({ ...a, ...filled }))
+      if (!r?.about) {
+        setAboutMsg(Object.keys(filled).length
+          ? `No About line found, but filled ${Object.keys(filled).join(' and ')}.`
+          : 'Nothing specific found on the public web — add a line by hand.')
+        return
+      }
       setAbout(r.about); setAboutSources(r.sources ?? [])
-      onSaved(key, { ...(overlay ?? { investor_key: key }), about: r.about, about_sources: r.sources ?? null })
+      onSaved(key, { ...(overlay ?? { investor_key: key }), about: r.about, about_sources: r.sources ?? null, ...filled })
     } catch (e) { setAboutMsg(`Research failed: ${String(e)}`) }
     finally { setAboutBusy(false) }
   }
@@ -971,13 +982,18 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     value={about}
                     onChange={e => setAbout(e.target.value)}
                     onBlur={() => { if (about !== (overlay?.about ?? '')) saveAccount({ about }) }}
-                    placeholder="Who this investor is — profession, firm, where they're based. Click Research to pull it from LinkedIn and the web, then edit."
+                    placeholder="Who this investor is — profession, firm, where they're based. Research pulls this plus website and address from LinkedIn and the web, then you can edit."
                     rows={3}
                     style={{ width: '100%', marginTop: 8, padding: '9px 11px', borderRadius: 8, border: '1px solid #e2e8f0',
                              fontSize: 14.5, color: '#374151', fontFamily: 'inherit', lineHeight: 1.55, resize: 'vertical', background: '#f8fafc' }}
                   />
                   {aboutMsg && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>{aboutMsg}</div>}
-                  {aboutSources.length > 0 && (
+                  {!about && overlay?.about_researched_at && !aboutMsg && (
+                    <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>
+                      Searched the public web — nothing that could be confirmed as this investor. Worth filling in by hand.
+                    </div>
+                  )}
+                  {about && aboutSources.length > 0 && (
                     <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                       <span>Sources:</span>
                       {aboutSources.slice(0, 4).map((u, i) => (

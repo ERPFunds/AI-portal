@@ -6,29 +6,41 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
-// Researches a one-or-two-sentence "About" line for an investor account from public
-// sources (LinkedIn, company sites, press) via Claude's web_search tool. Written back to
-// investor_crm.about so the CRM keeps it; the drawer field stays hand-editable.
+// Researches public-source detail for an investor account — the "About" line, plus the
+// entity's website and business address — via Claude's web_search tool, and writes it back
+// to investor_crm. The drawer fields stay hand-editable.
 //
 // Accuracy over coverage: these are real LPs, so the model is told to return an empty
-// string rather than guess when it cannot identify the entity with confidence.
+// string rather than guess when it cannot identify the entity with confidence. Website and
+// address are only ever filled in where the record has none, so hand-entered values and the
+// addresses that came off the LP spreadsheets are never overwritten.
 
 const normKey = (investor: string) => investor.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 const SYSTEM = `You research investors for the investor-relations CRM of ERP Funds, a commercial real estate private equity firm (industrial/IOS assets, Permian Basin and secondary markets).
 
-Given the name of an investing entity — and possibly the name of the individual behind it — search the public web (LinkedIn, company websites, professional bios, press, filings) and write a short factual "About" line for the CRM record.
+Given the name of an investing entity — and possibly the name of the individual behind it — search the public web (LinkedIn, company websites, professional bios, press, filings) and return what you can verify for the CRM record.
 
-RULES
+ABOUT
 - 1-2 sentences, under 45 words. No preamble, no "This entity appears to be".
 - Say who they are: profession or role, firm or company, city/region, and anything about their wealth source or investing background that helps an IR team hold a conversation.
 - Family trusts, IRAs and custodial accounts: describe the PERSON or FAMILY behind the account, not the legal wrapper. A custodian (Goldstar, Strata, Millennium, Equity Trust) is not the investor.
-- Only state what you actually found in a source. Never infer a job, employer, or net worth from a name.
-- Common names are the main failure mode. If you cannot tell which person a name refers to, or the searches return nothing specific, return an empty about string. An empty result is correct and useful; a plausible guess about a real client is not.
 - No commentary on their investment in ERP Funds, and no speculation about capacity to invest.
 
+WEBSITE
+- The entity's own site, or the site of the operating company the individual runs or leads. Full https URL.
+- Never a LinkedIn profile, Bloomberg/ZoomInfo/Crunchbase listing, news article, or any other directory or aggregator page. If the entity has no site of its own, return an empty string.
+
+ADDRESS
+- BUSINESS or office address only — street, city, state, ZIP on one line.
+- Never a private individual's home or residential address. If the only address you can find for a person is where they live, return an empty string. For an operating company, LLC or fund, the corporate office is fine.
+
+RULES THAT OVERRIDE EVERYTHING ABOVE
+- Only state what you actually found in a source. Never infer a job, employer, website, or address from a name.
+- Common names are the main failure mode. If you cannot tell which person or company a name refers to, or the searches return nothing specific, return empty strings. An empty result is correct and useful; a plausible guess about a real client is not.
+
 Reply with ONLY a JSON object, no markdown fence:
-{"about": "...", "confidence": "high" | "medium" | "low", "sources": ["url", ...]}
+{"about": "...", "website": "...", "address": "...", "confidence": "high" | "medium" | "low", "sources": ["url", ...]}
 Use confidence "low" only alongside an empty about.`;
 
 const anthropic = new Anthropic();
@@ -44,13 +56,16 @@ type Row = {
   about: string | null;
 };
 
+const BAD_SITE = /linkedin\.com|bloomberg\.com|zoominfo|crunchbase|dnb\.com|facebook\.com|twitter\.com|wikipedia/i;
+const URL_RE = /https?:\/\/[^\s"'\\]+/g;
+
 async function research(row: Row, contacts: string[]) {
   const facts = [
     `Investing entity: ${row.investor}`,
     row.contact ? `Contact on the account: ${row.contact}` : "",
     contacts.length ? `Known people at this account: ${contacts.join(", ")}` : "",
-    row.address ? `Address on file: ${row.address}` : "",
-    row.website ? `Website on file: ${row.website}` : "",
+    row.address ? `Address already on file (do not contradict it): ${row.address}` : "",
+    row.website ? `Website already on file: ${row.website}` : "",
     row.notes ? `CRM notes: ${row.notes}` : "",
   ].filter(Boolean).join("\n");
 
@@ -59,25 +74,31 @@ async function research(row: Row, contacts: string[]) {
     max_tokens: 1500,
     system: [{ type: "text" as const, text: SYSTEM, cache_control: { type: "ephemeral" } }],
     tools: [
-      { type: "web_search_20250305" as "web_search_20250305", name: "web_search", max_uses: 5 } as unknown as Anthropic.Tool,
+      { type: "web_search_20250305" as "web_search_20250305", name: "web_search", max_uses: 6 } as unknown as Anthropic.Tool,
     ],
     messages: [{ role: "user", content: `${facts}\n\nResearch this investor and return the JSON object.` }],
   });
 
   const text = res.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("\n").trim();
-  const json = text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
-  const start = json.indexOf("{");
-  const end = json.lastIndexOf("}");
-  let parsed: { about?: string; confidence?: string; sources?: string[] } = {};
+  const stripped = text.replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  const start = stripped.indexOf("{");
+  const end = stripped.lastIndexOf("}");
+  let parsed: { about?: string; website?: string; address?: string; confidence?: string; sources?: string[] } = {};
   if (start >= 0 && end > start) {
-    try { parsed = JSON.parse(json.slice(start, end + 1)); } catch { /* fall through to empty */ }
+    try { parsed = JSON.parse(stripped.slice(start, end + 1)); } catch { /* fall through to empty */ }
   }
+
   const about = String(parsed.about ?? "").trim();
+  let website = String(parsed.website ?? "").trim();
+  // Directory and profile pages are not the entity's own site, whatever the model decided.
+  if (BAD_SITE.test(website)) website = "";
+  if (website && !/^https?:\/\//i.test(website)) website = `https://${website}`;
+  const address = String(parsed.address ?? "").trim().replace(/\s*\n\s*/g, ", ");
   // URLs the search actually returned, as a fallback when the model omits its sources.
-  const found = (JSON.stringify(res.content).match(/https?:\/\/[^\s"\\]+/g) ?? [])
+  const found = (JSON.stringify(res.content).match(URL_RE) ?? [])
     .filter((u) => !u.includes("anthropic") && !u.includes("api."));
   const sources = (Array.isArray(parsed.sources) && parsed.sources.length ? parsed.sources : found).slice(0, 6);
-  return { about, confidence: String(parsed.confidence ?? ""), sources };
+  return { about, website, address, confidence: String(parsed.confidence ?? ""), sources };
 }
 
 export async function POST(req: NextRequest) {
@@ -92,11 +113,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const cols = "investor_key, investor, contact, fund, notes, address, website, about";
 
-  // Batch mode fills in accounts that have no About yet — used by the backfill, not the UI.
+  // Batch mode fills in accounts not yet researched — used by the backfill, not the UI.
+  // what: "contact" drives the website/address pass, which covers accounts the earlier
+  // About-only pass already went through.
   let targets: Row[] = [];
   if (body.all) {
-    const { data, error } = await supabase.from("investor_crm").select(cols)
-      .eq("archived", false).eq("is_lp", true).is("about", null);
+    const q = supabase.from("investor_crm").select(cols).eq("archived", false).eq("is_lp", true);
+    const { data, error } = body.what === "contact"
+      ? await q.is("contact_researched_at", null)
+      : await q.is("about", null);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     targets = ((data ?? []) as Row[]).slice(0, Math.min(Number(body.limit) || 25, 60));
   } else {
@@ -120,27 +145,35 @@ export async function POST(req: NextRequest) {
     byKey.set(p.investor_key, list);
   }
 
-  const results: { investor: string; about: string; confidence: string; sources: string[] }[] = [];
+  const results: { investor: string; about: string; website: string; address: string; confidence: string; sources: string[] }[] = [];
   // Serial: the web_search calls are slow and this runs against a shared rate limit.
   for (const row of targets) {
     try {
       const r = await research(row, byKey.get(row.investor_key) ?? []);
+      const now = new Date().toISOString();
+      const patch: Record<string, unknown> = { about_researched_at: now, contact_researched_at: now };
       // An empty About is stored as "" (not null) so the backfill treats the account as
-      // already attempted and does not re-research it every run.
-      await supabase.from("investor_crm").update({
-        about: r.about,
-        about_sources: r.sources.length ? r.sources : null,
-        about_researched_at: new Date().toISOString(),
-      }).eq("investor_key", row.investor_key);
+      // already attempted and does not re-research it every run. A blank result never
+      // overwrites an About someone has written by hand.
+      if (r.about || row.about == null) patch.about = r.about;
+      // Sources are only meaningful next to a line they support. When the model declines
+      // to identify the entity, the pages it happened to open are noise, not evidence.
+      patch.about_sources = r.about && r.sources.length ? r.sources : null;
+      // Only ever fill a gap — spreadsheet and hand-entered values win.
+      if (r.website && !row.website) patch.website = r.website;
+      if (r.address && !row.address) patch.address = r.address;
+      await supabase.from("investor_crm").update(patch).eq("investor_key", row.investor_key);
       results.push({ investor: row.investor, ...r });
     } catch (e) {
-      results.push({ investor: row.investor, about: "", confidence: "error", sources: [String(e).slice(0, 200)] });
+      results.push({ investor: row.investor, about: "", website: "", address: "", confidence: "error", sources: [String(e).slice(0, 200)] });
     }
   }
 
   return NextResponse.json({
     count: results.length,
     found: results.filter((r) => r.about).length,
+    websites: results.filter((r) => r.website).length,
+    addresses: results.filter((r) => r.address).length,
     results,
   });
 }
