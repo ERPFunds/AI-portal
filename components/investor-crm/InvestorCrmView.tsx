@@ -556,7 +556,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <InvestorDrawer
           lp={selected}
           program={program}
-          isLpDirectory={isLpDirectory}
+          isLpDirectory={isLpDirectory || program === 'DST'}
           overlay={overlayFor(selected)}
           accent={accent}
           onClose={() => setSelected(null)}
