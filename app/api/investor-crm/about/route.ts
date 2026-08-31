@@ -166,7 +166,9 @@ export async function POST(req: NextRequest) {
       ? await q.is("contact_researched_at", null)
       : body.what === "retry"
         ? await q.or("about.is.null,about.eq.")
-        : await q.is("about", null);
+        // Also skip rows that errored: without this an unwritable row is re-selected
+        // every batch and the run spins on it. what:"retry" still picks them up.
+        : await q.is("about", null).is("about_researched_at", null);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     targets = ((data ?? []) as Row[]).slice(0, Math.min(Number(body.limit) || 25, 60));
   } else {
@@ -210,6 +212,9 @@ export async function POST(req: NextRequest) {
       await supabase.from("investor_crm").update(patch).eq("investor_key", row.investor_key);
       results.push({ investor: row.investor, ...r });
     } catch (e) {
+      // Stamp the attempt even on failure, so the row leaves the default batch queue.
+      await supabase.from("investor_crm")
+        .update({ about_researched_at: new Date().toISOString() }).eq("investor_key", row.investor_key);
       results.push({ investor: row.investor, about: "", website: "", address: "", confidence: "error", sources: [String(e).slice(0, 200)] });
     }
   }
