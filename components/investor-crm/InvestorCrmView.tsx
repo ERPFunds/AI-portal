@@ -188,21 +188,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
   const [showImport, setShowImport] = useState(false)
-  const [backfilling, setBackfilling] = useState(false)
 
-  // One-time pull of contacts Salesforce still holds for investors our spreadsheets left blank.
-  async function sfBackfill() {
-    if (!window.confirm('Pull contact details from Salesforce for investors with no email on file? Existing contacts are left untouched.')) return
-    setBackfilling(true); setSyncMsg(null)
-    try {
-      const res = await fetch('/api/investor-crm/sf-backfill', { method: 'POST' })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || j.error) { setSyncMsg({ ok: false, text: j.error ?? `Backfill failed (${res.status})` }); return }
-      setSyncMsg({ ok: true, text: `Salesforce filled ${j.filled} contacts across ${j.matched} of ${j.considered} investors that had no email.` })
-      load()
-    } catch (e) { setSyncMsg({ ok: false, text: `Backfill failed: ${String(e)}` }) }
-    finally { setBackfilling(false) }
-  }
   const [sortKey, setSortKey] = useState('commitment')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const [selected, setSelected] = useState<LpRecord | null>(null)
@@ -511,10 +497,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
         <button onClick={() => setShowImport(true)}
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
-        {program === 'PE' && <button onClick={sfBackfill} disabled={backfilling}
-          title="Fill missing contacts/emails from Salesforce before it is retired"
-          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: backfilling ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
-          {backfilling ? 'Pulling…' : '⇩ Fill from Salesforce'}</button>}
         <button onClick={() => setShowFunds(true)}
           style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>
         {program === 'DST' && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}

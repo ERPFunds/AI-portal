@@ -53,9 +53,15 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  // Either an interactive session or the cron secret (lets the backfill be run server-side,
+  // where the Salesforce credentials live).
+  const isCron = !!process.env.CRON_SECRET &&
+    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+  if (!isCron) {
+    const auth = await createClient();
+    const { data: { user } } = await auth.auth.getUser();
+    if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  }
   if (!salesforceConfigured()) return NextResponse.json({ error: "Salesforce is not configured" }, { status: 503 });
   const supabase = createAdminClient();
 
