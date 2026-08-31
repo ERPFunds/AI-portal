@@ -17,6 +17,9 @@ const config: DirConfig = {
   typeKey: 'category',
   typeOptions: CATEGORIES,
   searchKeys: ['name', 'contact', 'category', 'email', 'title', 'notes'],
+  // Opens as an account record like the LP Directory rather than an edit dialog.
+  accountView: true,
+  aboutResearch: true,
   defaults: { category: 'Other' },
   columns: [
     { key: 'name', label: 'Firm / Account', kind: 'name' },
@@ -35,6 +38,7 @@ const config: DirConfig = {
     { key: 'email', label: 'Email' },
     { key: 'phone', label: 'Office Phone' },
     { key: 'phone_cell', label: 'Cell Phone' },
+    { key: 'website', label: 'Website' },
     { key: 'address', label: 'Address', full: true },
     { key: 'notes', label: 'Notes', kind: 'textarea', full: true },
   ],

@@ -499,8 +499,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
         <button onClick={() => setShowImport(true)}
           style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>⤒ Import</button>
-        <button onClick={() => setShowFunds(true)}
-          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>
+        {/* Prospects are all Fund IV, so there is no fund list to manage there. */}
+        {!hideFund && <button onClick={() => setShowFunds(true)}
+          style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>}
         {program === 'DST' && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
@@ -1223,11 +1224,19 @@ function EditField({ k, value, onSave, full }: { k: string; value: string; onSav
         value={draft}
         onChange={e => setDraft(e.target.value)}
         onBlur={() => { if (draft !== value) onSave(draft) }}
-        placeholder="—"
-        style={{ width: '100%', marginTop: 3, padding: '6px 9px', borderRadius: 7, border: '1px solid transparent',
+        // Enter commits and Escape reverts. Blur-only saving reads as a dead field: you
+        // type, press Enter, nothing visibly happens, and the edit looks lost.
+        onKeyDown={e => {
+          if (e.key === 'Enter') { e.currentTarget.blur() }
+          if (e.key === 'Escape') { setDraft(value); e.currentTarget.blur() }
+        }}
+        placeholder="Add…"
+        // A visible border matters: with a transparent one an empty field is
+        // indistinguishable from the read-only values sitting next to it.
+        style={{ width: '100%', marginTop: 3, padding: '6px 9px', borderRadius: 7, border: '1px solid #e2e8f0',
                  fontSize: 15, color: '#1a2233', fontWeight: 500, fontFamily: 'inherit', background: '#f8fafc' }}
-        onFocus={e => { e.currentTarget.style.borderColor = '#cbd5e1'; e.currentTarget.style.background = '#fff' }}
-        onBlurCapture={e => { e.currentTarget.style.borderColor = 'transparent'; e.currentTarget.style.background = '#f8fafc' }}
+        onFocus={e => { e.currentTarget.style.borderColor = '#0f766e'; e.currentTarget.style.background = '#fff' }}
+        onBlurCapture={e => { e.currentTarget.style.borderColor = '#e2e8f0'; e.currentTarget.style.background = '#f8fafc' }}
       />
     </div>
   )

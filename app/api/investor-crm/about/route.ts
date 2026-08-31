@@ -118,6 +118,32 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json().catch(() => ({}));
+
+  // The Other directory (lenders, law firms, vendors) keeps the same About/website/address
+  // fields on its own table, so it reuses this pass keyed by row id instead of by name.
+  if (body.table === "other") {
+    const id = String(body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+    const { data, error } = await supabase.from("crm_other")
+      .select("id, name, contact, title, notes, address, website, about").eq("id", id).maybeSingle();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data) return NextResponse.json({ error: "No such record" }, { status: 404 });
+    const rec = data as { id: string; name: string; contact: string | null; title: string | null; notes: string | null; address: string | null; website: string | null; about: string | null };
+    const r = await research({
+      investor_key: rec.id, investor: rec.name, contact: rec.contact, fund: null,
+      notes: rec.notes, address: rec.address, website: rec.website, about: rec.about,
+    }, rec.title ? [rec.title] : []);
+    const patch: Record<string, unknown> = {
+      about_researched_at: new Date().toISOString(),
+      about_sources: r.about && r.sources.length ? r.sources : null,
+    };
+    if (r.about || rec.about == null) patch.about = r.about;
+    if (r.website && !rec.website) patch.website = r.website;
+    if (r.address && !rec.address) patch.address = r.address;
+    await supabase.from("crm_other").update(patch).eq("id", id);
+    return NextResponse.json({ count: 1, found: r.about ? 1 : 0, results: [{ investor: rec.name, ...r }] });
+  }
+
   const cols = "investor_key, investor, contact, fund, notes, address, website, about";
 
   // Batch mode fills in accounts not yet researched — used by the backfill, not the UI.

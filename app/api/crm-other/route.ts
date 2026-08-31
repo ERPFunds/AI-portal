@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 // alongside investor exports. Portal-owned. RLS-locked → service-role client.
 
 const CATEGORIES = ["Lender", "Law Firm", "Vendor", "Other"];
-const COLS = "id, name_key, name, match_key, category, contact, title, email, phone, phone_cell, address, owner, notes, created_at, updated_at";
+const COLS = "id, name_key, name, match_key, category, contact, title, email, phone, phone_cell, address, website, owner, notes, about, about_sources, about_researched_at, created_at, updated_at";
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
@@ -25,6 +25,8 @@ function clean(body: Record<string, unknown>) {
   if (body.address != null) out.address = str(body.address);
   if (body.owner != null) out.owner = str(body.owner);
   if (body.notes != null) out.notes = str(body.notes);
+  if (body.website != null) out.website = str(body.website);
+  if (body.about != null) out.about = str(body.about);
   return out;
 }
 
