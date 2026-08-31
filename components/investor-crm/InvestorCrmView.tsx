@@ -416,7 +416,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <td style={tdCss}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 170 }}>
             <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, whiteSpace: 'nowrap', background: t.bg, color: t.color }}>{t.label}</span>
-            {overlays[normKey(lp.investor)]?.prior_fund && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>prior: {overlays[normKey(lp.investor)]?.prior_fund}</span>}
             {fundsOf(lp).slice(1).map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#eff6ff', color: '#1d4ed8', whiteSpace: 'nowrap' }}>{f}</span>)}
             {lp.priorFunds?.map(pf => <span key={pf} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{pf}</span>)}
             {lp.commitType && <span style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f1f5f9', color: '#475569', whiteSpace: 'nowrap' }}>{lp.commitType}</span>}
@@ -730,7 +729,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     source: overlay?.source ?? '',
     owner: overlay?.owner ?? '',
     fund: overlay?.fund ?? '',
-    prior_fund: overlay?.prior_fund ?? '',
     committed_usd: overlay?.committed_usd != null ? String(overlay.committed_usd) : String(effectiveCommitted(lp) || ''),
     phone: overlay?.phone ?? lp.phone ?? '',
     website: overlay?.website ?? '',
@@ -968,7 +966,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <EditField k="Source" value={acct.source} onSave={v => saveAccount({ source: v })} />
                     <EditField k="Owner" value={acct.owner} onSave={v => saveAccount({ owner: v })} />
                     <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />
-                    <EditField k="Prior Fund" value={acct.prior_fund} onSave={v => saveAccount({ prior_fund: v })} />
                     <EditField k="Committed (total)" value={acct.committed_usd} onSave={v => saveAccount({ committed_usd: v })} />
                     {overlay?.fund_commitments && Object.entries(overlay.fund_commitments).map(([f, amt]) => (
                       <Field key={f} k={f + ' Committed'} v={fmtUsd(Number(amt))} />

@@ -99,7 +99,7 @@ function isRelevant(item: NewsItem): boolean {
   return hasGeo;
 }
 
-async function fetchNews(): Promise<NewsItem[]> {
+async function fetchNews(): Promise<{ items: NewsItem[]; debug: { rss: number; apify: number; apifyError?: string } }> {
   const items: NewsItem[] = [];
 
   await Promise.allSettled(
@@ -123,11 +123,15 @@ async function fetchNews(): Promise<NewsItem[]> {
     })
   );
 
+  const rssCount = items.length;
+  let apifyCount = 0;
+  let apifyError: string | undefined;
+
   try {
     const run = await apify.actor("apify/google-news-scraper").call({
       queries: APIFY_QUERIES,
       maxResultsPerQuery: 15,
-      dateFilter: "week",
+      dateFilter: "month",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
@@ -140,18 +144,19 @@ async function fetchNews(): Promise<NewsItem[]> {
           summary: i.description,
           fromApify: true,
         });
+        apifyCount++;
       }
     }
-  } catch {
-    // Apify optional
+  } catch (err) {
+    apifyError = String(err);
+    console.error("Brevard submarket Apify error:", err);
   }
 
   const seen = new Set<string>();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  return items
+  const filtered = items
     .filter((i) => i.pubDate > thirtyDaysAgo)
-    // Apify results are already geo-targeted by query; only RSS items need the keyword filter
     .filter((i) => i.fromApify || isRelevant(i))
     .filter((i) => {
       if (seen.has(i.link)) return false;
@@ -160,6 +165,8 @@ async function fetchNews(): Promise<NewsItem[]> {
     })
     .sort((a, b) => b.pubDate.getTime() - a.pubDate.getTime())
     .slice(0, 25);
+
+  return { items: filtered, debug: { rss: rssCount, apify: apifyCount, apifyError } };
 }
 
 export async function GET(request: Request) {
@@ -171,14 +178,14 @@ export async function GET(request: Request) {
   const startMs = Date.now();
 
   try {
-    const [rawNews, seenUrls] = await Promise.all([
+    const [{ items: rawNews, debug }, seenUrls] = await Promise.all([
       fetchNews(),
       getSeenNewsletterArticleUrls('brevard-submarket-watch').catch(() => new Set<string>()),
     ]);
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No new Brevard submarket articles this week." });
+      return NextResponse.json({ message: "No new Brevard submarket articles this week.", debug });
     }
 
     const articleList = news
