@@ -11,6 +11,11 @@ import ImportModal from './ImportModal'
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
 const OWNERS = ['Meghan Berry', 'William Meyer']
+const US_STATES = [
+  'AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME',
+  'MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI',
+  'SC','SD','TN','TX','UT','VT','VA','WA','WV','WI','WY',
+]
 const SOURCES = [
   'Referral', 'Existing LP', 'Placement agent', 'Broker / advisor',
   'Conference', 'Inbound', 'Outreach', 'Other',
@@ -63,6 +68,7 @@ interface Overlay {
   website?: string | null
   notes?: string | null
   next_steps?: string | null
+  state?: string | null
   broker_dealer?: string | null
   advisor?: string | null
   about?: string | null
@@ -197,6 +203,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [search, setSearch] = useState('')
   const [fundFilter, setFundFilter] = useState('All')
   const [stageFilter, setStageFilter] = useState('All')
+  const [stateFilter, setStateFilter] = useState('All')
   const [funds, setFunds] = useState<Fund[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
@@ -295,6 +302,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       })
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => {
+        if (stateFilter === 'All') return true
+        const st = overlays[normKey(lp.investor)]?.state ?? ''
+        return stateFilter === 'Unknown' ? !st : st === stateFilter
+      })
+      .filter(lp => {
         if (stageFilter === 'All') return true
         const st = overlays[normKey(lp.investor)]?.funnel_stage ?? ''
         return stageFilter === 'Unset' ? !st : st === stageFilter
@@ -308,7 +320,16 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, overlays, program, search, fundFilter, stageFilter, mode, columns, sortKey, sortDir])
+  }, [lps, overlays, program, search, fundFilter, stageFilter, stateFilter, mode, columns, sortKey, sortDir])
+
+  const stateOptions = useMemo(() => {
+    const set = new Set<string>()
+    for (const ov of Object.values(overlays)) {
+      if ((ov.program ?? 'PE') !== program || ov.archived) continue
+      if (ov.state) set.add(ov.state)
+    }
+    return [...set].sort()
+  }, [overlays, program])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -513,6 +534,14 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           {FUNNEL_STAGES.map(st => <option key={st} value={st}>{st}</option>)}
           <option value="Unset">— no stage set —</option>
         </select>}
+        {isLpDirectory && stateOptions.length > 0 && (
+          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+            <option value="All">All states</option>
+            {stateOptions.map(st => <option key={st} value={st}>{st}</option>)}
+            <option value="Unknown">— no state on file —</option>
+          </select>
+        )}
         {!hideFund && <select value={fundFilter} onChange={e => setFundFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
           <option value="All">All funds</option>
@@ -757,6 +786,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     phone: overlay?.phone ?? lp.phone ?? '',
     website: overlay?.website ?? '',
     address: overlay?.address ?? '',
+    state: overlay?.state ?? '',
   })
   // Every account field is editable; the entity name is the record's key, so renaming it
   // is sent as a rename rather than a plain field update.
@@ -1079,6 +1109,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     ))}
                     <EditField k="Phone" value={acct.phone} onSave={v => saveAccount({ phone: v })} />
                     <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
+                    <EditSelect k="State" value={acct.state} options={US_STATES} onSave={v => saveAccount({ state: v })} />
                     <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
                   </div>
                   {!isLpDirectory && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
