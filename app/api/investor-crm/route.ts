@@ -19,7 +19,9 @@ const PROGRAMS = ["PE", "DST"];
 
 const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, updated_by, updated_at";
 
-const normKey = (investor: string) => investor.trim().toLowerCase();
+// Must match how keys are stored: lowercase, punctuation collapsed to single spaces.
+// A weaker normalization silently inserts a duplicate instead of updating the record.
+const normKey = (investor: string) => investor.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };
 const money = (v: unknown) => {
   const raw = String(v ?? "").replace(/[$,\s]/g, "");
@@ -154,7 +156,7 @@ export async function DELETE(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const supabase = createAdminClient();
 
-  const key = (req.nextUrl.searchParams.get("investor_key") ?? "").trim().toLowerCase();
+  const key = normKey(req.nextUrl.searchParams.get("investor_key") ?? "");
   if (!key) return NextResponse.json({ error: "investor_key required" }, { status: 400 });
 
   const { data: row } = await supabase

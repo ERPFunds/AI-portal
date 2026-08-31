@@ -11,7 +11,9 @@ export const dynamic = "force-dynamic";
 
 const LIST_COLS = "id, name, description, program, created_by, created_at";
 const MEMBER_COLS = "id, list_id, investor_key, investor, added_by, added_at";
-const normKey = (investor: string) => investor.trim().toLowerCase();
+// Must match how keys are stored: lowercase, punctuation collapsed to single spaces.
+// A weaker normalization silently inserts a duplicate instead of updating the record.
+const normKey = (investor: string) => investor.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 export async function GET(req: NextRequest) {
   const auth = await createClient();
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const supabase = createAdminClient();
 
-  const investorKey = (req.nextUrl.searchParams.get("investor_key") ?? "").trim().toLowerCase();
+  const investorKey = normKey(req.nextUrl.searchParams.get("investor_key") ?? "");
 
   const [{ data: lists, error: le }, { data: members, error: me }] = await Promise.all([
     supabase.from("crm_distribution_lists").select(LIST_COLS).order("created_at", { ascending: true }),
@@ -102,7 +104,7 @@ export async function DELETE(req: NextRequest) {
       .from("crm_distribution_list_members")
       .delete()
       .eq("list_id", listId)
-      .eq("investor_key", investorKey.trim().toLowerCase());
+      .eq("investor_key", normKey(investorKey));
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
