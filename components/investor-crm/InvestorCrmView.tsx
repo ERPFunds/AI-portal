@@ -62,6 +62,9 @@ interface Overlay {
   address?: string | null
   website?: string | null
   notes?: string | null
+  about?: string | null
+  about_sources?: string[] | null
+  about_researched_at?: string | null
 }
 interface InvestorDoc { id: string; file_id: string; filename: string; size_bytes: number; created_at: string; uploaded_by: string | null }
 interface Fund { id: string; name: string; program: string | null }
@@ -83,7 +86,10 @@ interface Meeting {
   onedrive_url: string | null
 }
 
-const normKey = (s: string) => (s || '').trim().toLowerCase()
+// Must match the key stored in investor_crm: lowercase, punctuation collapsed to single
+// spaces. A weaker normalization misses the overlay for any punctuated name, which makes a
+// saved edit render as a second row.
+const normKey = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 const normEntity = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
 function fmtUsd(n: number | null | undefined): string {
   if (n == null || !isFinite(n) || n === 0) return '—'
@@ -771,6 +777,28 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     finally { setMoving(false) }
   }
 
+  const [about, setAbout] = useState(overlay?.about ?? '')
+  const [aboutSources, setAboutSources] = useState<string[]>(overlay?.about_sources ?? [])
+  const [aboutBusy, setAboutBusy] = useState(false)
+  const [aboutMsg, setAboutMsg] = useState<string | null>(null)
+  // Researches the About line from public sources. The result is written server-side, so a
+  // failed request leaves whatever was already on the record untouched.
+  async function researchAbout() {
+    setAboutBusy(true); setAboutMsg(null)
+    try {
+      const res = await fetch('/api/investor-crm/about', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ investor: lp.investor }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setAboutMsg(`Research failed: ${j.error ?? res.status}`); return }
+      const r = j.results?.[0]
+      if (!r?.about) { setAboutMsg('Nothing specific found on the public web — add a line by hand.'); return }
+      setAbout(r.about); setAboutSources(r.sources ?? [])
+      onSaved(key, { ...(overlay ?? { investor_key: key }), about: r.about, about_sources: r.sources ?? null })
+    } catch (e) { setAboutMsg(`Research failed: ${String(e)}`) }
+    finally { setAboutBusy(false) }
+  }
   const [notesDraft, setNotesDraft] = useState(overlay?.notes ?? lp.notes ?? '')
   const [notesSaved, setNotesSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -953,6 +981,38 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
 
             {tab === 'overview' && (
               <>
+                <div style={{ ...cardCss, padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div style={{ ...sectTitle, marginBottom: 0 }}>About</div>
+                    <button onClick={researchAbout} disabled={aboutBusy}
+                      style={{ border: '1px solid #c7d2da', background: aboutBusy ? '#f1f5f9' : '#fff', color: '#0f766e',
+                               borderRadius: 7, padding: '5px 11px', fontSize: 12.5, fontWeight: 600,
+                               cursor: aboutBusy ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
+                      {aboutBusy ? 'Searching the web…' : about ? 'Re-research' : 'Research from the web'}
+                    </button>
+                  </div>
+                  <textarea
+                    value={about}
+                    onChange={e => setAbout(e.target.value)}
+                    onBlur={() => { if (about !== (overlay?.about ?? '')) saveAccount({ about }) }}
+                    placeholder="Who this investor is — profession, firm, where they're based. Click Research to pull it from LinkedIn and the web, then edit."
+                    rows={3}
+                    style={{ width: '100%', marginTop: 8, padding: '9px 11px', borderRadius: 8, border: '1px solid #e2e8f0',
+                             fontSize: 14.5, color: '#374151', fontFamily: 'inherit', lineHeight: 1.55, resize: 'vertical', background: '#f8fafc' }}
+                  />
+                  {aboutMsg && <div style={{ fontSize: 12, color: '#b45309', marginTop: 6 }}>{aboutMsg}</div>}
+                  {aboutSources.length > 0 && (
+                    <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      <span>Sources:</span>
+                      {aboutSources.slice(0, 4).map((u, i) => (
+                        <a key={i} href={u} target="_blank" rel="noreferrer" style={{ color: '#0f766e' }}>
+                          {(() => { try { return new URL(u).hostname.replace(/^www\./, '') } catch { return 'link' } })()}
+                        </a>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
                 <div style={{ ...cardCss, padding: 20 }}>
                   <div style={sectTitle}>Account Summary</div>
                   <div style={{ fontSize: 14.5, color: '#374151', lineHeight: 1.55 }}>{summaryText}</div>

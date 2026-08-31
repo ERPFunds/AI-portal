@@ -17,7 +17,7 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, about, about_sources, about_researched_at, updated_by, updated_at";
 
 // Must match how keys are stored: lowercase, punctuation collapsed to single spaces.
 // A weaker normalization silently inserts a duplicate instead of updating the record.
@@ -87,6 +87,8 @@ export async function PATCH(req: NextRequest) {
   }
   if (body.archived !== undefined) row.archived = !!body.archived;
   if (body.is_lp !== undefined) row.is_lp = !!body.is_lp;
+  // Hand-edited About wins over whatever the research route last wrote.
+  if (body.about !== undefined) row.about = str(body.about);
   if (body.fund !== undefined) row.fund = str(body.fund);
   if (body.prior_fund !== undefined) row.prior_fund = str(body.prior_fund);
   if (body.contact !== undefined) row.contact = str(body.contact);
