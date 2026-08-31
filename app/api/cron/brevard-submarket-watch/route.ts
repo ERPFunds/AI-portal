@@ -88,6 +88,7 @@ interface NewsItem {
   pubDate: Date;
   source: string;
   summary?: string;
+  fromApify?: boolean;
 }
 
 function isRelevant(item: NewsItem): boolean {
@@ -137,6 +138,7 @@ async function fetchNews(): Promise<NewsItem[]> {
           pubDate: new Date(i.publishedAt),
           source: i.source ?? "Google News",
           summary: i.description,
+          fromApify: true,
         });
       }
     }
@@ -149,7 +151,8 @@ async function fetchNews(): Promise<NewsItem[]> {
 
   return items
     .filter((i) => i.pubDate > thirtyDaysAgo)
-    .filter(isRelevant)
+    // Apify results are already geo-targeted by query; only RSS items need the keyword filter
+    .filter((i) => i.fromApify || isRelevant(i))
     .filter((i) => {
       if (seen.has(i.link)) return false;
       seen.add(i.link);

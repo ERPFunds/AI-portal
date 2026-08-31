@@ -86,6 +86,7 @@ interface NewsItem {
   pubDate: Date;
   source: string;
   summary?: string;
+  fromApify?: boolean;
 }
 
 const RE_ANCHORS = [
@@ -139,6 +140,7 @@ async function fetchFundNews(): Promise<NewsItem[]> {
           pubDate: new Date(i.publishedAt),
           source: i.source ?? "Google News",
           summary: i.description,
+          fromApify: true,
         });
       }
     }
@@ -151,7 +153,8 @@ async function fetchFundNews(): Promise<NewsItem[]> {
 
   return items
     .filter((i) => i.pubDate > thirtyDaysAgo)
-    .filter(isFundRelevant)
+    // Apify results are already targeted by query; only RSS items need the keyword filter
+    .filter((i) => i.fromApify || isFundRelevant(i))
     .filter((i) => {
       if (seen.has(i.link)) return false;
       seen.add(i.link);
