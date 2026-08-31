@@ -176,14 +176,14 @@ export async function GET(request: Request) {
   const startMs = Date.now();
 
   try {
-    const [rawNews, seenUrls] = await Promise.all([
+    const [{ items: rawNews, debug }, seenUrls] = await Promise.all([
       fetchNews(),
       getSeenNewsletterArticleUrls('permian-submarket-watch').catch(() => new Set<string>()),
     ]);
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No new Permian submarket articles this week." });
+      return NextResponse.json({ message: "No new Permian submarket articles this week.", debug });
     }
 
     const articleList = news
