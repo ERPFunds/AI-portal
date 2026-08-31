@@ -63,8 +63,11 @@ export async function GET(req: NextRequest) {
     for (const [k, m] of perEntity) {
       const list = [...m.values()];
       counts[k] = list.length;
+      // Name comes from the primary contact, but the address from whoever actually has one —
+      // Fund II/III primaries were imported name-only, so the two are often different people.
       const pick = list.find((x) => x.primary) ?? list.find((x) => x.email) ?? list[0];
-      if (pick) primary[k] = { name: pick.name, email: pick.email, more: list.length - 1 };
+      const withEmail = list.find((x) => x.email);
+      if (pick) primary[k] = { name: pick.name, email: pick.email || withEmail?.email || "", more: list.length - 1 };
     }
     return NextResponse.json({ counts, primary });
   }
