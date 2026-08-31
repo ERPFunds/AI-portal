@@ -160,7 +160,11 @@ async function fetchFundNews(): Promise<{ items: NewsItem[]; debug: { rss: numbe
 
   const filtered = items
     .filter((i) => i.pubDate > thirtyDaysAgo)
-    .filter((i) => i.fromApify || isFundRelevant(i))
+    .filter((i) => {
+      const text = `${i.title} ${i.summary ?? ""}`.toLowerCase();
+      if (i.fromApify) return RE_ANCHORS.some((kw) => text.includes(kw));
+      return isFundRelevant(i);
+    })
     .filter((i) => {
       if (seen.has(i.link)) return false;
       seen.add(i.link);

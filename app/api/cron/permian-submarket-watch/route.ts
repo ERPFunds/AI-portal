@@ -154,7 +154,11 @@ async function fetchNews(): Promise<{ items: NewsItem[]; debug: { rss: number; a
 
   const filtered = items
     .filter((i) => i.pubDate > thirtyDaysAgo)
-    .filter((i) => i.fromApify || isRelevant(i))
+    .filter((i) => {
+      const text = `${i.title} ${i.summary ?? ""}`.toLowerCase();
+      if (i.fromApify) return TOPIC_KEYWORDS.some((kw) => text.includes(kw));
+      return isRelevant(i);
+    })
     .filter((i) => {
       if (seen.has(i.link)) return false;
       seen.add(i.link);
