@@ -728,7 +728,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     investor_type: overlay?.investor_type ?? lp.sfLpType ?? '',
     source: overlay?.source ?? '',
     owner: overlay?.owner ?? '',
-    fund: overlay?.fund ?? '',
+    fund: overlay?.fund ?? (program === 'PE' ? 'Fund IV' : ''),
     committed_usd: overlay?.committed_usd != null ? String(overlay.committed_usd) : String(effectiveCommitted(lp) || ''),
     phone: overlay?.phone ?? lp.phone ?? '',
     website: overlay?.website ?? '',
@@ -748,6 +748,24 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
       setSaveMsg('Saved'); setTimeout(() => setSaveMsg(null), 1500)
     } catch (e) { setSaveMsg(`Save failed: ${String(e)}`) }
   }
+  const [moving, setMoving] = useState(false)
+  async function moveToLpDirectory() {
+    if (!window.confirm(`Move "${lp.investor}" to the LP Directory?`)) return
+    setMoving(true)
+    try {
+      const res = await fetch('/api/investor-crm', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ investor: lp.investor, program, is_lp: true }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setSaveMsg(`Move failed: ${j.error ?? res.status}`); return }
+      onSaved(key, j.overlay)
+      setSaveMsg('Moved to LP Directory')
+      setTimeout(onClose, 900)
+    } catch (e) { setSaveMsg(`Move failed: ${String(e)}`) }
+    finally { setMoving(false) }
+  }
+
   const [notesDraft, setNotesDraft] = useState(overlay?.notes ?? lp.notes ?? '')
   const [notesSaved, setNotesSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -864,7 +882,15 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
         {/* top bar */}
         <div style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '12px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: 13, color: '#6b7280' }}>{program === 'DST' ? 'DST Investors' : 'PE Investors'} <span style={{ color: '#c7ccd4' }}>›</span> <b style={{ color: '#1a2233' }}>{lp.investor}</b></div>
-          <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Close ✕</button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {/* A prospect that has come in becomes an LP; the flag moves it across without
+                needing a commitment figure yet. */}
+            {!isLpDirectory && <button onClick={moveToLpDirectory} disabled={moving}
+              style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: moving ? 'wait' : 'pointer', fontWeight: 600, color: '#0f766e' }}>
+              {moving ? 'Moving…' : '→ Move to LP Directory'}
+            </button>}
+            <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Close ✕</button>
+          </div>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, padding: 16, alignItems: 'start' }}>
@@ -928,10 +954,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
               <RailField label="Source">
                 <input value={source} onChange={e => setSource(e.target.value)} onBlur={() => saveOverlay({ source })} placeholder="e.g. Referral, Conference…" style={{ ...selCss, cursor: 'text' }} />
               </RailField>
-              {!isLpDirectory && <RailField label="Last Contact">
-                <div style={railVal}>{lp.lastInteraction ? fmtDate(lp.lastInteraction.date) : 'No contact logged'}</div>
-                {lp.lastInteraction?.note && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>{lp.lastInteraction.note.slice(0, 120)}</div>}
-              </RailField>}
               {saveMsg && <div style={{ fontSize: 12, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c', padding: '6px 0', fontWeight: 600 }}>{saving ? 'Saving…' : saveMsg}</div>}
             </div>
           </aside>
@@ -953,7 +975,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <Stat label="Committed" value={committed ? fmtUsd(committed) : '—'} accent="#0f766e" />
                     {!isLpDirectory && <Stat label="Target" value={fmtUsd(targetAmount)} />}
                     <Stat label="People" value={people == null ? '·' : String(people.length)} />
-                    {!isLpDirectory && <Stat label="Last Contact" value={lp.lastInteraction ? `${daysSince(lp.lastInteraction.date)}d ago` : '—'} />}
                   </div>
                 </div>
 
@@ -962,7 +983,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
                     <EditField k="Account (Entity)" value={acct.investor} onSave={v => saveAccount({ investor: v })} />
                     <Field k="Primary Contact" v={people?.find(x => x.is_primary)?.name || people?.[0]?.name || '—'} />
-                    <EditField k="Investor Type" value={acct.investor_type} onSave={v => saveAccount({ investor_type: v })} />
                     <EditField k="Source" value={acct.source} onSave={v => saveAccount({ source: v })} />
                     <EditField k="Owner" value={acct.owner} onSave={v => saveAccount({ owner: v })} />
                     <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />
