@@ -63,6 +63,8 @@ interface Overlay {
   website?: string | null
   notes?: string | null
   next_steps?: string | null
+  broker_dealer?: string | null
+  advisor?: string | null
   about?: string | null
   about_sources?: string[] | null
   about_researched_at?: string | null
@@ -123,7 +125,7 @@ function overlayToLp(ov: Overlay): LpRecord {
     lastInteraction: null,
     sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
     sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
-    brokerFirm: '', brokerContact: '',
+    brokerFirm: ov.broker_dealer ?? '', brokerContact: ov.advisor ?? '',
     resolvedEmail: ov.email ?? null,
     committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : null,
     priorFunds: [],
@@ -205,7 +207,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [selected, setSelected] = useState<LpRecord | null>(null)
   const [contactCounts, setContactCounts] = useState<Record<string, number>>({})
   const [contactPrimary, setContactPrimary] = useState<Record<string, { name: string; email: string; more: number }>>({})
-  const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
@@ -278,6 +279,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
             ...lp,
             dstFunds: Object.keys(ov.fund_commitments),
             committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : lp.committedUsd,
+            // The feed's broker/advisor wins where it has one; the sheets fill the rest.
+            brokerFirm: lp.brokerFirm || (ov.broker_dealer ?? ''),
+            brokerContact: lp.brokerContact || (ov.advisor ?? ''),
           }
         })
       : []
@@ -333,25 +337,6 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     setOverlays(prev => ({ ...prev, [key]: { ...prev[key], ...ov } }))
   }
 
-  // Force the heavy Salesforce/SharePoint recompute (same as the LP Directory "Sync" button),
-  // then refresh overlays. Reports company-account coverage inline so grouping can be verified.
-  async function syncSalesforce() {
-    setSyncing(true); setSyncMsg(null)
-    try {
-      const [lpRes, ovRes] = await Promise.all([fetch('/api/lp-directory?refresh=1'), fetch('/api/investor-crm')])
-      const lpJson = await lpRes.json()
-      if (!lpRes.ok || lpJson.error) { setSyncMsg({ ok: false, text: lpJson.error ?? `Sync failed (${lpRes.status})` }); return }
-      const nextLps: LpRecord[] = Array.isArray(lpJson.lps) ? lpJson.lps : []
-      setLps(nextLps)
-      const ovJson = await ovRes.json().catch(() => ({}))
-      setOverlays(ovJson.overlays ?? {})
-      const inProg = nextLps.filter(l => program === 'DST' ? l.group === DST_GROUP : l.group !== DST_GROUP)
-      const withSf = inProg.filter(l => (l.sfOwner || '').trim()).length
-      const withAny = inProg.filter(l => resolveOwner(l, overlays[normKey(l.investor)]?.owner).name).length
-      setSyncMsg({ ok: true, text: `Synced. Relationship owner known for ${withAny} of ${inProg.length} ${program} investors (${withSf} from Salesforce, the rest inferred from email activity).` })
-    } catch (e) { setSyncMsg({ ok: false, text: `Sync failed: ${String(e)}` }) }
-    finally { setSyncing(false) }
-  }
 
   // Export the currently-filtered rows to CSV (opens in Excel), mirroring the LP Directory export.
   function exportCsv() {
@@ -541,10 +526,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         {/* Prospects are all Fund IV, so there is no fund list to manage there. */}
         {!hideFund && <button onClick={() => setShowFunds(true)}
           style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Fund</button>}
-        {program === 'DST' && <button onClick={syncSalesforce} disabled={syncing} title="Pull the latest from Salesforce (also refreshes company accounts)" style={{ border: '1px solid #0f766e', background: syncing ? '#f0f9f7' : '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: syncing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>{syncing ? '⟳ Syncing…' : '⟳ Sync with Salesforce'}</button>}
+
       </div>
       {syncMsg && <div style={{ marginBottom: 12, fontSize: 13, fontWeight: 600, color: syncMsg.ok ? '#197a52' : '#b91c1c' }}>{syncMsg.text}</div>}
-      {syncing && <div style={{ marginBottom: 12, fontSize: 12.5, color: '#9ca3af' }}>Pulling the commitment schedule + Salesforce + mailbox scan — this can take up to a minute.</div>}
 
       {loading && <div style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>Loading investors…</div>}
       {error && <div style={{ padding: 16, background: '#fef2f2', color: '#b91c1c', borderRadius: 8, marginBottom: 12 }}>{error}</div>}
