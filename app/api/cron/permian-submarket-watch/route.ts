@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -67,7 +67,7 @@ const APIFY_QUERIES = [
   "West Texas industrial sale comp 2026",
 ];
 
-// Must match at least one geographic keyword — topic-only keywords are not sufficient
+// Must match at least one geographic keyword â€” topic-only keywords are not sufficient
 const GEO_KEYWORDS = [
   "permian", "west texas", "permian basin", "permian cre",
   "midland tx", "midland, tx", "midland texas", "midland-odessa",
@@ -93,7 +93,7 @@ interface NewsItem {
 function isRelevant(item: NewsItem): boolean {
   const text = `${item.title} ${item.summary ?? ""}`.toLowerCase();
   const hasGeo = GEO_KEYWORDS.some((kw) => text.includes(kw));
-  // Topic keywords alone are not enough — must mention Permian/West Texas geography
+  // Topic keywords alone are not enough â€” must mention Permian/West Texas geography
   return hasGeo;
 }
 
@@ -126,20 +126,19 @@ async function fetchNews(): Promise<{ items: NewsItem[]; debug: { rss: number; a
   let apifyError: string | undefined;
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({
+    const run = await apify.actor("easyapi/google-news-scraper").call({
       queries: APIFY_QUERIES,
       maxResultsPerQuery: 15,
-      dateFilter: "month",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
-      if (i.url && i.title && i.publishedAt) {
+      if (i.link && i.title && i.date_utc) {
         items.push({
           title: i.title,
-          link: i.url,
-          pubDate: new Date(i.publishedAt),
+          link: i.link.startsWith("/") ? `https://news.google.com${i.link}` : i.link,
+          pubDate: new Date(i.date_utc),
           source: i.source ?? "Google News",
-          summary: i.description,
+          summary: i.snippet,
           fromApify: true,
         });
         apifyCount++;
@@ -208,7 +207,7 @@ Focus on:
 Articles:
 ${articleList}
 
-Write with data density and specificity. Synthesize what the articles tell you and draw market implications from them. If an article is only tangentially related to Permian, extract what IS useful for the market narrative. Do not apologize for limited data, do not add asterisked notes or disclaimers about source quality, do not comment on what the articles did or did not cover. Write a tight, usable brief from what's available and stop. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions.`,
+Write with data density and specificity. Synthesize what the articles tell you and draw market implications from them. If an article is only tangentially related to Permian, extract what IS useful for the market narrative. Do not apologize for limited data, do not add asterisked notes or disclaimers about source quality, do not comment on what the articles did or did not cover. Write a tight, usable brief from what's available and stop. This is an automated newsletter â€” do NOT ask follow-up questions, offer options, or end with bullet-point suggestions.`,
         },
       ],
     });
@@ -280,3 +279,4 @@ Write with data density and specificity. Synthesize what the articles tell you a
     return NextResponse.json({ error: "Permian Submarket Watch generation failed" }, { status: 500 });
   }
 }
+

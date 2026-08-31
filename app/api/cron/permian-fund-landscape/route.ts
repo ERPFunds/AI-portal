@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -130,20 +130,20 @@ async function fetchFundNews(): Promise<{ items: NewsItem[]; debug: { rss: numbe
   let apifyError: string | undefined;
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({
+    const run = await apify.actor("easyapi/google-news-scraper").call({
       queries: FUND_APIFY_QUERIES,
       maxResultsPerQuery: 15,
       dateFilter: "month",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
-      if (i.url && i.title && i.publishedAt) {
+      if (i.link && i.title && i.date_utc) {
         items.push({
           title: i.title,
-          link: i.url,
-          pubDate: new Date(i.publishedAt),
+          link: i.link?.startsWith("/") ? `https://news.google.com${i.link}` : i.link,
+          pubDate: new Date(i.date_utc),
           source: i.source ?? "Google News",
-          summary: i.description,
+          summary: i.snippet,
           fromApify: true,
         });
         apifyCount++;
@@ -187,7 +187,7 @@ export async function GET(request: Request) {
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No fund landscape articles found this week — skipping send.", debug });
+      return NextResponse.json({ message: "No fund landscape articles found this week â€” skipping send.", debug });
     }
 
     const articleList = news
@@ -206,16 +206,16 @@ export async function GET(request: Request) {
 ERP context: ~$50M fund targeting Permian Basin industrial outdoor storage (IOS), service yards, and small-bay industrial. Competing against larger generalist industrial funds but differentiated by West Texas market depth.
 
 From the articles below, synthesize what's relevant for LP conversations:
-1. Which funds are actively raising or just closed — sizes, strategies, target returns
-2. What LP appetite signals are visible — what asset types and geographies are attracting capital?
-3. How do ERP's IOS/Permian focus compare to what competitors are doing — is it differentiated or crowded?
+1. Which funds are actively raising or just closed â€” sizes, strategies, target returns
+2. What LP appetite signals are visible â€” what asset types and geographies are attracting capital?
+3. How do ERP's IOS/Permian focus compare to what competitors are doing â€” is it differentiated or crowded?
 4. Any IRR benchmarks, fee structures, or LP preference shifts worth noting
 5. Broader industrial CRE sentiment that affects the fundraising environment
 
 Articles:
 ${articleList}
 
-Write with confidence — synthesize what the articles tell you and draw LP-facing implications from them. If an article is only tangentially relevant, extract what IS useful for the fundraising narrative. Do not apologize for limited data; write a tight, usable brief from what's available. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
+Write with confidence â€” synthesize what the articles tell you and draw LP-facing implications from them. If an article is only tangentially relevant, extract what IS useful for the fundraising narrative. Do not apologize for limited data; write a tight, usable brief from what's available. This is an automated newsletter â€” do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
         },
       ],
     });
@@ -287,3 +287,5 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
     return NextResponse.json({ error: "Permian Fund Landscape Brief generation failed" }, { status: 500 });
   }
 }
+
+

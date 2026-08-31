@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -131,20 +131,20 @@ async function fetchFundNews(): Promise<{ items: NewsItem[]; debug: { rss: numbe
   let apifyError: string | undefined;
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({
+    const run = await apify.actor("easyapi/google-news-scraper").call({
       queries: FUND_APIFY_QUERIES,
       maxResultsPerQuery: 15,
       dateFilter: "month",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
-      if (i.url && i.title && i.publishedAt) {
+      if (i.link && i.title && i.date_utc) {
         items.push({
           title: i.title,
-          link: i.url,
-          pubDate: new Date(i.publishedAt),
+          link: i.link?.startsWith("/") ? `https://news.google.com${i.link}` : i.link,
+          pubDate: new Date(i.date_utc),
           source: i.source ?? "Google News",
-          summary: i.description,
+          summary: i.snippet,
           fromApify: true,
         });
         apifyCount++;
@@ -188,7 +188,7 @@ export async function GET(request: Request) {
     const news = rawNews.filter((item) => !seenUrls.has(item.link));
 
     if (news.length === 0) {
-      return NextResponse.json({ message: "No fund landscape articles found this week — skipping send.", debug });
+      return NextResponse.json({ message: "No fund landscape articles found this week â€” skipping send.", debug });
     }
 
     const articleList = news
@@ -205,16 +205,16 @@ export async function GET(request: Request) {
           content: `You are a competitive intelligence analyst for ERP Industrials, an industrial CRE fund with assets in Florida (Brevard County / Space Coast). Write a Fund Landscape Brief (4-6 paragraphs) based on the following recent news.
 
 Focus on:
-1. Competitor fund activity â€" who's raising, who closed, fund sizes, target IRRs
-2. Fund benchmarks â€" what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
-3. Competitive positioning â€" how does ERP's Fund IV strategy compare to what larger players are doing?
-4. LP appetite signals â€" what asset types and markets are attracting capital right now?
+1. Competitor fund activity Ã¢â‚¬" who's raising, who closed, fund sizes, target IRRs
+2. Fund benchmarks Ã¢â‚¬" what are institutional investors expecting from industrial CRE funds? (IRR, equity multiples, fee structures)
+3. Competitive positioning Ã¢â‚¬" how does ERP's Fund IV strategy compare to what larger players are doing?
+4. LP appetite signals Ã¢â‚¬" what asset types and markets are attracting capital right now?
 5. Any market shifts that could affect ERP's Fund IV fundraising pitch
 
 Articles:
 ${articleList}
 
-Write with confidence — synthesize what the articles tell you and draw LP-facing implications. Be specific about fund names, sizes, and metrics where available. Do not apologize for limited data; write a tight, usable brief from what's available. Frame the analysis for Meghan (head of fundraising) preparing LP meetings. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
+Write with confidence â€” synthesize what the articles tell you and draw LP-facing implications. Be specific about fund names, sizes, and metrics where available. Do not apologize for limited data; write a tight, usable brief from what's available. Frame the analysis for Meghan (head of fundraising) preparing LP meetings. This is an automated newsletter â€” do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
         },
       ],
     });
@@ -286,3 +286,5 @@ Write with confidence — synthesize what the articles tell you and draw LP-faci
     return NextResponse.json({ error: "Brevard Fund Landscape Brief generation failed" }, { status: 500 });
   }
 }
+
+

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import Parser from "rss-parser";
 import { ApifyClient } from "apify-client";
@@ -74,20 +74,20 @@ async function fetchSubmatchNews(): Promise<NewsItem[]> {
   );
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({
+    const run = await apify.actor("easyapi/google-news-scraper").call({
       queries: SUBMARKET_APIFY_QUERIES,
       maxResultsPerQuery: 15,
       dateFilter: "month",
     });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as any[]) {
-      if (i.url && i.title && i.publishedAt) {
+      if (i.link && i.title && i.date_utc) {
         items.push({
           title: i.title,
-          link: i.url,
-          pubDate: new Date(i.publishedAt),
+          link: i.link?.startsWith("/") ? `https://news.google.com${i.link}` : i.link,
+          pubDate: new Date(i.date_utc),
           source: i.source ?? "Google News",
-          summary: i.description,
+          summary: i.snippet,
         });
       }
     }
@@ -141,22 +141,22 @@ export async function GET(request: Request) {
           content: `You are an industrial CRE market analyst for ERP Industrials. Write a Submarket Watch brief (4-5 paragraphs) covering the following news from the past month.
 
 Focus on:
-1. Sale comparable transactions — what are assets trading at? Cap rates, price/SF, price/acre?
-2. Tenant activity — who's leasing, expanding, contracting in Permian Basin and Tampa industrial?
-3. Submarket trends — vacancy, absorption, asking rents, any notable market shifts
-4. OM implications — what does this month's activity mean for ERP's active deals?
+1. Sale comparable transactions â€” what are assets trading at? Cap rates, price/SF, price/acre?
+2. Tenant activity â€” who's leasing, expanding, contracting in Permian Basin and Tampa industrial?
+3. Submarket trends â€” vacancy, absorption, asking rents, any notable market shifts
+4. OM implications â€” what does this month's activity mean for ERP's active deals?
 
 Articles:
 ${articleList}
 
-Write with data density and specificity. Flag any market shifts that could affect OM pricing or demand driver narratives. This is an automated newsletter — do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
+Write with data density and specificity. Flag any market shifts that could affect OM pricing or demand driver narratives. This is an automated newsletter â€” do NOT ask follow-up questions, offer options, or end with bullet-point suggestions. Write the brief and stop.`,
         },
       ],
     });
 
     const narrative = msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    const subject = `Submarket Watch — ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`;
+    const subject = `Submarket Watch â€” ${new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}`;
 
     const narrativeHtml = narrative
       .split("\n\n")
@@ -183,9 +183,9 @@ Write with data density and specificity. Flag any market shifts that could affec
   <tr><td align="center">
     <table width="100%" style="max-width:640px;background:#fff;border-radius:8px;overflow:hidden;">
       <tr><td style="background:#0f172a;padding:28px 32px;">
-        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials · Agent 1 · Submarket Watch</div>
+        <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#94a3b8;margin-bottom:6px;">ERP Industrials Â· Agent 1 Â· Submarket Watch</div>
         <div style="font-size:22px;font-weight:700;color:#fff;line-height:1.3;">${subject}</div>
-        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Sale comps &amp; tenant activity · Permian Basin &amp; Tampa</div>
+        <div style="font-size:13px;color:#cbd5e1;margin-top:6px;">Sale comps &amp; tenant activity Â· Permian Basin &amp; Tampa</div>
       </td></tr>
       <tr><td style="padding:28px 32px;">
         <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#6b7280;margin-bottom:14px;">Market Narrative</div>
@@ -197,7 +197,7 @@ Write with data density and specificity. Flag any market shifts that could affec
         <table width="100%" cellpadding="0" cellspacing="0">${articlesHtml}</table>
       </td></tr>
       <tr><td style="padding:18px 32px;background:#f8fafc;border-top:1px solid #e5e7eb;text-align:center;">
-        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal · Submarket Watch · Feeds OMs</div>
+        <div style="font-size:12px;color:#9ca3af;">ERP Funds AI Portal Â· Submarket Watch Â· Feeds OMs</div>
       </td></tr>
     </table>
   </td></tr>
@@ -215,3 +215,5 @@ Write with data density and specificity. Flag any market shifts that could affec
     return NextResponse.json({ error: "Submarket Watch generation failed" }, { status: 500 });
   }
 }
+
+
