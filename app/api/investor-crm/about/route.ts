@@ -35,6 +35,13 @@ ADDRESS
 - BUSINESS or office address only — street, city, state, ZIP on one line.
 - Never a private individual's home or residential address. If the only address you can find for a person is where they live, return an empty string. For an operating company, LLC or fund, the corporate office is fine.
 
+CLOSELY-HELD ENTITIES
+- Many of these accounts are small Texas LLCs, LPs and Inc.s with no web presence at all — Johnston Properties Inc., Dog Canyon Investments LP and the like. A plain name search returns unrelated companies for these.
+- For those, search state business registries and filing records (Texas Comptroller and Secretary of State, Bizapedia, OpenCorporates, SEC Form D filings, county records) and identify the entity by its FILING: state and year of formation, registered city, and the officer, manager, general partner or registered agent named on it.
+- Cross-check against the contact name on the account. An entity whose officer or agent matches the account's contact is the right entity; one that does not is not, however similar the name.
+- A line like "Texas limited partnership formed in 1998, based in Midland; managed by <name>, who also runs <company>" is a good result. Say what the filing says and stop there.
+- These registries are acceptable evidence for the ABOUT and the ADDRESS. They are still not acceptable as the WEBSITE.
+
 RULES THAT OVERRIDE EVERYTHING ABOVE
 - Only state what you actually found in a source. Never infer a job, employer, website, or address from a name.
 - Common names are the main failure mode. If you cannot tell which person or company a name refers to, or the searches return nothing specific, return empty strings. An empty result is correct and useful; a plausible guess about a real client is not.
