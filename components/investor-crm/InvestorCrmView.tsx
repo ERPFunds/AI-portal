@@ -73,18 +73,6 @@ interface Person {
   phone_office: string | null; phone_cell: string | null; address: string | null
   notes: string | null; is_primary: boolean; company: string | null; funds: string[]
 }
-interface Meeting {
-  id: string
-  meeting_date: string | null
-  created_at: string
-  medium: string | null
-  interest_level: string | null
-  sticking_points: unknown
-  follow_up_commitments: unknown
-  relationship_context: string | null
-  next_touch_suggestion: string | null
-  onedrive_url: string | null
-}
 
 // Must match the key stored in investor_crm: lowercase, punctuation collapsed to single
 // spaces. A weaker normalization misses the overlay for any punctuated name, which makes a
@@ -723,14 +711,12 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   onSaved: (key: string, ov: Overlay) => void
 }) {
   const key = normKey(lp.investor)
-  const [tab, setTab] = useState<'overview' | 'meetings' | 'docs'>('overview')
   const [stage, setStage] = useState(overlay?.funnel_stage ?? '')
   const [owner, setOwner] = useState(overlay?.owner ?? '')
   const [source, setSource] = useState(overlay?.source ?? '')
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
-  const [meetings, setMeetings] = useState<Meeting[] | null>(null)
   const [people, setPeople] = useState<Person[] | null>(null)
   const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
   const [docs, setDocs] = useState<InvestorDoc[] | null>(null)
@@ -830,11 +816,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   })()
 
   useEffect(() => {
-    // Meetings from the IR dialogue log
-    const params = new URLSearchParams()
-    params.set('investor', lp.investor)
-    if (email) params.set('email', email)
-    fetch(`/api/investor-crm/meetings?${params}`).then(r => r.json()).then(j => setMeetings(j.meetings ?? [])).catch(() => setMeetings([]))
     // People under this account (the individuals tied to the investing entity)
     setPeople(null)
     fetch(`/api/investor-crm/people?investor=${encodeURIComponent(lp.investor)}`)
@@ -922,13 +903,16 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
               style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: moving ? 'wait' : 'pointer', fontWeight: 600, color: '#0f766e' }}>
               {moving ? 'Moving…' : '→ Move to LP Directory'}
             </button>}
+            {isLpDirectory && saveMsg && <span style={{ alignSelf: 'center', fontSize: 12.5, fontWeight: 600, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c' }}>{saving ? 'Saving…' : saveMsg}</span>}
+            {isLpDirectory && email && <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
+              style={{ border: '1px solid #2563eb', background: '#2563eb', color: '#fff', borderRadius: 8, padding: '6px 12px', fontWeight: 600, textDecoration: 'none' }}>✉ Email</a>}
             <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Close ✕</button>
           </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: 16, padding: 16, alignItems: 'start' }}>
-          {/* LEFT RAIL */}
-          <aside style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: isLpDirectory ? '1fr' : '300px 1fr', gap: 16, padding: 16, alignItems: 'start' }}>
+          {/* LEFT RAIL — prospects and DST only; it carries the funnel fields there */}
+          {!isLpDirectory && <aside style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div style={{ ...cardCss, padding: 20, textAlign: 'center' }}>
               <div style={{ width: 72, height: 72, borderRadius: '50%', margin: '0 auto 12px', display: 'grid', placeItems: 'center', color: '#fff', fontWeight: 700, fontSize: 25, background: `linear-gradient(150deg, ${accent}, #1a2233)` }}>{initials}</div>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2233', lineHeight: 1.15 }}>{lp.investor}</div>
@@ -969,18 +953,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
               </RailField>}
               {saveMsg && <div style={{ fontSize: 12, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c', padding: '6px 0', fontWeight: 600 }}>{saving ? 'Saving…' : saveMsg}</div>}
             </div>
-          </aside>
+          </aside>}
 
           {/* MAIN */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <div style={{ display: 'flex', gap: 2, borderBottom: '1px solid #e5e7eb' }}>
-              {([['overview', 'Overview'], ['meetings', `Meetings${meetings ? ` (${meetings.length})` : ''}`], ['docs', 'Docs']] as const).map(([k, label]) => (
-                <button key={k} onClick={() => setTab(k)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 14, color: tab === k ? '#1a2233' : '#9ca3af', padding: '10px 14px', borderBottom: tab === k ? '2px solid #0f766e' : '2px solid transparent', marginBottom: -1 }}>{label}</button>
-              ))}
-            </div>
-
-            {tab === 'overview' && (
-              <>
                 <div style={{ ...cardCss, padding: 20 }}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <div style={{ ...sectTitle, marginBottom: 0 }}>About</div>
@@ -1094,36 +1070,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     ))}
                   </div>
                 </div>
-              </>
-            )}
 
-            {tab === 'meetings' && (
-              <div style={{ ...cardCss, padding: 20 }}>
-                <div style={sectTitle}>Meeting History <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>IR DIALOGUE LOG</span></div>
-                {meetings == null && <div style={{ color: '#9ca3af' }}>Loading…</div>}
-                {meetings && meetings.length === 0 && <div style={{ color: '#9ca3af', fontSize: 14, padding: '20px 0' }}>No meetings logged yet. Meetings recorded by the IR agent will appear here.</div>}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {meetings?.map(m => (
-                    <div key={m.id} style={{ padding: '14px 0', borderTop: '1px solid #f0f1f3', display: 'flex', gap: 14 }}>
-                      <div style={{ flex: '0 0 70px', color: '#0f766e', fontWeight: 700, fontSize: 13 }}>{fmtDate(m.meeting_date || m.created_at)}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-                          {m.medium && <span style={{ fontSize: 11, fontWeight: 600, color: '#6b7280', background: '#f1f2f4', padding: '1px 8px', borderRadius: 20 }}>{m.medium}</span>}
-                          {m.interest_level && <span style={{ fontSize: 11, fontWeight: 700, color: '#197a52', background: '#e5f2eb', padding: '1px 8px', borderRadius: 20 }}>{m.interest_level}</span>}
-                        </div>
-                        {m.relationship_context && <div style={{ fontSize: 13.5, color: '#374151' }}>{m.relationship_context}</div>}
-                        {m.next_touch_suggestion && <div style={{ fontSize: 12.5, color: '#9ca3af', marginTop: 5 }}><b style={{ color: '#6b7280' }}>Next touch:</b> {m.next_touch_suggestion}</div>}
-                        {m.onedrive_url && <a href={m.onedrive_url} target="_blank" rel="noreferrer" style={{ fontSize: 12.5, color: '#0e7490', display: 'inline-block', marginTop: 4 }}>Open notes ↗</a>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {tab === 'docs' && (
-              <div style={{ ...cardCss, padding: 20 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                {/* Docs live with the account now rather than behind their own tab. */}
+                <div style={{ ...cardCss, padding: 20 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                   <div style={sectTitle}>Documents {docs && docs.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{docs.length}</span>}</div>
                   <label style={{ border: '1px solid #0f766e', background: uploading ? '#f0f9f7' : '#fff', color: '#0f766e', borderRadius: 8, padding: '6px 13px', cursor: uploading ? 'wait' : 'pointer', fontWeight: 600, fontSize: 13 }}>
                     {uploading ? 'Uploading…' : '⤒ Upload'}
@@ -1151,7 +1101,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                   ))}
                 </div>
               </div>
-            )}
           </div>
         </div>
       </div>
