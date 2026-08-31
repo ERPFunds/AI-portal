@@ -26,7 +26,8 @@ async function build(supabase: ReturnType<typeof createAdminClient>) {
     supabase.from("investor_crm").select("investor_key, investor, committed_usd, is_lp").eq("archived", false),
     supabase.from("investor_contacts").select("id, investor_key, name, email"),
   ]);
-  const investors = ((lps ?? []) as Row[]).filter((r) => (r.committed_usd ?? 0) > 0 || r.is_lp);
+  // Prospects need contact details as much as LPs do, so consider every live record.
+  const investors = (lps ?? []) as Row[];
   const byInvestor = new Map<string, ContactRow[]>();
   for (const c of ((contacts ?? []) as ContactRow[])) {
     (byInvestor.get(c.investor_key) ?? byInvestor.set(c.investor_key, []).get(c.investor_key)!).push(c);

@@ -19,8 +19,8 @@ async function plan(supabase: ReturnType<typeof createAdminClient>) {
   const { data: lps } = await supabase
     .from("investor_crm").select("investor_key, investor, committed_usd, is_lp, archived")
     .eq("archived", false);
-  const investors = ((lps ?? []) as (Investor & { committed_usd: number | null; is_lp: boolean })[])
-    .filter((r) => (r.committed_usd ?? 0) > 0 || r.is_lp);
+  // Prospects need contact details as much as LPs do, so consider every live record.
+  const investors = (lps ?? []) as (Investor & { committed_usd: number | null; is_lp: boolean })[];
 
   const { data: contacts } = await supabase
     .from("investor_contacts").select("investor_key, email");
