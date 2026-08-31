@@ -117,7 +117,7 @@ function overlayToLp(ov: Overlay): LpRecord {
     commitment: '', commitmentUsd: Number(ov.target_amount ?? 0) || 0, commitType: '',
     contact: ov.contact ?? '', email: ov.email ?? '', phone: ov.phone ?? '',
     date: '', notes: ov.notes ?? '',
-    group: isDst ? DST_GROUP : (ov.fund || 'Fund IV'),
+    group: isDst ? DST_GROUP : (ov.fund || ''),
     lastInteraction: null,
     sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
     sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
@@ -137,7 +137,7 @@ function fundsOf(lp: LpRecord): string[] {
     // An investor in several funds is stored as 'Fund II, Fund III' — count them under each
     // fund rather than inventing a combined option.
     if (/fund|dst/i.test(g)) for (const part of g.split(',').map(x => x.trim()).filter(Boolean)) { if (!out.includes(part)) out.push(part) }
-    else out.push('Fund IV')
+    else if (g.trim()) out.push('Fund IV')  // a named schedule section means the live raise
   }
   for (const pf of lp.priorFunds ?? []) if (!out.includes(pf)) out.push(pf)
   return out
@@ -169,10 +169,11 @@ function typeTag(lp: LpRecord, isLp = false): { label: string; bg: string; color
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
   // The record's own fund. An investor in several funds is stored as "Fund II, Fund III" —
   // the tag names the first, and the Fund column adds a chip for each of the others.
-  const fund = fundsOf(lp)[0] ?? 'Fund IV'
+  // No fund on the record means we don't know which one yet — say so rather than guessing.
+  const fund = fundsOf(lp)[0]
   return effectiveCommitted(lp) > 0 || isLp
-    ? { label: `${fund} LP`, bg: '#eff6ff', color: '#1d4ed8' }
-    : { label: `${fund} Prospect`, bg: '#e5f2eb', color: '#197a52' }
+    ? { label: fund ? `${fund} LP` : 'LP', bg: '#eff6ff', color: '#1d4ed8' }
+    : { label: fund ? `${fund} Prospect` : 'Prospect', bg: '#e5f2eb', color: '#197a52' }
 }
 
 // mode splits each population by whether capital has actually been committed:
