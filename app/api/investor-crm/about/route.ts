@@ -158,9 +158,12 @@ export async function POST(req: NextRequest) {
   let targets: Row[] = [];
   if (body.all) {
     const q = supabase.from("investor_crm").select(cols).eq("archived", false).eq("is_lp", true);
+    // "retry" takes another swing at the accounts still without an About line.
     const { data, error } = body.what === "contact"
       ? await q.is("contact_researched_at", null)
-      : await q.is("about", null);
+      : body.what === "retry"
+        ? await q.or("about.is.null,about.eq.")
+        : await q.is("about", null);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     targets = ((data ?? []) as Row[]).slice(0, Math.min(Number(body.limit) || 25, 60));
   } else {
