@@ -726,7 +726,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     investor_type: overlay?.investor_type ?? lp.sfLpType ?? '',
     source: overlay?.source ?? '',
     owner: overlay?.owner ?? '',
-    fund: overlay?.fund ?? (program === 'PE' ? 'Fund IV' : ''),
+    // Prospects are all Fund IV, so defaulting the field there is right. In the LP
+    // Directory it is not: the contacts imported without a fund genuinely have none yet,
+    // and showing Fund IV made an unknown look like an answer.
+    fund: overlay?.fund ?? (program === 'PE' && !isLpDirectory ? 'Fund IV' : ''),
     committed_usd: overlay?.committed_usd != null ? String(overlay.committed_usd) : String(effectiveCommitted(lp) || ''),
     phone: overlay?.phone ?? lp.phone ?? '',
     website: overlay?.website ?? '',
