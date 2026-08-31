@@ -11,6 +11,10 @@ import ImportModal from './ImportModal'
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
 const OWNERS = ['Meghan Berry', 'William Meyer']
+const SOURCES = [
+  'Referral', 'Existing LP', 'Placement agent', 'Broker / advisor',
+  'Conference', 'Inbound', 'Outreach', 'Other',
+]
 
 const DST_GROUP = 'DST / 1031'
 
@@ -935,26 +939,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                 <input type="date" value={closeDraft} onChange={e => { setCloseDraft(e.target.value); saveOverlay({ expected_close: e.target.value }) }}
                   style={{ ...selCss, cursor: 'text' }} />
               </RailField>}
-              <RailField label="Relationship Owner">
-                <select value={owner || resolvedOwner.name} onChange={e => { setOwner(e.target.value); saveOverlay({ owner: e.target.value }) }} style={selCss}>
-                  <option value="">— unassigned —</option>
-                  {ownerOptions.map(o => <option key={o} value={o}>{o}</option>)}
-                </select>
-                {!owner && resolvedOwner.source !== 'none' && (
-                  <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 3 }}>
-                    Auto — {resolvedOwner.source === 'salesforce' ? 'Salesforce account owner' : 'from email activity'}
-                  </div>
-                )}
-              </RailField>
-              {program === 'DST' && (
-                <RailField label="Advisor / Broker">
-                  <div style={railVal}>{lp.brokerFirm || lp.sfAdvisorFirm || '—'}</div>
-                  {(lp.brokerContact || lp.sfAdvisorContact) && <div style={{ fontSize: 13, color: '#6b7280' }}>{lp.brokerContact || lp.sfAdvisorContact}</div>}
-                </RailField>
-              )}
-              <RailField label="Source">
-                <input value={source} onChange={e => setSource(e.target.value)} onBlur={() => saveOverlay({ source })} placeholder="e.g. Referral, Conference…" style={{ ...selCss, cursor: 'text' }} />
-              </RailField>
               {saveMsg && <div style={{ fontSize: 12, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c', padding: '6px 0', fontWeight: 600 }}>{saving ? 'Saving…' : saveMsg}</div>}
             </div>
           </aside>
@@ -984,8 +968,8 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
                     <EditField k="Account (Entity)" value={acct.investor} onSave={v => saveAccount({ investor: v })} />
                     <Field k="Primary Contact" v={people?.find(x => x.is_primary)?.name || people?.[0]?.name || '—'} />
-                    <EditField k="Source" value={acct.source} onSave={v => saveAccount({ source: v })} />
-                    <EditField k="Owner" value={acct.owner} onSave={v => saveAccount({ owner: v })} />
+                    <EditSelect k="Source" value={acct.source} options={SOURCES} onSave={v => saveAccount({ source: v })} />
+                    <EditSelect k="Owner" value={acct.owner} options={OWNERS} onSave={v => saveAccount({ owner: v })} />
                     <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />
                     <EditField k="Committed (total)" value={acct.committed_usd} onSave={v => saveAccount({ committed_usd: v })} />
                     {overlay?.fund_commitments && Object.entries(overlay.fund_commitments).map(([f, amt]) => (
@@ -1181,6 +1165,26 @@ function Stat({ label, value, accent }: { label: string; value: string; accent?:
     <div style={{ background: '#f8f9fb', border: '1px solid #eef0f2', borderRadius: 10, padding: '10px 12px' }}>
       <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{label}</div>
       <div style={{ fontSize: 17, fontWeight: 700, color: accent ?? '#1a2233', fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>{value}</div>
+    </div>
+  )
+}
+// A picker for fields with a known set of values. Any value already on the record is kept as
+// an option so existing data isn't silently dropped.
+function EditSelect({ k, value, options, onSave }: { k: string; value: string; options: string[]; onSave: (v: string) => void }) {
+  const all = [...new Set([...options, value].filter(Boolean))]
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{k}</div>
+      <select
+        value={value}
+        onChange={e => onSave(e.target.value)}
+        style={{ width: '100%', marginTop: 3, padding: '6px 9px', borderRadius: 7, border: '1px solid #e2e8f0',
+                 fontSize: 15, color: value ? '#1a2233' : '#9ca3af', fontWeight: 500, fontFamily: 'inherit',
+                 background: '#f8fafc', cursor: 'pointer' }}
+      >
+        <option value="">—</option>
+        {all.map(o => <option key={o} value={o}>{o}</option>)}
+      </select>
     </div>
   )
 }
