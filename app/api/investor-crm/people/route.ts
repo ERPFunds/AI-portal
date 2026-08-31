@@ -17,9 +17,10 @@ interface PriorRow {
 }
 
 const norm = (s: string) => (s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-const OVL = "id, investor_key, match_key, name, title, email, phone_office, phone_cell, address, notes, is_primary";
+const OVL = "id, investor_key, match_key, name, title, email, phone_office, phone_cell, address, notes, is_primary, linkedin_url, bio";
 interface Ovl {
   id: string; investor_key: string; match_key: string; name: string; title: string | null;
+  linkedin_url?: string | null; bio?: string | null;
   email: string | null; phone_office: string | null; phone_cell: string | null;
   address: string | null; notes: string | null; is_primary: boolean;
 }
@@ -122,6 +123,8 @@ export async function GET(req: NextRequest) {
       address: ov?.address ?? p.location,
       notes: ov?.notes ?? null,
       is_primary: ov?.is_primary ?? false,
+      linkedin_url: ov?.linkedin_url ?? null,
+      bio: ov?.bio ?? null,
       company: p.company,
       funds: [...p.funds].sort(),
     };
@@ -131,7 +134,9 @@ export async function GET(req: NextRequest) {
     people.push({
       match_key: ov.match_key, id: ov.id, name: ov.name, title: ov.title, email: ov.email,
       phone_office: ov.phone_office, phone_cell: ov.phone_cell, address: ov.address,
-      notes: ov.notes, is_primary: ov.is_primary, company: null, funds: [],
+      notes: ov.notes, is_primary: ov.is_primary,
+      linkedin_url: ov.linkedin_url ?? null, bio: ov.bio ?? null,
+      company: null, funds: [],
     });
   }
   people.sort((a, b) => Number(b.is_primary) - Number(a.is_primary) || a.name.localeCompare(b.name));

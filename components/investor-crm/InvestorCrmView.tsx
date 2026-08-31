@@ -73,6 +73,7 @@ interface Person {
   match_key: string; id: string | null; name: string; title: string | null; email: string | null
   phone_office: string | null; phone_cell: string | null; address: string | null
   notes: string | null; is_primary: boolean; company: string | null; funds: string[]
+  linkedin_url?: string | null; bio?: string | null
 }
 
 // Must match the key stored in investor_crm: lowercase, punctuation collapsed to single
@@ -921,6 +922,25 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
     setEditingContact(null); loadPeople()
   }
+  const [liBusy, setLiBusy] = useState<string | null>(null)
+  const [liMsg, setLiMsg] = useState<Record<string, string>>({})
+  // Bio here is only what the person publishes on LinkedIn — deliberately different from
+  // the account's About line, which is general web research about the entity.
+  async function findLinkedIn(id: string) {
+    setLiBusy(id); setLiMsg(m => ({ ...m, [id]: '' }))
+    try {
+      const res = await fetch('/api/investor-crm/linkedin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${j.error ?? res.status}` })); return }
+      const r = j.results?.[0]
+      if (!r?.linkedin_url) { setLiMsg(m => ({ ...m, [id]: 'No profile could be tied to this person.' })); return }
+      loadPeople()
+    } catch (e) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${String(e)}` })) }
+    finally { setLiBusy(null) }
+  }
   async function deleteContact(id: string) {
     if (!window.confirm('Remove this contact?')) return
     const res = await fetch(`/api/investor-crm/people?id=${id}`, { method: 'DELETE' })
@@ -1117,9 +1137,24 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                               <ContactBit label="Office" value={pn.phone_office} />
                               <ContactBit label="Cell" value={pn.phone_cell} />
                             </div>
+                            {pn.linkedin_url && (
+                              <div style={{ marginTop: 5 }}>
+                                <a href={pn.linkedin_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                                  style={{ fontSize: 12.5, fontWeight: 600, color: '#0a66c2', textDecoration: 'none' }}>in · LinkedIn profile ↗</a>
+                              </div>
+                            )}
+                            {pn.bio && <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 4, lineHeight: 1.5 }}>{pn.bio}</div>}
+                            {liMsg[pn.id ?? ''] && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{liMsg[pn.id ?? '']}</div>}
                             {pn.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{pn.notes}</div>}
                           </div>
                           <div style={{ display: 'flex', gap: 6 }}>
+                            {pn.id && !pn.linkedin_url && (
+                              <button onClick={() => findLinkedIn(pn.id!)} disabled={liBusy === pn.id}
+                                title="Search for this person's LinkedIn profile and the bio they publish there"
+                                style={{ border: 0, background: 'none', cursor: liBusy === pn.id ? 'default' : 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0a66c2' }}>
+                                {liBusy === pn.id ? 'Searching…' : 'Find LinkedIn'}
+                              </button>
+                            )}
                             <button onClick={() => setEditingContact(pn)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0e7490' }}>Edit</button>
                             {pn.id && <button onClick={() => deleteContact(pn.id!)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>✕</button>}
                           </div>
