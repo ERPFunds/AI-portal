@@ -17,7 +17,7 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, committed_usd, contact, email, phone, address, website, notes, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, updated_by, updated_at";
 
 const normKey = (investor: string) => investor.trim().toLowerCase();
 const str = (v: unknown) => { const t = String(v ?? "").trim(); return t || null; };

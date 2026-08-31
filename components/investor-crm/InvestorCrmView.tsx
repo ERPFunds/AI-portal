@@ -49,6 +49,7 @@ interface Overlay {
   is_lp?: boolean
   investor_type?: string | null
   fund?: string | null
+  fund_commitments?: Record<string, number> | null
   committed_usd?: number | string | null
   contact?: string | null
   email?: string | null
@@ -964,7 +965,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <EditField k="Source" value={acct.source} onSave={v => saveAccount({ source: v })} />
                     <EditField k="Owner" value={acct.owner} onSave={v => saveAccount({ owner: v })} />
                     <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />
-                    <EditField k="Committed" value={acct.committed_usd} onSave={v => saveAccount({ committed_usd: v })} />
+                    <EditField k="Committed (total)" value={acct.committed_usd} onSave={v => saveAccount({ committed_usd: v })} />
+                    {overlay?.fund_commitments && Object.entries(overlay.fund_commitments).map(([f, amt]) => (
+                      <Field key={f} k={f + ' Committed'} v={fmtUsd(Number(amt))} />
+                    ))}
                     <EditField k="Phone" value={acct.phone} onSave={v => saveAccount({ phone: v })} />
                     <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
                     <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
