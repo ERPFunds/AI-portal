@@ -44,6 +44,8 @@ CLOSELY-HELD ENTITIES
 
 RULES THAT OVERRIDE EVERYTHING ABOVE
 - Only state what you actually found in a source. Never infer a job, employer, website, or address from a name.
+- NO HEDGING. Never write "appears to be", "likely", "may be", "possibly", "suggests", "seems", "presumably" or anything of that kind. If you would need a hedge word to write the sentence, you have not identified the entity and the correct answer is an empty about string. A hedged sentence is worse than no sentence: it reads to the IR team as a finding when it is a guess.
+- A shared surname is NOT evidence that two people are related, and a matching city is NOT evidence that a trust belongs to a particular family. Do not assemble an identity out of coincidences.
 - Common names are the main failure mode. If you cannot tell which person or company a name refers to, or the searches return nothing specific, return empty strings. An empty result is correct and useful; a plausible guess about a real client is not.
 
 Reply with ONLY a JSON object, no markdown fence:
@@ -63,6 +65,7 @@ type Row = {
   about: string | null;
 };
 
+const HEDGE = /(appears? to be|appear to be|likely|may be|possibly|presumably|probably|suggests?|is believed|could be|seems? to|we believe|unclear)/i;
 const BAD_SITE = /linkedin\.com|bloomberg\.com|zoominfo|crunchbase|dnb\.com|facebook\.com|twitter\.com|wikipedia/i;
 const URL_RE = /https?:\/\/[^\s"'\\]+/g;
 
@@ -95,7 +98,10 @@ async function research(row: Row, contacts: string[]) {
     try { parsed = JSON.parse(stripped.slice(start, end + 1)); } catch { /* fall through to empty */ }
   }
 
-  const about = String(parsed.about ?? "").trim();
+  let about = String(parsed.about ?? "").trim();
+  // Belt and braces: a hedged line is a guess wearing the clothes of a finding, so drop it
+  // rather than trusting the model to have followed the no-hedging rule.
+  if (HEDGE.test(about)) about = "";
   let website = String(parsed.website ?? "").trim();
   // Directory and profile pages are not the entity's own site, whatever the model decided.
   if (BAD_SITE.test(website)) website = "";
