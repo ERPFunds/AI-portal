@@ -17,7 +17,7 @@ const FUNNEL_STAGES = [
 const TIERS = ["Anchor", "Core", "Prospect"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, about, about_sources, about_researched_at, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, notes, next_steps, about, about_sources, about_researched_at, updated_by, updated_at";
 
 // Must match how keys are stored: lowercase, punctuation collapsed to single spaces.
 // A weaker normalization silently inserts a duplicate instead of updating the record.
@@ -97,6 +97,7 @@ export async function PATCH(req: NextRequest) {
   if (body.address !== undefined) row.address = str(body.address);
   if (body.website !== undefined) row.website = str(body.website);
   if (body.notes !== undefined) row.notes = str(body.notes);
+  if (body.next_steps !== undefined) row.next_steps = str(body.next_steps);
   if (body.committed_usd !== undefined) row.committed_usd = money(body.committed_usd);
   if (body.expected_close !== undefined) {
     const d = String(body.expected_close ?? "").slice(0, 10);

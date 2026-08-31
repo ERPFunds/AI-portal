@@ -141,6 +141,7 @@ export interface LpRecord {
   phone: string;
   date: string;
   notes: string;
+  nextSteps?: string;  // portal-owned: where a prospect stands and what happens next
   group: string;
   lastInteraction: { date: string; note: string; source: "ir" | "sf" | "email"; mailbox?: string } | null;
   sfLpType: string | null;

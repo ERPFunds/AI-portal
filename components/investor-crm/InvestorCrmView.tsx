@@ -62,6 +62,7 @@ interface Overlay {
   address?: string | null
   website?: string | null
   notes?: string | null
+  next_steps?: string | null
   about?: string | null
   about_sources?: string[] | null
   about_researched_at?: string | null
@@ -116,7 +117,7 @@ function overlayToLp(ov: Overlay): LpRecord {
     investor: ov.investor ?? '',
     commitment: '', commitmentUsd: Number(ov.target_amount ?? 0) || 0, commitType: '',
     contact: ov.contact ?? '', email: ov.email ?? '', phone: ov.phone ?? '',
-    date: '', notes: ov.notes ?? '',
+    date: '', notes: ov.notes ?? '', nextSteps: ov.next_steps ?? '',
     group: isDst ? DST_GROUP : (ov.fund || ''),
     lastInteraction: null,
     sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
@@ -146,7 +147,7 @@ function fundsOf(lp: LpRecord): string[] {
 // The table's columns. Each knows how to render nothing (renderRow does that) but how to be
 // filtered and sorted, so every column gets both for free.
 interface ColDef {
-  key: string; label: string; dstOnly?: boolean
+  key: string; label: string; dstOnly?: boolean; prospectsOnly?: boolean
   text: (lp: LpRecord) => string
   sort: (lp: LpRecord) => string | number
 }
@@ -160,6 +161,9 @@ const COLUMN_DEFS: ColDef[] = [
   { key: 'brokerDealer', label: 'Broker Dealer / RIA', dstOnly: true, text: bdOf, sort: lp => bdOf(lp).toLowerCase() },
   { key: 'advisor', label: 'Advisor', dstOnly: true, text: advOf, sort: lp => advOf(lp).toLowerCase() },
   { key: 'notes', label: 'Notes', text: lp => lp.notes || '', sort: lp => (lp.notes || '').toLowerCase() },
+  // Where the prospect stands and what happens next — merged from the two Next Steps
+  // columns on the PE prospect sheet.
+  { key: 'nextSteps', label: 'Next Steps', prospectsOnly: true, text: lp => lp.nextSteps || '', sort: lp => (lp.nextSteps || '').toLowerCase() },
 ]
 
 // LP-directory tagging: the investor's Type derived from its group + commitment status.
@@ -242,8 +246,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     () => COLUMN_DEFS.filter(c =>
       (!c.dstOnly || program === 'DST') &&
       (c.key !== 'contacts' || hasContacts) &&
-      (c.key !== 'fund' || !hideFund)),
-    [program, hasContacts, hideFund]
+      (c.key !== 'fund' || !hideFund) &&
+      (!c.prospectsOnly || mode === 'prospects')),
+    [program, hasContacts, hideFund, mode]
   )
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
@@ -451,6 +456,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         <td style={{ ...tdCss, maxWidth: 260 }}>
           {lp.notes ? <span style={{ fontSize: 12.5, color: '#6b7280' }}>{lp.notes}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
         </td>
+        {/* Next Steps — prospects only */}
+        {mode === 'prospects' && <td style={{ ...tdCss, maxWidth: 320 }}>
+          {lp.nextSteps ? <span style={{ fontSize: 12.5, color: '#374151' }}>{lp.nextSteps}</span> : <span style={{ color: '#d1d5db' }}>—</span>}
+        </td>}
         {/* Email / Edit */}
         <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
           {contactEmail
@@ -813,6 +822,8 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     } catch (e) { setAboutMsg(`Research failed: ${String(e)}`) }
     finally { setAboutBusy(false) }
   }
+  const [stepsDraft, setStepsDraft] = useState(overlay?.next_steps ?? lp.nextSteps ?? '')
+  const [stepsSaved, setStepsSaved] = useState(false)
   const [notesDraft, setNotesDraft] = useState(overlay?.notes ?? lp.notes ?? '')
   const [notesSaved, setNotesSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -1024,7 +1035,9 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
 
                 <div style={{ ...cardCss, padding: 20 }}>
                   <div style={sectTitle}>Account Summary</div>
-                  <div style={{ fontSize: 14.5, color: '#374151', lineHeight: 1.55 }}>{summaryText}</div>
+                  {/* On a prospect this only ever restated the stage and that no commitment
+                      exists yet — both of which move, and both already shown elsewhere. */}
+                  {isLpDirectory && <div style={{ fontSize: 14.5, color: '#374151', lineHeight: 1.55 }}>{summaryText}</div>}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 12, marginTop: 16 }}>
                     <Stat label="Committed" value={committed ? fmtUsd(committed) : '—'} accent="#0f766e" />
                     {!isLpDirectory && <Stat label="Target" value={fmtUsd(targetAmount)} />}
@@ -1048,6 +1061,20 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
                     <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
                   </div>
+                  {!isLpDirectory && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Next Steps</div>
+                      {stepsSaved && <span style={{ fontSize: 11.5, fontWeight: 600, color: '#197a52' }}>Saved</span>}
+                    </div>
+                    <textarea
+                      value={stepsDraft}
+                      onChange={e => setStepsDraft(e.target.value)}
+                      onBlur={() => { if (stepsDraft !== (overlay?.next_steps ?? lp.nextSteps ?? '')) { saveOverlay({ next_steps: stepsDraft }); setStepsSaved(true); setTimeout(() => setStepsSaved(false), 1500) } }}
+                      placeholder="Where this stands and what happens next…"
+                      rows={3}
+                      style={{ width: '100%', marginTop: 6, padding: '9px 11px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit', lineHeight: 1.5, resize: 'vertical' }}
+                    />
+                  </div>}
                   <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Notes</div>
@@ -1086,11 +1113,9 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                               {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
                             </div>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '2px 16px', marginTop: 6 }}>
-                              <ContactBit label="Title" value={pn.title} />
                               <ContactBit label="Email" value={pn.email} href={pn.email ? `mailto:${pn.email}` : undefined} />
                               <ContactBit label="Office" value={pn.phone_office} />
                               <ContactBit label="Cell" value={pn.phone_cell} />
-                              <ContactBit label="Address" value={pn.address} />
                             </div>
                             {pn.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{pn.notes}</div>}
                           </div>
@@ -1170,11 +1195,9 @@ function ContactModal({ draft, onCancel, onSave }: { draft: Partial<Person>; onC
         <h2 style={{ margin: '0 0 16px', fontSize: 19, fontWeight: 700, color: '#1a2233' }}>{draft.match_key ? 'Edit Contact' : 'Add Contact'}</h2>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
           {fld('Name', 'name')}
-          {fld('Title', 'title')}
           {fld('Email', 'email', true)}
           {fld('Office Phone', 'phone_office')}
           {fld('Cell Phone', 'phone_cell')}
-          {fld('Address', 'address', true)}
           {fld('Notes', 'notes', true)}
           <label style={{ gridColumn: '1 / -1', display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#374151', fontWeight: 600 }}>
             <input type="checkbox" checked={!!d.is_primary} onChange={e => set('is_primary', e.target.checked)} /> Primary contact for this account
