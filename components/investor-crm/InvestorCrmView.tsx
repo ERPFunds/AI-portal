@@ -10,7 +10,7 @@ import ImportModal from './ImportModal'
 // accounting (called/uncalled/NAV) lives in the fund admin portal, not here.
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
-const OWNERS = ['Meghan Berry', 'William Meyer', 'Michele Parad', 'Pippi Espinoza']
+const OWNERS = ['Meghan Berry', 'William Meyer']
 
 const DST_GROUP = 'DST / 1031'
 
