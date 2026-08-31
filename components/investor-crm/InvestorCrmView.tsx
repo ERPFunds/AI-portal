@@ -185,6 +185,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [fundFilter, setFundFilter] = useState('All')
+  const [stageFilter, setStageFilter] = useState('All')
   const [funds, setFunds] = useState<Fund[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
@@ -267,6 +268,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         return mode === 'lps' ? isLp : !isLp
       })
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
+      .filter(lp => {
+        if (stageFilter === 'All') return true
+        const st = overlays[normKey(lp.investor)]?.funnel_stage ?? ''
+        return stageFilter === 'Unset' ? !st : st === stageFilter
+      })
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
       .sort((a, b) => {
         const c = columns.find(x => x.key === sortKey) ?? columns[0]
@@ -276,7 +282,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, overlays, program, search, fundFilter, mode, columns, sortKey, sortDir])
+  }, [lps, overlays, program, search, fundFilter, stageFilter, mode, columns, sortKey, sortDir])
 
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
@@ -489,11 +495,18 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           placeholder="Search investors, contacts, email…"
           style={{ flex: 1, minWidth: 220, maxWidth: 360, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }}
         />
-        <select value={fundFilter} onChange={e => setFundFilter(e.target.value)}
+        {/* Prospects are all Fund IV, so the fund filter gives way to the funnel stage. */}
+        {hideFund && <select value={stageFilter} onChange={e => setStageFilter(e.target.value)}
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+          <option value="All">All stages</option>
+          {FUNNEL_STAGES.map(st => <option key={st} value={st}>{st}</option>)}
+          <option value="Unset">— no stage set —</option>
+        </select>}
+        {!hideFund && <select value={fundFilter} onChange={e => setFundFilter(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
           <option value="All">All funds</option>
           {fundOptions.map(f => <option key={f} value={f}>{f}</option>)}
-        </select>
+        </select>}
         <button onClick={exportCsv} disabled={loading || rows.length === 0} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#374151', cursor: rows.length ? 'pointer' : 'not-allowed', whiteSpace: 'nowrap' }}>⤓ Export to Excel</button>
         <button onClick={() => setShowAdd(true)}
           style={{ border: 0, background: accent, color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', whiteSpace: 'nowrap' }}>+ Add Investor</button>
