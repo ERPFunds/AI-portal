@@ -127,13 +127,16 @@ function overlayToLp(ov: Overlay): LpRecord {
     resolvedEmail: ov.email ?? null,
     committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : null,
     priorFunds: [],
+    dstFunds: isDst && ov.fund_commitments ? Object.keys(ov.fund_commitments) : undefined,
   }
 }
 
 // Every fund an investor is associated with — the current fund plus any prior ones.
 function fundsOf(lp: LpRecord): string[] {
   const out: string[] = []
-  if (lp.group === DST_GROUP) out.push('DST / 1031')
+  // A DST investor's funds come from its per-fund commitment split; the generic
+  // 'DST / 1031' label is only the fallback for a record with no split recorded.
+  if (lp.group === DST_GROUP) { if (lp.dstFunds?.length) out.push(...lp.dstFunds); else out.push('DST / 1031') }
   else if (lp.group !== 'Prior Fund LPs') {
     const g = lp.group || ''
     // An investor in several funds is stored as 'Fund II, Fund III' — count them under each
@@ -170,7 +173,8 @@ const COLUMN_DEFS: ColDef[] = [
 // LP-directory tagging: the investor's Type derived from its group + commitment status.
 // Fund IV investors split into committed LPs vs prospects (targets not yet committed).
 function typeTag(lp: LpRecord, isLp = false): { label: string; bg: string; color: string } {
-  if (lp.group === DST_GROUP) return { label: 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
+  // Show which DST rather than a label every row shares.
+  if (lp.group === DST_GROUP) return { label: lp.dstFunds?.[0] ?? 'DST / 1031', bg: '#fef3c7', color: '#92400e' }
   if (lp.group === 'Prior Fund LPs') return { label: 'Prior Fund LP', bg: '#f3e8ff', color: '#7e22ce' }
   // The record's own fund. An investor in several funds is stored as "Fund II, Fund III" —
   // the tag names the first, and the Fund column adds a chip for each of the others.
@@ -264,7 +268,19 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     const portal = Object.values(overlays)
       .filter(ov => ov.portal_created && !ov.archived && (ov.program ?? 'PE') === program)
       .map(overlayToLp)
-    const base = program === 'DST' ? lps : []
+    // DST rows arrive from the SharePoint cache without a fund breakdown. The portal now
+    // owns that, so merge the split and the fuller total onto each cached row.
+    const base = program === 'DST'
+      ? lps.map(lp => {
+          const ov = overlays[normKey(lp.investor)]
+          if (!ov?.fund_commitments) return lp
+          return {
+            ...lp,
+            dstFunds: Object.keys(ov.fund_commitments),
+            committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : lp.committedUsd,
+          }
+        })
+      : []
     return [...base, ...portal]
       .filter(lp => !overlays[normKey(lp.investor)]?.archived)
       .filter(inProgram)

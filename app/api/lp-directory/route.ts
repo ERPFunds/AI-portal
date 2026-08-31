@@ -142,6 +142,7 @@ export interface LpRecord {
   date: string;
   notes: string;
   nextSteps?: string;  // portal-owned: where a prospect stands and what happens next
+  dstFunds?: string[]; // portal-owned: which DST funds this investor is in
   group: string;
   lastInteraction: { date: string; note: string; source: "ir" | "sf" | "email"; mailbox?: string } | null;
   sfLpType: string | null;
