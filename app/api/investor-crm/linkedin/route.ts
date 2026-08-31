@@ -47,6 +47,9 @@ const anthropic = new Anthropic();
 
 const HEDGE = /(appears? to be|appear to be|likely|may be|possibly|presumably|probably|suggests?|is believed|could be|seems? to|we believe|unclear)/i;
 const PROFILE = /^https?:\/\/([a-z]{2,3}\.)?linkedin\.com\/in\/[^\/\s?#]+/i;
+// Errors that are about the account or the service, not about this particular contact.
+// These must not mark a row as attempted, or an outage quietly empties the queue.
+const GLOBAL_FAILURE = /credit balance|rate.?limit|429|overloaded|529|authentication|invalid x-api-key|permission/i;
 
 type Row = {
   id: string;
@@ -146,10 +149,21 @@ export async function POST(req: NextRequest) {
       }).eq("id", row.id);
       results.push({ name: row.name, investor: row.investor ?? row.investor_key, linkedin_url: r.url, bio: r.bio, confidence: r.confidence });
     } catch (e) {
-      // Stamp the attempt so a failing row leaves the queue instead of being retried forever.
+      const msg = String(e);
+      if (GLOBAL_FAILURE.test(msg)) {
+        // Nothing is wrong with this contact — stop, leave the queue intact, and say so.
+        return NextResponse.json({
+          count: results.length,
+          profiles: results.filter((r) => r.linkedin_url).length,
+          bios: results.filter((r) => r.bio).length,
+          halted: msg.slice(0, 200),
+          results,
+        });
+      }
+      // A failure specific to this row: stamp it so the batch does not spin on it.
       await supabase.from("investor_contacts")
         .update({ bio_researched_at: new Date().toISOString() }).eq("id", row.id);
-      results.push({ name: row.name, investor: row.investor ?? row.investor_key, linkedin_url: "", bio: "", confidence: `error: ${String(e).slice(0, 160)}` });
+      results.push({ name: row.name, investor: row.investor ?? row.investor_key, linkedin_url: "", bio: "", confidence: `error: ${msg.slice(0, 160)}` });
     }
   }
 
