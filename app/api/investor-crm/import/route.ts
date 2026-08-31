@@ -56,9 +56,16 @@ async function upsertAll(
 }
 
 export async function POST(req: NextRequest) {
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  // Either an interactive session or the cron secret, so a workbook can also be loaded
+  // server-side rather than through the browser.
+  const isCron = !!process.env.CRON_SECRET &&
+    req.headers.get("authorization") === `Bearer ${process.env.CRON_SECRET}`;
+  let user: { email?: string | null; id: string } | null = null;
+  if (!isCron) {
+    const auth = await createClient();
+    ({ data: { user } } = await auth.auth.getUser());
+    if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  }
   const supabase = createAdminClient();
 
   const body = await req.json().catch(() => ({}));
