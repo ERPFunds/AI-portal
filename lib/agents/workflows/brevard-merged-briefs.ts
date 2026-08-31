@@ -115,11 +115,12 @@ async function fetchNews(apifyQueries: string[], keywords: string[], excludeUrls
   );
 
   try {
-    const run = await apify.actor("apify/google-news-scraper").call({ queries: apifyQueries, maxResultsPerQuery: 15, dateFilter: "week" });
+    const run = await apify.actor("easyapi/google-news-scraper").call({ queries: apifyQueries, maxResultsPerQuery: 15 });
     const { items: apifyItems } = await apify.dataset(run.defaultDatasetId).listItems();
     for (const i of apifyItems as Record<string, unknown>[]) {
-      if (i.url && i.title && i.publishedAt) {
-        items.push({ title: String(i.title), link: String(i.url), pubDate: new Date(String(i.publishedAt)), source: String(i.source ?? "Google News"), summary: i.description ? String(i.description) : undefined });
+      if (i.link && i.title && i.date_utc) {
+        const rawLink = String(i.link);
+        items.push({ title: String(i.title), link: rawLink.startsWith("/") ? `https://news.google.com${rawLink}` : rawLink, pubDate: new Date(String(i.date_utc)), source: String(i.source ?? "Google News"), summary: i.snippet ? String(i.snippet) : undefined });
       }
     }
   } catch { /* Apify optional */ }

@@ -157,7 +157,10 @@ export async function POST(req: NextRequest) {
   // About-only pass already went through.
   let targets: Row[] = [];
   if (body.all) {
-    const q = supabase.from("investor_crm").select(cols).eq("archived", false).eq("is_lp", true);
+    // population: "lps" (default), "prospects", or "all". Prospects are mostly named firms
+    // and institutions, which research more reliably than personal-name trusts do.
+    let q = supabase.from("investor_crm").select(cols).eq("archived", false);
+    if (body.population !== "all") q = q.eq("is_lp", body.population !== "prospects");
     // "retry" takes another swing at the accounts still without an About line.
     const { data, error } = body.what === "contact"
       ? await q.is("contact_researched_at", null)
