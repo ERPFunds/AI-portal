@@ -264,7 +264,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       (!c.dstOnly || program === 'DST') &&
       (c.key !== 'contacts' || hasContacts) &&
       (c.key !== 'fund' || !hideFund) &&
-      (!c.prospectsOnly || mode === 'prospects')),
+      (!c.prospectsOnly || mode === 'prospects'))
+      // Nothing is committed on a prospect — the figure there is what we are aiming for.
+      .map(c => (c.key === 'commitment' && mode === 'prospects' ? { ...c, label: 'Target Commitment' } : c)),
     [program, hasContacts, hideFund, mode]
   )
   function toggleSort(key: string) {
@@ -606,6 +608,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       {showAdd && (
         <AddInvestorModal
           program={program}
+          commitLabel={mode === 'prospects' ? 'Target Commitment' : 'Commitment'}
           funds={fundOptions}
           onCancel={() => setShowAdd(false)}
           onSaved={ov => { setOverlays(prev => ({ ...prev, [normKey(ov.investor ?? '')]: ov })); setShowAdd(false) }}
@@ -637,8 +640,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   )
 }
 
-function AddInvestorModal({ program, funds, onCancel, onSaved }: {
-  program: 'PE' | 'DST'; funds: string[]; onCancel: () => void; onSaved: (ov: Overlay) => void
+function AddInvestorModal({ program, commitLabel, funds, onCancel, onSaved }: {
+  program: 'PE' | 'DST'; commitLabel: string; funds: string[]
+  onCancel: () => void; onSaved: (ov: Overlay) => void
 }) {
   const [d, setD] = useState<Record<string, string>>({ fund: funds[0] ?? '' })
   const [busy, setBusy] = useState(false)
@@ -676,7 +680,7 @@ function AddInvestorModal({ program, funds, onCancel, onSaved }: {
               {funds.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </label>
-          {fld('Commitment', 'committed_usd', false, '1,000,000')}
+          {fld(commitLabel, 'committed_usd', false, '1,000,000')}
           {fld('Primary Contact', 'contact')}
           {fld('Email', 'email')}
           {fld('Phone', 'phone')}
