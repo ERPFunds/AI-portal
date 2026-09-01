@@ -350,10 +350,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   // Fund options present in this program, newest fund first.
   const fundOptions = useMemo(() => {
     const set = new Set<string>()
-    for (const lp of lps) {
-      if (program === 'DST' ? lp.group !== DST_GROUP : lp.group === DST_GROUP) continue
-      for (const f of fundsOf(lp)) if (f !== DST_GROUP) set.add(f)
-    }
+    // Deliberately not derived from the SharePoint cache. Its rows are grouped by schedule
+    // section, so reading funds out of them put labels like "Fund II Investors (Not in
+    // Fund III)" in the filter. Every row in these lists is portal-owned and states its
+    // own fund, so the managed list plus the records themselves are the whole truth.
     // Managed funds lead, in their configured order; anything else seen in the data follows.
     for (const ov of Object.values(overlays)) {
       if ((ov.program ?? 'PE') !== program || ov.archived || !ov.fund) continue
