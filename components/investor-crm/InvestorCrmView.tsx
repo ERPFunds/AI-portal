@@ -128,6 +128,7 @@ function overlayToLp(ov: Overlay): LpRecord {
     contact: ov.contact ?? '', email: ov.email ?? '', phone: ov.phone ?? '',
     date: '', notes: ov.notes ?? '', nextSteps: ov.next_steps ?? '',
     group: isDst ? DST_GROUP : (ov.fund || ''),
+    portalFund: !isDst && !!ov.fund,
     lastInteraction: null,
     sfLpType: null, sfCalled: null, sfDistributions: null, sfCrmId: null,
     sfBrokerCompany: null, sfBrokerContact: null, sfAdvisorFirm: null, sfAdvisorContact: null,
@@ -149,8 +150,13 @@ function fundsOf(lp: LpRecord): string[] {
     const g = lp.group || ''
     // An investor in several funds is stored as 'Fund II, Fund III' — count them under each
     // fund rather than inventing a combined option.
-    if (/fund|dst/i.test(g)) for (const part of g.split(',').map(x => x.trim()).filter(Boolean)) { if (!out.includes(part)) out.push(part) }
-    else if (g.trim()) out.push('Fund IV')  // a named schedule section means the live raise
+    // A portal-owned record names its fund explicitly, so take it as given. Only a
+    // SharePoint schedule section falls through to the live-raise guess — without this,
+    // any fund whose name lacks the word "Fund" (IEP Capital I, say) was mislabelled
+    // Fund IV and could not be filtered on.
+    if (lp.portalFund || /fund|dst/i.test(g)) {
+      for (const part of g.split(',').map(x => x.trim()).filter(Boolean)) { if (!out.includes(part)) out.push(part) }
+    } else if (g.trim()) out.push('Fund IV')  // a named schedule section means the live raise
   }
   for (const pf of lp.priorFunds ?? []) if (!out.includes(pf)) out.push(pf)
   return out
@@ -268,6 +274,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     else { setSortKey(key); setSortDir(key === 'commitment' ? 'desc' : 'asc') }
   }
 
+  useEffect(() => {
+    setFundFilter('All'); setStageFilter('All'); setStateFilter('All'); setSearch('')
+  }, [program, mode])
+
   const overlayFor = useCallback((lp: LpRecord): Overlay | undefined => overlays[normKey(lp.investor)], [overlays])
 
   const rows = useMemo(() => {
@@ -336,13 +346,17 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     const set = new Set<string>()
     for (const lp of lps) {
       if (program === 'DST' ? lp.group !== DST_GROUP : lp.group === DST_GROUP) continue
-      for (const f of fundsOf(lp)) set.add(f)
+      for (const f of fundsOf(lp)) if (f !== DST_GROUP) set.add(f)
     }
     // Managed funds lead, in their configured order; anything else seen in the data follows.
+    for (const ov of Object.values(overlays)) {
+      if ((ov.program ?? 'PE') !== program || ov.archived || !ov.fund) continue
+      for (const part of ov.fund.split(',').map(x => x.trim()).filter(Boolean)) set.add(part)
+    }
     const managed = funds.filter(f => !f.program || f.program === program).map(f => f.name)
     const derived = [...set].filter(n => !managed.includes(n)).sort()
     return [...managed, ...derived]
-  }, [lps, program, funds])
+  }, [lps, overlays, program, funds])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
   const totalTarget = useMemo(() => rows.reduce((s, lp) => s + (lp.sfAmount ?? lp.commitmentUsd ?? 0), 0), [rows])
