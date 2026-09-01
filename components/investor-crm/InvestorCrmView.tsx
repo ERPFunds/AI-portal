@@ -542,7 +542,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           {FUNNEL_STAGES.map(st => <option key={st} value={st}>{st}</option>)}
           <option value="Unset">— no stage set —</option>
         </select>}
-        {isLpDirectory && (
+        {(isLpDirectory || mode === 'prospects') && (
           <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
             <option value="All">All owners</option>
