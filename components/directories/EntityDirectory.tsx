@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import { downloadXlsx, shapeRows } from '@/lib/exportXlsx'
 
 // A reusable, configurable directory (list + search + type filter + add/edit/delete modal).
 // Used for the Property Contractors and Lenders directories.
@@ -27,6 +28,8 @@ export interface DirConfig {
   accountView?: boolean
   /** Show an About line on the account, researched from the public web. */
   aboutResearch?: boolean
+  /** Adds an Export button. The value is the workbook's filename stem. */
+  exportName?: string
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -122,6 +125,16 @@ export default function EntityDirectory({ config }: { config: DirConfig }) {
     return v ? <span style={{ fontSize: 13, color: '#374151' }}>{v}</span> : <span style={{ color: '#d1d5db' }}>—</span>
   }
 
+  // Every editable field, plus About where the directory researches one — a fuller record than
+  // the on-screen columns, which are deliberately narrow.
+  function exportRows() {
+    const cols: [string, string][] = config.fields.map(f => [f.key, f.label])
+    if (config.aboutResearch) cols.push(['about', 'About'])
+    const stamp = new Date().toISOString().slice(0, 10)
+    downloadXlsx([{ name: config.title.slice(0, 31), rows: shapeRows(rows, cols) }],
+      `${config.exportName}-${stamp}.xlsx`)
+  }
+
   return (
     <div style={{ padding: '4px 2px' }}>
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
@@ -130,7 +143,13 @@ export default function EntityDirectory({ config }: { config: DirConfig }) {
           <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>{config.title}</h1>
           {config.subtitle && <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>{config.subtitle}</div>}
         </div>
-        <button onClick={() => setEditing({ ...(config.defaults ?? {}) })} style={{ border: 0, background: config.accent, color: '#fff', borderRadius: 9, padding: '10px 16px', fontWeight: 600, cursor: 'pointer' }}>{config.addLabel}</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {config.exportName && (
+            <button onClick={exportRows} title="Download the rows currently shown"
+              style={{ border: '1px solid #d1d5db', background: '#fff', color: '#374151', borderRadius: 9, padding: '10px 16px', fontWeight: 600, cursor: 'pointer' }}>⤓ Export</button>
+          )}
+          <button onClick={() => setEditing({ ...(config.defaults ?? {}) })} style={{ border: 0, background: config.accent, color: '#fff', borderRadius: 9, padding: '10px 16px', fontWeight: 600, cursor: 'pointer' }}>{config.addLabel}</button>
+        </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>

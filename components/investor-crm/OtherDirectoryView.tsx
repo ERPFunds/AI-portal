@@ -20,6 +20,7 @@ const config: DirConfig = {
   // Opens as an account record like the LP Directory rather than an edit dialog.
   accountView: true,
   aboutResearch: true,
+  exportName: 'other-directory',
   defaults: { category: 'Other' },
   columns: [
     { key: 'name', label: 'Firm / Account', kind: 'name' },
