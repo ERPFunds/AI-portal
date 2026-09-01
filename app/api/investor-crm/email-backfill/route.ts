@@ -18,8 +18,9 @@ const PAGE = 100;
 //                   almost nothing. Deleted Items, Junk and Drafts are excluded. Resumable: each
 //                   run continues from the watermark in mailbox_scan_state, and mailboxes are
 //                   served round-robin so a large one cannot starve the others.
-//   action:"match"  matches PE prospect contacts that have no email against that directory.
-//                   Dry-run unless apply:true.
+//   action:"match"  matches PE prospect contacts that have no email against that directory,
+//                   first on display name and then on addresses that spell the name out (a fifth
+//                   of the directory has no display name at all). Dry-run unless apply:true.
 //
 // Nothing is read but the participant fields — no subjects, no bodies. Internal addresses are
 // never written to the CRM.
@@ -66,6 +67,25 @@ function keyVariants(display: string): string[] {
     if (!out.includes(firstLast)) out.push(firstLast);
   }
   return out;
+}
+
+// Free mail hosts, where a "jsmith@" style local part is far more likely to be a coincidence
+// than it is at a company domain.
+const CONSUMER = /^(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|aol|icloud|me|mac|comcast|verizon|att|sbcglobal|bellsouth|cox|charter|protonmail|proton|mail|gmx|zoho)\./i;
+
+// Does an address's local part spell out this person's name? Display names are missing on a fifth
+// of the directory, and the address itself is often the only evidence left.
+//   strong: adamcathey@ / cathey.adam@ — the full name, either order
+//   weak:   acathey@ / adamc@ — an initial plus a name, trusted only off the free mail hosts
+function localPartMatch(email: string, first: string, last: string): "strong" | "weak" | null {
+  const [rawLocal, domain] = email.split("@");
+  if (!rawLocal || !domain || !first || !last) return null;
+  const loc = rawLocal.toLowerCase().replace(/[^a-z]/g, "");
+  if (!loc) return null;
+  if (loc === first + last || loc === last + first) return "strong";
+  const initialForms = [first[0] + last, first + last[0], last + first[0], last[0] + first];
+  if (initialForms.includes(loc)) return CONSUMER.test(domain + ".") ? null : "weak";
+  return null;
 }
 
 interface Party { email: string; name: string; when: string }
@@ -260,20 +280,23 @@ async function runIndex(body: Record<string, unknown>) {
 
 // ── Matching ─────────────────────────────────────────────────────────────────
 
-interface Candidate { email: string; display: string; hits: number; last: string | null }
+interface Candidate { email: string; display: string; hits: number; last: string | null; via?: string }
 
 async function runMatch(body: Record<string, unknown>, actor: string) {
   const admin = createAdminClient();
   const apply = body.apply === true;
 
   const { data: dir, error: dirErr } = await admin
-    .from("mailbox_directory").select("email, display_name, name_key, hits, last_seen")
-    .neq("name_key", "");
+    .from("mailbox_directory").select("email, display_name, name_key, hits, last_seen");
   if (dirErr) return NextResponse.json({ error: dirErr.message }, { status: 500 });
   if (!dir?.length) return NextResponse.json({ error: "Directory is empty — run action:'index' first" }, { status: 400 });
 
   // name key (in both orderings) -> every address seen under it
   const byName = new Map<string, Candidate[]>();
+  const all: Candidate[] = dir.map((r) => ({
+    email: r.email as string, display: (r.display_name as string) ?? "",
+    hits: (r.hits as number) ?? 0, last: (r.last_seen as string) ?? null,
+  }));
   for (const r of dir) {
     const cand: Candidate = { email: r.email as string, display: (r.display_name as string) ?? "", hits: (r.hits as number) ?? 0, last: (r.last_seen as string) ?? null };
     for (const k of keyVariants((r.display_name as string) ?? "")) {
@@ -302,7 +325,19 @@ async function runMatch(body: Record<string, unknown>, actor: string) {
   for (const c of targets) {
     const key = usableName(c.name as string);
     if (!key) { unmatched.push(`${c.investor} / ${c.name} (unusable name)`); continue; }
-    const cands = byName.get(key) ?? [];
+    let cands: Candidate[] = (byName.get(key) ?? []).map((x) => ({ ...x, via: "display name" }));
+    if (!cands.length) {
+      // Nothing under that display name — see whether an address spells the name out.
+      const toks = nameTokens(c.name as string);
+      const first = toks[0], last = toks[toks.length - 1];
+      const strong: Candidate[] = [], weak: Candidate[] = [];
+      for (const cand of all) {
+        const m = localPartMatch(cand.email, first, last);
+        if (m === "strong") strong.push({ ...cand, via: "address spells the name" });
+        else if (m === "weak") weak.push({ ...cand, via: "address initial + surname" });
+      }
+      cands = strong.length ? strong : weak;
+    }
     if (!cands.length) { unmatched.push(`${c.investor} / ${c.name}`); continue; }
 
     const sorted = [...cands].sort((a, b) => b.hits - a.hits);
@@ -310,7 +345,7 @@ async function runMatch(body: Record<string, unknown>, actor: string) {
     const clear = sorted.length === 1 || sorted[0].hits >= sorted[1].hits * 3;
     const row = {
       contactId: c.id, account: c.investor, contact: c.name,
-      email: sorted[0].email, hits: sorted[0].hits, lastSeen: sorted[0].last,
+      email: sorted[0].email, hits: sorted[0].hits, lastSeen: sorted[0].last, via: sorted[0].via ?? "display name",
       alternatives: sorted.slice(1, 4).map((s) => `${s.email} (${s.hits})`),
     };
     if (clear) matched.push(row); else ambiguous.push(row);
