@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import DocsPanel from '../shared/DocsPanel'
 
 // ── DST Vendors ───────────────────────────────────────────────────────────────
 // Directory of DST/1031 vendor accounts: broker dealers, the brokerages that sit
@@ -365,6 +366,8 @@ function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; d
 
         <button onClick={() => setEditing({})}
           style={{ marginTop: 14, border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, color: '#374151', cursor: 'pointer' }}>+ Add contact</button>
+
+        <DocsPanel tag={`vendor:${desk}:${vendor.id}`} category="Vendor Docs" uploadedBy={vendor.name} />
 
         {editing && <ContactModal draft={editing} onCancel={() => setEditing(null)} onSave={saveContact} />}
       </div>

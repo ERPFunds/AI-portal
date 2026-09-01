@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
+import DocsPanel from '../shared/DocsPanel'
 
 // ── Tenant CRM ────────────────────────────────────────────────────────────────
 // Companies at ERP properties — current tenants, prospects and prior tenants —
@@ -366,6 +367,8 @@ function ContactsModal({ tenant, onClose, onChanged }: { tenant: Tenant; onClose
 
         <button onClick={() => setEditing({ contact_type: 'All' })}
           style={{ marginTop: 14, border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13, color: '#374151', cursor: 'pointer' }}>+ Add contact</button>
+
+        <DocsPanel tag={`tenant:${tenant.id}`} category="Tenant Docs" uploadedBy={tenant.name} />
 
         {editing && <ContactModal draft={editing} onCancel={() => setEditing(null)} onSave={saveContact} />}
       </div>
