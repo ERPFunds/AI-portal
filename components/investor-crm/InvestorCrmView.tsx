@@ -253,6 +253,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   // The Contact(s) column only appears once there are contacts in the portal store — while it's
   // empty (e.g. after a reset, before an import) the column is hidden rather than shown blank.
   const hasContacts = Object.keys(contactPrimary).length > 0
+  // Which account's people are open in the contact popout (the Contact(s) column).
+  const [contactsFor, setContactsFor] = useState<string | null>(null)
   // PE Prospects are all Fund IV by definition, so the Fund column is dropped there.
   const hideFund = program === 'PE' && mode === 'prospects'
   // The LP Directory is portal-owned now, so it carries no Salesforce sync or fund admin.
@@ -461,11 +463,13 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         {/* Contact(s) — from the portal contact store only */}
         {hasContacts && <td style={tdCss}>
           {pc
-            ? <div>
-                <div style={{ fontSize: 13, color: '#374151' }}>{pc.name || pc.email || '—'}</div>
+            ? <button onClick={e => { e.stopPropagation(); setContactsFor(lp.investor) }}
+                title="Open this person's details"
+                style={{ border: 0, background: 'none', padding: 0, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: '#0e7490' }}>{pc.name || pc.email || '—'}</div>
                 {pc.name && pc.email && <div style={{ fontSize: 12, color: '#9ca3af' }}>{pc.email}</div>}
                 {pc.more > 0 && <div style={{ fontSize: 11, fontWeight: 600, color: '#0f766e', marginTop: 2 }}>+{pc.more} more</div>}
-              </div>
+              </button>
             : <span style={{ color: '#d1d5db' }}>—</span>}
         </td>}
         {/* Commitment */}
@@ -617,6 +621,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       )}
       {showFunds && <ManageFundsModal funds={funds} program={program} onClose={() => setShowFunds(false)} onChanged={loadFunds} />}
 
+      {contactsFor && <ContactsPopout investor={contactsFor} onClose={() => setContactsFor(null)} />}
       {selected && (
         <InvestorDrawer
           lp={selected}
@@ -781,7 +786,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   const [saving, setSaving] = useState(false)
 
   const [people, setPeople] = useState<Person[] | null>(null)
-  const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
   const [docs, setDocs] = useState<InvestorDoc[] | null>(null)
   const [acct, setAcct] = useState({
     investor: lp.investor,
@@ -953,40 +957,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
       const j = await r.json(); setPeople(j.people ?? [])
     } catch { setPeople([]) }
   }
-  async function saveContact(d: Partial<Person>) {
-    const res = await fetch('/api/investor-crm/people', {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...d, investor: lp.investor }),
-    })
-    const j = await res.json().catch(() => ({}))
-    if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
-    setEditingContact(null); loadPeople()
-  }
-  const [liBusy, setLiBusy] = useState<string | null>(null)
-  const [liMsg, setLiMsg] = useState<Record<string, string>>({})
-  // Bio here is only what the person publishes on LinkedIn — deliberately different from
-  // the account's About line, which is general web research about the entity.
-  async function findLinkedIn(id: string) {
-    setLiBusy(id); setLiMsg(m => ({ ...m, [id]: '' }))
-    try {
-      const res = await fetch('/api/investor-crm/linkedin', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || j.error) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${j.error ?? res.status}` })); return }
-      const r = j.results?.[0]
-      if (!r?.linkedin_url) { setLiMsg(m => ({ ...m, [id]: 'No profile could be tied to this person.' })); return }
-      loadPeople()
-    } catch (e) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${String(e)}` })) }
-    finally { setLiBusy(null) }
-  }
-  async function deleteContact(id: string) {
-    if (!window.confirm('Remove this contact?')) return
-    const res = await fetch(`/api/investor-crm/people?id=${id}`, { method: 'DELETE' })
-    if (res.ok) loadPeople()
-  }
-
   const initials = lp.investor.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase()
 
   return (
@@ -1152,58 +1122,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                   </div>
                 </div>
 
-                <div style={{ ...cardCss, padding: 20 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                    <div style={sectTitle}>People Under This Account {people && people.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{people.length}</span>}</div>
-                    <button onClick={() => setEditingContact({})} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}>+ Add contact</button>
-                  </div>
-                  {people == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
-                  {people && people.length === 0 && (
-                    <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
-                      No individual contacts on file for this entity.
-                    </div>
-                  )}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {people?.map((pn) => (
-                      <div key={pn.match_key} style={{ padding: '11px 13px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontWeight: 600, fontSize: 14.5 }}>{pn.name}</span>
-                              {pn.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
-                              {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
-                            </div>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '2px 16px', marginTop: 6 }}>
-                              <ContactBit label="Email" value={pn.email} href={pn.email ? `mailto:${pn.email}` : undefined} />
-                              <ContactBit label="Office" value={pn.phone_office} />
-                              <ContactBit label="Cell" value={pn.phone_cell} />
-                            </div>
-                            {pn.linkedin_url && (
-                              <div style={{ marginTop: 5 }}>
-                                <a href={pn.linkedin_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
-                                  style={{ fontSize: 12.5, fontWeight: 600, color: '#0a66c2', textDecoration: 'none' }}>in · LinkedIn profile ↗</a>
-                              </div>
-                            )}
-                            {pn.bio && <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 4, lineHeight: 1.5 }}>{pn.bio}</div>}
-                            {liMsg[pn.id ?? ''] && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{liMsg[pn.id ?? '']}</div>}
-                            {pn.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{pn.notes}</div>}
-                          </div>
-                          <div style={{ display: 'flex', gap: 6 }}>
-                            {pn.id && !pn.linkedin_url && (
-                              <button onClick={() => findLinkedIn(pn.id!)} disabled={liBusy === pn.id}
-                                title="Search for this person's LinkedIn profile and the bio they publish there"
-                                style={{ border: 0, background: 'none', cursor: liBusy === pn.id ? 'default' : 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0a66c2' }}>
-                                {liBusy === pn.id ? 'Searching…' : 'Find LinkedIn'}
-                              </button>
-                            )}
-                            <button onClick={() => setEditingContact(pn)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0e7490' }}>Edit</button>
-                            {pn.id && <button onClick={() => deleteContact(pn.id!)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>✕</button>}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <PeopleList investor={lp.investor} people={people} reload={loadPeople} />
 
                 {/* Docs live with the account now rather than behind their own tab. */}
                 <div style={{ ...cardCss, padding: 20 }}>
@@ -1238,7 +1157,6 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
           </div>
         </div>
       </div>
-      {editingContact && <ContactModal draft={editingContact} onCancel={() => setEditingContact(null)} onSave={saveContact} />}
     </div>
   )
 }
@@ -1364,3 +1282,134 @@ function Field({ k, v }: { k: string; v: string }) {
     </div>
   )
 }
+
+// The people under one account, with their contact detail — used both inside the account drawer
+// and on its own from the Contact(s) column, where clicking a name should open the person rather
+// than the account.
+function PeopleList({ investor, people, reload, title }: {
+  investor: string; people: Person[] | null; reload: () => void; title?: string
+}) {
+  const [editingContact, setEditingContact] = useState<Partial<Person> | null>(null)
+  const [liBusy, setLiBusy] = useState<string | null>(null)
+  const [liMsg, setLiMsg] = useState<Record<string, string>>({})
+
+  async function saveContact(d: Partial<Person>) {
+    const res = await fetch('/api/investor-crm/people', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...d, investor }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
+    setEditingContact(null); reload()
+  }
+  // Bio here is only what the person publishes on LinkedIn — deliberately different from
+  // the account's About line, which is general web research about the entity.
+  async function findLinkedIn(id: string) {
+    setLiBusy(id); setLiMsg(m => ({ ...m, [id]: '' }))
+    try {
+      const res = await fetch('/api/investor-crm/linkedin', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${j.error ?? res.status}` })); return }
+      const r = j.results?.[0]
+      if (!r?.linkedin_url) { setLiMsg(m => ({ ...m, [id]: 'No profile could be tied to this person.' })); return }
+      reload()
+    } catch (e) { setLiMsg(m => ({ ...m, [id]: `Lookup failed: ${String(e)}` })) }
+    finally { setLiBusy(null) }
+  }
+  async function deleteContact(id: string) {
+    if (!window.confirm('Remove this contact?')) return
+    const res = await fetch(`/api/investor-crm/people?id=${id}`, { method: 'DELETE' })
+    if (res.ok) reload()
+  }
+
+  return (
+    <>
+    <div style={{ ...cardCss, padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div style={sectTitle}>{title ?? 'People Under This Account'} {people && people.length > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: '#0f766e', background: '#e4f2ef', padding: '2px 7px', borderRadius: 5, marginLeft: 6 }}>{people.length}</span>}</div>
+        <button onClick={() => setEditingContact({})} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '5px 12px', cursor: 'pointer', fontWeight: 600, fontSize: 13, color: '#374151' }}>+ Add contact</button>
+      </div>
+      {people == null && <div style={{ color: '#9ca3af', fontSize: 13 }}>Loading…</div>}
+      {people && people.length === 0 && (
+        <div style={{ color: '#9ca3af', fontSize: 13.5 }}>
+          No individual contacts on file for this entity.
+        </div>
+      )}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {people?.map((pn) => (
+          <div key={pn.match_key} style={{ padding: '11px 13px', border: '1px solid #eef0f2', borderRadius: 10, background: '#fbfcfd' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontWeight: 600, fontSize: 14.5 }}>{pn.name}</span>
+                  {pn.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
+                  {pn.funds.map(f => <span key={f} style={{ fontSize: 9, fontWeight: 600, padding: '2px 6px', borderRadius: 20, background: '#f3e8ff', color: '#7e22ce', whiteSpace: 'nowrap' }}>{f}</span>)}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: '2px 16px', marginTop: 6 }}>
+                  <ContactBit label="Email" value={pn.email} href={pn.email ? `mailto:${pn.email}` : undefined} />
+                  <ContactBit label="Office" value={pn.phone_office} />
+                  <ContactBit label="Cell" value={pn.phone_cell} />
+                </div>
+                {pn.linkedin_url && (
+                  <div style={{ marginTop: 5 }}>
+                    <a href={pn.linkedin_url} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}
+                      style={{ fontSize: 12.5, fontWeight: 600, color: '#0a66c2', textDecoration: 'none' }}>in · LinkedIn profile ↗</a>
+                  </div>
+                )}
+                {pn.bio && <div style={{ fontSize: 12.5, color: '#4b5563', marginTop: 4, lineHeight: 1.5 }}>{pn.bio}</div>}
+                {liMsg[pn.id ?? ''] && <div style={{ fontSize: 11.5, color: '#b45309', marginTop: 4 }}>{liMsg[pn.id ?? '']}</div>}
+                {pn.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{pn.notes}</div>}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {pn.id && !pn.linkedin_url && (
+                  <button onClick={() => findLinkedIn(pn.id!)} disabled={liBusy === pn.id}
+                    title="Search for this person's LinkedIn profile and the bio they publish there"
+                    style={{ border: 0, background: 'none', cursor: liBusy === pn.id ? 'default' : 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0a66c2' }}>
+                    {liBusy === pn.id ? 'Searching…' : 'Find LinkedIn'}
+                  </button>
+                )}
+                <button onClick={() => setEditingContact(pn)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#0e7490' }}>Edit</button>
+                {pn.id && <button onClick={() => deleteContact(pn.id!)} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>✕</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+      {editingContact && <ContactModal draft={editingContact} onCancel={() => setEditingContact(null)} onSave={saveContact} />}
+    </>
+  )
+}
+
+// Opened from the Contact(s) column: the people on an account, without the account around them.
+function ContactsPopout({ investor, onClose }: { investor: string; onClose: () => void }) {
+  const [people, setPeople] = useState<Person[] | null>(null)
+  const load = useCallback(async () => {
+    try {
+      const r = await fetch(`/api/investor-crm/people?investor=${encodeURIComponent(investor)}`)
+      const j = await r.json(); setPeople(j.people ?? [])
+    } catch { setPeople([]) }
+  }, [investor])
+  useEffect(() => { load() }, [load])
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(720px, 96vw)', maxHeight: '88vh', overflowY: 'auto', background: '#eef0f4', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+        <div style={{ position: 'sticky', top: 0, zIndex: 2, background: '#fff', borderBottom: '1px solid #e5e7eb', padding: '13px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: '14px 14px 0 0' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Contacts</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{investor}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ padding: 16 }}>
+          <PeopleList investor={investor} people={people} reload={load} title="People" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
