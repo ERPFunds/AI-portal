@@ -210,6 +210,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [fundFilter, setFundFilter] = useState('All')
   const [stageFilter, setStageFilter] = useState('All')
   const [stateFilter, setStateFilter] = useState('All')
+  const [ownerFilter, setOwnerFilter] = useState('All')
   const [funds, setFunds] = useState<Fund[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
@@ -275,7 +276,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   }
 
   useEffect(() => {
-    setFundFilter('All'); setStageFilter('All'); setStateFilter('All'); setSearch('')
+    setFundFilter('All'); setStageFilter('All'); setStateFilter('All'); setOwnerFilter('All'); setSearch('')
   }, [program, mode])
 
   const overlayFor = useCallback((lp: LpRecord): Overlay | undefined => overlays[normKey(lp.investor)], [overlays])
@@ -312,6 +313,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       })
       .filter(lp => fundFilter === 'All' || fundsOf(lp).includes(fundFilter))
       .filter(lp => {
+        if (ownerFilter === 'All') return true
+        const ow = overlays[normKey(lp.investor)]?.owner ?? ''
+        return ownerFilter === 'Unassigned' ? !ow : ow === ownerFilter
+      })
+      .filter(lp => {
         if (stateFilter === 'All') return true
         const st = overlays[normKey(lp.investor)]?.state ?? ''
         return stateFilter === 'Unknown' ? !st : st === stateFilter
@@ -330,7 +336,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, overlays, program, search, fundFilter, stageFilter, stateFilter, mode, columns, sortKey, sortDir])
+  }, [lps, overlays, program, search, fundFilter, stageFilter, stateFilter, ownerFilter, mode, columns, sortKey, sortDir])
 
   const stateOptions = useMemo(() => {
     const set = new Set<string>()
@@ -548,6 +554,14 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           {FUNNEL_STAGES.map(st => <option key={st} value={st}>{st}</option>)}
           <option value="Unset">— no stage set —</option>
         </select>}
+        {isLpDirectory && (
+          <select value={ownerFilter} onChange={e => setOwnerFilter(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+            <option value="All">All owners</option>
+            {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
+            <option value="Unassigned">— unassigned —</option>
+          </select>
+        )}
         {isLpDirectory && stateOptions.length > 0 && (
           <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
