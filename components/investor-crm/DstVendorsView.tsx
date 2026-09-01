@@ -8,8 +8,28 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 // managers, lenders, legal). A brokerage's affiliation names the broker dealer it
 // is listed under. Contacts belong to an account and open in a popout.
 
-const VENDOR_TYPES = ['Broker Dealer', 'Brokerage', 'RIA', 'Advisor', 'Qualified Intermediary',
-  'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other']
+// One component serves both vendor desks; only the vocabulary and headings differ.
+const DESK = {
+  dst: {
+    eyebrow: 'Investor CRM', title: 'DST Vendors',
+    subtitle: 'Broker dealers, brokerages and service providers',
+    affiliationLabel: 'Affiliation — broker dealer this account is listed under',
+    parentType: 'Broker Dealer',
+    columns: ['account', 'description', 'affiliation', 'contacts', 'website', 'notes', 'nextSteps'] as string[],
+    types: ['Broker Dealer', 'Brokerage', 'RIA', 'Advisor', 'Qualified Intermediary',
+      'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other'],
+  },
+  property: {
+    eyebrow: 'Property CRM', title: 'Vendors',
+    subtitle: 'Contractors, lenders, brokers and service providers',
+    affiliationLabel: 'Affiliation — parent company this account sits under',
+    parentType: '',
+    columns: ['account', 'descNotes', 'contacts', 'address', 'website'] as string[],
+    types: ['Contractor', 'Lender', 'Broker', 'Property Manager', 'Title/Escrow',
+      'Insurance', 'Legal/Counsel', 'Utility', 'Inspection/Appraisal', 'Other'],
+  },
+} as const
+type DeskKey = keyof typeof DESK
 
 interface VContact {
   id: string; vendor_id: string; name: string; title: string | null; email: string | null
@@ -19,10 +39,17 @@ interface VContact {
 interface Vendor {
   id: string; name: string; description: string | null; vendor_type: string | null
   parent_id: string | null; website: string | null; notes: string | null; next_steps: string | null
+  address: string | null
   contacts: VContact[]
 }
 type Draft = Partial<Vendor>
 type CDraft = Partial<VContact>
+
+const LABELS: Record<string, string> = {
+  account: 'Company', description: 'Description', descNotes: 'Description / Notes',
+  affiliation: 'Affiliation', contacts: 'Contact(s)', address: 'Address',
+  website: 'Website', notes: 'Notes', nextSteps: 'Next Steps',
+}
 
 const thCss: React.CSSProperties = {
   textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
@@ -34,7 +61,9 @@ const inputCss: React.CSSProperties = {
   fontSize: 14, fontFamily: 'inherit',
 }
 
-export default function DstVendorsView() {
+export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}) {
+  const cfg = DESK[desk]
+  const VENDOR_TYPES = cfg.types
   const [items, setItems] = useState<Vendor[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -46,13 +75,13 @@ export default function DstVendorsView() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch('/api/dst-vendors')
+      const res = await fetch(`/api/dst-vendors?desk=${desk}`)
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.error) { setError(j.error ?? `Load failed (${res.status})`); return }
       setItems(j.items ?? []); setError(null)
     } catch (e) { setError(String(e)) }
     finally { setLoading(false) }
-  }, [])
+  }, [desk])
   useEffect(() => { load() }, [load])
 
   // Keep the open popout in step with the list after a contact is added or removed.
@@ -63,7 +92,10 @@ export default function DstVendorsView() {
   }, [items, people])
 
   const byId = useMemo(() => new Map(items.map(v => [v.id, v])), [items])
-  const brokerDealers = useMemo(() => items.filter(v => v.vendor_type === 'Broker Dealer'), [items])
+  // On the DST desk only broker dealers can be a parent; elsewhere any account can.
+  const parents = useMemo(
+    () => (cfg.parentType ? items.filter(v => v.vendor_type === cfg.parentType) : items),
+    [items, cfg.parentType])
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -79,7 +111,7 @@ export default function DstVendorsView() {
     const editingExisting = !!draft.id
     const res = await fetch('/api/dst-vendors', {
       method: editingExisting ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(draft),
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...draft, desk }),
     })
     const j = await res.json().catch(() => ({}))
     if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
@@ -92,7 +124,7 @@ export default function DstVendorsView() {
       ? `Delete ${v.name}? ${kids} brokerage${kids > 1 ? 's' : ''} listed under it will remain, without an affiliation.`
       : `Delete ${v.name} and its contacts?`
     if (!window.confirm(msg)) return
-    const res = await fetch(`/api/dst-vendors?id=${v.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/dst-vendors?desk=${desk}&id=${v.id}`, { method: 'DELETE' })
     if (res.ok) { setPeople(null); load() } else alert('Delete failed')
   }
 
@@ -101,9 +133,9 @@ export default function DstVendorsView() {
   return (
     <div>
       <div style={{ marginBottom: 18 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Investor CRM</div>
-        <h1 style={{ fontSize: 30, fontWeight: 700, color: '#1a2233', margin: '2px 0 2px' }}>DST Vendors</h1>
-        <div style={{ color: '#6b7280', fontSize: 14 }}>Broker dealers, brokerages and service providers</div>
+        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>{cfg.eyebrow}</div>
+        <h1 style={{ fontSize: 30, fontWeight: 700, color: '#1a2233', margin: '2px 0 2px' }}>{cfg.title}</h1>
+        <div style={{ color: '#6b7280', fontSize: 14 }}>{cfg.subtitle}</div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -114,7 +146,7 @@ export default function DstVendorsView() {
           <option value="All">All types</option>
           {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
-        <button onClick={() => setEditing({ vendor_type: 'Broker Dealer' })}
+        <button onClick={() => setEditing({ vendor_type: VENDOR_TYPES[0] })}
           style={{ border: 0, background: '#1a2233', color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>+ Add Account</button>
       </div>
 
@@ -124,13 +156,7 @@ export default function DstVendorsView() {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
             <thead>
               <tr>
-                <th style={thCss}>Account</th>
-                <th style={thCss}>Description</th>
-                <th style={thCss}>Affiliation</th>
-                <th style={thCss}>Contact(s)</th>
-                <th style={thCss}>Website</th>
-                <th style={thCss}>Notes</th>
-                <th style={thCss}>Next Steps</th>
+                {cfg.columns.map(c => <th key={c} style={thCss}>{LABELS[c]}</th>)}
                 <th style={thCss}></th>
               </tr>
             </thead>
@@ -138,35 +164,51 @@ export default function DstVendorsView() {
               {rows.map(v => {
                 const p = primaryOf(v)
                 const parent = v.parent_id ? byId.get(v.parent_id) : undefined
+                const dash = <span style={{ color: '#d1d5db' }}>—</span>
                 return (
                   <tr key={v.id}>
-                    <td style={{ ...tdCss, fontWeight: 600, color: '#1a2233' }}>
-                      {v.name}
-                      {v.vendor_type && (
-                        <div style={{ marginTop: 3 }}>
-                          <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#eceff9', color: '#3b4a86' }}>{v.vendor_type}</span>
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ ...tdCss, color: '#4b5563', maxWidth: 260 }}>{v.description || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={{ ...tdCss, color: '#6b7280' }}>{parent ? parent.name : <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={tdCss}>
-                      {v.contacts.length === 0 ? <span style={{ color: '#d1d5db' }}>—</span> : (
-                        <button onClick={() => setPeople(v)}
-                          style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
-                          <span style={{ fontWeight: 600, fontSize: 14, color: '#0e7490' }}>{p?.name}</span>
-                          {v.contacts.length > 1 && <span style={{ fontSize: 12.5, color: '#0f766e', marginLeft: 6 }}>+{v.contacts.length - 1} more</span>}
-                        </button>
-                      )}
-                    </td>
-                    <td style={tdCss}>
-                      {v.website
-                        ? <a href={v.website.startsWith('http') ? v.website : `https://${v.website}`} target="_blank" rel="noreferrer"
-                            style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', fontSize: 13.5 }}>{v.website.replace(/^https?:\/\//, '')} ↗</a>
-                        : <span style={{ color: '#d1d5db' }}>—</span>}
-                    </td>
-                    <td style={{ ...tdCss, color: '#6b7280', maxWidth: 220, fontSize: 13 }}>{v.notes || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={{ ...tdCss, color: '#6b7280', maxWidth: 220, fontSize: 13 }}>{v.next_steps || <span style={{ color: '#d1d5db' }}>—</span>}</td>
+                    {cfg.columns.map(col => {
+                      if (col === 'account') return (
+                        <td key={col} style={{ ...tdCss, fontWeight: 600, color: '#1a2233' }}>
+                          {v.name}
+                          {v.vendor_type && v.vendor_type !== 'Other' && (
+                            <div style={{ marginTop: 3 }}>
+                              <span style={{ fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#eceff9', color: '#3b4a86' }}>{v.vendor_type}</span>
+                            </div>
+                          )}
+                        </td>
+                      )
+                      if (col === 'description') return <td key={col} style={{ ...tdCss, color: '#4b5563', maxWidth: 260 }}>{v.description || dash}</td>
+                      // The property desk keeps description and notes in a single column.
+                      if (col === 'descNotes') {
+                        const both = [v.description, v.notes].filter(Boolean).join(' — ')
+                        return <td key={col} style={{ ...tdCss, color: '#4b5563', maxWidth: 300, fontSize: 13 }}>{both || dash}</td>
+                      }
+                      if (col === 'affiliation') return <td key={col} style={{ ...tdCss, color: '#6b7280' }}>{parent ? parent.name : dash}</td>
+                      if (col === 'contacts') return (
+                        <td key={col} style={tdCss}>
+                          {v.contacts.length === 0 ? dash : (
+                            <button onClick={() => setPeople(v)}
+                              style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: '#0e7490' }}>{p?.name}</span>
+                              {v.contacts.length > 1 && <span style={{ fontSize: 12.5, color: '#0f766e', marginLeft: 6 }}>+{v.contacts.length - 1} more</span>}
+                            </button>
+                          )}
+                        </td>
+                      )
+                      if (col === 'address') return <td key={col} style={{ ...tdCss, maxWidth: 190, fontSize: 13, color: '#4b5563' }}>{v.address || dash}</td>
+                      if (col === 'website') return (
+                        <td key={col} style={tdCss}>
+                          {v.website
+                            ? <a href={v.website.startsWith('http') ? v.website : `https://${v.website}`} target="_blank" rel="noreferrer"
+                                style={{ color: '#2563eb', fontWeight: 600, textDecoration: 'none', fontSize: 13.5 }}>{v.website.replace(/^https?:\/\//, '')} ↗</a>
+                            : dash}
+                        </td>
+                      )
+                      if (col === 'notes') return <td key={col} style={{ ...tdCss, color: '#6b7280', maxWidth: 220, fontSize: 13 }}>{v.notes || dash}</td>
+                      if (col === 'nextSteps') return <td key={col} style={{ ...tdCss, color: '#6b7280', maxWidth: 220, fontSize: 13 }}>{v.next_steps || dash}</td>
+                      return <td key={col} style={tdCss} />
+                    })}
                     <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <a href={p?.email ? `mailto:${p.email}` : undefined}
                         style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: 'none',
@@ -178,27 +220,30 @@ export default function DstVendorsView() {
                   </tr>
                 )
               })}
-              {rows.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No vendor accounts yet.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={cfg.columns.length + 1} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No vendor accounts yet.</td></tr>}
             </tbody>
           </table>
         </div>
       )}
 
       {editing && (
-        <AccountModal draft={editing} brokerDealers={brokerDealers}
+        <AccountModal draft={editing} parents={parents} types={VENDOR_TYPES} affiliationLabel={cfg.affiliationLabel} columns={cfg.columns}
           onCancel={() => setEditing(null)} onSave={save}
           onDelete={editing.id ? () => removeAccount(editing as Vendor) : undefined} />
       )}
-      {people && <ContactsModal vendor={people} onClose={() => setPeople(null)} onChanged={load} />}
+      {people && <ContactsModal vendor={people} desk={desk} onClose={() => setPeople(null)} onChanged={load} />}
     </div>
   )
 }
 
 // ── Account add / edit ────────────────────────────────────────────────────────
-function AccountModal({ draft, brokerDealers, onCancel, onSave, onDelete }: {
-  draft: Draft; brokerDealers: Vendor[]; onCancel: () => void
-  onSave: (d: Draft) => void; onDelete?: () => void
+function AccountModal({ draft, parents, types, affiliationLabel, columns, onCancel, onSave, onDelete }: {
+  draft: Draft; parents: Vendor[]; types: readonly string[]; affiliationLabel: string
+  columns: string[]; onCancel: () => void; onSave: (d: Draft) => void; onDelete?: () => void
 }) {
+  const showAffiliation = columns.includes('affiliation')
+  const showAddress = columns.includes('address')
+  const showNextSteps = columns.includes('nextSteps')
   const [d, setD] = useState<Draft>(draft)
   const set = (k: keyof Vendor, v: unknown) => setD(p => ({ ...p, [k]: v }))
   const fld = (label: string, k: keyof Vendor, area?: boolean) => (
@@ -218,22 +263,23 @@ function AccountModal({ draft, brokerDealers, onCancel, onSave, onDelete }: {
           {fld('Account', 'name')}
           <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Type</span>
-            <select value={d.vendor_type ?? 'Broker Dealer'} onChange={e => set('vendor_type', e.target.value)} style={inputCss}>
-              {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            <select value={d.vendor_type ?? types[0]} onChange={e => set('vendor_type', e.target.value)} style={inputCss}>
+              {types.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </label>
           {fld('Description', 'description', true)}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
-            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Affiliation — broker dealer this account is listed under</span>
+          {showAffiliation && <label style={{ display: 'flex', flexDirection: 'column', gap: 4, gridColumn: '1 / -1' }}>
+            <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>{affiliationLabel}</span>
             <select value={d.parent_id ?? ''} onChange={e => set('parent_id', e.target.value)} style={inputCss}>
               <option value="">— none —</option>
-              {brokerDealers.filter(b => b.id !== d.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+              {parents.filter(b => b.id !== d.id).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
-          </label>
+          </label>}
+          {showAddress && fld('Address', 'address', true)}
           {fld('Website', 'website')}
           <div />
           {fld('Notes', 'notes', true)}
-          {fld('Next Steps', 'next_steps', true)}
+          {showNextSteps && fld('Next Steps', 'next_steps', true)}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginTop: 20 }}>
           <div>
@@ -252,13 +298,13 @@ function AccountModal({ draft, brokerDealers, onCancel, onSave, onDelete }: {
 }
 
 // ── Contacts popout ───────────────────────────────────────────────────────────
-function ContactsModal({ vendor, onClose, onChanged }: { vendor: Vendor; onClose: () => void; onChanged: () => void }) {
+function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; desk: DeskKey; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState<CDraft | null>(null)
 
   async function saveContact(c: CDraft) {
     const res = await fetch('/api/dst-vendors', {
       method: c.id ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...c, kind: 'contact', vendor_id: vendor.id }),
+      body: JSON.stringify({ ...c, kind: 'contact', desk, vendor_id: vendor.id }),
     })
     const j = await res.json().catch(() => ({}))
     if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
@@ -266,7 +312,7 @@ function ContactsModal({ vendor, onClose, onChanged }: { vendor: Vendor; onClose
   }
   async function removeContact(c: VContact) {
     if (!window.confirm(`Remove ${c.name}?`)) return
-    const res = await fetch(`/api/dst-vendors?kind=contact&id=${c.id}`, { method: 'DELETE' })
+    const res = await fetch(`/api/dst-vendors?desk=${desk}&kind=contact&id=${c.id}`, { method: 'DELETE' })
     if (res.ok) onChanged(); else alert('Delete failed')
   }
 

@@ -12,23 +12,35 @@ export const dynamic = "force-dynamic";
 // tells the team which desk a brokerage is listed under. Contacts live in their own table
 // so each person can carry a title, both phone numbers, an address and a LinkedIn profile.
 
-const VENDOR_TYPES = [
-  "Broker Dealer", "Brokerage", "RIA", "Advisor",
-  "Qualified Intermediary", "Title/Escrow", "Property Manager", "Lender",
-  "Legal/Counsel", "Insurance", "Inspection/Appraisal", "Other",
-];
+// Two vendor desks share this route: the DST distribution network and the property-side
+// vendors. Same shape, different tables and vocabulary.
+const DESKS = {
+  dst: {
+    accounts: "dst_vendors", contacts: "dst_vendor_contacts",
+    types: ["Broker Dealer", "Brokerage", "RIA", "Advisor",
+      "Qualified Intermediary", "Title/Escrow", "Property Manager", "Lender",
+      "Legal/Counsel", "Insurance", "Inspection/Appraisal", "Other"],
+  },
+  property: {
+    accounts: "property_vendors", contacts: "property_vendor_contacts",
+    types: ["Contractor", "Lender", "Broker", "Property Manager", "Title/Escrow",
+      "Insurance", "Legal/Counsel", "Utility", "Inspection/Appraisal", "Other"],
+  },
+} as const;
+type DeskKey = keyof typeof DESKS;
+const deskOf = (v: unknown): DeskKey => (String(v) === "property" ? "property" : "dst");
 
 const COLS = "id, name, description, vendor_type, parent_id, website, notes, next_steps, " +
   "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at";
 const CONTACT_COLS = "id, vendor_id, name, title, email, phone_office, phone_cell, address, linkedin_url, notes, is_primary";
 
-function clean(body: Record<string, unknown>) {
+function clean(body: Record<string, unknown>, types: readonly string[]) {
   const out: Record<string, unknown> = {};
   const str = (v: unknown) => String(v ?? "").trim() || null;
   if (typeof body.name === "string") out.name = body.name.trim();
   if (body.description !== undefined) out.description = str(body.description);
   if (body.vendor_type !== undefined) {
-    out.vendor_type = VENDOR_TYPES.includes(String(body.vendor_type)) ? String(body.vendor_type) : "Other";
+    out.vendor_type = types.includes(String(body.vendor_type)) ? String(body.vendor_type) : "Other";
   }
   // Empty string clears the affiliation; a non-uuid is ignored rather than written.
   if (body.parent_id !== undefined) {
@@ -59,13 +71,14 @@ async function requireUser() {
   return user;
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   if (!(await requireUser())) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const supabase = createAdminClient();
+  const desk = DESKS[deskOf(new URL(req.url).searchParams.get("desk"))];
 
   const [{ data: items, error }, { data: contacts }] = await Promise.all([
-    supabase.from("dst_vendors").select(COLS).eq("archived", false).order("name"),
-    supabase.from("dst_vendor_contacts").select(CONTACT_COLS).order("is_primary", { ascending: false }).order("name"),
+    supabase.from(desk.accounts).select(COLS).eq("archived", false).order("name"),
+    supabase.from(desk.contacts).select(CONTACT_COLS).order("is_primary", { ascending: false }).order("name"),
   ]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
@@ -78,7 +91,7 @@ export async function GET() {
   }
   const withContacts = ((items ?? []) as unknown as { id: string }[]).map((v) => ({ ...v, contacts: byVendor.get(v.id) ?? [] }));
 
-  return NextResponse.json({ items: withContacts, types: VENDOR_TYPES });
+  return NextResponse.json({ items: withContacts, types: desk.types });
 }
 
 export async function POST(req: NextRequest) {
@@ -87,21 +100,22 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const body = await req.json().catch(() => ({}));
   const who = user.email ?? user.id;
+  const desk = DESKS[deskOf(body.desk)];
 
   if (body.kind === "contact") {
     const vendor_id = String(body.vendor_id ?? "").trim();
     if (!vendor_id) return NextResponse.json({ error: "vendor_id required" }, { status: 400 });
     const row = cleanContact(body);
     if (!row.name) return NextResponse.json({ error: "Contact name required" }, { status: 400 });
-    const { data, error } = await supabase.from("dst_vendor_contacts")
+    const { data, error } = await supabase.from(desk.contacts)
       .insert({ ...row, vendor_id, created_by: who, updated_by: who }).select(CONTACT_COLS).single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ contact: data });
   }
 
-  const row = clean(body);
+  const row = clean(body, desk.types);
   if (!row.name) return NextResponse.json({ error: "Account name required" }, { status: 400 });
-  const { data, error } = await supabase.from("dst_vendors")
+  const { data, error } = await supabase.from(desk.accounts)
     .insert({ ...row, created_by: who, updated_by: who }).select(COLS).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ item: { ...(data as object), contacts: [] } });
@@ -115,9 +129,10 @@ export async function PATCH(req: NextRequest) {
   const id = String(body.id ?? "").trim();
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
   const who = user.email ?? user.id;
+  const desk = DESKS[deskOf(body.desk)];
 
   if (body.kind === "contact") {
-    const { data, error } = await supabase.from("dst_vendor_contacts")
+    const { data, error } = await supabase.from(desk.contacts)
       .update({ ...cleanContact(body), updated_by: who, updated_at: new Date().toISOString() })
       .eq("id", id).select(CONTACT_COLS).single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -125,9 +140,9 @@ export async function PATCH(req: NextRequest) {
   }
 
   // An account cannot be its own parent, which would hide it from the affiliation tree.
-  const row = clean(body);
+  const row = clean(body, desk.types);
   if (row.parent_id === id) row.parent_id = null;
-  const { data, error } = await supabase.from("dst_vendors")
+  const { data, error } = await supabase.from(desk.accounts)
     .update({ ...row, updated_by: who, updated_at: new Date().toISOString() })
     .eq("id", id).select(COLS).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -141,16 +156,17 @@ export async function DELETE(req: NextRequest) {
   const id = searchParams.get("id");
   const kind = searchParams.get("kind");
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
+  const desk = DESKS[deskOf(searchParams.get("desk"))];
 
   if (kind === "contact") {
-    const { error } = await supabase.from("dst_vendor_contacts").delete().eq("id", id);
+    const { error } = await supabase.from(desk.contacts).delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ ok: true });
   }
 
   // Brokerages under a deleted broker dealer keep their own records; only the link goes,
   // which the parent_id foreign key handles on its own.
-  const { error } = await supabase.from("dst_vendors").delete().eq("id", id);
+  const { error } = await supabase.from(desk.accounts).delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
