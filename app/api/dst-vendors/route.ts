@@ -32,7 +32,7 @@ const deskOf = (v: unknown): DeskKey => (String(v) === "property" ? "property" :
 
 const COLS = "id, name, description, vendor_type, parent_id, website, notes, next_steps, " +
   "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at";
-const CONTACT_COLS = "id, vendor_id, name, title, email, phone_office, phone_cell, address, linkedin_url, notes, is_primary";
+const CONTACT_COLS = "id, vendor_id, name, title, email, phone_office, phone_cell, address, city_state, linkedin_url, notes, is_primary";
 
 function clean(body: Record<string, unknown>, types: readonly string[]) {
   const out: Record<string, unknown> = {};
@@ -58,7 +58,7 @@ function cleanContact(body: Record<string, unknown>) {
   const out: Record<string, unknown> = {};
   const str = (v: unknown) => String(v ?? "").trim() || null;
   if (typeof body.name === "string") out.name = body.name.trim();
-  for (const k of ["title", "email", "phone_office", "phone_cell", "address", "linkedin_url", "notes"]) {
+  for (const k of ["title", "email", "phone_office", "phone_cell", "address", "city_state", "linkedin_url", "notes"]) {
     if (body[k] !== undefined) out[k] = str(body[k]);
   }
   if (body.is_primary !== undefined) out.is_primary = !!body.is_primary;

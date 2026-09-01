@@ -34,7 +34,7 @@ type DeskKey = keyof typeof DESK
 
 interface VContact {
   id: string; vendor_id: string; name: string; title: string | null; email: string | null
-  phone_office: string | null; phone_cell: string | null; address: string | null
+  phone_office: string | null; phone_cell: string | null; address: string | null; city_state: string | null
   linkedin_url: string | null; notes: string | null; is_primary: boolean
 }
 interface Vendor {
@@ -71,6 +71,7 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('All')
   const [affFilter, setAffFilter] = useState('All')
+  const [stateFilter, setStateFilter] = useState('All')
   const [editing, setEditing] = useState<Draft | null>(null)
   const [people, setPeople] = useState<Vendor | null>(null)
 
@@ -106,19 +107,34 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     return items.filter(v => withKids.has(v.id)).sort((a, b) => a.name.localeCompare(b.name))
   }, [items])
 
+  // States come off the tail of each contact's city/state line, e.g. "Chandler, AZ".
+  const statesOf = (v: Vendor) => {
+    const out: string[] = []
+    for (const c of v.contacts) {
+      const m = /(?:^|[\s,])([A-Za-z]{2})\.?(\s+\d{5}(-\d{4})?)?\s*$/.exec(c.city_state ?? '')
+      if (m) { const st = m[1].toUpperCase(); if (!out.includes(st)) out.push(st) }
+    }
+    return out
+  }
+
+  const stateOptions = useMemo(
+    () => Array.from(new Set(items.flatMap(statesOf))).sort(),
+    [items])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     const hasKids = new Set(items.map(v => v.parent_id).filter(Boolean) as string[])
     return items
       .filter(v => typeFilter === 'All' || v.vendor_type === typeFilter)
       // Picking a parent keeps the parent itself alongside everything under it.
+      .filter(v => stateFilter === 'All' || statesOf(v).includes(stateFilter))
       .filter(v => affFilter === 'All'
         || (affFilter === 'None' ? !v.parent_id && !hasKids.has(v.id) : v.id === affFilter || v.parent_id === affFilter))
       .filter(v => !q
         || v.name.toLowerCase().includes(q)
         || (v.description || '').toLowerCase().includes(q)
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
-  }, [items, search, typeFilter, affFilter])
+  }, [items, search, typeFilter, affFilter, stateFilter])
 
   async function save(draft: Draft) {
     const editingExisting = !!draft.id
@@ -160,6 +176,13 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           <option value="All">All types</option>
           {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
+        {stateOptions.length > 0 && (
+          <select value={stateFilter} onChange={e => setStateFilter(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+            <option value="All">All states</option>
+            {stateOptions.map(st => <option key={st} value={st}>{st}</option>)}
+          </select>
+        )}
         {showAffiliationFilter && (
           <select value={affFilter} onChange={e => setAffFilter(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151', maxWidth: 260 }}>
@@ -371,6 +394,7 @@ function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; d
                     {bit('Office', c.phone_office)}
                     {bit('Cell', c.phone_cell)}
                     {bit('Address', c.address)}
+                    {bit('City / State', c.city_state)}
                     {bit('LinkedIn', c.linkedin_url ? 'profile ↗' : null, c.linkedin_url ?? undefined)}
                   </div>
                   {c.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{c.notes}</div>}
@@ -417,6 +441,7 @@ function ContactModal({ draft, onCancel, onSave }: { draft: CDraft; onCancel: ()
           {fld('Phone (cell)', 'phone_cell')}
           {fld('LinkedIn URL', 'linkedin_url')}
           {fld('Address', 'address', true)}
+          {fld('City / State', 'city_state')}
           {fld('Notes', 'notes', true)}
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, gridColumn: '1 / -1', fontSize: 13.5, color: '#374151' }}>
             <input type="checkbox" checked={!!c.is_primary} onChange={e => set('is_primary', e.target.checked)} />
