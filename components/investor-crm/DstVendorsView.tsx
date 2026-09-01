@@ -74,6 +74,8 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   const [stateFilter, setStateFilter] = useState('All')
   const [editing, setEditing] = useState<Draft | null>(null)
   const [people, setPeople] = useState<Vendor | null>(null)
+  // Set when the DST Investor directory sent us here for a named broker dealer or advisor.
+  const [handoff, setHandoff] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -86,6 +88,33 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     finally { setLoading(false) }
   }, [desk])
   useEffect(() => { load() }, [load])
+
+  // Arriving from the DST Investor directory: it stashes the broker dealer or advisor's name
+  // and navigates here. Land on that record rather than the top of an unfiltered list.
+  useEffect(() => {
+    if (desk !== 'dst' || loading || !items.length) return
+    let wanted: string | null = null
+    try {
+      wanted = window.sessionStorage.getItem('dstVendorFilter')
+      if (wanted) window.sessionStorage.removeItem('dstVendorFilter')   // one jump, not every visit
+    } catch { return }
+    if (!wanted) return
+
+    const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+    const w = norm(wanted)
+    // An account first, then the advisor sitting inside one.
+    const account =
+      items.find(v => norm(v.name) === w) ??
+      items.find(v => v.contacts.some(c => norm(c.name) === w)) ??
+      items.find(v => norm(v.name).includes(w) || w.includes(norm(v.name))) ??
+      items.find(v => v.contacts.some(c => norm(c.name).includes(w)))
+
+    // Clear the filters, or the record we were sent to could be filtered out of the list.
+    setTypeFilter('All'); setAffFilter('All'); setStateFilter('All')
+    setSearch(account ? account.name : wanted)
+    if (account) setPeople(account)
+    else setHandoff(wanted)
+  }, [desk, loading, items])
 
   // Keep the open popout in step with the list after a contact is added or removed.
   useEffect(() => {
@@ -167,6 +196,14 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
         <h1 style={{ fontSize: 30, fontWeight: 700, color: '#1a2233', margin: '2px 0 2px' }}>{cfg.title}</h1>
         <div style={{ color: '#6b7280', fontSize: 14 }}>{cfg.subtitle}</div>
       </div>
+
+      {handoff && (
+        <div style={{ marginBottom: 12, padding: '10px 13px', borderRadius: 9, background: '#fffbeb', border: '1px solid #fde68a', fontSize: 13, color: '#92400e', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span><b>{handoff}</b> has no account or contact in this directory yet.</span>
+          <button onClick={() => { setHandoff(null); setSearch('') }}
+            style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 700, color: '#92400e' }}>✕</button>
+        </div>
+      )}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts, contacts…"
