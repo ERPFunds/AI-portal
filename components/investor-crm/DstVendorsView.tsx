@@ -70,6 +70,7 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('All')
+  const [affFilter, setAffFilter] = useState('All')
   const [editing, setEditing] = useState<Draft | null>(null)
   const [people, setPeople] = useState<Vendor | null>(null)
 
@@ -98,15 +99,26 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     () => (cfg.parentType ? items.filter(v => v.vendor_type === cfg.parentType) : items),
     [items, cfg.parentType])
 
+  // Affiliation filter: the parents that actually have something listed under them,
+  // so the dropdown never offers a broker dealer with no brokerages.
+  const affOptions = useMemo(() => {
+    const withKids = new Set(items.map(v => v.parent_id).filter(Boolean) as string[])
+    return items.filter(v => withKids.has(v.id)).sort((a, b) => a.name.localeCompare(b.name))
+  }, [items])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
+    const hasKids = new Set(items.map(v => v.parent_id).filter(Boolean) as string[])
     return items
       .filter(v => typeFilter === 'All' || v.vendor_type === typeFilter)
+      // Picking a parent keeps the parent itself alongside everything under it.
+      .filter(v => affFilter === 'All'
+        || (affFilter === 'None' ? !v.parent_id && !hasKids.has(v.id) : v.id === affFilter || v.parent_id === affFilter))
       .filter(v => !q
         || v.name.toLowerCase().includes(q)
         || (v.description || '').toLowerCase().includes(q)
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
-  }, [items, search, typeFilter])
+  }, [items, search, typeFilter, affFilter])
 
   async function save(draft: Draft) {
     const editingExisting = !!draft.id
@@ -130,6 +142,7 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   }
 
   const primaryOf = (v: Vendor) => v.contacts.find(c => c.is_primary) ?? v.contacts[0]
+  const showAffiliationFilter = cfg.columns.includes('affiliation') && affOptions.length > 0
 
   return (
     <div>
@@ -147,6 +160,14 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           <option value="All">All types</option>
           {VENDOR_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
+        {showAffiliationFilter && (
+          <select value={affFilter} onChange={e => setAffFilter(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151', maxWidth: 260 }}>
+            <option value="All">All affiliations</option>
+            {affOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+            <option value="None">Unaffiliated</option>
+          </select>
+        )}
         <button onClick={() => setEditing({ vendor_type: VENDOR_TYPES[0] })}
           style={{ border: 0, background: '#1a2233', color: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>+ Add Account</button>
       </div>
