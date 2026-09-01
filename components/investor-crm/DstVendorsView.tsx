@@ -29,6 +29,15 @@ const DESK = {
     types: ['Contractor', 'Lender', 'Broker', 'Property Manager', 'Title/Escrow',
       'Insurance', 'Legal/Counsel', 'Utility', 'Inspection/Appraisal', 'Other'],
   },
+  lender: {
+    eyebrow: 'Property CRM', title: 'Lenders',
+    subtitle: 'Banks, credit unions and other lenders financing the portfolio',
+    affiliationLabel: 'Affiliation — parent institution this account sits under',
+    parentType: '',
+    columns: ['account', 'descNotes', 'contacts', 'address', 'website'] as string[],
+    types: ['Bank', 'Credit Union', 'Life Company', 'Debt Fund', 'Agency', 'Bridge/Mezz',
+      'Private Lender', 'Other'],
+  },
 } as const
 type DeskKey = keyof typeof DESK
 

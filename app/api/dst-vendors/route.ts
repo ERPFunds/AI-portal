@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 // tells the team which desk a brokerage is listed under. Contacts live in their own table
 // so each person can carry a title, both phone numbers, an address and a LinkedIn profile.
 
-// Two vendor desks share this route: the DST distribution network and the property-side
-// vendors. Same shape, different tables and vocabulary.
+// Three desks share this route: the DST distribution network, the property-side vendors,
+// and the property lenders. Same shape, different tables and vocabulary.
 const DESKS = {
   dst: {
     accounts: "dst_vendors", contacts: "dst_vendor_contacts",
@@ -26,9 +26,15 @@ const DESKS = {
     types: ["Contractor", "Lender", "Broker", "Property Manager", "Title/Escrow",
       "Insurance", "Legal/Counsel", "Utility", "Inspection/Appraisal", "Other"],
   },
+  lender: {
+    accounts: "property_lenders", contacts: "property_lender_contacts",
+    types: ["Bank", "Credit Union", "Life Company", "Debt Fund", "Agency", "Bridge/Mezz",
+      "Private Lender", "Other"],
+  },
 } as const;
 type DeskKey = keyof typeof DESKS;
-const deskOf = (v: unknown): DeskKey => (String(v) === "property" ? "property" : "dst");
+const deskOf = (v: unknown): DeskKey =>
+  (String(v) === "property" || String(v) === "lender" ? (String(v) as DeskKey) : "dst");
 
 const COLS = "id, name, description, vendor_type, parent_id, website, notes, next_steps, " +
   "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at";

@@ -461,7 +461,18 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           </div>
         </td>}
         {/* Investor (the account / entity) */}
-        <td style={tdCss}><div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div></td>
+        <td style={tdCss}>
+          <div style={{ fontWeight: 600, color: '#1a2233' }}>{lp.investor}</div>
+          {/* Not every prospect is an investor prospect — the sheet also carries law firms
+              and vendors, and the description is what tells them apart. */}
+          {overlays[normKey(lp.investor)]?.investor_type && (
+            <div style={{ marginTop: 3 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#f1f5f9', color: '#475569' }}>
+                {overlays[normKey(lp.investor)]?.investor_type}
+              </span>
+            </div>
+          )}
+        </td>
         {/* Contact(s) — from the portal contact store only */}
         {hasContacts && <td style={tdCss}>
           {pc
