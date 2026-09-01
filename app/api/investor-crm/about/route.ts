@@ -65,6 +65,9 @@ type Row = {
   about: string | null;
 };
 
+// Failures that are about the account or the service, not this particular investor.
+// Stamping a row for one of these would quietly empty the queue during an outage.
+const GLOBAL_FAILURE = /credit balance|rate.?limit|429|overloaded|529|authentication|invalid x-api-key|permission/i;
 const HEDGE = /(appears? to be|appear to be|likely|may be|possibly|presumably|probably|suggests?|is believed|could be|seems? to|we believe|unclear)/i;
 const BAD_SITE = /linkedin\.com|bloomberg\.com|zoominfo|crunchbase|dnb\.com|facebook\.com|twitter\.com|wikipedia/i;
 const URL_RE = /https?:\/\/[^\s"'\\]+/g;
@@ -160,6 +163,7 @@ export async function POST(req: NextRequest) {
     // population: "lps" (default), "prospects", or "all". Prospects are mostly named firms
     // and institutions, which research more reliably than personal-name trusts do.
     let q = supabase.from("investor_crm").select(cols).eq("archived", false);
+    if (body.program) q = q.eq("program", String(body.program).toUpperCase());
     if (body.population !== "all") q = q.eq("is_lp", body.population !== "prospects");
     // "retry" takes another swing at the accounts still without an About line.
     const { data, error } = body.what === "contact"
@@ -212,10 +216,22 @@ export async function POST(req: NextRequest) {
       await supabase.from("investor_crm").update(patch).eq("investor_key", row.investor_key);
       results.push({ investor: row.investor, ...r });
     } catch (e) {
-      // Stamp the attempt even on failure, so the row leaves the default batch queue.
+      const msg = String(e);
+      if (GLOBAL_FAILURE.test(msg)) {
+        // Nothing wrong with this investor — stop and leave the queue untouched.
+        return NextResponse.json({
+          count: results.length,
+          found: results.filter((r) => r.about).length,
+          websites: results.filter((r) => r.website).length,
+          addresses: results.filter((r) => r.address).length,
+          halted: msg.slice(0, 200),
+          results,
+        });
+      }
+      // A failure specific to this row: stamp it so the batch does not spin on it.
       await supabase.from("investor_crm")
         .update({ about_researched_at: new Date().toISOString() }).eq("investor_key", row.investor_key);
-      results.push({ investor: row.investor, about: "", website: "", address: "", confidence: "error", sources: [String(e).slice(0, 200)] });
+      results.push({ investor: row.investor, about: "", website: "", address: "", confidence: "error", sources: [msg.slice(0, 200)] });
     }
   }
 
