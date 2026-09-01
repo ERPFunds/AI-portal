@@ -12,10 +12,12 @@ const PAGE = 100;
 
 // Backfills CRM contact emails from the addresses the team has actually corresponded with.
 //
-//   action:"index"  walks Meghan's and William's inbox + sent items backwards in time and records
-//                   every counterparty (name -> email) in mailbox_directory. Resumable: each run
-//                   continues from the watermark in mailbox_scan_state, so it can be called
-//                   repeatedly until it reports done.
+//   action:"index"  walks Meghan's and William's mail backwards in time and records every
+//                   counterparty (name -> email) in mailbox_directory. Every folder is scanned,
+//                   not just the Inbox — both of them file mail away, so an Inbox-only walk sees
+//                   almost nothing. Deleted Items, Junk and Drafts are excluded. Resumable: each
+//                   run continues from the watermark in mailbox_scan_state, and mailboxes are
+//                   served round-robin so a large one cannot starve the others.
 //   action:"match"  matches PE prospect contacts that have no email against that directory.
 //                   Dry-run unless apply:true.
 //
@@ -78,22 +80,36 @@ async function authorize(req: NextRequest): Promise<string | null> {
 
 // ── Indexing ─────────────────────────────────────────────────────────────────
 
-// One page-walk of a folder, going backwards from `before` until the time floor or the budget.
-async function walkFolder(
-  token: string, mailbox: string, folder: "inbox" | "sentitems",
+// The well-known folders whose mail is noise rather than correspondence.
+const EXCLUDED_FOLDERS = ["deleteditems", "junkemail", "drafts"];
+
+async function excludedFolderIds(token: string, mailbox: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  for (const wk of EXCLUDED_FOLDERS) {
+    try {
+      const r = await fetch(`${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${wk}?$select=id`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (r.ok) { const d = await r.json(); if (d.id) out.add(d.id as string); }
+    } catch { /* best-effort exclusion */ }
+  }
+  return out;
+}
+
+// One page-walk across every folder in a mailbox, going backwards from `before` until the time
+// floor or the slice deadline. Sent mail carries receivedDateTime too, so a single ordering covers
+// both directions; participants are taken from From, To and CC regardless of direction.
+async function walkMailbox(
+  token: string, mailbox: string, excluded: Set<string>,
   floorIso: string, beforeIso: string | null, deadline: number,
 ): Promise<{ parties: Party[]; oldest: string | null; newest: string | null; messages: number; done: boolean }> {
-  const dateField = folder === "inbox" ? "receivedDateTime" : "sentDateTime";
-  const select = folder === "inbox"
-    ? `from,${dateField}`
-    : `toRecipients,ccRecipients,${dateField}`;
-
-  const clauses = [`${dateField} ge ${floorIso}`];
-  if (beforeIso) clauses.push(`${dateField} lt ${beforeIso}`);
+  const clauses = [`receivedDateTime ge ${floorIso}`];
+  if (beforeIso) clauses.push(`receivedDateTime lt ${beforeIso}`);
   let url: string | null =
-    `${GRAPH}/users/${encodeURIComponent(mailbox)}/mailFolders/${folder}/messages` +
-    `?$select=${select}&$filter=${encodeURIComponent(clauses.join(" and "))}` +
-    `&$orderby=${encodeURIComponent(`${dateField} desc`)}&$top=${PAGE}`;
+    `${GRAPH}/users/${encodeURIComponent(mailbox)}/messages` +
+    `?$select=from,toRecipients,ccRecipients,receivedDateTime,parentFolderId` +
+    `&$filter=${encodeURIComponent(clauses.join(" and "))}` +
+    `&$orderby=${encodeURIComponent("receivedDateTime desc")}&$top=${PAGE}`;
 
   const parties: Party[] = [];
   let oldest: string | null = null;
@@ -104,25 +120,24 @@ async function walkFolder(
   while (url) {
     if (Date.now() > deadline) return { parties, oldest, newest, messages, done: false };
     const r: Response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
-    if (!r.ok) throw new Error(`Graph ${mailbox}/${folder} ${r.status}: ${(await r.text()).slice(0, 180)}`);
+    if (!r.ok) throw new Error(`Graph ${mailbox} ${r.status}: ${(await r.text()).slice(0, 180)}`);
     const j = await r.json();
-    const batch = (j.value ?? []) as Record<string, unknown>[];
-    for (const m of batch) {
-      const when = (m[dateField] as string) || "";
+    for (const m of ((j.value ?? []) as Record<string, unknown>[])) {
+      const when = (m.receivedDateTime as string) || "";
+      // The watermark must advance over skipped mail too, or the next run re-reads the same pages.
       if (when) {
         if (!newest || when > newest) newest = when;
         if (!oldest || when < oldest) oldest = when;
       }
       messages++;
+      if (m.parentFolderId && excluded.has(m.parentFolderId as string)) continue;
+
       const addrs: { name?: string; address?: string }[] = [];
-      if (folder === "inbox") {
-        const f = (m.from as { emailAddress?: { name?: string; address?: string } })?.emailAddress;
-        if (f) addrs.push(f);
-      } else {
-        for (const key of ["toRecipients", "ccRecipients"]) {
-          for (const rc of ((m[key] as { emailAddress?: { name?: string; address?: string } }[]) ?? [])) {
-            if (rc.emailAddress) addrs.push(rc.emailAddress);
-          }
+      const f = (m.from as { emailAddress?: { name?: string; address?: string } })?.emailAddress;
+      if (f) addrs.push(f);
+      for (const key of ["toRecipients", "ccRecipients"]) {
+        for (const rc of ((m[key] as { emailAddress?: { name?: string; address?: string } }[]) ?? [])) {
+          if (rc.emailAddress) addrs.push(rc.emailAddress);
         }
       }
       for (const a of addrs) {
@@ -132,7 +147,7 @@ async function walkFolder(
       }
     }
     url = (j["@odata.nextLink"] as string) || null;
-    if (!url) done = true;                        // reached the floor for this folder
+    if (!url) done = true;                        // reached the floor for this mailbox
   }
   return { parties, oldest, newest, messages, done };
 }
@@ -150,60 +165,66 @@ async function runIndex(body: Record<string, unknown>) {
   const floorIso = floor.toISOString();
   const deadline = Date.now() + Number(body.budgetMs ?? 210_000);
 
-  const { data: stateRows } = await admin.from("mailbox_scan_state").select("*");
-  const state = new Map((stateRows ?? []).map((r) => [`${r.mailbox}|${r.folder}`, r]));
-
   // Aggregate this run's sightings in memory, then write one row per address.
   const seen = new Map<string, { name: string; hits: number; first: string; last: string; boxes: Set<string> }>();
   const report: Record<string, unknown>[] = [];
-  let allDone = true;
 
-  for (const mailbox of mailboxes) {
-    for (const folder of ["inbox", "sentitems"] as const) {
-      const prior = state.get(`${mailbox}|${folder}`);
-      // Continue backwards from wherever the last run stopped.
-      const before = prior?.oldest_scanned ? new Date(prior.oldest_scanned).toISOString() : null;
-      if (prior?.oldest_scanned && new Date(prior.oldest_scanned) <= floor) {
-        report.push({ mailbox, folder, skipped: "already scanned to floor" });
+  // Serve the mailboxes round-robin in short slices so a big one cannot eat the whole budget.
+  const SLICE_MS = 45_000;
+  const excluded = new Map<string, Set<string>>();
+  const finished = new Set<string>();
+  for (const mailbox of mailboxes) excluded.set(mailbox, await excludedFolderIds(token, mailbox));
+
+  while (Date.now() < deadline && finished.size < mailboxes.length) {
+    for (const mailbox of mailboxes) {
+      if (finished.has(mailbox) || Date.now() >= deadline) continue;
+      const { data: cur } = await admin.from("mailbox_scan_state")
+        .select("*").eq("mailbox", mailbox).eq("folder", "all").maybeSingle();
+      if (cur?.oldest_scanned && new Date(cur.oldest_scanned) <= floor) {
+        finished.add(mailbox);
+        report.push({ mailbox, skipped: "already scanned to floor" });
         continue;
       }
+      const before = cur?.oldest_scanned ? new Date(cur.oldest_scanned).toISOString() : null;
+      const slice = Math.min(deadline, Date.now() + SLICE_MS);
       try {
-        const res = await walkFolder(token, mailbox, folder, floorIso, before, deadline);
+        const res = await walkMailbox(token, mailbox, excluded.get(mailbox)!, floorIso, before, slice);
         for (const p of res.parties) {
-          const cur = seen.get(p.email);
-          if (!cur) {
+          const prev = seen.get(p.email);
+          if (!prev) {
             seen.set(p.email, { name: p.name, hits: 1, first: p.when, last: p.when, boxes: new Set([mailbox]) });
           } else {
-            cur.hits++;
-            cur.boxes.add(mailbox);
-            if (p.when && p.when < cur.first) cur.first = p.when;
-            if (p.when && p.when > cur.last) cur.last = p.when;
+            prev.hits++;
+            prev.boxes.add(mailbox);
+            if (p.when && p.when < prev.first) prev.first = p.when;
+            if (p.when && p.when > prev.last) prev.last = p.when;
             // Prefer a real display name over an echoed address.
-            if (!usableName(cur.name) && usableName(p.name)) cur.name = p.name;
+            if (!usableName(prev.name) && usableName(p.name)) prev.name = p.name;
           }
         }
-        const oldest = res.oldest && prior?.oldest_scanned
-          ? (res.oldest < prior.oldest_scanned ? res.oldest : prior.oldest_scanned)
-          : (res.oldest ?? prior?.oldest_scanned ?? null);
-        const newest = res.newest && prior?.newest_scanned
-          ? (res.newest > prior.newest_scanned ? res.newest : prior.newest_scanned)
-          : (res.newest ?? prior?.newest_scanned ?? null);
+        const oldest = res.oldest && cur?.oldest_scanned
+          ? (res.oldest < cur.oldest_scanned ? res.oldest : cur.oldest_scanned)
+          : (res.oldest ?? cur?.oldest_scanned ?? null);
+        const newest = res.newest && cur?.newest_scanned
+          ? (res.newest > cur.newest_scanned ? res.newest : cur.newest_scanned)
+          : (res.newest ?? cur?.newest_scanned ?? null);
         await admin.from("mailbox_scan_state").upsert({
-          mailbox, folder,
-          // When a folder is exhausted, park the watermark at the floor so later runs skip it.
+          mailbox, folder: "all",
+          // When a mailbox is exhausted, park the watermark at the floor so later runs skip it.
           oldest_scanned: res.done ? floorIso : oldest,
           newest_scanned: newest,
-          messages: (prior?.messages ?? 0) + res.messages,
+          messages: (cur?.messages ?? 0) + res.messages,
           updated_at: new Date().toISOString(),
         }, { onConflict: "mailbox,folder" });
-        if (!res.done) allDone = false;
-        report.push({ mailbox, folder, messages: res.messages, parties: res.parties.length, done: res.done });
+        if (res.done) finished.add(mailbox);
+        report.push({ mailbox, messages: res.messages, parties: res.parties.length, done: res.done, through: oldest });
       } catch (e) {
-        allDone = false;
-        report.push({ mailbox, folder, error: String(e).slice(0, 200) });
+        finished.add(mailbox);                    // don't spin on a mailbox that is erroring
+        report.push({ mailbox, error: String(e).slice(0, 200) });
       }
     }
   }
+  const allDone = finished.size === mailboxes.length && !report.some((r) => r.error);
 
   // Merge into the directory. Hits accumulate across runs; the best name seen wins.
   const emails = [...seen.keys()];
