@@ -202,7 +202,6 @@ function typeTag(lp: LpRecord, isLp = false): { label: string; bg: string; color
 // mode splits each population by whether capital has actually been committed:
 // 'lps' = committed, 'prospects' = no commitment recorded yet, 'all' = both.
 export default function InvestorCrmView({ program, mode = 'all', onNavigate }: { program: 'PE' | 'DST'; mode?: 'lps' | 'prospects' | 'all'; onNavigate?: (view: string) => void }) {
-  const [lps, setLps] = useState<LpRecord[]>([])
   const [overlays, setOverlays] = useState<Record<string, Overlay>>({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -226,14 +225,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [lpRes, ovRes] = await Promise.all([
-        fetch('/api/lp-directory'),
-        fetch('/api/investor-crm'),
-      ])
-      const lpJson = await lpRes.json()
-      if (!lpRes.ok || lpJson.error) { setError(lpJson.error ?? `Load failed (${lpRes.status})`); return }
-      setLps(Array.isArray(lpJson.lps) ? lpJson.lps : [])
+      const ovRes = await fetch('/api/investor-crm')
+      if (!ovRes.ok) { setError(`Load failed (${ovRes.status})`); return }
       const ovJson = await ovRes.json().catch(() => ({}))
+      if (ovJson.error) { setError(ovJson.error); return }
       setOverlays(ovJson.overlays ?? {})
       setError(null)
     } catch (e) { setError(String(e)) }
@@ -287,23 +282,10 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     const portal = Object.values(overlays)
       .filter(ov => ov.portal_created && !ov.archived && (ov.program ?? 'PE') === program)
       .map(overlayToLp)
-    // DST rows arrive from the SharePoint cache without a fund breakdown. The portal now
-    // owns that, so merge the split and the fuller total onto each cached row.
-    const base = program === 'DST'
-      ? lps.map(lp => {
-          const ov = overlays[normKey(lp.investor)]
-          if (!ov?.fund_commitments) return lp
-          return {
-            ...lp,
-            dstFunds: Object.keys(ov.fund_commitments),
-            committedUsd: ov.committed_usd != null ? Number(ov.committed_usd) : lp.committedUsd,
-            // The feed's broker/advisor wins where it has one; the sheets fill the rest.
-            brokerFirm: lp.brokerFirm || (ov.broker_dealer ?? ''),
-            brokerContact: lp.brokerContact || (ov.advisor ?? ''),
-          }
-        })
-      : []
-    return [...base, ...portal]
+    // DST used to be layered on top of the SharePoint cache. Its investors, fund splits,
+    // commitments, broker/advisor and contacts all live in the portal now, so every CRM
+    // list is portal-owned and none of them read the feed.
+    return portal
       .filter(lp => !overlays[normKey(lp.investor)]?.archived)
       .filter(inProgram)
       .filter(lp => {
@@ -336,7 +318,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [lps, overlays, program, search, fundFilter, stageFilter, stateFilter, ownerFilter, mode, columns, sortKey, sortDir])
+  }, [overlays, program, search, fundFilter, stageFilter, stateFilter, ownerFilter, mode, columns, sortKey, sortDir])
 
   const stateOptions = useMemo(() => {
     const set = new Set<string>()
@@ -362,7 +344,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
     const managed = funds.filter(f => !f.program || f.program === program).map(f => f.name)
     const derived = [...set].filter(n => !managed.includes(n)).sort()
     return [...managed, ...derived]
-  }, [lps, overlays, program, funds])
+  }, [overlays, program, funds])
 
   const totalCommitted = useMemo(() => rows.reduce((s, lp) => s + effectiveCommitted(lp), 0), [rows])
   const totalTarget = useMemo(() => rows.reduce((s, lp) => s + (lp.sfAmount ?? lp.commitmentUsd ?? 0), 0), [rows])
