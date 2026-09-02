@@ -10,7 +10,7 @@ import ImportModal from './ImportModal'
 // accounting (called/uncalled/NAV) lives in the fund admin portal, not here.
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
-const OWNERS = ['Meghan Berry', 'William Meyer']
+const OWNERS = ['Meghan Berry', 'William Meyer', 'Brennan Berry']
 // Not every prospect account is an investor — the prospect sheet also carries buy-side
 // counterparties, brokers and counsel, and the description is what separates them.
 const DESCRIPTIONS = ['Investor', 'Buyer', 'Broker', 'Lawyer']
