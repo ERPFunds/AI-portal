@@ -726,10 +726,38 @@ function ManageFundsModal({ funds, program, onClose, onChanged }: {
     } finally { setBusy(false) }
   }
   async function remove(f: Fund) {
-    if (!window.confirm(`Delete the fund "${f.name}"? Investors keep their data — they just lose this label.`)) return
+    if (!window.confirm(`Remove the label "${f.name}"? Investors keep their records and their data — they just lose this tag.`)) return
     setBusy(true)
     try { await fetch(`/api/crm-funds?id=${f.id}`, { method: 'DELETE' }); onChanged() }
     finally { setBusy(false) }
+  }
+
+  // The destructive one: state what will actually go before asking, and make the person
+  // type the fund name. Investors who also sit in another fund are kept and just untagged.
+  async function removeWithInvestors(f: Fund) {
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/crm-funds?impact=${encodeURIComponent(f.name)}${f.program ? `&program=${f.program}` : ''}`)
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j.error) { alert(`Could not check what this would delete: ${j.error ?? r.status}`); return }
+      const lines = [
+        `Delete "${f.name}" and everything only in it?`,
+        '',
+        `• ${j.investorsDeleted} investor${j.investorsDeleted === 1 ? '' : 's'} deleted`,
+        `• ${j.contactsDeleted} contact${j.contactsDeleted === 1 ? '' : 's'} deleted with them`,
+        `• ${j.investorsUntagged} investor${j.investorsUntagged === 1 ? '' : 's'} kept (they are in another fund too) — they just lose this tag`,
+      ]
+      if (j.sample?.length) lines.push('', `For example: ${j.sample.join(', ')}${j.investorsDeleted > j.sample.length ? '…' : ''}`)
+      lines.push('', 'This cannot be undone. Type the fund name to confirm.')
+      const typed = window.prompt(lines.join('\n'), '')
+      if (typed?.trim() !== f.name) { if (typed !== null) alert('Name did not match — nothing was deleted.'); return }
+
+      const res = await fetch(`/api/crm-funds?id=${f.id}&cascade=1`, { method: 'DELETE' })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || d.error) { alert(`Delete failed: ${d.error ?? res.status}`); return }
+      alert(`Deleted "${f.name}" — ${d.investorsDeleted} investors and ${d.contactsDeleted} contacts removed, ${d.investorsUntagged} kept.`)
+      onChanged()
+    } finally { setBusy(false) }
   }
   return (
     <div onClick={onClose} style={modalBackdrop}>
@@ -741,12 +769,21 @@ function ManageFundsModal({ funds, program, onClose, onChanged }: {
           <button onClick={add} disabled={busy || !name.trim()} style={modalPrimary}>Add</button>
         </div>
         {funds.length === 0 && <div style={{ color: '#9ca3af', fontSize: 13.5 }}>No funds defined yet. Add the ones you use to tag investors.</div>}
+        {funds.length > 0 && (
+          <div style={{ fontSize: 12.5, color: '#6b7280', marginBottom: 8, lineHeight: 1.5 }}>
+            <b>Remove label</b> drops the tag and keeps every investor.{' '}
+            <b>Delete fund + investors</b> also deletes the investors and contacts that belong only to that fund.
+          </div>
+        )}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {funds.map(f => (
             <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', border: '1px solid #eef0f2', borderRadius: 8 }}>
               <span style={{ fontWeight: 600, fontSize: 14, flex: 1 }}>{f.name}</span>
               {f.program && <span style={{ fontSize: 11, fontWeight: 700, color: '#6b7280' }}>{f.program}</span>}
-              <button onClick={() => remove(f)} disabled={busy} style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>Delete</button>
+              <button onClick={() => remove(f)} disabled={busy} title="Remove the label only — every investor record stays"
+                style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#6b7280' }}>Remove label</button>
+              <button onClick={() => removeWithInvestors(f)} disabled={busy} title="Delete the fund and every investor and contact that belongs only to it"
+                style={{ border: '1px solid #fecaca', background: '#fef2f2', borderRadius: 7, padding: '4px 9px', cursor: 'pointer', fontWeight: 600, fontSize: 12.5, color: '#b91c1c' }}>Delete fund + investors</button>
             </div>
           ))}
         </div>
