@@ -49,6 +49,7 @@ interface VContact {
 interface Vendor {
   id: string; name: string; description: string | null; vendor_type: string | null
   parent_id: string | null; website: string | null; notes: string | null; next_steps: string | null
+  about?: string | null; about_researched_at?: string | null
   address: string | null
   contacts: VContact[]
 }
@@ -171,6 +172,7 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
       .filter(v => !q
         || v.name.toLowerCase().includes(q)
         || (v.description || '').toLowerCase().includes(q)
+        || (v.about || '').toLowerCase().includes(q)
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
   }, [items, search, typeFilter, affFilter, stateFilter])
 
@@ -369,6 +371,7 @@ function AccountModal({ draft, parents, types, affiliationLabel, columns, onCanc
           {showAddress && fld('Address', 'address', true)}
           {fld('Website', 'website')}
           <div />
+          {fld('About — what the firm is', 'about', true)}
           {fld('Notes', 'notes', true)}
           {showNextSteps && fld('Next Steps', 'next_steps', true)}
         </div>
@@ -423,6 +426,13 @@ function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; d
           <div style={{ fontSize: 18, fontWeight: 700, color: '#1a2233' }}>{vendor.name}</div>
           <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Close ✕</button>
         </div>
+        {vendor.about && (
+          <div style={{ margin: '12px 0 16px', padding: '12px 14px', border: '1px solid #e6edf1', borderRadius: 10, background: '#f7fafb' }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#0f766e', marginBottom: 5 }}>About</div>
+            <div style={{ fontSize: 13.5, lineHeight: 1.55, color: '#374151', whiteSpace: 'pre-wrap' }}>{vendor.about}</div>
+          </div>
+        )}
+
         <div style={{ color: '#9ca3af', fontSize: 13, marginBottom: 16 }}>Contacts</div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

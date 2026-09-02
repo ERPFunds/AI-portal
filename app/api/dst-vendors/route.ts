@@ -37,7 +37,8 @@ const deskOf = (v: unknown): DeskKey =>
   (String(v) === "property" || String(v) === "lender" ? (String(v) as DeskKey) : "dst");
 
 const COLS = "id, name, description, vendor_type, parent_id, website, notes, next_steps, " +
-  "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at";
+  "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at, " +
+  "about, about_researched_at";
 const CONTACT_COLS = "id, vendor_id, name, title, email, phone_office, phone_cell, address, city_state, linkedin_url, notes, is_primary";
 
 function clean(body: Record<string, unknown>, types: readonly string[]) {
@@ -55,6 +56,9 @@ function clean(body: Record<string, unknown>, types: readonly string[]) {
   }
   if (body.website !== undefined) out.website = str(body.website);
   if (body.notes !== undefined) out.notes = str(body.notes);
+  // The researched profile of the firm. Deliberately separate from notes, which is the
+  // team's own relationship history.
+  if (body.about !== undefined) out.about = str(body.about);
   if (body.next_steps !== undefined) out.next_steps = str(body.next_steps);
   if (body.archived !== undefined) out.archived = !!body.archived;
   return out;
