@@ -11,6 +11,9 @@ import ImportModal from './ImportModal'
 
 const FUNNEL_STAGES = ['Identified', 'Contacted', 'Deck/OM sent', 'Diligence', 'Soft-circle', 'Subscription docs', 'Funded']
 const OWNERS = ['Meghan Berry', 'William Meyer']
+// Not every prospect account is an investor — the prospect sheet also carries buy-side
+// counterparties, brokers and counsel, and the description is what separates them.
+const DESCRIPTIONS = ['Investor', 'Buyer', 'Broker', 'Lawyer']
 const US_STATES = [
   'AL','AK','AZ','AR','CA','CO','CT','DE','DC','FL','GA','HI','ID','IL','IN','IA','KS','KY','LA','ME',
   'MD','MA','MI','MN','MS','MO','MT','NE','NV','NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI',
@@ -173,7 +176,7 @@ const bdOf = (lp: LpRecord) => lp.sfBrokerDealer || lp.brokerFirm || lp.sfAdviso
 const advOf = (lp: LpRecord) => lp.brokerContact || lp.sfAdvisorContact || ''
 const COLUMN_DEFS: ColDef[] = [
   { key: 'fund', label: 'Fund', text: lp => [typeTag(lp).label, ...(lp.priorFunds ?? []), lp.commitType || ''].join(' '), sort: lp => typeTag(lp).label },
-  { key: 'investor', label: 'Investor', text: lp => lp.investor, sort: lp => lp.investor.toLowerCase() },
+  { key: 'investor', label: 'Investor', text: lp => lp.investor, sort: lp => lp.investor.toLowerCase() },  // relabelled 'Account' on prospects
   { key: 'contacts', label: 'Contact(s)', text: () => '', sort: () => '' },
   { key: 'commitment', label: 'Commitment', text: lp => String(effectiveCommitted(lp) || ''), sort: lp => effectiveCommitted(lp) },
   { key: 'brokerDealer', label: 'Broker Dealer / RIA', dstOnly: true, text: bdOf, sort: lp => bdOf(lp).toLowerCase() },
@@ -265,8 +268,12 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       (c.key !== 'contacts' || hasContacts) &&
       (c.key !== 'fund' || !hideFund) &&
       (!c.prospectsOnly || mode === 'prospects'))
-      // Nothing is committed on a prospect — the figure there is what we are aiming for.
-      .map(c => (c.key === 'commitment' && mode === 'prospects' ? { ...c, label: 'Target Commitment' } : c)),
+      // On prospects the entity is not necessarily an investor, and nothing is committed
+      // yet, so both headers read differently there.
+      .map(c => (mode !== 'prospects' ? c
+        : c.key === 'commitment' ? { ...c, label: 'Target Commitment' }
+        : c.key === 'investor' ? { ...c, label: 'Account' }
+        : c)),
     [program, hasContacts, hideFund, mode]
   )
   function toggleSort(key: string) {
@@ -691,6 +698,15 @@ function AddInvestorModal({ program, commitLabel, funds, onCancel, onSaved }: {
               {funds.map(f => <option key={f} value={f}>{f}</option>)}
             </select>
           </label>
+          {commitLabel === 'Target Commitment' && (
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: '#9ca3af' }}>Description</span>
+              <select value={(d.investor_type as string) ?? ''} onChange={e => set('investor_type', e.target.value)} style={modalInput}>
+                <option value="">— none —</option>
+                {DESCRIPTIONS.map(x => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </label>
+          )}
           {fld(commitLabel, 'committed_usd', false, '1,000,000')}
           {fld('Primary Contact', 'contact')}
           {fld('Email', 'email')}
@@ -1132,6 +1148,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}>
                     <EditField k="Account (Entity)" value={acct.investor} onSave={v => saveAccount({ investor: v })} />
                     <Field k="Primary Contact" v={people?.find(x => x.is_primary)?.name || people?.[0]?.name || '—'} />
+                    {!isLpDirectory && <EditSelect k="Description" value={acct.investor_type} options={DESCRIPTIONS} onSave={v => saveAccount({ investor_type: v })} />}
                     <EditSelect k="Source" value={acct.source} options={SOURCES} onSave={v => saveAccount({ source: v })} />
                     <EditSelect k="Owner" value={acct.owner} options={OWNERS} onSave={v => saveAccount({ owner: v })} />
                     <EditField k="Fund" value={acct.fund} onSave={v => saveAccount({ fund: v })} />

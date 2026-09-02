@@ -15,9 +15,10 @@ const FUNNEL_STAGES = [
   "Identified", "Contacted", "Deck/OM sent", "Diligence", "Soft-circle", "Subscription docs", "Funded",
 ];
 const TIERS = ["Anchor", "Core", "Prospect"];
+const DESCRIPTIONS = ["Investor", "Buyer", "Broker", "Lawyer"];
 const PROGRAMS = ["PE", "DST"];
 
-const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, state, notes, next_steps, broker_dealer, advisor, about, about_sources, about_researched_at, updated_by, updated_at";
+const COLS = "investor_key, investor, program, funnel_stage, tier, owner, source, entity, investor_type, target_amount, expected_close, archived, portal_created, is_lp, fund, prior_fund, fund_commitments, committed_usd, contact, email, phone, address, website, state, notes, next_steps, broker_dealer, advisor, about, about_sources, about_researched_at, updated_by, updated_at";
 
 // Must match how keys are stored: lowercase, punctuation collapsed to single spaces.
 // A weaker normalization silently inserts a duplicate instead of updating the record.
@@ -78,6 +79,8 @@ export async function PATCH(req: NextRequest) {
   if (body.tier !== undefined) { const t = body.tier ? String(body.tier).trim() : ""; row.tier = t && TIERS.includes(t) ? t : (t || null); }
   if (body.owner !== undefined) row.owner = body.owner ? String(body.owner).trim() : null;
   if (body.source !== undefined) row.source = body.source ? String(body.source).trim() : null;
+  // Free text is accepted so historic values ("Law Firm", "Vendor") survive an unrelated save.
+  if (body.investor_type !== undefined) row.investor_type = str(body.investor_type);
   if (body.entity !== undefined) row.entity = body.entity ? String(body.entity).trim() : null;
   // Portal overrides for the SF Opportunity Amount / CloseDate shown on the record.
   if (body.target_amount !== undefined) {
@@ -148,6 +151,7 @@ export async function POST(req: NextRequest) {
     phone: str(body.phone),
     notes: str(body.notes),
     owner: str(body.owner),
+    investor_type: DESCRIPTIONS.includes(body.investor_type) ? body.investor_type : str(body.investor_type),
     updated_by: user.email ?? user.id,
   }).select(COLS).single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
