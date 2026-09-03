@@ -45,6 +45,10 @@ async function readMailboxSince(mailbox: string, sinceIso: string, max: number):
     for (const m of (data.value || []) as Record<string, unknown>[]) {
       if (m.parentFolderId && excluded.has(m.parentFolderId as string)) continue;
       const fromObj = (m.from as { emailAddress?: { address?: string; name?: string } })?.emailAddress;
+      // Platform digests and other no-reply blasts are not inbound demand. VTS
+      // (viewthespace.com) sends a daily digest that reads enough like an enquiry for the
+      // extractor to take it seriously, so it is dropped before it ever gets there.
+      if (isNoiseSender(fromObj?.address || "")) continue;
       out.push({
         id: (m.id as string) || "", from: fromObj?.address || "", fromName: fromObj?.name || "",
         subject: (m.subject as string) || "", preview: (m.bodyPreview as string) || "", received: (m.receivedDateTime as string) || "",
@@ -54,6 +58,14 @@ async function readMailboxSince(mailbox: string, sinceIso: string, max: number):
     url = (data["@odata.nextLink"] as string) || null;
   }
   return out;
+}
+
+/** Senders that never carry a leasing enquiry: platform digests and automated blasts. */
+const NOISE_SENDER = /(^|@|\.)((no-?reply|do-?not-?reply|donotreply|notifications?|alerts?|digest|updates?)@|viewthespace\.com|vts\.com|costar\.com|crexi\.com|loopnet\.com|mailer-daemon)/i;
+function isNoiseSender(addr: string): boolean {
+  const a = (addr || "").toLowerCase().trim();
+  if (!a) return true;
+  return NOISE_SENDER.test(a);
 }
 
 const SCHEMA = {
