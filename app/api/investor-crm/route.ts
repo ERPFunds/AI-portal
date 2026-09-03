@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 
@@ -36,12 +37,18 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
   const supabase = createAdminClient();
 
-  const { data, error } = await supabase.from("investor_crm").select(COLS);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // Paged: the table is past PostgREST's 1,000-row default, and an unbounded select
+  // would drop the overflow without erroring.
+  let data: { investor_key: string }[];
+  try {
+    data = await fetchAll<{ investor_key: string }>(() => supabase.from("investor_crm").select(COLS));
+  } catch (e) {
+    return NextResponse.json({ error: String(e) }, { status: 500 });
+  }
 
   // Return as a map keyed by investor_key so the client can merge onto LP records in O(1).
   const byKey: Record<string, unknown> = {};
-  for (const row of (data ?? []) as { investor_key: string }[]) byKey[row.investor_key] = row;
+  for (const row of data) byKey[row.investor_key] = row;
   return NextResponse.json({ overlays: byKey });
 }
 

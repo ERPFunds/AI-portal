@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 
@@ -53,9 +54,17 @@ export async function GET(req: NextRequest) {
       const email = (r.email || "").trim();
       put(norm(r.investor_name), email ? `e:${email.toLowerCase()}` : `n:${norm(name)}`, { name, email, primary: false });
     }
-    const { data: allOvl } = await supabase
-      .from("investor_contacts").select("investor_key, match_key, name, email, is_primary");
-    for (const r of ((allOvl ?? []) as { investor_key: string; match_key: string; name: string; email: string | null; is_primary: boolean }[])) {
+    // Paged: investor_contacts is past PostgREST's 1,000-row default, and an unbounded
+    // select silently truncates — which empties the Contact(s) column for the overflow.
+    type OvlLite = { investor_key: string; match_key: string; name: string; email: string | null; is_primary: boolean };
+    let allOvl: OvlLite[];
+    try {
+      allOvl = await fetchAll<OvlLite>(() => supabase
+        .from("investor_contacts").select("investor_key, match_key, name, email, is_primary"));
+    } catch (e) {
+      return NextResponse.json({ error: String(e) }, { status: 500 });
+    }
+    for (const r of allOvl) {
       put(r.investor_key, r.match_key, { name: r.name, email: r.email ?? "", primary: !!r.is_primary });
     }
 

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 
@@ -19,14 +20,16 @@ const labelsOf = (fund: unknown): string[] =>
 async function investorsForFund(
   supabase: ReturnType<typeof createAdminClient>, name: string, program: string | null,
 ) {
-  let q = supabase.from("investor_crm").select("investor_key, investor, fund, fund_commitments");
-  if (program) q = q.eq("program", program);
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
+  // Paged — a cascading fund delete that only saw the first 1,000 investors would leave
+  // the rest tagged to a fund that no longer exists.
+  const data = await fetchAll<Record<string, unknown>>(() => {
+    const q = supabase.from("investor_crm").select("investor_key, investor, fund, fund_commitments");
+    return program ? q.eq("program", program) : q;
+  });
 
   const sole: Record<string, unknown>[] = [];
   const shared: Record<string, unknown>[] = [];
-  for (const row of (data ?? []) as Record<string, unknown>[]) {
+  for (const row of data) {
     const labels = labelsOf(row.fund);
     if (!labels.includes(name)) continue;
     (labels.length === 1 ? sole : shared).push(row);
