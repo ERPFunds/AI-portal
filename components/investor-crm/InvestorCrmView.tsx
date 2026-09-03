@@ -215,6 +215,8 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const [stageFilter, setStageFilter] = useState('All')
   const [stateFilter, setStateFilter] = useState('All')
   const [ownerFilter, setOwnerFilter] = useState('All')
+  // Prospects only: Investor / Buyer / Broker / Lawyer, the account's Description.
+  const [typeFilter, setTypeFilter] = useState('All')
   const [funds, setFunds] = useState<Fund[]>([])
   const [showAdd, setShowAdd] = useState(false)
   const [showFunds, setShowFunds] = useState(false)
@@ -339,6 +341,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         const st = overlays[normKey(lp.investor)]?.funnel_stage ?? ''
         return stageFilter === 'Unset' ? !st : st === stageFilter
       })
+      .filter(lp => {
+        if (typeFilter === 'All') return true
+        const t = overlays[normKey(lp.investor)]?.investor_type ?? ''
+        return typeFilter === 'Unset' ? !t : t === typeFilter
+      })
       .filter(lp => !q || lp.investor.toLowerCase().includes(q) || (lp.contact || '').toLowerCase().includes(q) || (lp.email || '').toLowerCase().includes(q))
       .sort((a, b) => {
         const c = columns.find(x => x.key === sortKey) ?? columns[0]
@@ -348,7 +355,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           : String(av).localeCompare(String(bv))
         return sortDir === 'asc' ? r : -r
       })
-  }, [overlays, program, search, fundFilter, stageFilter, stateFilter, ownerFilter, mode, columns, sortKey, sortDir])
+  }, [overlays, program, search, fundFilter, stageFilter, stateFilter, ownerFilter, typeFilter, mode, columns, sortKey, sortDir])
 
   const stateOptions = useMemo(() => {
     const set = new Set<string>()
@@ -589,6 +596,14 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
             <option value="All">All owners</option>
             {OWNERS.map(o => <option key={o} value={o}>{o}</option>)}
             <option value="Unassigned">— unassigned —</option>
+          </select>
+        )}
+        {mode === 'prospects' && (
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+            <option value="All">All descriptions</option>
+            {DESCRIPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+            <option value="Unset">— none set —</option>
           </select>
         )}
         {isLpDirectory && stateOptions.length > 0 && (
