@@ -16,6 +16,22 @@ interface Candidate {
   preview: string
 }
 
+// Where a captured person can be filed. These are the directories as they appear in the
+// sidebar, so the choice reads the same here as it does where the record ends up.
+type Dest = {
+  key: string; label: string; where: string
+  kind: 'investor' | 'vendor'
+  program?: 'PE' | 'DST'; isLp?: boolean; desk?: 'dst' | 'property' | 'lender'
+}
+const DESTINATIONS: Dest[] = [
+  { key: 'pe-prospects', label: 'PE Prospects',    where: 'Investor CRM', kind: 'investor', program: 'PE',  isLp: false },
+  { key: 'lp-directory', label: 'LP Directory',    where: 'Investor CRM', kind: 'investor', program: 'PE',  isLp: true },
+  { key: 'dst-investors', label: 'DST Investors',  where: 'Investor CRM', kind: 'investor', program: 'DST', isLp: true },
+  { key: 'dst-vendors',  label: 'DST Vendors',     where: 'Investor CRM', kind: 'vendor',   desk: 'dst' },
+  { key: 'prop-vendors', label: 'Property Vendors', where: 'Property CRM', kind: 'vendor',  desk: 'property' },
+  { key: 'prop-lenders', label: 'Lenders',          where: 'Property CRM', kind: 'vendor',  desk: 'lender' },
+]
+
 const MAILBOX_LABELS: Record<string, string> = {
   'mberry@erpfunds.com': 'Meghan',
   'wmeyer@erpfunds.com': 'William',
@@ -36,6 +52,8 @@ export default function ContactCaptureView() {
   const [mailbox, setMailbox] = useState('All')
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
+  // The person waiting on a "file it where?" decision.
+  const [filing, setFiling] = useState<Candidate | null>(null)
 
   const load = useCallback(async () => {
     setItems(null); setError(null)
@@ -68,25 +86,44 @@ export default function ContactCaptureView() {
     } finally { setBusy(null) }
   }
 
-  async function addAsInvestor(c: Candidate) {
+  // File a captured person into the directory the user picked, creating the account and
+  // attaching them to it as its primary contact.
+  async function fileInto(c: Candidate, dest: Dest) {
     const suggested = c.name || c.email
-    const investor = window.prompt('Add as investor — entity / investor name:', suggested)
-    if (!investor || !investor.trim()) return
-    setBusy(c.email)
+    const account = window.prompt(
+      `Add to ${dest.label}.\n\nWhat is the account called? For a company use the company name; for an individual their own name is fine.`,
+      suggested)
+    if (!account || !account.trim()) return
+    const name = account.trim()
+    setFiling(null); setBusy(c.email)
     try {
-      const res = await fetch('/api/investor-crm', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investor: investor.trim(), program: 'PE', contact: c.name || null, email: c.email }),
-      })
-      const j = await res.json().catch(() => ({}))
-      if (!res.ok || j.error) { setNote(`Could not add: ${j.error ?? res.status}`); return }
-      // Attach the person to the new account as its primary contact.
-      await fetch('/api/investor-crm/people', {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investor: investor.trim(), name: c.name || c.email, email: c.email, is_primary: true }),
-      }).catch(() => {})
+      if (dest.kind === 'investor') {
+        const res = await fetch('/api/investor-crm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ investor: name, program: dest.program, is_lp: dest.isLp, contact: c.name || null, email: c.email }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || j.error) { setNote(`Could not add: ${j.error ?? res.status}`); return }
+        await fetch('/api/investor-crm/people', {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ investor: name, name: c.name || c.email, email: c.email, is_primary: true }),
+        }).catch(() => {})
+      } else {
+        const res = await fetch('/api/dst-vendors', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ desk: dest.desk, name, vendor_type: 'Other' }),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok || j.error) { setNote(`Could not add: ${j.error ?? res.status}`); return }
+        const vendorId = j.vendor?.id ?? j.item?.id ?? j.id
+        if (!vendorId) { setNote(`Added ${name}, but could not attach the contact — open the account and add them.`); return }
+        await fetch('/api/dst-vendors', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ kind: 'contact', desk: dest.desk, vendor_id: vendorId, name: c.name || c.email, email: c.email, is_primary: true }),
+        }).catch(() => {})
+      }
       setItems(prev => (prev ?? []).filter(x => x.email !== c.email))
-      setNote(`Added ${investor.trim()} — find it under PE Prospects.`)
+      setNote(`Added ${name} — find it under ${dest.where} › ${dest.label}.`)
     } catch (e) { setNote(`Could not add: ${String(e)}`) }
     finally { setBusy(null) }
   }
@@ -155,9 +192,10 @@ export default function ContactCaptureView() {
                       {c.preview && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 2 }}>{c.preview}</div>}
                     </td>
                     <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      <button onClick={() => addAsInvestor(c)} disabled={busy === c.email}
+                      <button onClick={() => setFiling(c)} disabled={busy === c.email}
+                        title="Choose which directory this person belongs in"
                         style={{ border: '1px solid #0f766e', background: '#f0f9f7', color: '#0f766e', borderRadius: 8, padding: '5px 11px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                        Add as investor
+                        {busy === c.email ? 'Adding…' : 'Add to…'}
                       </button>
                       <button onClick={() => dismiss(c)} disabled={busy === c.email}
                         style={{ border: 0, background: 'none', color: '#9ca3af', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 8px' }}>
@@ -173,6 +211,40 @@ export default function ContactCaptureView() {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {filing && (
+        <div onClick={() => setFiling(null)}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ width: 'min(520px, 96vw)', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+            <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0f2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Which directory?</div>
+                <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {filing.name || filing.email}
+                </div>
+                {filing.name && <div style={{ fontSize: 12.5, color: '#0e7490' }}>{filing.email}</div>}
+              </div>
+              <button onClick={() => setFiling(null)}
+                style={{ border: 0, background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>✕</button>
+            </div>
+            <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {DESTINATIONS.map(d => (
+                <button key={d.key} onClick={() => fileInto(filing, d)}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 14px',
+                           border: '1px solid #e6edf1', borderRadius: 10, background: '#fff', cursor: 'pointer',
+                           textAlign: 'left', fontFamily: 'inherit', width: '100%' }}>
+                  <span>
+                    <span style={{ display: 'block', fontWeight: 600, fontSize: 14.5, color: '#1a2233' }}>{d.label}</span>
+                    <span style={{ display: 'block', fontSize: 12.5, color: '#9ca3af' }}>{d.where}</span>
+                  </span>
+                  <span style={{ color: '#0f766e', fontWeight: 700, fontSize: 16 }}>→</span>
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}

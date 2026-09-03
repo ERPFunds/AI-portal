@@ -147,6 +147,9 @@ export async function POST(req: NextRequest) {
     investor_key: key,
     investor,
     program: ["PE", "DST"].includes(body.program) ? body.program : "PE",
+    // Which side of the book: the LP Directory and DST Investors are is_lp records,
+    // PE Prospects are not.
+    is_lp: body.is_lp === true,
     portal_created: true,
     archived: false,
     fund: str(body.fund),

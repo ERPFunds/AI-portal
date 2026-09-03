@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
+import { fetchAll } from "@/lib/supabase/fetch-all";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -10,9 +11,14 @@ export const maxDuration = 300;
 // New investor contact capture: people who appear in the IR mailboxes' correspondence but
 // aren't in any of the portal's directories yet. The mailbox scan is the same one that powers
 // "last interaction"; everything already known — LP directory records, imported and CRM
-// contacts, DST vendors, contractors, lenders, captured event contacts — is subtracted, along
-// with internal addresses, junk (no-reply/voicemail/image cids) and anything dismissed here.
+// contacts, every vendor and lender desk on both the investor and property side, captured
+// event contacts — is subtracted, along with internal addresses, junk (no-reply/voicemail/
+// image cids) and anything dismissed here.
 // RLS-locked tables → service-role client.
+//
+// Every directory that can hold an address has to be listed here. Miss one and its people
+// come back as strangers: the account tables mostly carry no address at all, so it is the
+// *_contacts tables that matter.
 
 const INTERNAL = /@erpfunds\.com$/i;
 
@@ -31,22 +37,33 @@ export async function GET() {
     if (s) known.add(s);
   };
 
-  const [cache, prior, crmContacts, vendors, contractors, lenders, imported, dismissed] = await Promise.all([
+  // Paged, because investor_contacts is past PostgREST's 1,000-row default and a truncated
+  // read here would hand back known people as new ones.
+  type E = { email?: string | null };
+  const EMAIL_TABLES = [
+    "investor_crm",              // the account's own address
+    "investor_contacts",         // LP directory, PE prospects, DST investors
+    "dst_vendors",               // broker dealers, brokerages, QIs
+    "dst_vendor_contacts",       // the people under them
+    "property_vendors",
+    "property_vendor_contacts",
+    "property_lenders",
+    "property_lender_contacts",
+    "contractors",               // legacy property tables, kept until they are retired
+    "lenders",
+    "lp_prior_contacts",
+    "imported_contacts",         // event and CSV captures
+    "crm_capture_dismissed",     // already waved off here
+  ];
+
+  const [cache, ...sets] = await Promise.all([
     supabase.from("lp_directory_cache").select("data").eq("id", 1).maybeSingle(),
-    supabase.from("lp_prior_contacts").select("email"),
-    supabase.from("investor_contacts").select("email"),
-    supabase.from("dst_vendors").select("email"),
-    supabase.from("contractors").select("email"),
-    supabase.from("lenders").select("email"),
-    supabase.from("imported_contacts").select("email"),
-    supabase.from("crm_capture_dismissed").select("email"),
+    ...EMAIL_TABLES.map((t) => fetchAll<E>(() => supabase.from(t).select("email")).catch(() => [] as E[])),
   ]);
 
   const lps = ((cache.data?.data as { lps?: LpLite[] } | undefined)?.lps) ?? [];
   for (const lp of lps) { add(lp.email); add(lp.resolvedEmail); }
-  for (const set of [prior, crmContacts, vendors, contractors, lenders, imported, dismissed]) {
-    for (const r of ((set.data ?? []) as { email?: string | null }[])) add(r.email);
-  }
+  for (const set of sets) for (const r of set) add(r.email);
 
   // Everyone the IR mailboxes have actually corresponded with.
   let byEmail: Awaited<ReturnType<typeof getInteractions>>["byEmail"] = {};
