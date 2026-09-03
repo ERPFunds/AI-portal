@@ -45,6 +45,7 @@ interface VContact {
   id: string; vendor_id: string; name: string; title: string | null; email: string | null
   phone_office: string | null; phone_cell: string | null; address: string | null; city_state: string | null
   linkedin_url: string | null; notes: string | null; is_primary: boolean
+  bio?: string | null; bio_researched_at?: string | null
 }
 interface Vendor {
   id: string; name: string; description: string | null; vendor_type: string | null
@@ -453,6 +454,9 @@ function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; d
                     {bit('City / State', c.city_state)}
                     {bit('LinkedIn', c.linkedin_url ? 'profile ↗' : null, c.linkedin_url ?? undefined)}
                   </div>
+                  {c.bio && (
+                    <div style={{ fontSize: 12.5, lineHeight: 1.5, color: '#4b5563', marginTop: 7, paddingTop: 7, borderTop: '1px dashed #e6edf1', whiteSpace: 'pre-wrap' }}>{c.bio}</div>
+                  )}
                   {c.notes && <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>{c.notes}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 6 }}>
