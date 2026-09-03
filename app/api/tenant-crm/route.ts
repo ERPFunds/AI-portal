@@ -39,7 +39,7 @@ function cleanContact(body: Record<string, unknown>) {
   if (body.contact_type !== undefined) {
     out.contact_type = CONTACT_TYPES.includes(String(body.contact_type)) ? String(body.contact_type) : "All";
   }
-  for (const k of ["title", "email", "phone_office", "phone_cell", "address", "linkedin_url", "notes", "property_label"]) {
+  for (const k of ["title", "email", "phone", "phone_office", "phone_cell", "address", "linkedin_url", "notes", "property_label"]) {
     if (body[k] !== undefined) out[k] = str(body[k]);
   }
   if (body.is_primary !== undefined) out.is_primary = !!body.is_primary;

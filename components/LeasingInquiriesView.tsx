@@ -34,8 +34,31 @@ type Inquiry = {
 
 const TYPE_ICON: Record<string, string> = { 'Storage yard': '🪵', 'Warehouse': '🏭', 'Flex/office': '🏢', 'IOS': '🚚', 'Other': '📦' }
 
+/** What this inquiry was asking for, in one line, for the tenant record's notes. */
+function askSummary(items: Inquiry[]): string {
+  const i = items[0]
+  const bits = [
+    i.inquiry_type,
+    i.sf_needed ? `${i.sf_needed.toLocaleString()} SF` : '',
+    i.acreage_needed ? `${i.acreage_needed} acres` : '',
+    [i.market, i.submarket].filter(Boolean).join(' / '),
+    i.timeline || '',
+    i.budget_psf ? `$${i.budget_psf}/SF` : '',
+  ].filter(Boolean)
+  const when = i.received_at ? new Date(i.received_at).toLocaleDateString() : ''
+  return [
+    `Inbound leasing inquiry${when ? ` (${when})` : ''}${bits.length ? ` — ${bits.join(', ')}` : ''}.`,
+    items.length > 1 ? `${items.length} messages from this contact.` : '',
+    i.summary || '',
+  ].filter(Boolean).join(' ')
+}
+
 export default function LeasingInquiriesView() {
   const [rows, setRows] = useState<Inquiry[]>([])
+  // Inquiries this session has already filed into the Tenant CRM, so the button can say so
+  // rather than letting someone create the same prospect twice.
+  const [filed, setFiled] = useState<Record<string, string>>({})
+  const [filing, setFiling] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [scanning, setScanning] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -62,6 +85,51 @@ export default function LeasingInquiriesView() {
     const ids = new Set(items.map(i => i.id))
     await Promise.all([...ids].map(id => fetch('/api/leasing-inquiries', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: 'dismissed' }) })))
     setRows(rs => rs.filter(r => !ids.has(r.id)))
+  }
+
+  // File an inbound enquiry into the Tenant CRM as a prospect, with the person who wrote in
+  // attached as its contact and what they asked for recorded on the record. The enquiry stays
+  // here — this is a hand-off, not a move.
+  async function addToTenantCrm(items: Inquiry[]) {
+    const i = items[0]
+    const key = contactKey(i)
+    const suggested = i.contact_company || i.contact_name || i.contact_email || ''
+    const company = window.prompt(
+      'Add to the Tenant CRM as a prospect.' + String.fromCharCode(10, 10) +
+      'Company name (use the person’s own name if they wrote in individually):',
+      suggested)
+    if (!company || !company.trim()) return
+    const name = company.trim()
+    setFiling(key)
+    try {
+      const res = await fetch('/api/tenant-crm', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          description: 'Prospect',
+          property_address: i.matched_address || null,
+          notes: askSummary(items),
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { window.alert(`Could not add: ${j.error ?? res.status}`); return }
+      const tenantId = j.item?.id
+      if (tenantId && (i.contact_name || i.contact_email)) {
+        await fetch('/api/tenant-crm', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'contact', tenant_id: tenantId,
+            contact_name: i.contact_name || i.contact_email,
+            email: i.contact_email || null,
+            phone: i.contact_phone || null,
+            is_primary: true,
+          }),
+        }).catch(() => {})
+      }
+      setFiled(f => ({ ...f, [key]: `In Tenant CRM as ${name}` }))
+    } catch (e) {
+      window.alert(`Could not add: ${String(e)}`)
+    } finally { setFiling(null) }
   }
 
   const num = (n: number | null) => (n ? n.toLocaleString('en-US') : null)
@@ -139,8 +207,9 @@ export default function LeasingInquiriesView() {
           const timeline = first(items.map(i => i.timeline))
           const market = first(items.map(i => i.market))
           const type = latest.inquiry_type ?? 'Other'
+          const key = contactKey(latest)
           return (
-            <div key={contactKey(latest)} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, position: 'relative' }}>
+            <div key={key} style={{ background: '#fff', border: '1px solid #e5e7eb', borderRadius: 12, padding: 14, position: 'relative' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 10, background: '#f3f4f6', border: '1px solid #e5e7eb', borderRadius: 5, padding: '1px 7px', color: '#374151' }}>{TYPE_ICON[type] ?? '📦'} {type}</span>
                 {market && <span style={{ fontSize: 10, background: '#f0f9fa', border: '1px solid #a5f3fc', borderRadius: 5, padding: '1px 7px', color: '#0e7490' }}>{market}</span>}
@@ -182,7 +251,16 @@ export default function LeasingInquiriesView() {
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 8 }}>
                 <div style={{ fontSize: 11, color: '#9ca3af' }}>Latest {latest.received_at ? new Date(latest.received_at).toLocaleDateString() : ''}</div>
-                <button onClick={() => dismissContact(items)} title="Dismiss this contact and all their inquiries" style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb' }}>Dismiss contact</button>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {filed[key]
+                    ? <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', color: '#197a52' }}>✓ {filed[key]}</span>
+                    : <button onClick={() => addToTenantCrm(items)} disabled={filing === key}
+                        title="Create this company as a prospect in the Tenant CRM, with this person as its contact"
+                        style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: filing === key ? 'wait' : 'pointer', color: '#fff', background: '#0f766e', border: '1px solid #0f766e' }}>
+                        {filing === key ? 'Adding…' : '+ Tenant CRM'}
+                      </button>}
+                  <button onClick={() => dismissContact(items)} title="Dismiss this contact and all their inquiries" style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb' }}>Dismiss contact</button>
+                </div>
               </div>
             </div>
           )
