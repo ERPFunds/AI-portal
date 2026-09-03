@@ -137,9 +137,10 @@ export default function TenantCrmView() {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1080 }}>
             <thead>
               <tr>
-                <th style={thCss}>Description</th>
-                <th style={thCss}>ERP Entity</th>
+                {/* Description is not a column: it reads "Tenant" on nearly every row. The
+                    exceptions ride as a badge next to the company name instead. */}
                 <th style={thCss}>Company</th>
+                <th style={thCss}>ERP Entity</th>
                 <th style={thCss}>Contact(s)</th>
                 <th style={{ ...thCss, maxWidth: 190 }}>ERP Property Address</th>
                 <th style={thCss}>Website / LinkedIn</th>
@@ -153,11 +154,13 @@ export default function TenantCrmView() {
                 const ds = descStyle(t.description)
                 return (
                   <tr key={t.id}>
-                    <td style={tdCss}>
-                      <span style={{ fontSize: 11.5, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: ds.bg, color: ds.color, whiteSpace: 'nowrap' }}>{t.description}</span>
+                    <td style={{ ...tdCss, fontWeight: 600, color: '#1a2233' }}>
+                      {t.name}
+                      {t.description && t.description !== 'Tenant' && (
+                        <span style={{ fontSize: 10.5, fontWeight: 700, marginLeft: 7, padding: '2px 7px', borderRadius: 20, background: ds.bg, color: ds.color, whiteSpace: 'nowrap', verticalAlign: '1px' }}>{t.description}</span>
+                      )}
                     </td>
                     <td style={{ ...tdCss, color: '#6b7280', fontWeight: 600 }}>{t.erp_entity || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={{ ...tdCss, fontWeight: 600, color: '#1a2233' }}>{t.name}</td>
                     <td style={tdCss}>
                       {t.contacts.length === 0 ? <span style={{ color: '#d1d5db' }}>—</span> : (
                         <button onClick={() => setPeople(t)}
@@ -195,7 +198,7 @@ export default function TenantCrmView() {
                   </tr>
                 )
               })}
-              {rows.length === 0 && <tr><td colSpan={8} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No companies yet.</td></tr>}
+              {rows.length === 0 && <tr><td colSpan={7} style={{ padding: 40, textAlign: 'center', color: '#9ca3af' }}>No companies yet.</td></tr>}
             </tbody>
           </table>
         </div>
