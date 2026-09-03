@@ -177,6 +177,8 @@ const advOf = (lp: LpRecord) => lp.brokerContact || lp.sfAdvisorContact || ''
 const COLUMN_DEFS: ColDef[] = [
   { key: 'fund', label: 'Fund', text: lp => [typeTag(lp).label, ...(lp.priorFunds ?? []), lp.commitType || ''].join(' '), sort: lp => typeTag(lp).label },
   { key: 'investor', label: 'Investor', text: lp => lp.investor, sort: lp => lp.investor.toLowerCase() },  // relabelled 'Account' on prospects
+  // Both the text and the sort come from the contact store, which lives in component state,
+  // so the real ones are patched in below — these are the placeholders.
   { key: 'contacts', label: 'Contact(s)', text: () => '', sort: () => '' },
   { key: 'commitment', label: 'Commitment', text: lp => String(effectiveCommitted(lp) || ''), sort: lp => effectiveCommitted(lp) },
   { key: 'brokerDealer', label: 'Broker Dealer / RIA', dstOnly: true, text: bdOf, sort: lp => bdOf(lp).toLowerCase() },
@@ -273,8 +275,22 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       .map(c => (mode !== 'prospects' ? c
         : c.key === 'commitment' ? { ...c, label: 'Target Commitment' }
         : c.key === 'investor' ? { ...c, label: 'Account' }
-        : c)),
-    [program, hasContacts, hideFund, mode]
+        : c))
+      // Contact(s) sorts by the name shown in the cell. Accounts with nobody on them sort
+      // last in either direction rather than clumping at the top under ascending.
+      .map(c => (c.key !== 'contacts' ? c : {
+        ...c,
+        text: (lp: LpRecord) => {
+          const pc = contactPrimary[normEntity(lp.investor)]
+          return pc ? `${pc.name} ${pc.email}`.trim() : ''
+        },
+        sort: (lp: LpRecord) => {
+          const pc = contactPrimary[normEntity(lp.investor)]
+          const v = (pc?.name || pc?.email || '').toLowerCase()
+          return v || '￿'
+        },
+      })),
+    [program, hasContacts, hideFund, mode, contactPrimary]
   )
   function toggleSort(key: string) {
     if (sortKey === key) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
