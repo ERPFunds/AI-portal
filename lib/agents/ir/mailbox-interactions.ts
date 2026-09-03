@@ -25,6 +25,12 @@ export interface Interaction {
   counterparty: string;        // display name (or email) of the LP/broker on the other side
   counterpartyEmail: string;   // their email address (for one-click drafting)
   preview: string;             // short body snippet for context
+  // Traffic with this counterparty across the whole scan window. A single inbound message is
+  // usually a stranger or a blast; a two-way thread is an actual relationship, and the New
+  // Contacts capture leans on that distinction to keep its list short.
+  sentCount?: number;          // messages ERP sent them
+  receivedCount?: number;      // messages they sent ERP
+  firstDate?: string;          // earliest message either way
 }
 
 export interface InteractionMaps {
@@ -81,7 +87,16 @@ async function scan(): Promise<InteractionMaps> {
   const putInto = (map: Record<string, Interaction>, key: string, it: Interaction) => {
     if (!key) return;
     const ex = map[key];
-    if (!ex || new Date(it.date).getTime() > new Date(ex.date).getTime()) map[key] = it;
+    if (!ex) {
+      map[key] = { ...it, sentCount: 0, receivedCount: 0, firstDate: it.date };
+    } else if (new Date(it.date).getTime() > new Date(ex.date).getTime()) {
+      // Keep the running tallies while replacing the "most recent" detail.
+      map[key] = { ...it, sentCount: ex.sentCount, receivedCount: ex.receivedCount, firstDate: ex.firstDate };
+    }
+    const row = map[key];
+    if (it.direction === "sent") row.sentCount = (row.sentCount ?? 0) + 1;
+    else row.receivedCount = (row.receivedCount ?? 0) + 1;
+    if (!row.firstDate || new Date(it.date).getTime() < new Date(row.firstDate).getTime()) row.firstDate = it.date;
   };
   const put = (addr: { address?: string; name?: string } | undefined, it: Interaction) => {
     if (!addr) return;

@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
 import { fetchAll } from "@/lib/supabase/fetch-all";
+import { classify, isTwoWay } from "@/lib/agents/ir/capture-classify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -29,10 +30,11 @@ const SINCE = new Date(process.env.CRM_CAPTURE_SINCE || "2026-07-01T00:00:00Z");
 
 interface LpLite { email?: string | null; resolvedEmail?: string | null }
 
-export async function GET() {
-  const auth = await createClient();
-  const { data: { user } } = await auth.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+/**
+ * Walk the mailboxes, subtract everyone already in a directory, and classify what is left.
+ * Slow (three mailboxes over Graph), so the daily cron calls this and the tab reads the cache.
+ */
+export async function runCaptureScan() {
   const supabase = createAdminClient();
 
   // Everything the portal already knows about.
@@ -71,31 +73,78 @@ export async function GET() {
   for (const set of sets) for (const r of set) add(r.email);
 
   // Everyone the IR mailboxes have actually corresponded with.
-  let byEmail: Awaited<ReturnType<typeof getInteractions>>["byEmail"] = {};
-  try { ({ byEmail } = await getInteractions()); }
-  catch (e) { return NextResponse.json({ error: `Mailbox scan failed: ${String(e).slice(0, 200)}` }, { status: 502 }); }
+  const { byEmail } = await getInteractions();
 
   const candidates = Object.entries(byEmail)
     .filter(([email, it]) => email && !known.has(email) && !INTERNAL.test(email) && isRealContactEmail(email)
       // Anything older than the floor is history, not a new contact worth chasing.
       && (() => { const d = new Date(it.date); return !isNaN(d.getTime()) && d >= SINCE; })())
-    .map(([email, it]) => ({
-      email,
-      name: it.counterparty && it.counterparty !== email ? it.counterparty : "",
-      lastDate: it.date,
-      subject: it.subject,
-      mailbox: it.mailbox,
-      direction: it.direction,
-      preview: (it.preview || "").slice(0, 160),
-    }))
-    .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
+    .map(([email, it]) => {
+      const sent = it.sentCount ?? 0;
+      const received = it.receivedCount ?? 0;
+      return {
+        email,
+        name: it.counterparty && it.counterparty !== email ? it.counterparty : "",
+        lastDate: it.date,
+        subject: it.subject,
+        mailbox: it.mailbox,
+        direction: it.direction,
+        preview: (it.preview || "").slice(0, 160),
+        kind: classify(email),          // firm | individual | service
+        sent,
+        received,
+        twoWay: isTwoWay(sent, received),
+      };
+    })
+    // Automated and service senders are never CRM contacts, so they never reach the tab.
+    .filter((c) => c.kind !== "service")
+    .sort((a, b) => {
+      // Real conversations first, then most recent.
+      if (a.twoWay !== b.twoWay) return a.twoWay ? -1 : 1;
+      return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
+    });
 
-  return NextResponse.json({
+  return {
     contacts: candidates,
     scanned: Object.keys(byEmail).length,
     known: known.size,
     since: SINCE.toISOString().slice(0, 10),
-  });
+  };
+}
+
+export async function GET(req: NextRequest) {
+  const auth = await createClient();
+  const { data: { user } } = await auth.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+  const supabase = createAdminClient();
+
+  // ?refresh=1 forces a live walk; otherwise serve whatever the daily cron last wrote, so
+  // opening the tab is instant instead of waiting on three mailboxes.
+  if (req.nextUrl.searchParams.get("refresh") !== "1") {
+    const { data } = await supabase.from("crm_capture_cache")
+      .select("contacts, scanned_at, scanned, known, error").eq("id", 1).maybeSingle();
+    if (data?.scanned_at) {
+      return NextResponse.json({
+        contacts: data.contacts ?? [],
+        scanned: data.scanned ?? 0,
+        known: data.known ?? 0,
+        scannedAt: data.scanned_at,
+        error: data.error ?? undefined,
+        since: SINCE.toISOString().slice(0, 10),
+      });
+    }
+  }
+
+  try {
+    const out = await runCaptureScan();
+    await supabase.from("crm_capture_cache").upsert({
+      id: 1, contacts: out.contacts, scanned: out.scanned, known: out.known,
+      scanned_at: new Date().toISOString(), error: null,
+    });
+    return NextResponse.json({ ...out, scannedAt: new Date().toISOString() });
+  } catch (e) {
+    return NextResponse.json({ error: `Mailbox scan failed: ${String(e).slice(0, 200)}` }, { status: 502 });
+  }
 }
 
 // Dismiss an address so it stops appearing as a new contact.

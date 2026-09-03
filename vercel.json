@@ -84,6 +84,10 @@
     {
       "path": "/api/cron/ir-drafts-archive",
       "schedule": "0 11 * * 1"
+    },
+    {
+      "path": "/api/cron/crm-capture",
+      "schedule": "15 10 * * *"
     }
   ]
 }

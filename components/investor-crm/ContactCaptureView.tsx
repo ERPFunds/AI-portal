@@ -14,6 +14,12 @@ interface Candidate {
   mailbox: string
   direction: 'sent' | 'received'
   preview: string
+  // firm = a business address, individual = gmail and the like. Service senders never
+  // reach the tab. twoWay means somebody actually replied — the rest is one-way traffic.
+  kind?: 'firm' | 'individual'
+  sent?: number
+  received?: number
+  twoWay?: boolean
 }
 
 // Where a captured person can be filed. These are the directories as they appear in the
@@ -50,19 +56,29 @@ export default function ContactCaptureView() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [mailbox, setMailbox] = useState('All')
+  const [kind, setKind] = useState('All')
+  // Default to people someone actually corresponded with. One inbound email that nobody
+  // answered is almost always a stranger or a blast, and that is what made the list unusable.
+  const [twoWayOnly, setTwoWayOnly] = useState(true)
+  const [scannedAt, setScannedAt] = useState<string | null>(null)
+  const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [note, setNote] = useState<string | null>(null)
   // The person waiting on a "file it where?" decision.
   const [filing, setFiling] = useState<Candidate | null>(null)
 
-  const load = useCallback(async () => {
-    setItems(null); setError(null)
+  // Reads the daily cron's result by default; refresh=1 walks the mailboxes live.
+  const load = useCallback(async (refresh = false) => {
+    if (refresh) setRefreshing(true); else setItems(null)
+    setError(null)
     try {
-      const res = await fetch('/api/investor-crm/capture')
+      const res = await fetch(`/api/investor-crm/capture${refresh ? '?refresh=1' : ''}`)
       const j = await res.json().catch(() => ({}))
-      if (!res.ok || j.error) { setError(j.error ?? `Scan failed (${res.status})`); setItems([]); return }
+      if (!res.ok || j.error) { setError(j.error ?? `Scan failed (${res.status})`); setItems(j.contacts ?? []); return }
       setItems(j.contacts ?? [])
+      setScannedAt(j.scannedAt ?? null)
     } catch (e) { setError(String(e)); setItems([]) }
+    finally { setRefreshing(false) }
   }, [])
   useEffect(() => { load() }, [load])
 
@@ -72,8 +88,12 @@ export default function ContactCaptureView() {
     const q = search.trim().toLowerCase()
     return (items ?? [])
       .filter(i => mailbox === 'All' || i.mailbox === mailbox)
+      .filter(i => kind === 'All' || i.kind === kind)
+      .filter(i => !twoWayOnly || i.twoWay !== false)
       .filter(i => !q || i.email.toLowerCase().includes(q) || (i.name || '').toLowerCase().includes(q) || (i.subject || '').toLowerCase().includes(q))
-  }, [items, search, mailbox])
+  }, [items, search, mailbox, kind, twoWayOnly])
+  const hiddenOneWay = useMemo(
+    () => (twoWayOnly ? (items ?? []).filter(i => i.twoWay === false).length : 0), [items, twoWayOnly])
 
   async function dismiss(c: Candidate) {
     setBusy(c.email)
@@ -134,7 +154,10 @@ export default function ContactCaptureView() {
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#9ca3af' }}>Investor CRM</div>
           <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>New Contact Capture</h1>
-          <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>People in Meghan&apos;s and William&apos;s correspondence since July who aren&apos;t in any directory yet</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
+            People in Meghan&apos;s and William&apos;s correspondence since July who aren&apos;t in any directory yet
+            {scannedAt && <> · scanned {fmtDate(scannedAt)}</>}
+          </div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>NEW CONTACTS</div>
@@ -143,6 +166,17 @@ export default function ContactCaptureView() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
+        <select value={kind} onChange={e => setKind(e.target.value)}
+          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
+          <option value="All">Firms and individuals</option>
+          <option value="firm">Firms only</option>
+          <option value="individual">Individuals only</option>
+        </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={twoWayOnly} onChange={e => setTwoWayOnly(e.target.checked)} />
+          Replied to only
+          {hiddenOneWay > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenOneWay} hidden)</span>}
+        </label>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, subject…"
           style={{ flex: 1, minWidth: 220, maxWidth: 340, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }} />
         <select value={mailbox} onChange={e => setMailbox(e.target.value)}
@@ -150,9 +184,10 @@ export default function ContactCaptureView() {
           <option value="All">All mailboxes</option>
           {mailboxes.map(m => <option key={m} value={m}>{MAILBOX_LABELS[m] ?? m}</option>)}
         </select>
-        <button onClick={load} disabled={items == null}
-          style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-          {items == null ? '⟳ Scanning…' : '⟳ Rescan mailboxes'}
+        <button onClick={() => load(true)} disabled={items == null || refreshing}
+          title="Walk the mailboxes now instead of using this morning's scan"
+          style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '9px 14px', fontWeight: 600, fontSize: 13.5, color: '#0f766e', cursor: refreshing ? 'wait' : 'pointer', whiteSpace: 'nowrap' }}>
+          {items == null || refreshing ? '⟳ Scanning…' : '⟳ Rescan mailboxes'}
         </button>
       </div>
 
