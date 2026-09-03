@@ -46,6 +46,15 @@ export async function runCaptureScan() {
   const filed = new Map<string, Filed>();
   for (const r of ((filedRows ?? []) as Filed[])) filed.set(r.email.toLowerCase(), r);
 
+  // Domains the team has excluded by hand. Maintained in the table, not in code, so a new
+  // offender is a row rather than a deploy.
+  const { data: exRows } = await supabase.from("crm_capture_excluded_domains").select("domain");
+  const excludedDomains = new Set(
+    ((exRows ?? []) as { domain: string }[])
+      .map((r) => String(r.domain ?? "").trim().toLowerCase().replace(/^@/, ""))
+      .filter(Boolean),
+  );
+
   // Everything the portal already knows about.
   const known = new Set<string>();
   const add = (e: unknown) => {
@@ -98,8 +107,7 @@ export async function runCaptureScan() {
         subject: it.subject,
         mailbox: it.mailbox,
         direction: it.direction,
-        preview: (it.preview || "").slice(0, 160),
-        kind: classify(email),
+        kind: classify(email, excludedDomains),
         sent,
         received,
         twoWay: isTwoWay(sent, received),

@@ -13,13 +13,13 @@ interface Candidate {
   subject: string
   mailbox: string
   direction: 'sent' | 'received'
-  preview: string
   // firm = a business address, individual = gmail and the like. Service senders never
   // reach the tab. twoWay means somebody actually replied — the rest is one-way traffic.
   // firm / individual are the ones worth a look. The rest are the categories the team asked
   // to leave out — they are classified rather than deleted, so an over-reaching filter can be
   // spotted and corrected.
-  kind?: 'firm' | 'individual' | 'service' | 'platform' | 'contractor' | 'legal' | 'education' | 'event' | 'research'
+  kind?: 'firm' | 'individual' | 'service' | 'platform' | 'contractor' | 'legal'
+       | 'education' | 'event' | 'research' | 'utility' | 'receipt' | 'blocked'
   sent?: number
   received?: number
   twoWay?: boolean
@@ -35,6 +35,7 @@ const KIND_LABEL: Record<string, string> = {
   firm: 'Firms', individual: 'Individuals', service: 'Automated / service',
   platform: 'Platform notices', contractor: 'Contractors', legal: 'Law firms',
   education: 'Schools', event: 'Conferences', research: 'Market commentary',
+  utility: 'Utilities', receipt: 'Receipts / shipping', blocked: 'Excluded domain',
 }
 
 // Where a captured person can be filed. These are the directories as they appear in the
@@ -277,7 +278,6 @@ export default function ContactCaptureView() {
                           {KIND_LABEL[c.kind] ?? c.kind}
                         </div>
                       )}
-                      {c.preview && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 2 }}>{c.preview}</div>}
                     </td>
                     <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {c.filedTo ? (

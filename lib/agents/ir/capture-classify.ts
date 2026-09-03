@@ -17,7 +17,10 @@ export type CaptureKind =
   | "legal"         // law firms
   | "education"     // schools, universities, alumni offices
   | "event"         // conferences, expos, industry bodies' event mail
-  | "research";     // sell-side market commentary and research distribution
+  | "research"      // sell-side market commentary and research distribution
+  | "utility"       // power, gas, water and telecoms suppliers to the portfolio
+  | "receipt"       // purchase confirmations, shipping and delivery notices
+  | "blocked";      // a domain the team has excluded by hand
 
 /**
  * "No reply" ANYWHERE in the address, not just as the whole local part. The anchored lists
@@ -82,6 +85,18 @@ const RESEARCH_DOMAIN =
 const RESEARCH_LOCAL =
   /^(research|insights?|commentary|economics|strategy|marketupdates?|marketcommentary|dailybrief|morningbrief|weekly|daily|digest|editor|editorial|press|media|pr)$/i;
 
+/**
+ * Utilities and energy retailers. These serve the PROPERTIES, so a named account rep at one
+ * is a property-side supplier contact and never an investor relations one. Vistra is the
+ * portfolio's electricity retailer, which is why its people kept appearing.
+ */
+const UTILITY_DOMAIN =
+  /(^|\.)(vistra|txu|reliant|nrg|oncor|centerpointenergy|atmosenergy|xcelenergy|duke-?energy|fpl|entergy|aep|pge|pgande|sce|sdge|dominionenergy|conedison|nationalgrid|elpasoelectric|swepco|tnmp|greenmountain|directenergy|gexaenergy|constellation|spectrum|comcastbusiness|coxbusiness|frontier|centurylink|lumen|windstream)\./i;
+
+/** Purchase confirmations, shipping and delivery notices. */
+const RECEIPT_LOCAL =
+  /^(your)?(purchase|purchases|receipt|receipts|order|orders|shipping|shipment|delivery|deliveries|tracking|confirmation|confirm|itinerary|booking|reservations?)$/i;
+
 /** Free/consumer mail — the person is an individual, not a firm. */
 const CONSUMER_DOMAIN =
   /^(gmail|googlemail|yahoo|ymail|rocketmail|hotmail|outlook|live|msn|aol|icloud|me|mac|comcast|verizon|att|sbcglobal|bellsouth|cox|charter|earthlink|juno|protonmail|proton|pm|mail|gmx|zoho|fastmail|hushmail|tutanota|yandex)\./i;
@@ -91,10 +106,18 @@ const CONSUMER_DOMAIN =
  * the generic firm/individual split, so a law firm or a roofer is labelled as such rather
  * than landing in "firm".
  */
-export function classify(email: string): CaptureKind {
+export function classify(email: string, excludedDomains?: Set<string>): CaptureKind {
   const [local, domain] = (email || "").toLowerCase().split("@");
   if (!local || !domain) return "service";
   const dot = domain + ".";                        // so (^|\.)x\. matches a bare TLD-less end
+
+  // The hand-maintained list wins over everything: it is a decision, not a heuristic.
+  // Matches the domain itself or any subdomain of it.
+  if (excludedDomains?.size) {
+    for (const d of excludedDomains) {
+      if (domain === d || domain.endsWith("." + d)) return "blocked";
+    }
+  }
 
   // Anything announcing itself as unanswerable, wherever it appears in the address.
   if (NOREPLY_ANYWHERE.test(email)) return "service";
@@ -102,6 +125,8 @@ export function classify(email: string): CaptureKind {
   // A local part that is mostly digits, or a long hex blob, is a ticket or tracking address.
   if (/^\d{4,}$/.test(local) || /^[0-9a-f]{16,}$/i.test(local)) return "service";
 
+  if (UTILITY_DOMAIN.test(dot)) return "utility";
+  if (RECEIPT_LOCAL.test(local)) return "receipt";
   if (RESEARCH_DOMAIN.test(dot) || RESEARCH_LOCAL.test(local)) return "research";
   if (PLATFORM_DOMAIN.test(dot)) return "platform";
   if (EDUCATION_DOMAIN.test(domain)) return "education";
