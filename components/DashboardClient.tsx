@@ -719,7 +719,7 @@ function AgentConfigTab({
           onChange={(e) => update('kb', e.target.value)}
           style={{ width: '100%', fontSize: 12, padding: '6px 10px', border: '1px solid #e5e7eb', borderRadius: 6, background: '#fff', color: '#111827' }}
         >
-          {['Capital KB', 'Investor Relations KB', 'Finance & Controls KB', 'Acquisition KB', 'Analytics KB', 'Strategy KB', 'Executive KB', 'Marketing KB', 'Fund Admin KB', 'Leasing KB', 'Operations KB', 'People Ops KB', 'Accounting KB'].map((kb) => <option key={kb}>{kb}</option>)}
+          {['Capital KB', 'Investor Relations KB', 'Finance & Controls KB', 'Acquisition KB', 'Analytics KB', 'Strategy KB', 'Executive KB', 'Marketing KB', 'Leasing KB', 'Operations KB', 'People Ops KB', 'Accounting KB'].map((kb) => <option key={kb}>{kb}</option>)}
         </select>
       </div>
 
@@ -4898,7 +4898,6 @@ const KB_CATEGORIES = [
   { icon: '🎯', label: 'Strategy KB',             desc: 'Board presentations, fund narratives, IC materials, strategic planning docs',       agents: ['CIO & Chief of Staff'] },
   { icon: '📋', label: 'Executive KB',            desc: 'Meeting transcripts, calendar context, follow-up templates, board prep materials',  agents: ['Executive Assistant'] },
   { icon: '📣', label: 'Marketing KB',            desc: 'Brand assets, LP newsletter templates, LinkedIn drafts, conference materials',      agents: ['Marketing'] },
-  { icon: '📁', label: 'Fund Admin KB',           desc: 'Subscription docs, K-1s, capital account statements, compliance filings',          agents: ['Fund Administration'] },
   { icon: '🔑', label: 'Leasing KB',              desc: 'Lease templates, market comps, prospect intake forms, renewal playbooks',          agents: ['Leasing'] },
   { icon: '🏗️', label: 'Operations KB',           desc: 'Vendor contracts, work order SOPs, COI requirements, inspection reports',          agents: ['Property Operations', 'COO Operations'] },
   { icon: '👥', label: 'People Ops KB',           desc: 'Employee handbook, benefits guides, onboarding checklists, HR policies',           agents: ['People Ops'] },
