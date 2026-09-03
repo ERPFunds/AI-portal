@@ -63,6 +63,7 @@ type Row = {
   address: string | null;
   website: string | null;
   about: string | null;
+  state: string | null;
 };
 
 // Failures that are about the account or the service, not this particular investor.
@@ -70,6 +71,21 @@ type Row = {
 const GLOBAL_FAILURE = /credit balance|rate.?limit|429|overloaded|529|authentication|invalid x-api-key|permission/i;
 const HEDGE = /(appears? to be|appear to be|likely|may be|possibly|presumably|probably|suggests?|is believed|could be|seems? to|we believe|unclear)/i;
 const BAD_SITE = /linkedin\.com|bloomberg\.com|zoominfo|crunchbase|dnb\.com|facebook\.com|twitter\.com|wikipedia/i;
+
+const US_STATES = new Set(["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS",
+  "KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR",
+  "PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC"]);
+
+/**
+ * The state out of a US business address — "..., Midland, TX 79701" -> "TX".
+ * Only a real ZIP counts: it is what separates a US address from "..., Geneva 73, Switzerland",
+ * where the state field should stay empty rather than pick up something that looks like one.
+ */
+function stateOf(address: string): string | null {
+  const m = /,\s*([A-Za-z]{2})\s+[0-9]{5}(?:-[0-9]{4})?\s*$/.exec(address.trim());
+  const st = m?.[1]?.toUpperCase();
+  return st && US_STATES.has(st) ? st : null;
+}
 const URL_RE = /https?:\/\/[^\s"'\\]+/g;
 
 async function research(row: Row, contacts: string[], hint?: string) {
@@ -132,32 +148,8 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => ({}));
 
-  // The Other directory (lenders, law firms, vendors) keeps the same About/website/address
-  // fields on its own table, so it reuses this pass keyed by row id instead of by name.
-  if (body.table === "other") {
-    const id = String(body.id ?? "").trim();
-    if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
-    const { data, error } = await supabase.from("crm_other")
-      .select("id, name, contact, title, notes, address, website, about").eq("id", id).maybeSingle();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    if (!data) return NextResponse.json({ error: "No such record" }, { status: 404 });
-    const rec = data as { id: string; name: string; contact: string | null; title: string | null; notes: string | null; address: string | null; website: string | null; about: string | null };
-    const r = await research({
-      investor_key: rec.id, investor: rec.name, contact: rec.contact, fund: null,
-      notes: rec.notes, address: rec.address, website: rec.website, about: rec.about,
-    }, rec.title ? [rec.title] : []);
-    const patch: Record<string, unknown> = {
-      about_researched_at: new Date().toISOString(),
-      about_sources: r.about && r.sources.length ? r.sources : null,
-    };
-    if (r.about || rec.about == null) patch.about = r.about;
-    if (r.website && !rec.website) patch.website = r.website;
-    if (r.address && !rec.address) patch.address = r.address;
-    await supabase.from("crm_other").update(patch).eq("id", id);
-    return NextResponse.json({ count: 1, found: r.about ? 1 : 0, results: [{ investor: rec.name, ...r }] });
-  }
 
-  const cols = "investor_key, investor, contact, fund, notes, address, website, about";
+  const cols = "investor_key, investor, contact, fund, notes, address, website, about, state";
 
   // Batch mode fills in accounts not yet researched — used by the backfill, not the UI.
   // what: "contact" drives the website/address pass, which covers accounts the earlier
@@ -221,6 +213,13 @@ export async function POST(req: NextRequest) {
       // Only ever fill a gap — spreadsheet and hand-entered values win.
       if (r.website && !row.website) patch.website = r.website;
       if (r.address && !row.address) patch.address = r.address;
+      // The state column is what the directory filters on, so derive it from whichever
+      // address we end up with rather than leaving it blank next to a filled address.
+      const addr = (r.address || row.address || "").trim();
+      if (addr && !row.state) {
+        const st = stateOf(addr);
+        if (st) patch.state = st;
+      }
       await supabase.from("investor_crm").update(patch).eq("investor_key", row.investor_key);
       results.push({ investor: row.investor, ...r });
     } catch (e) {
