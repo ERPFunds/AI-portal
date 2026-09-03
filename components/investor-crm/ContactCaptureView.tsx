@@ -134,7 +134,7 @@ export default function ContactCaptureView() {
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#9ca3af' }}>Investor CRM</div>
           <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>New Contact Capture</h1>
-          <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>People in Meghan&apos;s and William&apos;s correspondence who aren&apos;t in any directory yet</div>
+          <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>People in Meghan&apos;s and William&apos;s correspondence since July who aren&apos;t in any directory yet</div>
         </div>
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>NEW CONTACTS</div>

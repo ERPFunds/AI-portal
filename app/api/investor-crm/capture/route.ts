@@ -22,6 +22,11 @@ export const maxDuration = 300;
 
 const INTERNAL = /@erpfunds\.com$/i;
 
+// Only surface people first seen from this date on. The underlying mailbox scan goes back
+// 18 months and is shared with "last interaction" across the portal, so the floor is applied
+// here rather than by shortening the scan for everyone.
+const SINCE = new Date(process.env.CRM_CAPTURE_SINCE || "2026-07-01T00:00:00Z");
+
 interface LpLite { email?: string | null; resolvedEmail?: string | null }
 
 export async function GET() {
@@ -71,7 +76,9 @@ export async function GET() {
   catch (e) { return NextResponse.json({ error: `Mailbox scan failed: ${String(e).slice(0, 200)}` }, { status: 502 }); }
 
   const candidates = Object.entries(byEmail)
-    .filter(([email]) => email && !known.has(email) && !INTERNAL.test(email) && isRealContactEmail(email))
+    .filter(([email, it]) => email && !known.has(email) && !INTERNAL.test(email) && isRealContactEmail(email)
+      // Anything older than the floor is history, not a new contact worth chasing.
+      && (() => { const d = new Date(it.date); return !isNaN(d.getTime()) && d >= SINCE; })())
     .map(([email, it]) => ({
       email,
       name: it.counterparty && it.counterparty !== email ? it.counterparty : "",
@@ -83,7 +90,12 @@ export async function GET() {
     }))
     .sort((a, b) => new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime());
 
-  return NextResponse.json({ contacts: candidates, scanned: Object.keys(byEmail).length, known: known.size });
+  return NextResponse.json({
+    contacts: candidates,
+    scanned: Object.keys(byEmail).length,
+    known: known.size,
+    since: SINCE.toISOString().slice(0, 10),
+  });
 }
 
 // Dismiss an address so it stops appearing as a new contact.
