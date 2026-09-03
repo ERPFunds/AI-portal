@@ -68,7 +68,13 @@ export async function PATCH(req: NextRequest) {
     const newKey = normKey(renameTo);
     const { data: clash } = await supabase.from("investor_crm").select("investor_key").eq("investor_key", newKey).maybeSingle();
     if (clash) return NextResponse.json({ error: "An investor with that name already exists" }, { status: 409 });
-    await supabase.from("investor_contacts").update({ investor_key: newKey, investor: renameTo }).eq("investor_key", normKey(investor));
+    // Everything keyed on investor_key has to move together, or the rename silently
+    // orphans the record's commitments, prior-fund contacts and distribution-list rows.
+    const oldKey = normKey(investor);
+    await supabase.from("investor_contacts").update({ investor_key: newKey, investor: renameTo }).eq("investor_key", oldKey);
+    await supabase.from("lp_committed").update({ investor_key: newKey, investor: renameTo }).eq("investor_key", oldKey);
+    await supabase.from("lp_prior_contacts").update({ investor_key: newKey }).eq("investor_key", oldKey);
+    await supabase.from("crm_distribution_list_members").update({ investor_key: newKey, investor: renameTo }).eq("investor_key", oldKey);
     const { data: moved, error: mErr } = await supabase.from("investor_crm")
       .update({ investor_key: newKey, investor: renameTo, updated_by: user.email ?? user.id, updated_at: new Date().toISOString() })
       .eq("investor_key", normKey(investor)).select(COLS).single();

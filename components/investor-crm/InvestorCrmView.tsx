@@ -690,7 +690,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           // like Committed (total) updated the field but left the summary above it stale.
           lp={(() => { const ov = overlayFor(selected); return ov ? overlayToLp(ov) : selected })()}
           program={program}
-          isLpDirectory={isLpDirectory || program === 'DST'}
+          isLpDirectory={isLpDirectory}
           overlay={overlayFor(selected)}
           accent={accent}
           onClose={() => setSelected(null)}
@@ -1091,12 +1091,12 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
           <div style={{ display: 'flex', gap: 8 }}>
             {/* A prospect that has come in becomes an LP; the flag moves it across without
                 needing a commitment figure yet. */}
-            {!isLpDirectory && <button onClick={moveToLpDirectory} disabled={moving}
+            {!isLpDirectory && program === 'PE' && <button onClick={moveToLpDirectory} disabled={moving}
               style={{ border: '1px solid #0f766e', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: moving ? 'wait' : 'pointer', fontWeight: 600, color: '#0f766e' }}>
               {moving ? 'Moving…' : '→ Move to LP Directory'}
             </button>}
-            {isLpDirectory && saveMsg && <span style={{ alignSelf: 'center', fontSize: 12.5, fontWeight: 600, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c' }}>{saving ? 'Saving…' : saveMsg}</span>}
-            {isLpDirectory && email && <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
+            {saveMsg && <span style={{ alignSelf: 'center', fontSize: 12.5, fontWeight: 600, color: saveMsg === 'Saved' ? '#197a52' : '#b91c1c' }}>{saving ? 'Saving…' : saveMsg}</span>}
+            {email && <a href={`mailto:${email}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
               style={{ border: '1px solid #2563eb', background: '#2563eb', color: '#fff', borderRadius: 8, padding: '6px 12px', fontWeight: 600, textDecoration: 'none' }}>✉ Email</a>}
             <button onClick={onClose} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 600, color: '#374151' }}>Close ✕</button>
           </div>
