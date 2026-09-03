@@ -260,6 +260,9 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   const hasContacts = Object.keys(contactPrimary).length > 0
   // Which account's people are open in the contact popout (the Contact(s) column).
   const [contactsFor, setContactsFor] = useState<string | null>(null)
+  // Which account is choosing an email recipient. Only set where the account has more than
+  // one person on it — a single contact goes straight to the mail client as before.
+  const [emailFor, setEmailFor] = useState<LpRecord | null>(null)
   // PE Prospects are all Fund IV by definition, so the Fund column is dropped there.
   const hideFund = program === 'PE' && mode === 'prospects'
   // The LP Directory is portal-owned now, so it carries no Salesforce sync or fund admin.
@@ -527,7 +530,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         </td>}
         {/* Email / Edit */}
         <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
-          {contactEmail
+          {contactEmail && pc && pc.more > 0
+            ? <button onClick={e => { e.stopPropagation(); setEmailFor(lp) }}
+                title={`${pc.more + 1} people on this account — choose who to write to`}
+                style={{ ...emailBtn, cursor: 'pointer' }}>Email ▾</button>
+            : contactEmail
             ? <a href={`mailto:${contactEmail}?subject=${encodeURIComponent('ERP Industrials — ' + lp.investor)}`}
                 onClick={e => e.stopPropagation()} style={emailBtn}>Email</a>
             : <span style={{ ...rowBtn, color: '#cbd5e1', background: '#f8fafc', borderColor: '#e2e8f0', cursor: 'default' }}>Email</span>}
@@ -659,6 +666,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       {showFunds && <ManageFundsModal funds={funds} program={program} onClose={() => setShowFunds(false)} onChanged={loadFunds} />}
 
       {contactsFor && <ContactsPopout investor={contactsFor} onClose={() => setContactsFor(null)} />}
+      {emailFor && <EmailPicker lp={emailFor} onClose={() => setEmailFor(null)} />}
       {selected && (
         <InvestorDrawer
           lp={selected}
@@ -1455,6 +1463,75 @@ function PeopleList({ investor, people, reload, title }: {
 }
 
 // Opened from the Contact(s) column: the people on an account, without the account around them.
+// Who to write to when an account has several people on it. Every contact with an address
+// is listed with the detail needed to tell them apart, and the choice hands off to whatever
+// mail client the machine uses — the same mailto as the single-contact button.
+function EmailPicker({ lp, onClose }: { lp: LpRecord; onClose: () => void }) {
+  const [people, setPeople] = useState<Person[] | null>(null)
+  useEffect(() => {
+    let live = true
+    fetch(`/api/investor-crm/people?investor=${encodeURIComponent(lp.investor)}`)
+      .then(r => r.json())
+      .then(j => { if (live) setPeople(j.people ?? []) })
+      .catch(() => { if (live) setPeople([]) })
+    return () => { live = false }
+  }, [lp.investor])
+
+  const subject = encodeURIComponent('ERP Industrials — ' + lp.investor)
+  const withEmail = (people ?? []).filter(p => (p.email || '').includes('@'))
+  const href = (to: string) => `mailto:${to}?subject=${subject}`
+  const rowCss: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    padding: '11px 13px', border: '1px solid #e6edf1', borderRadius: 10, background: '#fff',
+    textDecoration: 'none', color: 'inherit',
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(520px, 96vw)', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0f2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Who are you writing to?</div>
+            <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lp.investor}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>✕</button>
+        </div>
+
+        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {people === null && <div style={{ color: '#9ca3af', fontSize: 13.5 }}>Loading…</div>}
+          {people !== null && withEmail.length === 0 && (
+            <div style={{ color: '#9ca3af', fontSize: 13.5 }}>Nobody on this account has an email address on file.</div>
+          )}
+          {withEmail.map(p => (
+            <a key={p.match_key} href={href(p.email as string)} onClick={onClose} style={rowCss}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  {p.name}
+                  {p.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
+                </div>
+                {p.title && <div style={{ fontSize: 12.5, color: '#6b7280' }}>{p.title}</div>}
+                <div style={{ fontSize: 12.5, color: '#0e7490', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.email}</div>
+              </div>
+              <span style={{ ...emailBtn, cursor: 'pointer', flexShrink: 0 }}>Email</span>
+            </a>
+          ))}
+
+          {withEmail.length > 1 && (
+            <a href={href(withEmail.map(p => p.email).join(','))} onClick={onClose}
+              style={{ ...rowCss, background: '#f7fafb', borderStyle: 'dashed' }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>
+                All {withEmail.length}
+                <div style={{ fontSize: 12.5, color: '#6b7280', fontWeight: 400 }}>One message addressed to everyone above</div>
+              </div>
+              <span style={{ ...emailBtn, cursor: 'pointer', flexShrink: 0 }}>Email</span>
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ContactsPopout({ investor, onClose }: { investor: string; onClose: () => void }) {
   const [people, setPeople] = useState<Person[] | null>(null)
   const load = useCallback(async () => {

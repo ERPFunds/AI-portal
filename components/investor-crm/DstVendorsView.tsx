@@ -85,6 +85,9 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   const [stateFilter, setStateFilter] = useState('All')
   const [editing, setEditing] = useState<Draft | null>(null)
   const [people, setPeople] = useState<Vendor | null>(null)
+  // Which account is choosing an email recipient. Only set where more than one person on
+  // the account has an address — one contact goes straight to the mail client.
+  const [emailFor, setEmailFor] = useState<Vendor | null>(null)
   // Set when the DST Investor directory sent us here for a named broker dealer or advisor.
   const [handoff, setHandoff] = useState<string | null>(null)
 
@@ -198,7 +201,11 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     if (res.ok) { setPeople(null); load() } else alert('Delete failed')
   }
 
-  const primaryOf = (v: Vendor) => v.contacts.find(c => c.is_primary) ?? v.contacts[0]
+  const primaryOf = (v: Vendor) =>
+    v.contacts.find(c => c.is_primary && (c.email || '').includes('@'))
+    ?? v.contacts.find(c => (c.email || '').includes('@'))
+    ?? v.contacts.find(c => c.is_primary)
+    ?? v.contacts[0]
   const showAffiliationFilter = cfg.columns.includes('affiliation') && affOptions.length > 0
 
   return (
@@ -304,10 +311,15 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
                       return <td key={col} style={tdCss} />
                     })}
                     <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      <a href={p?.email ? `mailto:${p.email}` : undefined}
-                        style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: 'none',
-                                 background: p?.email ? '#2563eb' : '#f1f2f4', color: p?.email ? '#fff' : '#b6bcc6',
-                                 pointerEvents: p?.email ? 'auto' : 'none' }}>Email</a>
+                      {v.contacts.filter(c => (c.email || '').includes('@')).length > 1
+                        ? <button onClick={() => setEmailFor(v)}
+                            title={`${v.contacts.filter(c => (c.email || '').includes('@')).length} people here — choose who to write to`}
+                            style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13,
+                                     border: 0, background: '#2563eb', color: '#fff', cursor: 'pointer', fontFamily: 'inherit' }}>Email ▾</button>
+                        : <a href={p?.email ? `mailto:${p.email}` : undefined}
+                            style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: 'none',
+                                     background: p?.email ? '#2563eb' : '#f1f2f4', color: p?.email ? '#fff' : '#b6bcc6',
+                                     pointerEvents: p?.email ? 'auto' : 'none' }}>Email</a>}
                       <button onClick={() => setEditing(v)}
                         style={{ marginLeft: 6, border: '1px solid #d1d5db', background: '#fff', borderRadius: 7, padding: '6px 12px', fontWeight: 600, fontSize: 13, color: '#374151', cursor: 'pointer' }}>Edit</button>
                     </td>
@@ -326,6 +338,7 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           onDelete={editing.id ? () => removeAccount(editing as Vendor) : undefined} />
       )}
       {people && <ContactsModal vendor={people} desk={desk} onClose={() => setPeople(null)} onChanged={load} />}
+      {emailFor && <VendorEmailPicker vendor={emailFor} onClose={() => setEmailFor(null)} />}
     </div>
   )
 }
@@ -393,6 +406,62 @@ function AccountModal({ draft, parents, types, affiliationLabel, columns, onCanc
 }
 
 // ── Contacts popout ───────────────────────────────────────────────────────────
+// Who to write to when several people sit under one account. Same hand-off as the single
+// contact button — a mailto the machine's mail client picks up.
+function VendorEmailPicker({ vendor, onClose }: { vendor: Vendor; onClose: () => void }) {
+  const withEmail = vendor.contacts.filter(c => (c.email || '').includes('@'))
+  const subject = encodeURIComponent('ERP Industrials — ' + vendor.name)
+  const href = (to: string) => `mailto:${to}?subject=${subject}`
+  const rowCss: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+    padding: '11px 13px', border: '1px solid #e6edf1', borderRadius: 10, background: '#fff',
+    textDecoration: 'none', color: 'inherit',
+  }
+  const btn: React.CSSProperties = {
+    padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13,
+    background: '#2563eb', color: '#fff', flexShrink: 0,
+  }
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(520px, 96vw)', maxHeight: '86vh', overflowY: 'auto', background: '#fff', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0f2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Who are you writing to?</div>
+            <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vendor.name}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 20, cursor: 'pointer', color: '#9ca3af', lineHeight: 1 }}>✕</button>
+        </div>
+        <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {withEmail.map(c => (
+            <a key={c.id} href={href(c.email as string)} onClick={onClose} style={rowCss}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14.5, display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+                  {c.name}
+                  {c.is_primary && <span style={{ fontSize: 10, fontWeight: 700, color: '#9a6b12' }}>★ PRIMARY</span>}
+                </div>
+                {c.title && <div style={{ fontSize: 12.5, color: '#6b7280' }}>{c.title}</div>}
+                <div style={{ fontSize: 12.5, color: '#0e7490', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.email}</div>
+              </div>
+              <span style={btn}>Email</span>
+            </a>
+          ))}
+          {withEmail.length > 1 && (
+            <a href={href(withEmail.map(c => c.email).join(','))} onClick={onClose}
+              style={{ ...rowCss, background: '#f7fafb', borderStyle: 'dashed' }}>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>
+                All {withEmail.length}
+                <div style={{ fontSize: 12.5, color: '#6b7280', fontWeight: 400 }}>One message addressed to everyone above</div>
+              </div>
+              <span style={btn}>Email</span>
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ContactsModal({ vendor, desk, onClose, onChanged }: { vendor: Vendor; desk: DeskKey; onClose: () => void; onChanged: () => void }) {
   const [editing, setEditing] = useState<CDraft | null>(null)
 

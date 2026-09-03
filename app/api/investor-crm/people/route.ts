@@ -73,11 +73,14 @@ export async function GET(req: NextRequest) {
     for (const [k, m] of perEntity) {
       const list = [...m.values()];
       counts[k] = list.length;
-      // Name comes from the primary contact, but the address from whoever actually has one —
-      // Fund II/III primaries were imported name-only, so the two are often different people.
-      const pick = list.find((x) => x.primary) ?? list.find((x) => x.email) ?? list[0];
-      const withEmail = list.find((x) => x.email);
-      if (pick) primary[k] = { name: pick.name, email: pick.email || withEmail?.email || "", more: list.length - 1 };
+      // The name shown and the address the Email button uses must be the SAME person.
+      // Preferring a starred primary who has no address, then borrowing someone else's,
+      // made the button write to a different person than the one named in the cell.
+      const pick = list.find((x) => x.primary && x.email)
+        ?? list.find((x) => x.email)
+        ?? list.find((x) => x.primary)
+        ?? list[0];
+      if (pick) primary[k] = { name: pick.name, email: pick.email || "", more: list.length - 1 };
     }
     return NextResponse.json({ counts, primary });
   }
