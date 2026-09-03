@@ -20,6 +20,12 @@ export type CaptureKind =
   | "research"      // sell-side market commentary and research distribution
   | "utility"       // power, gas, water and telecoms suppliers to the portfolio
   | "receipt"       // purchase confirmations, shipping and delivery notices
+  | "accounting"    // accountants, tax and audit
+  | "insurance"     // insurance brokers and risk advisors
+  | "title"         // title, escrow and abstract companies
+  | "tech"          // IT, software and telecom suppliers
+  | "travel"        // hotels, transport, clubs and concierge
+  | "personal"      // family and household mail that is not business at all
   | "blocked";      // a domain the team has excluded by hand
 
 /**
@@ -54,7 +60,38 @@ const CONTRACTOR_DOMAIN =
 
 /** Law firms. Most announce themselves in the domain. */
 const LEGAL_DOMAIN =
-  /(^|\.)(law|lawfirm|lawgroup|lawoffices?|attorneys?|attorneysatlaw|legal|counsel|llp)\.|(law|legal|attorney|llp)\.(com|net|org|us)$/i;
+  /(^|[.\-_])(law|legal|attorneys?|counsel|llp|esq)([.\-_]|$)|(^|[.\-_])[a-z]{2,}(law|legal|counsel)([.\-_]|$)|(law|legal)(firm|group|offices?|partners|pllc)/i;
+/** Law firms that name themselves after their partners, so nothing in the domain gives it away. */
+const LEGAL_FIRMS =
+  /(^|\.)(hallestill|akingump|dgclaw|gbafamilylaw|solidcounsel|kirkland|lathamwatkins|sidley|jonesday|skadden|winston|nortonrosefulbright|haynesboone|jw|thompsonknight|vinsonelkins|bakerbotts|lockelord|munsch|katten|goodwinlaw|ropesgray|wilmerhale|debevoise|paulweiss|stblaw|cravath|davispolk|freshfields|clearygottlieb|shearman|mwe|morganlewis|reedsmith|dentons|dlapiper|hoganlovells|squirepb|troutman|alston|kilpatricktownsend|nelsonmullins|mcguirewoods|bracewell|gibsondunn|quinnemanuel)\./i;
+
+/** Accountants, tax and audit. */
+const ACCOUNTING_DOMAIN =
+  /(cpa|accounting|accountants?|bookkeep|payroll|audit)|(^|\.)(cbiz|weaver|burgherhaggard|kpmg|deloitte|pwc|pricewaterhousecoopers|ey|ernstyoung|bdo|grantthornton|rsmus|crowe|moss?adams|bakertilly|whitleypenn|armanino|eidebailly|plantemoran|cohnreznick|marcumllp|withum|forvis|hcvt|andersen)\./i;
+
+/** Insurance brokers and risk advisors. */
+const INSURANCE_DOMAIN =
+  /(insurance|insurers?|underwrit|riskmanagement)|(^|\.)(marshmma|marsh|lockton|aon|willistowerswatson|wtwco|ajg|gallagher|hubinternational|alliant|usi|brownandbrown|higginbotham|acrisure|nfp|chubb|travelers|hartford|libertymutual|cna|zurichna)\./i;
+
+/** Title, escrow and abstract companies -- closing-side, never investor relations. */
+const TITLE_DOMAIN =
+  /(titleco|titleagency|titleinsurance|abstract|escrow)|(^|\.)(wtabstract|firstam|firstamerican|fnf|fidelitynationalfinancial|stewart|oldrepublictitle|chicagotitle|ctic|ticortitle|commonwealthtitle|capitaltitle|independencetitle|providencetitle)\./i;
+
+/** IT, software and telecom suppliers. */
+const TECH_DOMAIN =
+  /(itsupport|managedit|techsupport|msp|helpdesk)|(^|\.)(flexnet|flexnetllc|flexnetportal|dell|lenovo|hp|cdw|shi|insight|connection|ricoh|xerox|canon|konicaminolta|sharp|toshiba|avaya|mitel|nextiva|ooma)\./i;
+
+/** Hotels, transport, clubs and concierge -- travel logistics, not contacts. */
+const TRAVEL_DOMAIN =
+  /(limo|limousine|chauffeur|charter|concierge|countryclub|petroleumclub|golfclub)|(^|\.)(peninsula|fourseasons|ritzcarlton|mandarinoriental|rosewoodhotels|aman|belmond|omnihotels|loewshotels|kimpton|thompsonhotels|hoteldelcoronado|sixsenses)\./i;
+
+/**
+ * Household and family mail. Not a business category at all -- it turned up because the IR
+ * inboxes are also the team's working inboxes, so a college counsellor or a doctor's office
+ * looks exactly like a firm.
+ */
+const PERSONAL_DOMAIN =
+  /(ingeniusprep|collegeprep|tutor|counselor|counsellor|pediatric|dental|dentist|orthodont|dermatolog|veterinar|petcare|daycare|preschool|summercamp|photograph|florist|caterer|catering|weddings?|salon|spa|fitness|pilates|yoga|crossfit)/i;
 
 /** Schools, universities and their alumni and development offices. */
 const EDUCATION_DOMAIN =
@@ -131,7 +168,13 @@ export function classify(email: string, excludedDomains?: Set<string>): CaptureK
   if (PLATFORM_DOMAIN.test(dot)) return "platform";
   if (EDUCATION_DOMAIN.test(domain)) return "education";
   if (EVENT_DOMAIN.test(dot) || EVENT_LOCAL.test(local)) return "event";
-  if (LEGAL_DOMAIN.test(dot)) return "legal";
+  if (ACCOUNTING_DOMAIN.test(dot)) return "accounting";
+  if (INSURANCE_DOMAIN.test(dot)) return "insurance";
+  if (TITLE_DOMAIN.test(dot)) return "title";
+  if (LEGAL_FIRMS.test(dot) || LEGAL_DOMAIN.test(domain)) return "legal";
+  if (TECH_DOMAIN.test(dot)) return "tech";
+  if (TRAVEL_DOMAIN.test(dot)) return "travel";
+  if (PERSONAL_DOMAIN.test(domain)) return "personal";
   if (CONTRACTOR_DOMAIN.test(domain)) return "contractor";
   if (SERVICE_DOMAIN.test(dot)) return "service";
   if (SERVICE_LOCAL.test(local)) return "service";
@@ -148,4 +191,45 @@ export const CAPTURE_SHOWN: CaptureKind[] = ["firm", "individual"];
  */
 export function isTwoWay(sent = 0, received = 0): boolean {
   return (sent > 0 && received > 0) || sent + received >= 3;
+}
+
+/**
+ * Words that mark a firm as being in the world ERP raises capital in — wealth managers, RIAs,
+ * broker-dealers, 1031/DST shops, family offices.
+ *
+ * This exists because excluding noise category by category never converged: the scan kept
+ * surfacing hundreds of accountants, title companies, elevator vendors and hotel concierges,
+ * and each new exclusion only revealed the next. Worse, message VOLUME turned out to select
+ * FOR the wrong people — the heaviest correspondents are the firms ERP already pays every
+ * month, not new prospects. So the gate is positive: say what we are looking for.
+ */
+const CAPITAL_WORLD =
+  /(wealth|capital|advisor|advisory|invest|asset|financial|finserv|securities|equit(y|ies)|familyoffice|1031|dst|fiduciar|retirement|portfolio|planning|privatebank|privateclient|exchange|bd|ria)/i;
+
+/**
+ * Is this address worth putting in front of someone?
+ *
+ * Two ways to qualify: the domain reads like a capital-world firm, or the domain already
+ * appears somewhere in the CRM — meaning it is a new person at a firm we track, which is
+ * exactly the case the tab exists to catch. The second test grows on its own as the CRM does.
+ *
+ * `crmDomains` MUST NOT contain consumer domains. A single gmail address anywhere in the CRM
+ * would otherwise make gmail.com a "known firm" and let every personal message through, which
+ * is precisely what it did on the first attempt.
+ */
+export function isRelevant(email: string, crmDomains: Set<string>): boolean {
+  const domain = (email || "").toLowerCase().split("@")[1] || "";
+  if (!domain) return false;
+  if (CONSUMER_DOMAIN.test(domain + ".")) return false;
+  return CAPITAL_WORLD.test(domain) || crmDomains.has(domain);
+}
+
+/** Strip consumer domains out of a set of CRM domains, so they can never confer relevance. */
+export function firmDomainsOnly(domains: Iterable<string>): Set<string> {
+  const out = new Set<string>();
+  for (const d of domains) {
+    const dom = (d || "").toLowerCase().trim();
+    if (dom && !CONSUMER_DOMAIN.test(dom + ".")) out.add(dom);
+  }
+  return out;
 }

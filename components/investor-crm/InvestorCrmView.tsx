@@ -601,7 +601,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
         {mode === 'prospects' && (
           <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
-            <option value="All">All descriptions</option>
+            <option value="All">All types</option>
             {DESCRIPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
             <option value="Unset">— none set —</option>
           </select>

@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
 import { fetchAll } from "@/lib/supabase/fetch-all";
-import { classify, isTwoWay } from "@/lib/agents/ir/capture-classify";
+import { classify, isTwoWay, isRelevant, firmDomainsOnly } from "@/lib/agents/ir/capture-classify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -57,9 +57,16 @@ export async function runCaptureScan() {
 
   // Everything the portal already knows about.
   const known = new Set<string>();
+  // The DOMAINS behind those addresses. A domain we already deal with means a new person at a
+  // firm we track — the single most useful thing this tab can surface. Consumer domains are
+  // stripped out below, or one personal gmail in the CRM would qualify every personal message.
+  const knownDomains = new Set<string>();
   const add = (e: unknown) => {
     const s = String(e ?? "").trim().toLowerCase();
-    if (s) known.add(s);
+    if (!s) return;
+    known.add(s);
+    const dom = s.split("@")[1];
+    if (dom) knownDomains.add(dom);
   };
 
   // Paged, because investor_contacts is past PostgREST's 1,000-row default and a truncated
@@ -90,6 +97,8 @@ export async function runCaptureScan() {
   for (const lp of lps) { add(lp.email); add(lp.resolvedEmail); }
   for (const set of sets) for (const r of set) add(r.email);
 
+  const firmDomains = firmDomainsOnly(knownDomains);
+
   // Everyone the IR mailboxes have actually corresponded with.
   const { byEmail } = await getInteractions();
 
@@ -111,6 +120,8 @@ export async function runCaptureScan() {
         sent,
         received,
         twoWay: isTwoWay(sent, received),
+        // In the capital-raising world, or a new face at a firm already in the CRM.
+        relevant: isRelevant(email, firmDomains),
         // Set once someone has filed this person into a directory.
         filedTo: filed.get(email)?.destination ?? null,
         filedAccount: filed.get(email)?.account ?? null,

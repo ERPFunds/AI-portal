@@ -20,6 +20,10 @@ interface Candidate {
   // spotted and corrected.
   kind?: 'firm' | 'individual' | 'service' | 'platform' | 'contractor' | 'legal'
        | 'education' | 'event' | 'research' | 'utility' | 'receipt' | 'blocked'
+       | 'accounting' | 'insurance' | 'title' | 'tech' | 'travel' | 'personal'
+  // True when the firm is in the capital-raising world, or is already in the CRM under
+  // someone else. This is the main thing that keeps the list to a readable length.
+  relevant?: boolean
   sent?: number
   received?: number
   twoWay?: boolean
@@ -36,6 +40,8 @@ const KIND_LABEL: Record<string, string> = {
   platform: 'Platform notices', contractor: 'Contractors', legal: 'Law firms',
   education: 'Schools', event: 'Conferences', research: 'Market commentary',
   utility: 'Utilities', receipt: 'Receipts / shipping', blocked: 'Excluded domain',
+  accounting: 'Accountants', insurance: 'Insurance brokers', title: 'Title & escrow',
+  tech: 'IT suppliers', travel: 'Travel & clubs', personal: 'Personal & family',
 }
 
 // Where a captured person can be filed. These are the directories as they appear in the
@@ -76,6 +82,9 @@ export default function ContactCaptureView() {
   // The excluded categories — contractors, law firms, platform notices, conferences, schools,
   // market commentary, automated senders — are hidden unless this is on.
   const [showExcluded, setShowExcluded] = useState(false)
+  // On by default. Without it the scan returns several hundred names, almost all of them
+  // ERP's own accountants, lawyers, title companies and suppliers rather than new contacts.
+  const [capitalOnly, setCapitalOnly] = useState(true)
   // Default to people someone actually corresponded with. One inbound email that nobody
   // answered is almost always a stranger or a blast, and that is what made the list unusable.
   const [twoWayOnly, setTwoWayOnly] = useState(true)
@@ -109,10 +118,14 @@ export default function ContactCaptureView() {
       .filter(i => mailbox === 'All' || i.mailbox === mailbox)
       // A person already filed always stays visible — it is a record of work done.
       .filter(i => i.filedTo || showExcluded || !i.kind || SHOWN_KINDS.includes(i.kind))
+      .filter(i => i.filedTo || showExcluded || !capitalOnly || i.relevant !== false)
       .filter(i => kind === 'All' || i.kind === kind)
       .filter(i => i.filedTo || !twoWayOnly || i.twoWay !== false)
       .filter(i => !q || i.email.toLowerCase().includes(q) || (i.name || '').toLowerCase().includes(q) || (i.subject || '').toLowerCase().includes(q))
-  }, [items, search, mailbox, kind, twoWayOnly, showExcluded])
+  }, [items, search, mailbox, kind, twoWayOnly, showExcluded, capitalOnly])
+  const hiddenOffTopic = useMemo(
+    () => (capitalOnly ? (items ?? []).filter(i => !i.filedTo && i.relevant === false
+      && (!i.kind || SHOWN_KINDS.includes(i.kind))).length : 0), [items, capitalOnly])
   const hiddenOneWay = useMemo(
     () => (twoWayOnly ? (items ?? []).filter(i => !i.filedTo && i.twoWay === false).length : 0), [items, twoWayOnly])
   const hiddenExcluded = useMemo(
@@ -216,6 +229,12 @@ export default function ContactCaptureView() {
           <option value="individual">Individuals only</option>
           {showExcluded && excludedKinds.map(([k]) => <option key={k} value={k}>{KIND_LABEL[k] ?? k} only</option>)}
         </select>
+        <label title="Wealth managers, RIAs, broker-dealers, 1031/DST shops and family offices, plus anyone at a firm already in the CRM"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={capitalOnly} onChange={e => setCapitalOnly(e.target.checked)} />
+          Capital world only
+          {hiddenOffTopic > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenOffTopic} hidden)</span>}
+        </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
           <input type="checkbox" checked={showExcluded} onChange={e => setShowExcluded(e.target.checked)} />
           Show excluded
