@@ -41,7 +41,7 @@ const SERVICE_DOMAIN =
 
 /** Local parts that mean "a system sent this", beyond the hard junk filter. */
 const SERVICE_LOCAL =
-  /^(info|support|help|admin|sales|marketing|team|hello|contact|billing|invoices?|accounts?|accounting|ar|ap|payments?|receipts?|orders?|service|customerservice|care|news|newsletter|updates?|alerts?|notify|notifications?|events?|rsvp|register|registration|webinars?|subscribe|unsubscribe|feedback|survey|careers|jobs|recruiting|hr|security|abuse|legal|compliance|privacy|dmarc|reports?|noreply|no-reply|donotreply|mail|email|inbox|office|general|enquiries|inquiries)$/i;
+  /^(info|support|help|admin|sales|marketing|team|hello|contact|billing|invoices?|accounts?|accounting|ar|ap|payments?|receipts?|orders?|service|customerservice|care|news|newsletter|updates?|alerts?|notify|notifications?|events?|rsvp|register|registration|webinars?|subscribe|unsubscribe|feedback|survey|careers|jobs|recruiting|hr|security|abuse|legal|compliance|privacy|dmarc|reports?|noreply|no-reply|donotreply|mail|email|inbox|office|general|enquiries|inquiries|edelivery|estatements?|edocs?|statements?|proxy|corpactions)$/i;
 
 /**
  * Investment platforms and portals. Their mail is account statements, offering notices and
@@ -49,14 +49,14 @@ const SERVICE_LOCAL =
  * the team kept seeing.
  */
 const PLATFORM_DOMAIN =
-  /(^|\.)(flexnet|flexnetportal|icapital|icapitalnetwork|altigo|realized1031|yieldstreet|cais|caisgroup|ipreo|dstvision|phxa|phoenixamerican|sscinc|ssctech|alps|ultimusfundsolutions|juniperssquare|junipersquare|appfolio|yardi|entrata|realpage|northcapital|dealmaker|crowdstreet|fundrise|equitymultiple|arborcrowd|rialtomarkets|tzeropartners|vertalo|securitize)\./i;
+  /(^|\.)(flexnet|flexnetportal|icapital|icapitalnetwork|altigo|realized1031|yieldstreet|cais|caisgroup|ipreo|dstvision|phxa|phoenixamerican|sscinc|ssctech|alps|ultimusfundsolutions|juniperssquare|junipersquare|appfolio|yardi|entrata|realpage|northcapital|dealmaker|crowdstreet|fundrise|equitymultiple|arborcrowd|rialtomarkets|tzeropartners|vertalo|securitize|pershing|schwab|fidelityinstitutional|nfsproxy|axosadvisor|apexclearing|raymondjamesalt)\./i;
 
 /**
  * Trades and property services. These are the property desk's suppliers, not investor
  * relations contacts, and they arrive constantly on inboxes that also handle leasing.
  */
 const CONTRACTOR_DOMAIN =
-  /(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al|ians?)?|construction|contracting|contractors?|builders?|paving|asphalt|concrete|masonry|landscap(e|ing)|lawncare|irrigation|fencing|fence|glass|glazing|doors?|overheaddoor|garagedoor|striping|sweeping|snowremoval|janitorial|cleaning|restoration|remediation|abatement|pest(control)?|exterminat|fireprotection|firesafety|sprinkler|alarm|security(systems)?|surveying|survey(ors?)?|engineering|environmental|geotech|inspections?|appraisals?|welding|fabrication|millwork|flooring|painting|drywall|insulation|scaffold|crane|excavat|grading|utilit(y|ies)|septic|waste|disposal|dumpster|hauling|towing|equipmentrental|toolrental)/i;
+  /(roofing|roofers?|plumbing|plumbers?|hvac|heating|cooling|electric(al|ians?)?|construction|contracting|contractors?|builders?|paving|asphalt|concrete|masonry|landscap(e|ing)|lawncare|irrigation|fencing|fence|glass|glazing|doors?|overheaddoor|garagedoor|striping|sweeping|snowremoval|janitorial|cleaning|restoration|remediation|abatement|pest(control)?|exterminat|fireprotection|firesafety|sprinkler|alarm|security(systems)?|surveying|survey(ors?)?|engineering|environmental|geotech|inspections?|appraisals?|welding|fabrication|millwork|flooring|painting|drywall|insulation|scaffold|crane|excavat|grading|utilit(y|ies)|septic|waste|disposal|dumpster|hauling|towing|equipmentrental|toolrental|elevator|escalator|lift(services)?|dooropener|hoist)/i;
 
 /** Law firms. Most announce themselves in the domain. */
 const LEGAL_DOMAIN =
@@ -190,7 +190,7 @@ export const CAPTURE_SHOWN: CaptureKind[] = ["firm", "individual"];
  * several messages either way. A single inbound email with no reply is not a lead yet.
  */
 export function isTwoWay(sent = 0, received = 0): boolean {
-  return (sent > 0 && received > 0) || sent + received >= 3;
+  return sent > 0 && received > 0;
 }
 
 /**
