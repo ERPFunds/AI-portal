@@ -684,7 +684,11 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
       {emailFor && <EmailPicker lp={emailFor} onClose={() => setEmailFor(null)} />}
       {selected && (
         <InvestorDrawer
-          lp={selected}
+          // Re-derived from the live overlay, not the snapshot taken when the row was
+          // clicked. Every record in these lists is built by overlayToLp in the first place,
+          // so this is the same object with current values -- without it, editing a field
+          // like Committed (total) updated the field but left the summary above it stale.
+          lp={(() => { const ov = overlayFor(selected); return ov ? overlayToLp(ov) : selected })()}
           program={program}
           isLpDirectory={isLpDirectory || program === 'DST'}
           overlay={overlayFor(selected)}
