@@ -72,7 +72,7 @@ const HEDGE = /(appears? to be|appear to be|likely|may be|possibly|presumably|p
 const BAD_SITE = /linkedin\.com|bloomberg\.com|zoominfo|crunchbase|dnb\.com|facebook\.com|twitter\.com|wikipedia/i;
 const URL_RE = /https?:\/\/[^\s"'\\]+/g;
 
-async function research(row: Row, contacts: string[]) {
+async function research(row: Row, contacts: string[], hint?: string) {
   const facts = [
     `Investing entity: ${row.investor}`,
     row.contact ? `Contact on the account: ${row.contact}` : "",
@@ -80,6 +80,10 @@ async function research(row: Row, contacts: string[]) {
     row.address ? `Address already on file (do not contradict it): ${row.address}` : "",
     row.website ? `Website already on file: ${row.website}` : "",
     row.notes ? `CRM notes: ${row.notes}` : "",
+    // What the person asking for the re-run says is wrong with the current line. It comes
+    // last so it is the freshest thing in the prompt, and it is quoted rather than merged
+    // into the instructions so the model treats it as a lead to check, not as fact.
+    hint ? `\nThe IR team says the previous research on this account was wrong. In their words:\n"${hint}"\nTreat that as a lead to verify, not as something already established. If it turns out to be right, say what the sources show. If the sources contradict it, return what they actually support - or an empty about if they support nothing.` : "",
   ].filter(Boolean).join("\n");
 
   const res = await anthropic.messages.create({
@@ -196,11 +200,15 @@ export async function POST(req: NextRequest) {
     byKey.set(p.investor_key, list);
   }
 
+  // Free-text correction from the drawer's re-research button. Capped so a paste of a whole
+  // document cannot dominate the prompt.
+  const hint = String(body.hint ?? "").trim().slice(0, 600) || undefined;
+
   const results: { investor: string; about: string; website: string; address: string; confidence: string; sources: string[] }[] = [];
   // Serial: the web_search calls are slow and this runs against a shared rate limit.
   for (const row of targets) {
     try {
-      const r = await research(row, byKey.get(row.investor_key) ?? []);
+      const r = await research(row, byKey.get(row.investor_key) ?? [], hint);
       const now = new Date().toISOString();
       const patch: Record<string, unknown> = { about_researched_at: now, contact_researched_at: now };
       // An empty About is stored as "" (not null) so the backfill treats the account as

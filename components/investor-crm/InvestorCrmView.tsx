@@ -908,12 +908,24 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   const [aboutMsg, setAboutMsg] = useState<string | null>(null)
   // Researches the About line from public sources. The result is written server-side, so a
   // failed request leaves whatever was already on the record untouched.
+  // A re-run is nearly always because the existing line is wrong, and the person clicking
+  // usually knows why - the right firm, the right city, the wrong person entirely. Asking for
+  // that and passing it through is far more useful than running the same search again.
   async function researchAbout() {
+    let hint = ''
+    if (about) {
+      const answer = window.prompt(
+        `Re-research ${lp.investor}.\n\nWhat's wrong with what's there, and what should it look for instead?\n`
+        + `e.g. "wrong person - he's in Midland oil and gas, not the Chicago lawyer" or "this is the son, not the father".\n\n`
+        + `Leave blank to just run the search again.`, '')
+      if (answer === null) return          // cancelled - don't spend a search
+      hint = answer.trim()
+    }
     setAboutBusy(true); setAboutMsg(null)
     try {
       const res = await fetch('/api/investor-crm/about', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ investor: lp.investor }),
+        body: JSON.stringify({ investor: lp.investor, ...(hint ? { hint } : {}) }),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || j.error) { setAboutMsg(`Research failed: ${j.error ?? res.status}`); return }
@@ -1101,7 +1113,7 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                       style={{ border: '1px solid #c7d2da', background: aboutBusy ? '#f1f5f9' : '#fff', color: '#0f766e',
                                borderRadius: 7, padding: '5px 11px', fontSize: 12.5, fontWeight: 600,
                                cursor: aboutBusy ? 'default' : 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap' }}>
-                      {aboutBusy ? 'Searching the web…' : about ? 'Re-research' : 'Research from the web'}
+                      {aboutBusy ? 'Searching the web…' : about ? 'Re-research…' : 'Research from the web'}
                     </button>
                   </div>
                   <textarea
