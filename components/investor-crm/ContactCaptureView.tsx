@@ -16,10 +16,25 @@ interface Candidate {
   preview: string
   // firm = a business address, individual = gmail and the like. Service senders never
   // reach the tab. twoWay means somebody actually replied — the rest is one-way traffic.
-  kind?: 'firm' | 'individual'
+  // firm / individual are the ones worth a look. The rest are the categories the team asked
+  // to leave out — they are classified rather than deleted, so an over-reaching filter can be
+  // spotted and corrected.
+  kind?: 'firm' | 'individual' | 'service' | 'platform' | 'contractor' | 'legal' | 'education' | 'event' | 'research'
   sent?: number
   received?: number
   twoWay?: boolean
+  // Set once someone has filed this person into a directory. The row then stays as a record.
+  filedTo?: string | null
+  filedAccount?: string | null
+  filedAt?: string | null
+}
+
+// What the tab shows by default, and what each excluded category is called on screen.
+const SHOWN_KINDS = ['firm', 'individual']
+const KIND_LABEL: Record<string, string> = {
+  firm: 'Firms', individual: 'Individuals', service: 'Automated / service',
+  platform: 'Platform notices', contractor: 'Contractors', legal: 'Law firms',
+  education: 'Schools', event: 'Conferences', research: 'Market commentary',
 }
 
 // Where a captured person can be filed. These are the directories as they appear in the
@@ -57,6 +72,9 @@ export default function ContactCaptureView() {
   const [search, setSearch] = useState('')
   const [mailbox, setMailbox] = useState('All')
   const [kind, setKind] = useState('All')
+  // The excluded categories — contractors, law firms, platform notices, conferences, schools,
+  // market commentary, automated senders — are hidden unless this is on.
+  const [showExcluded, setShowExcluded] = useState(false)
   // Default to people someone actually corresponded with. One inbound email that nobody
   // answered is almost always a stranger or a blast, and that is what made the list unusable.
   const [twoWayOnly, setTwoWayOnly] = useState(true)
@@ -88,12 +106,27 @@ export default function ContactCaptureView() {
     const q = search.trim().toLowerCase()
     return (items ?? [])
       .filter(i => mailbox === 'All' || i.mailbox === mailbox)
+      // A person already filed always stays visible — it is a record of work done.
+      .filter(i => i.filedTo || showExcluded || !i.kind || SHOWN_KINDS.includes(i.kind))
       .filter(i => kind === 'All' || i.kind === kind)
-      .filter(i => !twoWayOnly || i.twoWay !== false)
+      .filter(i => i.filedTo || !twoWayOnly || i.twoWay !== false)
       .filter(i => !q || i.email.toLowerCase().includes(q) || (i.name || '').toLowerCase().includes(q) || (i.subject || '').toLowerCase().includes(q))
-  }, [items, search, mailbox, kind, twoWayOnly])
+  }, [items, search, mailbox, kind, twoWayOnly, showExcluded])
   const hiddenOneWay = useMemo(
-    () => (twoWayOnly ? (items ?? []).filter(i => i.twoWay === false).length : 0), [items, twoWayOnly])
+    () => (twoWayOnly ? (items ?? []).filter(i => !i.filedTo && i.twoWay === false).length : 0), [items, twoWayOnly])
+  const hiddenExcluded = useMemo(
+    () => (showExcluded ? 0 : (items ?? []).filter(i => !i.filedTo && i.kind && !SHOWN_KINDS.includes(i.kind)).length),
+    [items, showExcluded])
+  // Which excluded categories are actually present, so the count can say what it is hiding.
+  const excludedKinds = useMemo(() => {
+    const seen = new Map<string, number>()
+    for (const i of items ?? []) {
+      if (i.filedTo || !i.kind || SHOWN_KINDS.includes(i.kind)) continue
+      seen.set(i.kind, (seen.get(i.kind) ?? 0) + 1)
+    }
+    return [...seen.entries()].sort((a, b) => b[1] - a[1])
+  }, [items])
+  const filedCount = useMemo(() => (items ?? []).filter(i => i.filedTo).length, [items])
 
   async function dismiss(c: Candidate) {
     setBusy(c.email)
@@ -142,7 +175,15 @@ export default function ContactCaptureView() {
           body: JSON.stringify({ kind: 'contact', desk: dest.desk, vendor_id: vendorId, name: c.name || c.email, email: c.email, is_primary: true }),
         }).catch(() => {})
       }
-      setItems(prev => (prev ?? []).filter(x => x.email !== c.email))
+      // Record the filing so the row stays here, marked, instead of vanishing on the next
+      // scan once the new account makes this person "already known".
+      await fetch('/api/investor-crm/capture', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'filed', email: c.email, destination: dest.label, account: name }),
+      }).catch(() => {})
+      setItems(prev => (prev ?? []).map(x => x.email === c.email
+        ? { ...x, filedTo: dest.label, filedAccount: name, filedAt: new Date().toISOString() }
+        : x))
       setNote(`Added ${name} — find it under ${dest.where} › ${dest.label}.`)
     } catch (e) { setNote(`Could not add: ${String(e)}`) }
     finally { setBusy(null) }
@@ -162,16 +203,23 @@ export default function ContactCaptureView() {
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 600 }}>NEW CONTACTS</div>
           <div style={{ fontSize: 20, fontWeight: 700, color: '#1a2233' }}>{items == null ? '·' : rows.length}</div>
+          {filedCount > 0 && <div style={{ fontSize: 11.5, color: '#197a52', fontWeight: 600 }}>{filedCount} already added</div>}
         </div>
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
         <select value={kind} onChange={e => setKind(e.target.value)}
           style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
-          <option value="All">Firms and individuals</option>
+          <option value="All">All kinds</option>
           <option value="firm">Firms only</option>
           <option value="individual">Individuals only</option>
+          {showExcluded && excludedKinds.map(([k]) => <option key={k} value={k}>{KIND_LABEL[k] ?? k} only</option>)}
         </select>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
+          <input type="checkbox" checked={showExcluded} onChange={e => setShowExcluded(e.target.checked)} />
+          Show excluded
+          {hiddenExcluded > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenExcluded} hidden)</span>}
+        </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
           <input type="checkbox" checked={twoWayOnly} onChange={e => setTwoWayOnly(e.target.checked)} />
           Replied to only
@@ -224,18 +272,31 @@ export default function ContactCaptureView() {
                     <td style={{ ...td, whiteSpace: 'nowrap' }}>{fmtDate(c.lastDate)}</td>
                     <td style={{ ...td, maxWidth: 300 }}>
                       <div style={{ fontSize: 13, color: '#374151' }}>{c.subject || '—'}</div>
+                      {c.kind && !SHOWN_KINDS.includes(c.kind) && (
+                        <div style={{ display: 'inline-block', marginTop: 3, fontSize: 10, fontWeight: 700, padding: '1px 7px', borderRadius: 20, background: '#f3f4f6', color: '#6b7280' }}>
+                          {KIND_LABEL[c.kind] ?? c.kind}
+                        </div>
+                      )}
                       {c.preview && <div style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 2 }}>{c.preview}</div>}
                     </td>
                     <td style={{ ...td, whiteSpace: 'nowrap', textAlign: 'right' }}>
-                      <button onClick={() => setFiling(c)} disabled={busy === c.email}
-                        title="Choose which directory this person belongs in"
-                        style={{ border: '1px solid #0f766e', background: '#f0f9f7', color: '#0f766e', borderRadius: 8, padding: '5px 11px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
-                        {busy === c.email ? 'Adding…' : 'Add to…'}
-                      </button>
-                      <button onClick={() => dismiss(c)} disabled={busy === c.email}
-                        style={{ border: 0, background: 'none', color: '#9ca3af', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 8px' }}>
-                        Dismiss
-                      </button>
+                      {c.filedTo ? (
+                        <span title={`Added ${c.filedAt ? `on ${fmtDate(c.filedAt)}` : ''}`}
+                          style={{ fontSize: 12.5, fontWeight: 600, color: '#197a52' }}>
+                          ✓ {c.filedTo}
+                          {c.filedAccount && <span style={{ color: '#6b7280', fontWeight: 400 }}> · {c.filedAccount}</span>}
+                        </span>
+                      ) : (<>
+                        <button onClick={() => setFiling(c)} disabled={busy === c.email}
+                          title="Choose which directory this person belongs in"
+                          style={{ border: '1px solid #0f766e', background: '#f0f9f7', color: '#0f766e', borderRadius: 8, padding: '5px 11px', fontWeight: 600, fontSize: 13, cursor: 'pointer' }}>
+                          {busy === c.email ? 'Adding…' : 'Add to…'}
+                        </button>
+                        <button onClick={() => dismiss(c)} disabled={busy === c.email}
+                          style={{ border: 0, background: 'none', color: '#9ca3af', fontWeight: 600, fontSize: 13, cursor: 'pointer', padding: '0 8px' }}>
+                          Dismiss
+                        </button>
+                      </>)}
                     </td>
                   </tr>
                 ))}

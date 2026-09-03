@@ -37,6 +37,15 @@ interface LpLite { email?: string | null; resolvedEmail?: string | null }
 export async function runCaptureScan() {
   const supabase = createAdminClient();
 
+  // Already filed into a directory. These would otherwise be removed by the "already known"
+  // subtraction the moment they were added — the account exists now — leaving no record of
+  // what was done. They stay in the list, marked.
+  type Filed = { email: string; destination: string; account: string | null; filed_at: string };
+  const { data: filedRows } = await supabase.from("crm_capture_filed")
+    .select("email, destination, account, filed_at");
+  const filed = new Map<string, Filed>();
+  for (const r of ((filedRows ?? []) as Filed[])) filed.set(r.email.toLowerCase(), r);
+
   // Everything the portal already knows about.
   const known = new Set<string>();
   const add = (e: unknown) => {
@@ -76,7 +85,7 @@ export async function runCaptureScan() {
   const { byEmail } = await getInteractions();
 
   const candidates = Object.entries(byEmail)
-    .filter(([email, it]) => email && !known.has(email) && !INTERNAL.test(email) && isRealContactEmail(email)
+    .filter(([email, it]) => email && (!known.has(email) || filed.has(email)) && !INTERNAL.test(email) && isRealContactEmail(email)
       // Anything older than the floor is history, not a new contact worth chasing.
       && (() => { const d = new Date(it.date); return !isNaN(d.getTime()) && d >= SINCE; })())
     .map(([email, it]) => {
@@ -90,16 +99,21 @@ export async function runCaptureScan() {
         mailbox: it.mailbox,
         direction: it.direction,
         preview: (it.preview || "").slice(0, 160),
-        kind: classify(email),          // firm | individual | service
+        kind: classify(email),
         sent,
         received,
         twoWay: isTwoWay(sent, received),
+        // Set once someone has filed this person into a directory.
+        filedTo: filed.get(email)?.destination ?? null,
+        filedAccount: filed.get(email)?.account ?? null,
+        filedAt: filed.get(email)?.filed_at ?? null,
       };
     })
-    // Automated and service senders are never CRM contacts, so they never reach the tab.
-    .filter((c) => c.kind !== "service")
+    // Everything is classified rather than deleted, and the tab decides what to show — but a
+    // person already filed stays regardless of kind, since it is a record of work done.
     .sort((a, b) => {
-      // Real conversations first, then most recent.
+      // Still to deal with first, then real conversations, then most recent.
+      if (!!a.filedTo !== !!b.filedTo) return a.filedTo ? 1 : -1;
       if (a.twoWay !== b.twoWay) return a.twoWay ? -1 : 1;
       return new Date(b.lastDate).getTime() - new Date(a.lastDate).getTime();
     });
@@ -157,6 +171,20 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const email = String(body.email ?? "").trim().toLowerCase();
   if (!email) return NextResponse.json({ error: "email required" }, { status: 400 });
+
+  // action:"filed" records that this person was added to a directory, so the row stays in
+  // the tab as a record of what was done instead of disappearing.
+  if (body.action === "filed") {
+    const { error } = await supabase.from("crm_capture_filed").upsert({
+      email,
+      destination: String(body.destination ?? "").trim() || "a directory",
+      account: String(body.account ?? "").trim() || null,
+      filed_at: new Date().toISOString(),
+      filed_by: user.email ?? user.id,
+    }, { onConflict: "email" });
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true });
+  }
 
   const { error } = await supabase.from("crm_capture_dismissed")
     .upsert({ email, dismissed_by: user.email ?? user.id }, { onConflict: "email" });
