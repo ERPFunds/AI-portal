@@ -6121,7 +6121,6 @@ function SettingsView({
     capitalCall: { email: true,  sms: false, push: true  },
     weeklyDigest:{ email: true,  sms: false, push: false },
   })
-  const [expandedAgents, setExpandedAgents] = useState<Record<string, boolean>>({})
   const [saved, setSaved] = useState(false)
 
   function togglePref(key: keyof typeof prefs) {
@@ -6129,9 +6128,6 @@ function SettingsView({
   }
   function toggleNotif(key: keyof typeof notifs, ch: 'email' | 'sms' | 'push') {
     setNotifs((n) => ({ ...n, [key]: { ...n[key], [ch]: !n[key][ch] } }))
-  }
-  function toggleAgent(id: string) {
-    setExpandedAgents((p) => ({ ...p, [id]: !p[id] }))
   }
   function saveChanges() {
     setSaved(true)
@@ -6152,7 +6148,7 @@ function SettingsView({
       <div className="page-header"><h2>Settings</h2><p>Manage your profile, team access, agent configuration, and integrations</p></div>
       <div className="settings-wrap">
         <div className="settings-nav">
-          {[['s-profile', '👤 Profile'], ['s-team', '👥 Team & Roles'], ['s-agents', '🤖 Agents'], ['s-connections', '🔗 Connections'], ['s-notifications', '🔔 Notifications']].map(([key, label]) => (
+          {[['s-profile', '👤 Profile'], ['s-team', '👥 Team & Roles'], ['s-connections', '🔗 Connections'], ['s-notifications', '🔔 Notifications']].map(([key, label]) => (
             <div key={key} className={`settings-nav-item ${settingsTab === key ? 'active' : ''}`} onClick={() => setSettingsTab(key)}>{label}</div>
           ))}
         </div>
@@ -6219,81 +6215,6 @@ function SettingsView({
                     <div className={`toggle ${prefs[pref.key] ? 'on' : ''}`} />
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-          {settingsTab === 's-agents' && (
-            <div>
-              <div className="settings-section">
-                <h3>Agent Configuration</h3>
-                <p>Manage autonomy levels and escalation contacts for each agent</p>
-              </div>
-              {AGENTS.map((agent) => {
-                const cfg = agentConfig[agent.id]
-                const isActive = cfg?.active ?? (agent.status === 'active')
-                return (
-                  <div key={agent.id} className="agent-config-row" style={{ opacity: isActive ? 1 : 0.55 }}>
-                    <div className="agent-config-header" onClick={() => toggleAgent(agent.id)}>
-                      <span className={`badge ${agent.badge}`}>{agent.icon}</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#111827', flex: 1 }}>{agent.name}</span>
-                      {/* Active / Inactive toggle — stop propagation so it doesn't expand the row */}
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, marginRight: 8 }}
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], active: !isActive } }))
-                        }}
-                      >
-                        <div className={`toggle ${isActive ? 'on' : ''}`} style={{ width: 32, height: 18 }} />
-                        <span style={{ fontSize: 10, color: isActive ? '#15803d' : '#9ca3af', fontWeight: 600, minWidth: 40 }}>{isActive ? 'Active' : 'Inactive'}</span>
-                      </div>
-                      <span style={{ fontSize: 11, color: '#9ca3af' }}>Autonomy: {cfg?.auto ?? agent.auto}</span>
-                      <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 8 }}>{expandedAgents[agent.id] ? '▲' : '▼'}</span>
-                    </div>
-                    {expandedAgents[agent.id] && (
-                      <div className="agent-config-body open">
-                        <div className="config-grid">
-                          <div className="config-item">
-                            <label>Autonomy Level</label>
-                            <select
-                              value={cfg?.auto ?? agent.auto}
-                              onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], auto: e.target.value } }))}
-                            >
-                              <option>High</option>
-                              <option>Medium</option>
-                              <option>Low</option>
-                            </select>
-                          </div>
-                          <div className="config-item">
-                            <label>Escalation Contact</label>
-                            <select
-                              value={cfg?.escal ?? agent.escal}
-                              onChange={(e) => setAgentConfig((prev) => ({ ...prev, [agent.id]: { ...prev[agent.id], escal: e.target.value } }))}
-                            >
-                              <option>Meghan</option>
-                              <option>William</option>
-                              <option>Brennan</option>
-                              <option>Michele</option>
-                              <option>Liz</option>
-                              <option>Hannah</option>
-                              <option>Sylvia</option>
-                              <option>Pippi</option>
-                              <option>Kasandra</option>
-                            </select>
-                          </div>
-                          <div className="config-item">
-                            <label>Knowledge Base</label>
-                            <div className="config-val">{agent.kb}</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-              <div style={{ marginTop: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <button className="btn btn-primary" onClick={saveChanges}>Save Agent Config</button>
-                {saved && <span style={{ fontSize: 12, color: '#3DAE7A', fontWeight: 500 }}>✓ Saved</span>}
               </div>
             </div>
           )}
