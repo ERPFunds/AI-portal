@@ -7682,6 +7682,7 @@ const SOP_CATEGORIES = [
   { icon: '🎓', label: 'Claude Training and Assets',    desc: 'Claude training decks, brand & messaging guidelines, deck/OM build guides, and the skills & commands reference — the team’s AI enablement library' },
   { icon: '🤖', label: 'Agent Working Guides',          desc: 'How to interact with each agent — submitting tasks, reviewing outputs, handling escalations, and adjusting autonomy settings per agent' },
   { icon: '📊', label: 'Dashboard & Portal How-Tos',    desc: 'Step-by-step instructions for updating portal views: rent roll, capital calls, leasing pipeline, work orders, connections, and agent config' },
+  { icon: '🗂️', label: 'CRM',                          desc: 'How the CRMs are run — investor (LP Directory, PE Prospects, DST Investors), property (vendors, lenders), tenants and inbound leasing: what belongs on an account, how contacts and descriptions are maintained, and how new contacts are captured and filed' },
 ]
 
 // Opens a stored document (SOP, KB doc, or uploaded file) and shows its extracted text.
@@ -8292,7 +8293,6 @@ function SOPsView() {
         {SOP_CATEGORIES.map((cat) => (
           <SOPCategoryCard key={cat.label} cat={cat} query={query} reloadKey={reloadKey} />
         ))}
-        <UploadedFilesCard query={query} />
       </div>
     </div>
   )
