@@ -81,19 +81,6 @@ export default function ContactCaptureView() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [mailbox, setMailbox] = useState('All')
-  const [kind, setKind] = useState('All')
-  // The excluded categories — contractors, law firms, platform notices, conferences, schools,
-  // market commentary, automated senders — are hidden unless this is on.
-  const [showExcluded, setShowExcluded] = useState(false)
-  // On by default. Without it the scan returns several hundred names, almost all of them
-  // ERP's own accountants, lawyers, title companies and suppliers rather than new contacts.
-  const [capitalOnly, setCapitalOnly] = useState(true)
-  // Off by default. A new address at a firm ERP already works through is a new face, not a
-  // new channel, and those rows are what kept this list feeling wrong.
-  const [includeKnownFirms, setIncludeKnownFirms] = useState(false)
-  // Default to people someone actually corresponded with. One inbound email that nobody
-  // answered is almost always a stranger or a blast, and that is what made the list unusable.
-  const [twoWayOnly, setTwoWayOnly] = useState(true)
   const [scannedAt, setScannedAt] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
@@ -122,34 +109,26 @@ export default function ContactCaptureView() {
     const q = search.trim().toLowerCase()
     return (items ?? [])
       .filter(i => mailbox === 'All' || i.mailbox === mailbox)
-      // A person already filed always stays visible — it is a record of work done.
-      .filter(i => i.filedTo || showExcluded || !i.kind || SHOWN_KINDS.includes(i.kind))
-      .filter(i => i.filedTo || showExcluded || !capitalOnly || i.relevant !== false)
-      .filter(i => i.filedTo || includeKnownFirms || !i.knownFirm)
-      .filter(i => kind === 'All' || i.kind === kind)
-      .filter(i => i.filedTo || !twoWayOnly || i.twoWay !== false)
+      // The four rules that make this list worth reading. A person already filed is exempt
+      // from all of them — that row is a record of work done, not a candidate.
+      //   1. a business or personal address, not an automated sender, supplier or law firm
+      //   2. somebody actually replied, rather than one unanswered inbound
+      //   3. the firm is in the capital-raising world
+      //   4. the firm is not already in the CRM — otherwise it is a new face, not a new channel
+      .filter(i => i.filedTo || !i.kind || SHOWN_KINDS.includes(i.kind))
+      .filter(i => i.filedTo || i.relevant !== false)
+      .filter(i => i.filedTo || !i.knownFirm)
+      .filter(i => i.filedTo || i.twoWay !== false)
       .filter(i => !q || i.email.toLowerCase().includes(q) || (i.name || '').toLowerCase().includes(q) || (i.subject || '').toLowerCase().includes(q))
-  }, [items, search, mailbox, kind, twoWayOnly, showExcluded, capitalOnly, includeKnownFirms])
-  const hiddenKnownFirm = useMemo(
-    () => (includeKnownFirms ? 0 : (items ?? []).filter(i => !i.filedTo && i.knownFirm).length),
-    [items, includeKnownFirms])
-  const hiddenOffTopic = useMemo(
-    () => (capitalOnly ? (items ?? []).filter(i => !i.filedTo && i.relevant === false
-      && (!i.kind || SHOWN_KINDS.includes(i.kind))).length : 0), [items, capitalOnly])
-  const hiddenOneWay = useMemo(
-    () => (twoWayOnly ? (items ?? []).filter(i => !i.filedTo && i.twoWay === false).length : 0), [items, twoWayOnly])
-  const hiddenExcluded = useMemo(
-    () => (showExcluded ? 0 : (items ?? []).filter(i => !i.filedTo && i.kind && !SHOWN_KINDS.includes(i.kind)).length),
-    [items, showExcluded])
-  // Which excluded categories are actually present, so the count can say what it is hiding.
-  const excludedKinds = useMemo(() => {
-    const seen = new Map<string, number>()
-    for (const i of items ?? []) {
-      if (i.filedTo || !i.kind || SHOWN_KINDS.includes(i.kind)) continue
-      seen.set(i.kind, (seen.get(i.kind) ?? 0) + 1)
-    }
-    return [...seen.entries()].sort((a, b) => b[1] - a[1])
-  }, [items])
+  }, [items, search, mailbox])
+
+
+  // How many the rules left out, as one plain number under the heading rather than four
+  // separate counts attached to four separate switches.
+  const filteredOut = useMemo(
+    () => (items ?? []).filter(i => !i.filedTo && (
+      (i.kind && !SHOWN_KINDS.includes(i.kind)) || i.relevant === false || i.knownFirm || i.twoWay === false
+    )).length, [items])
   const filedCount = useMemo(() => (items ?? []).filter(i => i.filedTo).length, [items])
 
   async function dismiss(c: Candidate) {
@@ -220,8 +199,15 @@ export default function ContactCaptureView() {
           <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: '#9ca3af' }}>Investor CRM</div>
           <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>New Contact Capture</h1>
           <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
-            People in Meghan&apos;s and William&apos;s correspondence since July who aren&apos;t in any directory yet
+            Firms in the capital-raising world that Meghan or William has exchanged emails with
+            since July and that aren&apos;t in any directory yet
             {scannedAt && <> · scanned {fmtDate(scannedAt)}</>}
+            {filteredOut > 0 && (
+              <div style={{ marginTop: 2 }}>
+                {filteredOut} more left out: suppliers, accountants, lawyers and automated senders,
+                one-way email nobody replied to, and new faces at firms already on file.
+              </div>
+            )}
           </div>
         </div>
         <div style={{ textAlign: 'right' }}>
@@ -232,35 +218,6 @@ export default function ContactCaptureView() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap' }}>
-        <select value={kind} onChange={e => setKind(e.target.value)}
-          style={{ padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontWeight: 600, color: '#374151' }}>
-          <option value="All">All kinds</option>
-          <option value="firm">Firms only</option>
-          <option value="individual">Individuals only</option>
-          {showExcluded && excludedKinds.map(([k]) => <option key={k} value={k}>{KIND_LABEL[k] ?? k} only</option>)}
-        </select>
-        <label title="Show new people at firms already in the CRM. Off by default: a second rep at a broker-dealer ERP already works through is a new face, not a new channel."
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" checked={includeKnownFirms} onChange={e => setIncludeKnownFirms(e.target.checked)} />
-          Firms we already have
-          {hiddenKnownFirm > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenKnownFirm} hidden)</span>}
-        </label>
-        <label title="Wealth managers, RIAs, broker-dealers, 1031/DST shops and family offices, plus anyone at a firm already in the CRM"
-          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" checked={capitalOnly} onChange={e => setCapitalOnly(e.target.checked)} />
-          Capital world only
-          {hiddenOffTopic > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenOffTopic} hidden)</span>}
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" checked={showExcluded} onChange={e => setShowExcluded(e.target.checked)} />
-          Show excluded
-          {hiddenExcluded > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenExcluded} hidden)</span>}
-        </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#374151', whiteSpace: 'nowrap' }}>
-          <input type="checkbox" checked={twoWayOnly} onChange={e => setTwoWayOnly(e.target.checked)} />
-          Replied to only
-          {hiddenOneWay > 0 && <span style={{ color: '#9ca3af', fontWeight: 400 }}>({hiddenOneWay} hidden)</span>}
-        </label>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search name, email, subject…"
           style={{ flex: 1, minWidth: 220, maxWidth: 340, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }} />
         <select value={mailbox} onChange={e => setMailbox(e.target.value)}
