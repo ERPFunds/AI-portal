@@ -200,7 +200,7 @@ export default function ContactCaptureView() {
           <h1 style={{ margin: '2px 0 0', fontSize: 24, fontWeight: 700, color: '#1a2233' }}>New Contact Capture</h1>
           <div style={{ fontSize: 13, color: '#9ca3af', marginTop: 2 }}>
             Firms in the capital-raising world that Meghan or William has exchanged emails with
-            since July and that aren&apos;t in any directory yet
+            since June and that aren&apos;t in any directory yet
             {scannedAt && <> · scanned {fmtDate(scannedAt)}</>}
             {filteredOut > 0 && (
               <div style={{ marginTop: 2 }}>

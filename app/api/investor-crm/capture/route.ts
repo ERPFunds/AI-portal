@@ -26,7 +26,7 @@ const INTERNAL = /@erpfunds\.com$/i;
 // Only surface people first seen from this date on. The underlying mailbox scan goes back
 // 18 months and is shared with "last interaction" across the portal, so the floor is applied
 // here rather than by shortening the scan for everyone.
-const SINCE = new Date(process.env.CRM_CAPTURE_SINCE || "2026-07-01T00:00:00Z");
+const SINCE = new Date(process.env.CRM_CAPTURE_SINCE || "2026-06-01T00:00:00Z");
 
 interface LpLite { email?: string | null; resolvedEmail?: string | null }
 
