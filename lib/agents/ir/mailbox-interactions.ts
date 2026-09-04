@@ -1,8 +1,15 @@
 import { getGraphToken } from "@/lib/agents/graph-token";
 
 const GRAPH = "https://graph.microsoft.com/v1.0";
-const PAGE = 100;              // messages per Graph page
-const MAX_PAGES = 30;          // safety cap => up to 3,000 msgs per folder in the window
+// Graph allows up to 1,000 messages per page; 500 keeps responses a sane size while cutting
+// the number of round trips by five.
+const PAGE = 500;
+// The old cap was 30 pages of 100 -- 3,000 messages per folder, newest first. A busy shared
+// inbox blows through that in a couple of months, so everything older came back with ZERO
+// received messages while Sent Items (much smaller) still reached the start of the window.
+// Every contact whose conversation predated the cut-off then looked one-way and was filtered
+// out as "nobody replied", which is the opposite of the truth. 40 x 500 = 20,000 per folder.
+const MAX_PAGES = 40;
 const TTL_MS = 15 * 60_000;
 
 // How many months of history to scan (default 18). Override with IR_INTERACTION_MONTHS.
@@ -56,9 +63,12 @@ function label(addr: { name?: string; address?: string } | undefined): string {
 }
 
 // Fetch every message in the window for one folder, following @odata.nextLink.
+/** Set when a folder hit the page cap, meaning its history is incomplete for the window. */
+export type FolderResult = { msgs: any[]; truncated: boolean };
+
 async function fetchFolder(
   token: string, mailbox: string, folder: "inbox" | "sentitems", dateField: string, sinceIso: string,
-): Promise<any[]> {
+): Promise<FolderResult> {
   const select = folder === "inbox"
     ? "from,subject,bodyPreview,receivedDateTime"
     : "toRecipients,subject,bodyPreview,sentDateTime";
@@ -67,7 +77,8 @@ async function fetchFolder(
     `?$select=${select}&$filter=${encodeURIComponent(`${dateField} ge ${sinceIso}`)}` +
     `&$orderby=${encodeURIComponent(`${dateField} desc`)}&$top=${PAGE}`;
   const out: any[] = [];
-  for (let page = 0; url && page < MAX_PAGES; page++) {
+  let page = 0;
+  for (; url && page < MAX_PAGES; page++) {
     const r: Response = await fetch(url, {
       headers: { Authorization: `Bearer ${token}`, Prefer: 'outlook.body-content-type="text"' },
     });
@@ -76,7 +87,10 @@ async function fetchFolder(
     for (const m of (j.value ?? [])) out.push(m);
     url = j["@odata.nextLink"] ?? null;
   }
-  return out;
+  // Still a next link after the last allowed page means we stopped early and the oldest part
+  // of the window is missing. Silent truncation here is what made every older contact look
+  // like nobody had ever replied to them, so it is reported rather than swallowed.
+  return { msgs: out, truncated: page >= MAX_PAGES && !!url };
 }
 
 async function scan(): Promise<InteractionMaps> {
@@ -110,12 +124,28 @@ async function scan(): Promise<InteractionMaps> {
 
   // Fan out all folders (inbox + sent across every mailbox) in parallel — each folder still pages
   // sequentially, but the folders no longer wait on each other.
-  const jobs: Promise<{ mb: string; dir: "received" | "sent"; msgs: any[] }>[] = [];
+  type Job = { mb: string; dir: "received" | "sent"; msgs: any[]; truncated: boolean };
+  const jobs: Promise<Job>[] = [];
+  const empty = (mb: string, dir: "received" | "sent"): Job => ({ mb, dir, msgs: [], truncated: false });
   for (const mb of mailboxes()) {
-    jobs.push(fetchFolder(t, mb, "inbox", "receivedDateTime", sinceIso).then((msgs) => ({ mb, dir: "received" as const, msgs })).catch(() => ({ mb, dir: "received" as const, msgs: [] })));
-    jobs.push(fetchFolder(t, mb, "sentitems", "sentDateTime", sinceIso).then((msgs) => ({ mb, dir: "sent" as const, msgs })).catch(() => ({ mb, dir: "sent" as const, msgs: [] })));
+    jobs.push(fetchFolder(t, mb, "inbox", "receivedDateTime", sinceIso)
+      .then((r) => ({ mb, dir: "received" as const, msgs: r.msgs, truncated: r.truncated }))
+      .catch(() => empty(mb, "received")));
+    jobs.push(fetchFolder(t, mb, "sentitems", "sentDateTime", sinceIso)
+      .then((r) => ({ mb, dir: "sent" as const, msgs: r.msgs, truncated: r.truncated }))
+      .catch(() => empty(mb, "sent")));
   }
-  for (const { mb, dir, msgs } of await Promise.all(jobs)) {
+  const results = await Promise.all(jobs);
+  // A truncated folder means the counts below understate one side of the conversation, which
+  // silently turns two-way relationships into apparent one-way ones. Say so loudly.
+  for (const r of results) {
+    if (r.truncated) {
+      console.warn(`[mailbox-interactions] TRUNCATED: ${r.mb} ${r.dir === "received" ? "inbox" : "sentitems"} ` +
+        `hit the ${MAX_PAGES}-page cap (${r.msgs.length} messages). Older history is missing and ` +
+        `reply counts for it will read as zero. Raise MAX_PAGES or shorten IR_INTERACTION_MONTHS.`);
+    }
+  }
+  for (const { mb, dir, msgs } of results) {
     if (dir === "received") {
       for (const m of msgs) {
         const from = m.from?.emailAddress;
