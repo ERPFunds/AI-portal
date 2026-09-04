@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import DocsPanel from '../shared/DocsPanel'
+import { downloadCsv, exportBtnCss, type CsvColumn } from '@/lib/csv'
 
 // ── Tenant CRM ────────────────────────────────────────────────────────────────
 // Companies at ERP properties — current tenants, prospects and prior tenants —
@@ -89,6 +90,35 @@ export default function TenantCrmView() {
         || t.contacts.some(c => c.contact_name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
   }, [items, search, descFilter, entityFilter])
 
+  // One line per CONTACT, since that is what the list gets used for. A company with no
+  // contacts on file still gets a row rather than disappearing from the export.
+  const exportRows = useMemo(() => rows.flatMap(t => (
+    t.contacts.length ? t.contacts.map(c => ({ t, c })) : [{ t, c: null as TContact | null }]
+  )), [rows])
+
+  function exportCsv() {
+    const cols: CsvColumn<{ t: Tenant; c: TContact | null }>[] = [
+      ['Company', r => r.t.name],
+      ['Description', r => r.t.description],
+      ['ERP Entity', r => r.t.erp_entity],
+      ['Property Address', r => r.t.property_address],
+      ['Contact', r => r.c?.contact_name],
+      ['Role', r => r.c?.contact_type],
+      ['Title', r => r.c?.title],
+      ['Primary', r => (r.c?.is_primary ? 'Yes' : '')],
+      ['Email', r => r.c?.email],
+      ['Office Phone', r => r.c?.phone_office ?? r.c?.phone],
+      ['Cell', r => r.c?.phone_cell],
+      ['Contact Address', r => r.c?.address],
+      ['Contact LinkedIn', r => r.c?.linkedin_url],
+      ['Contact Notes', r => r.c?.notes],
+      ['Website', r => r.t.website],
+      ['Company LinkedIn', r => r.t.linkedin_url],
+      ['Company Notes', r => r.t.notes],
+    ]
+    downloadCsv('Tenant CRM', cols, exportRows)
+  }
+
   async function save(draft: Draft) {
     const res = await fetch('/api/tenant-crm', {
       method: draft.id ? 'PATCH' : 'POST',
@@ -115,6 +145,9 @@ export default function TenantCrmView() {
       </div>
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={exportCsv} disabled={loading || exportRows.length === 0}
+          title="Download the rows currently on screen, one line per contact"
+          style={{ ...exportBtnCss, cursor: exportRows.length ? 'pointer' : 'not-allowed' }}>⤓ Export to Excel</button>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search companies, contacts, addresses…"
           style={{ flex: 1, minWidth: 220, maxWidth: 360, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }} />
         <select value={descFilter} onChange={e => setDescFilter(e.target.value)}

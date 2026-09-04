@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getInteractions } from "@/lib/agents/ir/mailbox-interactions";
 import { isRealContactEmail } from "@/lib/agents/ir/email-validity";
 import { fetchAll } from "@/lib/supabase/fetch-all";
-import { classify, isTwoWay, isRelevant, firmDomainsOnly } from "@/lib/agents/ir/capture-classify";
+import { classify, isTwoWay, isRelevant, isKnownFirm, firmDomainsOnly, domainFromWebsite } from "@/lib/agents/ir/capture-classify";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -97,6 +97,20 @@ export async function runCaptureScan() {
   for (const lp of lps) { add(lp.email); add(lp.resolvedEmail); }
   for (const set of sets) for (const r of set) add(r.email);
 
+  // Websites as well as addresses: 47 vendor accounts carry a site and no email, and their
+  // domain would otherwise never be recognised.
+  type W = { website?: string | null };
+  const siteTables = ["dst_vendors", "investor_crm", "property_vendors", "property_lenders"];
+  const siteSets = await Promise.all(
+    siteTables.map((t) => fetchAll<W>(() => supabase.from(t).select("website")).catch(() => [] as W[])),
+  );
+  for (const set of siteSets) {
+    for (const r of set) {
+      const dom = domainFromWebsite(r.website);
+      if (dom) knownDomains.add(dom);
+    }
+  }
+
   const firmDomains = firmDomainsOnly(knownDomains);
 
   // Everyone the IR mailboxes have actually corresponded with.
@@ -122,6 +136,8 @@ export async function runCaptureScan() {
         twoWay: isTwoWay(sent, received),
         // In the capital-raising world, or a new face at a firm already in the CRM.
         relevant: isRelevant(email, firmDomains),
+        // At a firm the CRM already covers -- so a new person, not a new relationship.
+        knownFirm: isKnownFirm(email, firmDomains),
         // Set once someone has filed this person into a directory.
         filedTo: filed.get(email)?.destination ?? null,
         filedAccount: filed.get(email)?.account ?? null,

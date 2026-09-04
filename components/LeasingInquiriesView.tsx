@@ -132,6 +132,65 @@ export default function LeasingInquiriesView() {
     } finally { setFiling(null) }
   }
 
+  // Plenty of inbound leasing mail is not a prospective tenant at all: brokers touting a
+  // requirement, property managers, contractors. Those belong in the Property Vendor
+  // directory, so the card offers both destinations rather than forcing everything into
+  // the Tenant CRM.
+  const VENDOR_TYPES = ['Broker', 'Property Manager', 'Contractor', 'Lender', 'Title/Escrow',
+    'Insurance', 'Legal/Counsel', 'Utility', 'Inspection/Appraisal', 'Other']
+
+  async function addToPropertyVendors(items: Inquiry[]) {
+    const i = items[0]
+    const key = contactKey(i)
+    const suggested = i.contact_company || i.contact_name || i.contact_email || ''
+    const company = window.prompt(
+      'Add to the Property Vendor directory.' + String.fromCharCode(10, 10) +
+      'Company name (use the person’s own name if they work for themselves):',
+      suggested)
+    if (!company || !company.trim()) return
+    const name = company.trim()
+
+    const type = window.prompt(
+      'What sort of vendor?' + String.fromCharCode(10, 10) +
+      VENDOR_TYPES.join(', '),
+      'Broker')
+    if (type === null) return
+    // An unrecognised answer is not worth a second round trip; the API falls back to Other.
+    const vendor_type = VENDOR_TYPES.find(t => t.toLowerCase() === type.trim().toLowerCase()) ?? 'Other'
+
+    setFiling(key)
+    try {
+      const res = await fetch('/api/dst-vendors', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          desk: 'property',
+          name,
+          vendor_type,
+          address: i.matched_address || null,
+          notes: askSummary(items),
+        }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { window.alert(`Could not add: ${j.error ?? res.status}`); return }
+      const vendorId = j.item?.id
+      if (vendorId && (i.contact_name || i.contact_email)) {
+        await fetch('/api/dst-vendors', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            kind: 'contact', desk: 'property', vendor_id: vendorId,
+            name: i.contact_name || i.contact_email,
+            email: i.contact_email || null,
+            phone_office: i.contact_phone || null,
+            is_primary: true,
+          }),
+        }).catch(() => {})
+      }
+      setFiled(f => ({ ...f, [key]: `In Property Vendors as ${name} (${vendor_type})` }))
+    } catch (e) {
+      window.alert(`Could not add: ${String(e)}`)
+    } finally { setFiling(null) }
+  }
+
   const num = (n: number | null) => (n ? n.toLocaleString('en-US') : null)
 
   // One prospect can send many emails (and ERP replies get captured too), so group every inquiry by
@@ -254,11 +313,18 @@ export default function LeasingInquiriesView() {
                 <div style={{ display: 'flex', gap: 6 }}>
                   {filed[key]
                     ? <span style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', color: '#197a52' }}>✓ {filed[key]}</span>
-                    : <button onClick={() => addToTenantCrm(items)} disabled={filing === key}
-                        title="Create this company as a prospect in the Tenant CRM, with this person as its contact"
-                        style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: filing === key ? 'wait' : 'pointer', color: '#fff', background: '#0f766e', border: '1px solid #0f766e' }}>
-                        {filing === key ? 'Adding…' : '+ Tenant CRM'}
-                      </button>}
+                    : <>
+                        <button onClick={() => addToTenantCrm(items)} disabled={filing === key}
+                          title="Create this company as a prospect in the Tenant CRM, with this person as its contact"
+                          style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: filing === key ? 'wait' : 'pointer', color: '#fff', background: '#0f766e', border: '1px solid #0f766e' }}>
+                          {filing === key ? 'Adding…' : '+ Tenant CRM'}
+                        </button>
+                        <button onClick={() => addToPropertyVendors(items)} disabled={filing === key}
+                          title="Not a prospective tenant — file this company in the Property Vendor directory instead"
+                          style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, marginLeft: 6, cursor: filing === key ? 'wait' : 'pointer', color: '#0f766e', background: '#f0fdfa', border: '1px solid #99f6e4' }}>
+                          {filing === key ? 'Adding…' : '+ Property Vendor'}
+                        </button>
+                      </>}
                   <button onClick={() => dismissContact(items)} title="Dismiss this contact and all their inquiries" style={{ fontSize: 11, fontWeight: 600, padding: '4px 10px', borderRadius: 6, cursor: 'pointer', color: '#9ca3af', background: '#fff', border: '1px solid #e5e7eb' }}>Dismiss contact</button>
                 </div>
               </div>

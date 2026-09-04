@@ -36,7 +36,9 @@ type DeskKey = keyof typeof DESKS;
 const deskOf = (v: unknown): DeskKey =>
   (String(v) === "property" || String(v) === "lender" ? (String(v) as DeskKey) : "dst");
 
-const COLS = "id, name, description, vendor_type, parent_id, website, notes, next_steps, " +
+// `address` was missing here as well as from clean(), so the property and lender desks
+// rendered an Address column that could never hold anything.
+const COLS = "id, name, description, vendor_type, parent_id, website, address, notes, next_steps, " +
   "contact, email, phone, status, offerings, archived, created_by, created_at, updated_by, updated_at, " +
   "about, about_researched_at";
 const CONTACT_COLS = "id, vendor_id, name, title, email, phone_office, phone_cell, address, city_state, linkedin_url, notes, is_primary, bio, bio_researched_at";
@@ -55,6 +57,9 @@ function clean(body: Record<string, unknown>, types: readonly string[]) {
     out.parent_id = /^[0-9a-f-]{36}$/i.test(p) ? p : null;
   }
   if (body.website !== undefined) out.website = str(body.website);
+  // The account's own address. It is selected and displayed on the property and lender
+  // desks, but was never accepted here, so the column could not actually be written.
+  if (body.address !== undefined) out.address = str(body.address);
   if (body.notes !== undefined) out.notes = str(body.notes);
   // The researched profile of the firm. Deliberately separate from notes, which is the
   // team's own relationship history.

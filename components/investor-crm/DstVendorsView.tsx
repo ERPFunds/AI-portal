@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import DocsPanel from '../shared/DocsPanel'
+import { downloadCsv, exportBtnCss, type CsvColumn } from '@/lib/csv'
 
 // ── DST Vendors ───────────────────────────────────────────────────────────────
 // Directory of DST/1031 vendor accounts: broker dealers, the brokerages that sit
@@ -180,6 +181,41 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
   }, [items, search, typeFilter, affFilter, stateFilter])
 
+  // One row per CONTACT rather than per account, because that is what the exports get used
+  // for -- working a list of people. An account with nobody on it still gets a row so it is
+  // not silently dropped.
+  const exportRows = useMemo(() => rows.flatMap(v => (
+    v.contacts.length ? v.contacts.map(c => ({ v, c })) : [{ v, c: null as VContact | null }]
+  )), [rows])
+
+  function exportCsv() {
+    const parent = (v: Vendor) => items.find(x => x.id === v.parent_id)?.name ?? ''
+    const cols: CsvColumn<{ v: Vendor; c: VContact | null }>[] = [
+      ['Account', r => r.v.name],
+      ['Type', r => r.v.vendor_type],
+      ['Affiliation', r => parent(r.v)],
+      ['Contact', r => r.c?.name],
+      ['Title', r => r.c?.title],
+      ['Primary', r => (r.c?.is_primary ? 'Yes' : '')],
+      ['Email', r => r.c?.email],
+      ['Office Phone', r => r.c?.phone_office],
+      ['Cell', r => r.c?.phone_cell],
+      ['City / State', r => r.c?.city_state],
+      ['LinkedIn', r => r.c?.linkedin_url],
+      ['Contact Bio', r => r.c?.bio],
+      ['Contact Notes', r => r.c?.notes],
+      ['Description', r => r.v.description],
+      ['About', r => r.v.about],
+      ['Website', r => r.v.website],
+      ['Address', r => r.v.address],
+      ['Account Notes', r => r.v.notes],
+      ['Next Steps', r => r.v.next_steps],
+    ]
+    // Property Vendors and Lenders share a title with other pages, so the desk's eyebrow
+    // goes in the filename too.
+    downloadCsv(`${DESK[desk].eyebrow} ${DESK[desk].title}`, cols, exportRows)
+  }
+
   async function save(draft: Draft) {
     const editingExisting = !!draft.id
     const res = await fetch('/api/dst-vendors', {
@@ -225,6 +261,9 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
       )}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, flexWrap: 'wrap', alignItems: 'center' }}>
+        <button onClick={exportCsv} disabled={loading || exportRows.length === 0}
+          title="Download the rows currently on screen, one line per contact"
+          style={{ ...exportBtnCss, cursor: exportRows.length ? 'pointer' : 'not-allowed' }}>⤓ Export to Excel</button>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search accounts, contacts…"
           style={{ flex: 1, minWidth: 220, maxWidth: 360, padding: '9px 12px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14 }} />
         <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)}

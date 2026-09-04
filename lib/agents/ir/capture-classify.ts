@@ -224,6 +224,31 @@ export function isRelevant(email: string, crmDomains: Set<string>): boolean {
   return CAPITAL_WORLD.test(domain) || crmDomains.has(domain);
 }
 
+/**
+ * Is this person at a firm the CRM already covers?
+ *
+ * Distinct from `isRelevant`, and the more important of the two in practice. A new address at
+ * Emerson Equity is a new PERSON, not a new RELATIONSHIP -- the firm is already a channel ERP
+ * works through, so the row is noise unless someone is specifically looking for new faces at
+ * known firms. The scan subtracts known EMAIL ADDRESSES, which cannot catch this on its own.
+ */
+export function isKnownFirm(email: string, crmDomains: Set<string>): boolean {
+  const domain = (email || "").toLowerCase().split("@")[1] || "";
+  if (!domain) return false;
+  if (CONSUMER_DOMAIN.test(domain + ".")) return false;   // gmail is not a firm
+  return crmDomains.has(domain);
+}
+
+/** The bare domain behind a website, so an account with no email on file is still recognised. */
+export function domainFromWebsite(url?: string | null): string {
+  return (url || "")
+    .toLowerCase().trim()
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .replace(/[/?#].*$/, "")
+    .trim();
+}
+
 /** Strip consumer domains out of a set of CRM domains, so they can never confer relevance. */
 export function firmDomainsOnly(domains: Iterable<string>): Set<string> {
   const out = new Set<string>();
