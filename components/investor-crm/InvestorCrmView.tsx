@@ -691,6 +691,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           lp={(() => { const ov = overlayFor(selected); return ov ? overlayToLp(ov) : selected })()}
           program={program}
           isLpDirectory={isLpDirectory}
+          onOpenVendor={openVendor}
           overlay={overlayFor(selected)}
           accent={accent}
           onClose={() => setSelected(null)}
@@ -880,10 +881,50 @@ const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' 
 
 // ── Detail drawer ─────────────────────────────────────────────────────────────
 
-function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, onSaved }: {
+/**
+ * An account field that is also a pointer at another account: editable in place, but the
+ * saved value doubles as a link into the DST Vendor directory.
+ */
+function EditVendorField({ k, value, onSave, onOpen }: {
+  k: string; value?: string | null
+  onSave: (v: string) => void | Promise<void>
+  onOpen?: (name: string) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(value ?? '')
+  useEffect(() => { setDraft(value ?? '') }, [value])
+  const commit = async () => { setEditing(false); if ((draft ?? '') !== (value ?? '')) await onSave(draft) }
+  if (editing) return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{k}</div>
+      <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false) } }}
+        style={{ width: '100%', padding: '5px 7px', border: '1px solid #93c5fd', borderRadius: 6, fontSize: 13.5 }} />
+    </div>
+  )
+  return (
+    <div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{k}</div>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        {value
+          ? <button onClick={() => onOpen?.(value)} title="Open in the DST Vendor directory"
+              style={{ border: 0, background: 'none', padding: 0, textAlign: 'left', fontSize: 13.5, fontWeight: 600, color: '#0e7490', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>{value}</button>
+          : <span style={{ color: '#d1d5db', fontSize: 13.5 }}>—</span>}
+        <button onClick={() => setEditing(true)} title={`Edit ${k}`}
+          style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: '#9ca3af' }}>edit</button>
+      </div>
+    </div>
+  )
+}
+
+function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, onSaved, onOpenVendor }: {
   lp: LpRecord
   program: 'PE' | 'DST'
   isLpDirectory?: boolean
+  // Jump to the DST Vendor directory pre-filtered to a firm. The directory matches on the
+  // name, so the two only meet if the spellings agree -- which is why the broker-dealer
+  // values are kept identical to the vendor account names.
+  onOpenVendor?: (name: string) => void
   overlay?: Overlay
   accent: string
   onClose: () => void
@@ -912,6 +953,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
     website: overlay?.website ?? '',
     address: overlay?.address ?? '',
     state: overlay?.state ?? '',
+    // DST only: which channel the money came through. Kept spelled exactly as the vendor
+    // account is named, so the field can link straight into the DST Vendor directory.
+    broker_dealer: overlay?.broker_dealer ?? lp.sfBrokerDealer ?? lp.brokerFirm ?? '',
+    advisor: overlay?.advisor ?? lp.brokerContact ?? lp.sfAdvisorContact ?? '',
   })
   // Every account field is editable; the entity name is the record's key, so renaming it
   // is sent as a rename rather than a plain field update.
@@ -1214,6 +1259,10 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <EditField k="Phone" value={acct.phone} onSave={v => saveAccount({ phone: v })} />
                     <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
                     <EditSelect k="State" value={acct.state} options={US_STATES} onSave={v => saveAccount({ state: v })} />
+                    {program === 'DST' && <EditVendorField k="Broker Dealer / RIA" value={acct.broker_dealer}
+                      onSave={v => saveAccount({ broker_dealer: v })} onOpen={onOpenVendor} />}
+                    {program === 'DST' && <EditVendorField k="Advisor" value={acct.advisor}
+                      onSave={v => saveAccount({ advisor: v })} onOpen={onOpenVendor} />}
                     <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
                   </div>
                   {!isLpDirectory && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>
