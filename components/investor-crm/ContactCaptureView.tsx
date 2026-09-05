@@ -52,7 +52,7 @@ const KIND_LABEL: Record<string, string> = {
 type Dest = {
   key: string; label: string; where: string
   kind: 'investor' | 'vendor'
-  program?: 'PE' | 'DST'; isLp?: boolean; desk?: 'dst' | 'property' | 'lender'
+  program?: 'PE' | 'DST'; isLp?: boolean; desk?: 'dst' | 'property'
 }
 const DESTINATIONS: Dest[] = [
   { key: 'pe-prospects', label: 'PE Prospects',    where: 'Investor CRM', kind: 'investor', program: 'PE',  isLp: false },
@@ -60,7 +60,6 @@ const DESTINATIONS: Dest[] = [
   { key: 'dst-investors', label: 'DST Investors',  where: 'Investor CRM', kind: 'investor', program: 'DST', isLp: true },
   { key: 'dst-vendors',  label: 'DST Vendors',     where: 'Investor CRM', kind: 'vendor',   desk: 'dst' },
   { key: 'prop-vendors', label: 'Property Vendors', where: 'Property CRM', kind: 'vendor',  desk: 'property' },
-  { key: 'prop-lenders', label: 'Lenders',          where: 'Property CRM', kind: 'vendor',  desk: 'lender' },
 ]
 
 const MAILBOX_LABELS: Record<string, string> = {

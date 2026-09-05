@@ -399,7 +399,9 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'crm-dst-investors': <InvestorCrmView program="DST" mode="lps" onNavigate={setCurrentView} />,
     'dst-vendors': <DstVendorsView onNavigate={setCurrentView} />,
     'property-vendors': <DstVendorsView desk="property" />,
-    'property-lenders': <DstVendorsView desk="lender" />,
+    // Lenders were merged into Property Vendors; the old view key still resolves so a
+    // saved tab or a stale role sidebar lands on the desk that now holds them.
+    'property-lenders': <DstVendorsView desk="property" />,
     'crm-contact-capture': <CrmContactCaptureView />,
     'capital-raise': <CapitalRaiseView />,
     'ir-qa': <QaReviewView />,
