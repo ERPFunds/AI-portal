@@ -77,10 +77,8 @@ export async function runCaptureScan() {
     "investor_contacts",         // LP directory, PE prospects, DST investors
     "dst_vendors",               // broker dealers, brokerages, QIs
     "dst_vendor_contacts",       // the people under them
-    "property_vendors",
+    "property_vendors",         // property-side providers, lenders among them
     "property_vendor_contacts",
-    "property_lenders",
-    "property_lender_contacts",
     "contractors",               // legacy property tables, kept until they are retired
     "lenders",
     "lp_prior_contacts",
@@ -100,7 +98,7 @@ export async function runCaptureScan() {
   // Websites as well as addresses: 47 vendor accounts carry a site and no email, and their
   // domain would otherwise never be recognised.
   type W = { website?: string | null };
-  const siteTables = ["dst_vendors", "investor_crm", "property_vendors", "property_lenders"];
+  const siteTables = ["dst_vendors", "investor_crm", "property_vendors"];
   const siteSets = await Promise.all(
     siteTables.map((t) => fetchAll<W>(() => supabase.from(t).select("website")).catch(() => [] as W[])),
   );

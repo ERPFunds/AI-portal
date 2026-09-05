@@ -227,6 +227,10 @@ export default function TenantCrmView() {
                                  pointerEvents: p?.email ? 'auto' : 'none' }}>Email</a>
                       <button onClick={() => setEditing(t)}
                         style={{ marginLeft: 6, border: '1px solid #d1d5db', background: '#fff', borderRadius: 7, padding: '6px 12px', fontWeight: 600, fontSize: 13, color: '#374151', cursor: 'pointer' }}>Edit</button>
+                      {/* Deleting was only reachable by opening Edit first. It confirms, and
+                          names the contacts that go with the company, so it is safe on the row. */}
+                      <button onClick={() => removeCompany(t)} title={`Delete ${t.name}`}
+                        style={{ marginLeft: 6, border: '1px solid #fecaca', background: '#fff', borderRadius: 7, padding: '6px 12px', fontWeight: 600, fontSize: 13, color: '#b91c1c', cursor: 'pointer' }}>Delete</button>
                     </td>
                   </tr>
                 )

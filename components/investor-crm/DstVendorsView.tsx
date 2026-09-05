@@ -21,23 +21,18 @@ const DESK = {
     types: ['Broker Dealer', 'Brokerage', 'RIA', 'Advisor', 'Qualified Intermediary',
       'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other'],
   },
+  // Lenders were a separate desk on a separate table until the four accounts were merged
+  // in here. They are property-side providers like the rest; the lender types came along so
+  // a bank and a debt fund can still be told apart, and the type filter isolates them.
   property: {
     eyebrow: 'Property CRM', title: 'Vendors',
     subtitle: 'Contractors, lenders, brokers and service providers',
     affiliationLabel: 'Affiliation — parent company this account sits under',
     parentType: '',
     columns: ['account', 'descNotes', 'contacts', 'address', 'website'] as string[],
-    types: ['Contractor', 'Lender', 'Broker', 'Property Manager', 'Title/Escrow',
+    types: ['Contractor', 'Lender', 'Bank', 'Credit Union', 'Life Company', 'Debt Fund',
+      'Agency', 'Bridge/Mezz', 'Private Lender', 'Broker', 'Property Manager', 'Title/Escrow',
       'Insurance', 'Legal/Counsel', 'Utility', 'Inspection/Appraisal', 'Other'],
-  },
-  lender: {
-    eyebrow: 'Property CRM', title: 'Lenders',
-    subtitle: 'Banks, credit unions and other lenders financing the portfolio',
-    affiliationLabel: 'Affiliation — parent institution this account sits under',
-    parentType: '',
-    columns: ['account', 'descNotes', 'contacts', 'address', 'website'] as string[],
-    types: ['Bank', 'Credit Union', 'Life Company', 'Debt Fund', 'Agency', 'Bridge/Mezz',
-      'Private Lender', 'Other'],
   },
 } as const
 type DeskKey = keyof typeof DESK
@@ -513,6 +508,10 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
                                      pointerEvents: p?.email ? 'auto' : 'none' }}>Email</a>}
                       <button onClick={() => setEditing(v)}
                         style={{ marginLeft: 6, border: '1px solid #d1d5db', background: '#fff', borderRadius: 7, padding: '6px 12px', fontWeight: 600, fontSize: 13, color: '#374151', cursor: 'pointer' }}>Edit</button>
+                      {/* Deleting was only reachable by opening Edit first. It confirms, and
+                          says what else goes with the account, so it is safe on the row. */}
+                      <button onClick={() => removeAccount(v)} title={`Delete ${v.name}`}
+                        style={{ marginLeft: 6, border: '1px solid #fecaca', background: '#fff', borderRadius: 7, padding: '6px 12px', fontWeight: 600, fontSize: 13, color: '#b91c1c', cursor: 'pointer' }}>Delete</button>
                     </td>
                   </tr>
                 )

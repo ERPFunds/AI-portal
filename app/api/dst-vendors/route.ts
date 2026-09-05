@@ -12,8 +12,8 @@ export const dynamic = "force-dynamic";
 // tells the team which desk a brokerage is listed under. Contacts live in their own table
 // so each person can carry a title, both phone numbers, an address and a LinkedIn profile.
 
-// Three desks share this route: the DST distribution network, the property-side vendors,
-// and the property lenders. Same shape, different tables and vocabulary.
+// Two desks share this route: the DST distribution network and the property-side vendors
+// (lenders included). Same shape, different tables and vocabulary.
 const DESKS = {
   dst: {
     accounts: "dst_vendors", contacts: "dst_vendor_contacts",
@@ -21,20 +21,21 @@ const DESKS = {
       "Qualified Intermediary", "Title/Escrow", "Property Manager", "Lender",
       "Legal/Counsel", "Insurance", "Inspection/Appraisal", "Other"],
   },
+  // Lenders used to be their own desk on their own table. They are vendors like any other
+  // property-side provider, so the four accounts were merged in here and the lender-specific
+  // types came with them -- a bank and a debt fund are still worth telling apart.
   property: {
     accounts: "property_vendors", contacts: "property_vendor_contacts",
-    types: ["Contractor", "Lender", "Broker", "Property Manager", "Title/Escrow",
+    types: ["Contractor", "Lender", "Bank", "Credit Union", "Life Company", "Debt Fund",
+      "Agency", "Bridge/Mezz", "Private Lender", "Broker", "Property Manager", "Title/Escrow",
       "Insurance", "Legal/Counsel", "Utility", "Inspection/Appraisal", "Other"],
-  },
-  lender: {
-    accounts: "property_lenders", contacts: "property_lender_contacts",
-    types: ["Bank", "Credit Union", "Life Company", "Debt Fund", "Agency", "Bridge/Mezz",
-      "Private Lender", "Other"],
   },
 } as const;
 type DeskKey = keyof typeof DESKS;
+// "lender" is still accepted so a stale tab or bookmark lands on the vendor desk the
+// lenders were merged into rather than silently showing the DST book.
 const deskOf = (v: unknown): DeskKey =>
-  (String(v) === "property" || String(v) === "lender" ? (String(v) as DeskKey) : "dst");
+  (String(v) === "property" || String(v) === "lender" ? "property" : "dst");
 
 // `address` was missing here as well as from clean(), so the property and lender desks
 // rendered an Address column that could never hold anything.
