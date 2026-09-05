@@ -83,6 +83,11 @@ const thCss: React.CSSProperties = {
   textTransform: 'uppercase', color: '#9ca3af', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap',
 }
 const tdCss: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #f0f1f3', fontSize: 14, verticalAlign: 'top' }
+// The table is wider than its pane, so the last column — where Edit and Delete live — sat
+// off the right edge until you scrolled for it. Pinned there instead, always in reach.
+const stickyActions: React.CSSProperties = {
+  position: 'sticky', right: 0, background: '#fff', zIndex: 1, borderLeft: '1px solid #eef0f2',
+}
 const inputCss: React.CSSProperties = {
   width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db',
   fontSize: 14, fontFamily: 'inherit',
@@ -428,7 +433,7 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
                     </span>
                   </th>
                 ))}
-                <th style={thCss}></th>
+                <th style={{ ...thCss, ...stickyActions }}></th>
               </tr>
             </thead>
             <tbody>
@@ -496,7 +501,7 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
                       if (col === 'nextSteps') return <td key={col} style={{ ...tdCss, color: '#6b7280', maxWidth: 220, fontSize: 13 }}>{v.next_steps || dash}</td>
                       return <td key={col} style={tdCss} />
                     })}
-                    <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <td style={{ ...tdCss, ...stickyActions, whiteSpace: 'nowrap', textAlign: 'right' }}>
                       {v.contacts.filter(c => (c.email || '').includes('@')).length > 1
                         ? <button onClick={() => setEmailFor(v)}
                             title={`${v.contacts.filter(c => (c.email || '').includes('@')).length} people here — choose who to write to`}
