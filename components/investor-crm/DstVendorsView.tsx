@@ -260,6 +260,12 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
       .sort((a, b) => {
         if (!sortKey) return 0
         const av = sortValue(a, sortKey), bv = sortValue(b, sortKey)
+        // Emptiness is settled before direction. Sorting a blank as a high value only
+        // keeps it at the bottom one way -- reversing negates the comparison and lands a
+        // column of dashes on top of the rows you were reading.
+        const ae = av === LAST, be = bv === LAST
+        if (ae !== be) return ae ? 1 : -1
+        if (ae && be) return 0
         const cmp = typeof av === 'number' && typeof bv === 'number'
           ? av - bv
           : String(av).localeCompare(String(bv))
