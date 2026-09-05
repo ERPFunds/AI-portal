@@ -32,6 +32,24 @@ const thCss: React.CSSProperties = {
   textTransform: 'uppercase', color: '#9ca3af', borderBottom: '1px solid #e5e7eb', whiteSpace: 'nowrap',
 }
 const tdCss: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #f0f1f3', fontSize: 14, verticalAlign: 'top' }
+// Same treatment as the vendor desks: this table is wider than its pane, so the action
+// cell is pinned to the right edge rather than sitting off-screen until you scroll.
+const stickyActions: React.CSSProperties = {
+  position: 'sticky', right: 0, background: '#fff', zIndex: 1, borderLeft: '1px solid #eef0f2',
+}
+
+type SortDir = 'asc' | 'desc'
+// Empty cells sort last in both directions rather than clumping at the top when reversed.
+const LAST = '￿'
+// The sortable columns, in the order they are rendered.
+const COLUMNS: { key: string; label: string }[] = [
+  { key: 'company',  label: 'Company' },
+  { key: 'entity',   label: 'ERP Entity' },
+  { key: 'contacts', label: 'Contact(s)' },
+  { key: 'address',  label: 'ERP Property Address' },
+  { key: 'links',    label: 'Website / LinkedIn' },
+  { key: 'notes',    label: 'Notes' },
+]
 const inputCss: React.CSSProperties = {
   width: '100%', padding: '8px 10px', borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, fontFamily: 'inherit',
 }
@@ -80,6 +98,30 @@ export default function TenantCrmView() {
     if (fresh && fresh !== people) setPeople(fresh)
   }, [items, people])
 
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  // Clicking the current column flips direction; clicking a new one starts ascending.
+  const toggleSort = (col: string) => {
+    if (sortKey === col) { setSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return }
+    setSortKey(col); setSortDir('asc')
+  }
+
+  // One value per column per row, taken from what the cell actually shows.
+  const sortValue = useCallback((t: Tenant, col: string): string | number => {
+    const primary = t.contacts.find(c => c.is_primary) ?? t.contacts[0]
+    switch (col) {
+      case 'company':  return t.name.toLowerCase()
+      case 'entity':   return (t.erp_entity || '').toLowerCase() || LAST
+      // By the person named in the cell, not by how many there are.
+      case 'contacts': return (primary?.contact_name || '').toLowerCase() || LAST
+      case 'address':  return (t.property_address || '').toLowerCase() || LAST
+      // Whichever link the cell leads with, so the order matches the reading.
+      case 'links':    return (t.website || t.linkedin_url || '').toLowerCase() || LAST
+      case 'notes':    return (t.notes || '').toLowerCase() || LAST
+      default:         return LAST
+    }
+  }, [])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     return items
@@ -88,7 +130,16 @@ export default function TenantCrmView() {
       .filter(t => !q || t.name.toLowerCase().includes(q)
         || (t.property_address || '').toLowerCase().includes(q)
         || t.contacts.some(c => c.contact_name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
-  }, [items, search, descFilter, entityFilter])
+      // Sorting happens after filtering so it only ever orders what is on screen.
+      .sort((a, b) => {
+        if (!sortKey) return 0
+        const av = sortValue(a, sortKey), bv = sortValue(b, sortKey)
+        const cmp = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+  }, [items, search, descFilter, entityFilter, sortKey, sortDir, sortValue])
 
   // One line per CONTACT, since that is what the list gets used for. A company with no
   // contacts on file still gets a row rather than disappearing from the export.
@@ -172,13 +223,17 @@ export default function TenantCrmView() {
               <tr>
                 {/* Description is not a column: it reads "Tenant" on nearly every row. The
                     exceptions ride as a badge next to the company name instead. */}
-                <th style={thCss}>Company</th>
-                <th style={thCss}>ERP Entity</th>
-                <th style={thCss}>Contact(s)</th>
-                <th style={{ ...thCss, maxWidth: 190 }}>ERP Property Address</th>
-                <th style={thCss}>Website / LinkedIn</th>
-                <th style={thCss}>Notes</th>
-                <th style={thCss}></th>
+                {COLUMNS.map(c => (
+                  <th key={c.key} style={{ ...thCss, cursor: 'pointer', userSelect: 'none', ...(c.key === 'address' ? { maxWidth: 190 } : {}) }}
+                    onClick={() => toggleSort(c.key)}
+                    title={`Sort by ${c.label}`}>
+                    {c.label}
+                    <span style={{ marginLeft: 5, color: sortKey === c.key ? '#0f766e' : '#d1d5db' }}>
+                      {sortKey === c.key ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                  </th>
+                ))}
+                <th style={{ ...thCss, ...stickyActions }}></th>
               </tr>
             </thead>
             <tbody>
@@ -220,7 +275,7 @@ export default function TenantCrmView() {
                       {!t.website && !t.linkedin_url && <span style={{ color: '#d1d5db' }}>—</span>}
                     </td>
                     <td style={{ ...tdCss, maxWidth: 220, fontSize: 13, color: '#6b7280' }}>{t.notes || <span style={{ color: '#d1d5db' }}>—</span>}</td>
-                    <td style={{ ...tdCss, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                    <td style={{ ...tdCss, ...stickyActions, whiteSpace: 'nowrap', textAlign: 'right' }}>
                       <a href={p?.email ? `mailto:${p.email}` : undefined}
                         style={{ display: 'inline-block', padding: '6px 12px', borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: 'none',
                                  background: p?.email ? '#2563eb' : '#f1f2f4', color: p?.email ? '#fff' : '#b6bcc6',
