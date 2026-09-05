@@ -249,6 +249,28 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   }, [])
   useEffect(() => { loadFunds() }, [loadFunds])
 
+  // Broker dealer and advisor are matched to DST Vendor accounts by name, so the drawer
+  // offers the names that already exist there. A typo is what breaks the join, and the
+  // vendor side then shows an account with no book under it.
+  const [vendorNames, setVendorNames] = useState<{ accounts: string[]; people: string[] }>({ accounts: [], people: [] })
+  useEffect(() => {
+    if (program !== 'DST') return
+    fetch('/api/dst-vendors?desk=dst')
+      .then(r => r.json())
+      .then((j: { items?: { name: string; vendor_type: string | null; contacts?: { name: string }[] }[] }) => {
+        const items = j.items ?? []
+        setVendorNames({
+          accounts: items.map(v => v.name).sort((a, b) => a.localeCompare(b)),
+          // An advisor is normally a person on a firm, but some are accounts in their own right.
+          people: Array.from(new Set([
+            ...items.flatMap(v => (v.contacts ?? []).map(c => c.name)),
+            ...items.filter(v => v.vendor_type === 'Advisor' || v.vendor_type === 'RIA').map(v => v.name),
+          ])).filter(Boolean).sort((a, b) => a.localeCompare(b)),
+        })
+      })
+      .catch(() => {})
+  }, [program])
+
   // How many individuals sit under each investing entity (for the Contact(s) column).
   useEffect(() => {
     fetch('/api/investor-crm/people')
@@ -305,6 +327,24 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
   useEffect(() => {
     setFundFilter('All'); setStageFilter('All'); setStateFilter('All'); setOwnerFilter('All'); setSearch('')
   }, [program, mode])
+
+  // The return trip from DST Vendors: it stashes an investor's name and navigates here.
+  // Land on that record with its drawer open rather than at the top of the list. Declared
+  // after the filter reset above so a hand-off is not immediately cleared by it.
+  useEffect(() => {
+    if (program !== 'DST' || loading) return
+    let wanted: string | null = null
+    try {
+      wanted = window.sessionStorage.getItem('dstInvestorFilter')
+      if (wanted) window.sessionStorage.removeItem('dstInvestorFilter')   // one jump, not every visit
+    } catch { return }
+    if (!wanted) return
+    const ov = overlays[normKey(wanted)]
+    // Clear the filters, or the record we were sent to could be filtered out of the list.
+    setFundFilter('All'); setStageFilter('All'); setStateFilter('All'); setOwnerFilter('All'); setTypeFilter('All')
+    setSearch(ov?.investor ?? wanted)
+    if (ov) setSelected(overlayToLp(ov))
+  }, [program, loading, overlays])
 
   const overlayFor = useCallback((lp: LpRecord): Overlay | undefined => overlays[normKey(lp.investor)], [overlays])
 
@@ -692,6 +732,7 @@ export default function InvestorCrmView({ program, mode = 'all', onNavigate }: {
           program={program}
           isLpDirectory={isLpDirectory}
           onOpenVendor={openVendor}
+          vendorNames={vendorNames}
           overlay={overlayFor(selected)}
           accent={accent}
           onClose={() => setSelected(null)}
@@ -885,21 +926,28 @@ const tdCss: React.CSSProperties = { padding: '11px 14px', verticalAlign: 'top' 
  * An account field that is also a pointer at another account: editable in place, but the
  * saved value doubles as a link into the DST Vendor directory.
  */
-function EditVendorField({ k, value, onSave, onOpen }: {
+function EditVendorField({ k, value, onSave, onOpen, suggestions }: {
   k: string; value?: string | null
   onSave: (v: string) => void | Promise<void>
   onOpen?: (name: string) => void
+  /** Names that already exist in the DST Vendor directory, offered while typing. */
+  suggestions?: string[]
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(value ?? '')
   useEffect(() => { setDraft(value ?? '') }, [value])
   const commit = async () => { setEditing(false); if ((draft ?? '') !== (value ?? '')) await onSave(draft) }
+  const listId = `vendors-${k.replace(/[^a-z]+/gi, '-').toLowerCase()}`
   if (editing) return (
     <div>
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>{k}</div>
       <input autoFocus value={draft} onChange={e => setDraft(e.target.value)} onBlur={commit}
+        list={suggestions?.length ? listId : undefined}
         onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(value ?? ''); setEditing(false) } }}
         style={{ width: '100%', padding: '5px 7px', border: '1px solid #93c5fd', borderRadius: 6, fontSize: 13.5 }} />
+      {!!suggestions?.length && (
+        <datalist id={listId}>{suggestions.map(n => <option key={n} value={n} />)}</datalist>
+      )}
     </div>
   )
   return (
@@ -917,7 +965,7 @@ function EditVendorField({ k, value, onSave, onOpen }: {
   )
 }
 
-function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, onSaved, onOpenVendor }: {
+function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, onSaved, onOpenVendor, vendorNames }: {
   lp: LpRecord
   program: 'PE' | 'DST'
   isLpDirectory?: boolean
@@ -925,6 +973,8 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
   // name, so the two only meet if the spellings agree -- which is why the broker-dealer
   // values are kept identical to the vendor account names.
   onOpenVendor?: (name: string) => void
+  // Those same account and contact names, offered while typing for exactly that reason.
+  vendorNames?: { accounts: string[]; people: string[] }
   overlay?: Overlay
   accent: string
   onClose: () => void
@@ -1260,9 +1310,11 @@ function InvestorDrawer({ lp, program, isLpDirectory, overlay, accent, onClose, 
                     <EditField k="Website" value={acct.website} onSave={v => saveAccount({ website: v })} />
                     <EditSelect k="State" value={acct.state} options={US_STATES} onSave={v => saveAccount({ state: v })} />
                     {program === 'DST' && <EditVendorField k="Broker Dealer / RIA" value={acct.broker_dealer}
-                      onSave={v => saveAccount({ broker_dealer: v })} onOpen={onOpenVendor} />}
+                      onSave={v => saveAccount({ broker_dealer: v })} onOpen={onOpenVendor}
+                      suggestions={vendorNames?.accounts} />}
                     {program === 'DST' && <EditVendorField k="Advisor" value={acct.advisor}
-                      onSave={v => saveAccount({ advisor: v })} onOpen={onOpenVendor} />}
+                      onSave={v => saveAccount({ advisor: v })} onOpen={onOpenVendor}
+                      suggestions={vendorNames?.people} />}
                     <EditField k="Address" value={acct.address} onSave={v => saveAccount({ address: v })} full />
                   </div>
                   {!isLpDirectory && <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f1f3' }}>

@@ -17,7 +17,7 @@ const DESK = {
     subtitle: 'Broker dealers, brokerages and service providers',
     affiliationLabel: 'Affiliation — broker dealer this account is listed under',
     parentType: 'Broker Dealer',
-    columns: ['account', 'description', 'affiliation', 'contacts', 'website', 'notes', 'nextSteps'] as string[],
+    columns: ['account', 'description', 'affiliation', 'contacts', 'investors', 'website', 'notes', 'nextSteps'] as string[],
     types: ['Broker Dealer', 'Brokerage', 'RIA', 'Advisor', 'Qualified Intermediary',
       'Title/Escrow', 'Property Manager', 'Lender', 'Legal/Counsel', 'Insurance', 'Inspection/Appraisal', 'Other'],
   },
@@ -61,8 +61,27 @@ type CDraft = Partial<VContact>
 const LABELS: Record<string, string> = {
   account: 'Company', description: 'Description', descNotes: 'Description / Notes',
   affiliation: 'Affiliation', contacts: 'Contact(s)', address: 'Address',
-  website: 'Website', notes: 'Notes', nextSteps: 'Next Steps',
+  investors: 'Investors', website: 'Website', notes: 'Notes', nextSteps: 'Next Steps',
 }
+
+type SortDir = 'asc' | 'desc'
+// Empty cells sort last in both directions rather than clumping at the top when reversed —
+// a column of blanks above the rows you actually wanted to see is not a useful sort.
+const LAST = '￿'
+
+// A DST investor whose broker dealer or advisor resolves to this account. Built server-side
+// from the broker_dealer / advisor fields on investor_crm — see /api/dst-vendors/investors.
+interface Link {
+  investor_key: string; investor: string; role: 'Broker Dealer' | 'Advisor'
+  via: string | null; direct: boolean
+  stage: string | null; owner: string | null
+  email: string | null; fund: string | null; state: string | null
+}
+interface RosterInvestor {
+  investor_key: string; investor: string
+  broker_dealer: string | null; advisor: string | null
+}
+interface Unmatched { name: string; role: string; count: number }
 
 const thCss: React.CSSProperties = {
   textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
@@ -74,7 +93,7 @@ const inputCss: React.CSSProperties = {
   fontSize: 14, fontFamily: 'inherit',
 }
 
-export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}) {
+export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: DeskKey; onNavigate?: (view: string) => void } = {}) {
   const cfg = DESK[desk]
   const VENDOR_TYPES = cfg.types
   const [items, setItems] = useState<Vendor[]>([])
@@ -91,6 +110,15 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
   const [emailFor, setEmailFor] = useState<Vendor | null>(null)
   // Set when the DST Investor directory sent us here for a named broker dealer or advisor.
   const [handoff, setHandoff] = useState<string | null>(null)
+  // The investors sitting under each account, and the roster the link picker chooses from.
+  // DST desk only — the property desks have no investor side.
+  const [links, setLinks] = useState<Record<string, Link[]>>({})
+  const [roster, setRoster] = useState<RosterInvestor[]>([])
+  const [investorsFor, setInvestorsFor] = useState<Vendor | null>(null)
+  // Broker dealer / advisor names carried on investor records that match nothing here.
+  // Each one is a book of investors no account can see, so it is worth saying out loud.
+  const [unmatched, setUnmatched] = useState<Unmatched[]>([])
+  const [showUnmatched, setShowUnmatched] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -103,6 +131,19 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     finally { setLoading(false) }
   }, [desk])
   useEffect(() => { load() }, [load])
+
+  // Investor roll-up. Kept in its own call so a slow or failed join never holds up the
+  // directory itself — the column just shows nothing until it lands.
+  const loadLinks = useCallback(async () => {
+    if (desk !== 'dst') return
+    try {
+      const res = await fetch('/api/dst-vendors/investors')
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) return
+      setLinks(j.byVendor ?? {}); setRoster(j.investors ?? []); setUnmatched(j.unmatched ?? [])
+    } catch { /* the column stays empty */ }
+  }, [desk])
+  useEffect(() => { loadLinks() }, [loadLinks])
 
   // Arriving from the DST Investor directory: it stashes the broker dealer or advisor's name
   // and navigates here. Land on that record rather than the top of an unfiltered list.
@@ -138,6 +179,14 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     if (fresh && fresh !== people) setPeople(fresh)
   }, [items, people])
 
+  // Linking an investor renames nothing on the account, but a contact added or removed here
+  // can change which advisors resolve, so the roll-up is refreshed alongside the list.
+  useEffect(() => {
+    if (!investorsFor) return
+    const fresh = items.find(v => v.id === investorsFor.id)
+    if (fresh && fresh !== investorsFor) setInvestorsFor(fresh)
+  }, [items, links])
+
   const byId = useMemo(() => new Map(items.map(v => [v.id, v])), [items])
   // On the DST desk only broker dealers can be a parent; elsewhere any account can.
   const parents = useMemo(
@@ -165,6 +214,34 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     () => Array.from(new Set(items.flatMap(statesOf))).sort(),
     [items])
 
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  // Clicking the current column flips direction; clicking a new one starts ascending.
+  const toggleSort = (col: string) => {
+    if (sortKey === col) { setSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return }
+    setSortKey(col); setSortDir('asc')
+  }
+
+  // One value per column per row. Numbers sort numerically, everything else case-insensitively.
+  const sortValue = useCallback((v: Vendor, col: string): string | number => {
+    const primary = v.contacts.find(c => c.is_primary) ?? v.contacts[0]
+    switch (col) {
+      case 'account':     return v.name.toLowerCase()
+      case 'description': return (v.vendor_type || '').toLowerCase() || LAST
+      case 'descNotes':   return (v.description || v.notes || '').toLowerCase() || LAST
+      case 'affiliation': return (items.find(x => x.id === v.parent_id)?.name || '').toLowerCase() || LAST
+      // By the person shown in the cell, not by how many there are.
+      case 'contacts':    return (primary?.name || '').toLowerCase() || LAST
+      // The count shown in the cell, so the column sorts by what the reader sees.
+      case 'investors':   return (links[v.id] ?? []).length
+      case 'address':     return (v.address || '').toLowerCase() || LAST
+      case 'website':     return (v.website || '').toLowerCase() || LAST
+      case 'notes':       return (v.notes || '').toLowerCase() || LAST
+      case 'nextSteps':   return (v.next_steps || '').toLowerCase() || LAST
+      default:            return LAST
+    }
+  }, [items, investorsFor])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     const hasKids = new Set(items.map(v => v.parent_id).filter(Boolean) as string[])
@@ -179,7 +256,16 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
         || (v.description || '').toLowerCase().includes(q)
         || (v.about || '').toLowerCase().includes(q)
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
-  }, [items, search, typeFilter, affFilter, stateFilter])
+      // Sorting happens after filtering so it only ever orders what is on screen.
+      .sort((a, b) => {
+        if (!sortKey) return 0
+        const av = sortValue(a, sortKey), bv = sortValue(b, sortKey)
+        const cmp = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+  }, [items, search, typeFilter, affFilter, stateFilter, sortKey, sortDir, sortValue])
 
   // One row per CONTACT rather than per account, because that is what the exports get used
   // for -- working a list of people. An account with nobody on it still gets a row so it is
@@ -211,6 +297,11 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
       ['Account Notes', r => r.v.notes],
       ['Next Steps', r => r.v.next_steps],
     ]
+    // The book each account has placed. Repeated on every contact row of the account, the
+    // same way the account's own fields are.
+    if (desk === 'dst') cols.push(
+      ['Investors', r => String((links[r.v.id] ?? []).length || '')],
+    )
     // Property Vendors and Lenders share a title with other pages, so the desk's eyebrow
     // goes in the filename too.
     downloadCsv(`${DESK[desk].eyebrow} ${DESK[desk].title}`, cols, exportRows)
@@ -224,7 +315,8 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
     })
     const j = await res.json().catch(() => ({}))
     if (!res.ok || j.error) { alert(`Save failed: ${j.error ?? res.status}`); return }
-    setEditing(null); load()
+    // A new or renamed account changes which names resolve, so the roll-up is redone too.
+    setEditing(null); load(); loadLinks()
   }
 
   async function removeAccount(v: Vendor) {
@@ -234,7 +326,13 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
       : `Delete ${v.name} and its contacts?`
     if (!window.confirm(msg)) return
     const res = await fetch(`/api/dst-vendors?desk=${desk}&id=${v.id}`, { method: 'DELETE' })
-    if (res.ok) { setPeople(null); load() } else alert('Delete failed')
+    if (res.ok) { setPeople(null); setInvestorsFor(null); load(); loadLinks() } else alert('Delete failed')
+  }
+
+  // The return trip: the DST Investors tab sends people here by name, this sends them back.
+  function openInvestor(name: string) {
+    try { window.sessionStorage.setItem('dstInvestorFilter', name) } catch { /* storage unavailable */ }
+    onNavigate?.('crm-dst-investors')
   }
 
   const primaryOf = (v: Vendor) =>
@@ -257,6 +355,35 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           <span><b>{handoff}</b> has no account or contact in this directory yet.</span>
           <button onClick={() => { setHandoff(null); setSearch('') }}
             style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 700, color: '#92400e' }}>✕</button>
+        </div>
+      )}
+
+      {desk === 'dst' && unmatched.length > 0 && (
+        <div style={{ marginBottom: 12, padding: '10px 13px', borderRadius: 9, background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: 13, color: '#475569' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <span>
+              <b>{unmatched.length}</b> broker dealer / advisor name{unmatched.length > 1 ? 's' : ''} on DST investor records
+              {' '}{unmatched.length > 1 ? 'have' : 'has'} no account or contact here, so those investors show under no one.
+            </span>
+            <button onClick={() => setShowUnmatched(s => !s)}
+              style={{ border: 0, background: 'none', cursor: 'pointer', fontWeight: 700, color: '#0f766e', whiteSpace: 'nowrap' }}>
+              {showUnmatched ? 'Hide' : 'Show'}
+            </button>
+          </div>
+          {showUnmatched && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {unmatched.map(u => (
+                // Straight into a new account prefilled with the name, since adding it is
+                // what makes the missing book appear.
+                <button key={u.role + u.name}
+                  onClick={() => setEditing({ name: u.name, vendor_type: u.role === 'Broker Dealer' ? 'Broker Dealer' : 'Advisor' })}
+                  title={`Add ${u.name} as an account — ${u.count} investor${u.count > 1 ? 's' : ''} name${u.count > 1 ? '' : 's'} them as ${u.role.toLowerCase()}`}
+                  style={{ border: '1px solid #e2e8f0', background: '#fff', borderRadius: 20, padding: '4px 11px', fontSize: 12.5, fontWeight: 600, color: '#334155', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {u.name} <span style={{ color: '#9ca3af', fontWeight: 500 }}>· {u.count}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -296,7 +423,16 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
             <thead>
               <tr>
-                {cfg.columns.map(c => <th key={c} style={thCss}>{LABELS[c]}</th>)}
+                {cfg.columns.map(c => (
+                  <th key={c} style={{ ...thCss, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => toggleSort(c)}
+                    title={`Sort by ${LABELS[c]}`}>
+                    {LABELS[c]}
+                    <span style={{ marginLeft: 5, color: sortKey === c ? '#0f766e' : '#d1d5db' }}>
+                      {sortKey === c ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                  </th>
+                ))}
                 <th style={thCss}></th>
               </tr>
             </thead>
@@ -336,6 +472,22 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
                           )}
                         </td>
                       )
+                      if (col === 'investors') {
+                        const mine = links[v.id] ?? []
+                        return (
+                          <td key={col} style={tdCss}>
+                            <button onClick={() => setInvestorsFor(v)}
+                              title={mine.length ? 'Investors placed through this account' : 'Link an investor to this account'}
+                              style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
+                              {mine.length === 0
+                                ? <span style={{ fontSize: 13, color: '#9ca3af' }}>+ Link</span>
+                                : <div style={{ fontWeight: 600, fontSize: 14, color: '#0e7490' }}>
+                                    {mine.length} investor{mine.length > 1 ? 's' : ''}
+                                  </div>}
+                            </button>
+                          </td>
+                        )
+                      }
                       if (col === 'address') return <td key={col} style={{ ...tdCss, maxWidth: 190, fontSize: 13, color: '#4b5563' }}>{v.address || dash}</td>
                       if (col === 'website') return (
                         <td key={col} style={tdCss}>
@@ -376,8 +528,17 @@ export default function DstVendorsView({ desk = 'dst' }: { desk?: DeskKey } = {}
           onCancel={() => setEditing(null)} onSave={save}
           onDelete={editing.id ? () => removeAccount(editing as Vendor) : undefined} />
       )}
-      {people && <ContactsModal vendor={people} desk={desk} onClose={() => setPeople(null)} onChanged={load} />}
+      {people && <ContactsModal vendor={people} desk={desk} onClose={() => setPeople(null)} onChanged={() => { load(); loadLinks() }} />}
       {emailFor && <VendorEmailPicker vendor={emailFor} onClose={() => setEmailFor(null)} />}
+      {investorsFor && (
+        <VendorInvestorsModal
+          vendor={investorsFor}
+          links={links[investorsFor.id] ?? []}
+          roster={roster}
+          onClose={() => setInvestorsFor(null)}
+          onChanged={loadLinks}
+          onOpenInvestor={openInvestor} />
+      )}
     </div>
   )
 }
@@ -620,6 +781,170 @@ function ContactModal({ draft, onCancel, onSave }: { draft: CDraft; onCancel: ()
           <button onClick={onCancel} style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '9px 16px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Cancel</button>
           <button onClick={() => onSave(c)} disabled={!c.name?.trim()}
             style={{ border: 0, background: c.name?.trim() ? '#1a2233' : '#d1d5db', color: '#fff', borderRadius: 8, padding: '9px 18px', fontWeight: 600, cursor: c.name?.trim() ? 'pointer' : 'not-allowed' }}>Save</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Investors under an account ────────────────────────────────────────────────
+// The book this broker dealer, brokerage or advisor has placed. Nothing is stored here:
+// a link IS the broker_dealer / advisor field on the investor's own record, so attaching
+// or detaching writes through /api/investor-crm — the same field the DST Investors tab
+// edits, which is why the two sides can never disagree.
+function VendorInvestorsModal({ vendor, links, roster, onClose, onChanged, onOpenInvestor }: {
+  vendor: Vendor; links: Link[]; roster: RosterInvestor[]
+  onClose: () => void; onChanged: () => void; onOpenInvestor: (name: string) => void
+}) {
+  const [adding, setAdding] = useState(false)
+  const [pick, setPick] = useState('')
+  const [role, setRole] = useState<'Broker Dealer' | 'Advisor'>('Broker Dealer')
+  const [busy, setBusy] = useState<string | null>(null)
+  const [err, setErr] = useState<string | null>(null)
+
+  const direct = links.filter(l => l.direct)
+  const inherited = links.filter(l => !l.direct)
+
+  // Only accounts that stand for a person are usually somebody's advisor of record; for a
+  // firm the advisor is a contact on it, so that is the role the picker opens on.
+  const canAdvise = vendor.vendor_type === 'Advisor' || vendor.vendor_type === 'RIA'
+
+  const linked = new Set(links.map(l => l.investor_key))
+  const options = roster.filter(r => !linked.has(r.investor_key))
+
+  // broker_dealer / advisor are single-valued, so attaching replaces whatever name was
+  // there. Say so rather than silently overwriting a record edited elsewhere.
+  const chosen = roster.find(r => r.investor_key === pick)
+  const willReplace = chosen
+    ? (role === 'Broker Dealer' ? chosen.broker_dealer : chosen.advisor) || null
+    : null
+
+  async function write(investor: string, field: 'broker_dealer' | 'advisor', value: string | null) {
+    setBusy(investor); setErr(null)
+    try {
+      const res = await fetch('/api/investor-crm', {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ investor, [field]: value ?? '' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || j.error) { setErr(j.error ?? 'Save failed (' + res.status + ')'); return }
+      onChanged()
+    } catch (e) { setErr(String(e)) }
+    finally { setBusy(null) }
+  }
+
+  async function attach() {
+    if (!chosen) return
+    await write(chosen.investor, role === 'Broker Dealer' ? 'broker_dealer' : 'advisor', vendor.name)
+    setAdding(false); setPick('')
+  }
+
+  function detach(l: Link) {
+    const field = l.role === 'Broker Dealer' ? 'broker_dealer' : 'advisor'
+    const label = l.role === 'Broker Dealer' ? 'broker dealer' : 'advisor'
+    if (!window.confirm('Clear ' + vendor.name + ' as the ' + label + ' on ' + l.investor + '?')) return
+    write(l.investor, field, null)
+  }
+
+  const row = (l: Link) => (
+    <div key={l.investor_key + l.role} style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px',
+      border: '1px solid #eef0f2', borderRadius: 10, background: l.direct ? '#fff' : '#fbfcfd',
+    }}>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <button onClick={() => onOpenInvestor(l.investor)}
+          title="Open this investor in DST Investors"
+          style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left' }}>
+          <span style={{ fontWeight: 600, fontSize: 14.5, color: '#0e7490' }}>{l.investor}</span>
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap', marginTop: 4 }}>
+          <span style={{
+            fontSize: 10.5, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
+            background: l.role === 'Broker Dealer' ? '#eceff9' : '#f8efe0',
+            color: l.role === 'Broker Dealer' ? '#3b4a86' : '#8a5a1a',
+          }}>{l.role}</span>
+          {l.via && <span style={{ fontSize: 12, color: '#9ca3af' }}>via {l.via}</span>}
+          {l.stage && <span style={{ fontSize: 12, color: '#6b7280' }}>· {l.stage}</span>}
+          {l.owner && <span style={{ fontSize: 12, color: '#9ca3af' }}>· {l.owner}</span>}
+        </div>
+      </div>
+      {l.direct && (
+        <button onClick={() => detach(l)} disabled={busy === l.investor}
+          title="Remove this account from the investor's record"
+          style={{ border: '1px solid #e5e7eb', background: '#fff', borderRadius: 7, padding: '5px 9px', cursor: busy === l.investor ? 'wait' : 'pointer', color: '#9ca3af', fontWeight: 700, fontSize: 12 }}>✕</button>
+      )}
+    </div>
+  )
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(15,20,32,.45)', zIndex: 1100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div onClick={e => e.stopPropagation()} style={{ width: 'min(640px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
+        <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0f2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>
+              {links.length ? `${links.length} investor${links.length > 1 ? 's' : ''} placed through` : 'Investors placed through'}
+            </div>
+            <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vendor.name}</div>
+          </div>
+          <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
+        </div>
+
+        <div style={{ padding: 18, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {err && <div style={{ padding: 10, background: '#fef2f2', color: '#b91c1c', borderRadius: 8, fontSize: 13 }}>{err}</div>}
+
+          {links.length === 0 && (
+            <div style={{ color: '#9ca3af', fontSize: 13.5, padding: '10px 0' }}>
+              No investors point at this account yet. Linking one sets it as their broker dealer
+              or advisor on the DST Investors tab.
+            </div>
+          )}
+
+          {direct.map(row)}
+
+          {inherited.length > 0 && (
+            <>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af', marginTop: 10 }}>
+                Through affiliated brokerages
+              </div>
+              {inherited.map(row)}
+            </>
+          )}
+        </div>
+
+        <div style={{ padding: '12px 18px', borderTop: '1px solid #eef0f2' }}>
+          {!adding
+            ? <button onClick={() => { setAdding(true); setRole(canAdvise ? 'Advisor' : 'Broker Dealer') }}
+                style={{ border: '1px solid #0f766e', background: '#fff', color: '#0f766e', borderRadius: 8, padding: '8px 14px', fontWeight: 600, fontSize: 13.5, cursor: 'pointer' }}>+ Link an investor</button>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <select value={pick} onChange={e => setPick(e.target.value)}
+                    style={{ ...inputCss, flex: 1, minWidth: 220 }}>
+                    <option value="">— choose a DST investor —</option>
+                    {options.map(r => <option key={r.investor_key} value={r.investor_key}>{r.investor}</option>)}
+                  </select>
+                  <select value={role} onChange={e => setRole(e.target.value as 'Broker Dealer' | 'Advisor')}
+                    style={{ ...inputCss, width: 170, flex: '0 0 auto' }}>
+                    <option value="Broker Dealer">as Broker Dealer</option>
+                    <option value="Advisor">as Advisor</option>
+                  </select>
+                </div>
+                {willReplace && (
+                  <div style={{ fontSize: 12.5, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 8, padding: '8px 10px' }}>
+                    This replaces <b>{willReplace}</b>, currently that investor&apos;s {role === 'Broker Dealer' ? 'broker dealer' : 'advisor'}.
+                  </div>
+                )}
+                {options.length === 0 && (
+                  <div style={{ fontSize: 12.5, color: '#9ca3af' }}>Every DST investor is already linked to this account.</div>
+                )}
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button onClick={() => { setAdding(false); setPick('') }}
+                    style={{ border: '1px solid #d1d5db', background: '#fff', borderRadius: 8, padding: '8px 14px', fontWeight: 600, color: '#374151', cursor: 'pointer' }}>Cancel</button>
+                  <button onClick={attach} disabled={!pick || !!busy}
+                    style={{ border: 0, background: pick && !busy ? '#1a2233' : '#d1d5db', color: '#fff', borderRadius: 8, padding: '8px 16px', fontWeight: 600, cursor: pick && !busy ? 'pointer' : 'not-allowed' }}>
+                    {busy ? 'Saving…' : 'Link'}
+                  </button>
+                </div>
+              </div>}
         </div>
       </div>
     </div>
