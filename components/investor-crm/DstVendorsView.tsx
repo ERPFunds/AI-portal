@@ -64,6 +64,11 @@ const LABELS: Record<string, string> = {
   investors: 'Investors', website: 'Website', notes: 'Notes', nextSteps: 'Next Steps',
 }
 
+type SortDir = 'asc' | 'desc'
+// Empty cells sort last in both directions rather than clumping at the top when reversed —
+// a column of blanks above the rows you actually wanted to see is not a useful sort.
+const LAST = '￿'
+
 // A DST investor whose broker dealer or advisor resolves to this account. Built server-side
 // from the broker_dealer / advisor fields on investor_crm — see /api/dst-vendors/investors.
 interface Link {
@@ -180,7 +185,7 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
     if (!investorsFor) return
     const fresh = items.find(v => v.id === investorsFor.id)
     if (fresh && fresh !== investorsFor) setInvestorsFor(fresh)
-  }, [items, investorsFor])
+  }, [items, links])
 
   const byId = useMemo(() => new Map(items.map(v => [v.id, v])), [items])
   // On the DST desk only broker dealers can be a parent; elsewhere any account can.
@@ -209,6 +214,34 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
     () => Array.from(new Set(items.flatMap(statesOf))).sort(),
     [items])
 
+  const [sortKey, setSortKey] = useState<string | null>(null)
+  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  // Clicking the current column flips direction; clicking a new one starts ascending.
+  const toggleSort = (col: string) => {
+    if (sortKey === col) { setSortDir(d => (d === 'asc' ? 'desc' : 'asc')); return }
+    setSortKey(col); setSortDir('asc')
+  }
+
+  // One value per column per row. Numbers sort numerically, everything else case-insensitively.
+  const sortValue = useCallback((v: Vendor, col: string): string | number => {
+    const primary = v.contacts.find(c => c.is_primary) ?? v.contacts[0]
+    switch (col) {
+      case 'account':     return v.name.toLowerCase()
+      case 'description': return (v.vendor_type || '').toLowerCase() || LAST
+      case 'descNotes':   return (v.description || v.notes || '').toLowerCase() || LAST
+      case 'affiliation': return (items.find(x => x.id === v.parent_id)?.name || '').toLowerCase() || LAST
+      // By the person shown in the cell, not by how many there are.
+      case 'contacts':    return (primary?.name || '').toLowerCase() || LAST
+      // The count shown in the cell, so the column sorts by what the reader sees.
+      case 'investors':   return (links[v.id] ?? []).length
+      case 'address':     return (v.address || '').toLowerCase() || LAST
+      case 'website':     return (v.website || '').toLowerCase() || LAST
+      case 'notes':       return (v.notes || '').toLowerCase() || LAST
+      case 'nextSteps':   return (v.next_steps || '').toLowerCase() || LAST
+      default:            return LAST
+    }
+  }, [items, investorsFor])
+
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase()
     const hasKids = new Set(items.map(v => v.parent_id).filter(Boolean) as string[])
@@ -223,7 +256,16 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
         || (v.description || '').toLowerCase().includes(q)
         || (v.about || '').toLowerCase().includes(q)
         || v.contacts.some(c => c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q)))
-  }, [items, search, typeFilter, affFilter, stateFilter])
+      // Sorting happens after filtering so it only ever orders what is on screen.
+      .sort((a, b) => {
+        if (!sortKey) return 0
+        const av = sortValue(a, sortKey), bv = sortValue(b, sortKey)
+        const cmp = typeof av === 'number' && typeof bv === 'number'
+          ? av - bv
+          : String(av).localeCompare(String(bv))
+        return sortDir === 'asc' ? cmp : -cmp
+      })
+  }, [items, search, typeFilter, affFilter, stateFilter, sortKey, sortDir, sortValue])
 
   // One row per CONTACT rather than per account, because that is what the exports get used
   // for -- working a list of people. An account with nobody on it still gets a row so it is
@@ -381,7 +423,16 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 1100 }}>
             <thead>
               <tr>
-                {cfg.columns.map(c => <th key={c} style={thCss}>{LABELS[c]}</th>)}
+                {cfg.columns.map(c => (
+                  <th key={c} style={{ ...thCss, cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => toggleSort(c)}
+                    title={`Sort by ${LABELS[c]}`}>
+                    {LABELS[c]}
+                    <span style={{ marginLeft: 5, color: sortKey === c ? '#0f766e' : '#d1d5db' }}>
+                      {sortKey === c ? (sortDir === 'asc' ? '▲' : '▼') : '⇅'}
+                    </span>
+                  </th>
+                ))}
                 <th style={thCss}></th>
               </tr>
             </thead>
