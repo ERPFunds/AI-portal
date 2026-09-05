@@ -397,7 +397,7 @@ export default function DashboardClient({ roleKey, userEmail, userName }: Props)
     'crm-lp-directory': <InvestorCrmView program="PE" mode="lps" onNavigate={setCurrentView} />,
     'crm-pe-prospects': <InvestorCrmView program="PE" mode="prospects" onNavigate={setCurrentView} />,
     'crm-dst-investors': <InvestorCrmView program="DST" mode="lps" onNavigate={setCurrentView} />,
-    'dst-vendors': <DstVendorsView />,
+    'dst-vendors': <DstVendorsView onNavigate={setCurrentView} />,
     'property-vendors': <DstVendorsView desk="property" />,
     'property-lenders': <DstVendorsView desk="lender" />,
     'crm-contact-capture': <CrmContactCaptureView />,
