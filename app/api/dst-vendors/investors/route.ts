@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 // advisor fields the DST Investors tab already writes. There is no join table: an investor
 // names its broker dealer and its advisor as text on `investor_crm`, and that stays the one
 // source of truth, so linking from either side is the same write. This route only resolves
-// those names to vendor accounts and totals them up.
+// those names to vendor accounts. Commitment figures are deliberately not carried: the
+// vendor side answers who an account placed, and the money is read on the investor.
 //
 // An investor reaches a vendor three ways:
 //   • broker_dealer matches the account's name           → direct, role "Broker Dealer"
@@ -20,7 +21,7 @@ export const dynamic = "force-dynamic";
 
 interface InvestorRow {
   investor_key: string; investor: string | null; broker_dealer: string | null; advisor: string | null;
-  committed_usd: number | string | null; funnel_stage: string | null; owner: string | null;
+  funnel_stage: string | null; owner: string | null;
   email: string | null; fund: string | null; state: string | null;
 }
 interface VendorRow { id: string; name: string; parent_id: string | null; vendor_type: string | null }
@@ -34,7 +35,6 @@ export interface VendorInvestorLink {
   via: string | null;
   /** False when the link is inherited from a brokerage listed under this broker dealer. */
   direct: boolean;
-  committed: number;
   stage: string | null;
   owner: string | null;
   email: string | null;
@@ -48,8 +48,6 @@ const norm = (v: unknown) => String(v ?? "").toLowerCase().replace(/[^a-z0-9]+/g
 // part of the name and dropping them would collide two different firms.
 const LEGAL = /\b(llc|l l c|inc|incorporated|corp|corporation|co|ltd|limited|lp|llp|pllc|pc|plc|pa|company)\b/g;
 const loose = (v: unknown) => norm(v).replace(LEGAL, " ").replace(/\s+/g, " ").trim();
-const num = (v: unknown) => { const n = Number(String(v ?? "").replace(/[$,\s]/g, "")); return Number.isFinite(n) ? n : 0 };
-
 // Two advisors who worked the same deal are recorded in one field — "Harmony Russo / Neil
 // McAuliffe", "Mike O'Toole & Joe Michaletz" — and a few carry a parenthetical aside. The
 // field is only split when it does not resolve whole, because a firm name can carry the
@@ -74,7 +72,7 @@ export async function GET() {
     [investors, vendors, contacts] = await Promise.all([
       // Same population the DST Investors tab lists: portal-owned, unarchived DST records.
       fetchAll<InvestorRow>(() => supabase.from("investor_crm")
-        .select("investor_key, investor, broker_dealer, advisor, committed_usd, funnel_stage, owner, email, fund, state")
+        .select("investor_key, investor, broker_dealer, advisor, funnel_stage, owner, email, fund, state")
         .eq("program", "DST").eq("portal_created", true).neq("archived", true)),
       fetchAll<VendorRow>(() => supabase.from("dst_vendors")
         .select("id, name, parent_id, vendor_type").eq("archived", false)),
@@ -133,7 +131,6 @@ export async function GET() {
     const base = {
       investor_key: iv.investor_key,
       investor: iv.investor ?? iv.investor_key,
-      committed: num(iv.committed_usd),
       stage: iv.funnel_stage, owner: iv.owner, email: iv.email, fund: iv.fund, state: iv.state,
     };
 
@@ -181,7 +178,7 @@ export async function GET() {
 
   const out: Record<string, VendorInvestorLink[]> = {};
   for (const [vendorId, list] of byVendor) {
-    out[vendorId] = list.sort((a, b) => b.committed - a.committed || a.investor.localeCompare(b.investor));
+    out[vendorId] = list.sort((a, b) => a.investor.localeCompare(b.investor));
   }
 
   // The picker on the vendor side needs every DST investor, linked or not.
@@ -191,7 +188,6 @@ export async function GET() {
       investor: iv.investor ?? iv.investor_key,
       broker_dealer: iv.broker_dealer,
       advisor: iv.advisor,
-      committed: num(iv.committed_usd),
     }))
     .sort((a, b) => a.investor.localeCompare(b.investor));
 

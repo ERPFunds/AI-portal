@@ -69,17 +69,14 @@ const LABELS: Record<string, string> = {
 interface Link {
   investor_key: string; investor: string; role: 'Broker Dealer' | 'Advisor'
   via: string | null; direct: boolean
-  committed: number; stage: string | null; owner: string | null
+  stage: string | null; owner: string | null
   email: string | null; fund: string | null; state: string | null
 }
 interface RosterInvestor {
   investor_key: string; investor: string
-  broker_dealer: string | null; advisor: string | null; committed: number
+  broker_dealer: string | null; advisor: string | null
 }
 interface Unmatched { name: string; role: string; count: number }
-
-const fmtUsd = (n: number) =>
-  n ? '$' + Math.round(n).toLocaleString('en-US') : '—'
 
 const thCss: React.CSSProperties = {
   textAlign: 'left', padding: '10px 14px', fontSize: 11, fontWeight: 700, letterSpacing: '.06em',
@@ -262,10 +259,6 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
     // same way the account's own fields are.
     if (desk === 'dst') cols.push(
       ['Investors', r => String((links[r.v.id] ?? []).length || '')],
-      ['Investor Committed', r => {
-        const total = (links[r.v.id] ?? []).reduce((s, l) => s + l.committed, 0)
-        return total ? String(total) : ''
-      }],
     )
     // Property Vendors and Lenders share a title with other pages, so the desk's eyebrow
     // goes in the filename too.
@@ -430,7 +423,6 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
                       )
                       if (col === 'investors') {
                         const mine = links[v.id] ?? []
-                        const committed = mine.reduce((s, l) => s + l.committed, 0)
                         return (
                           <td key={col} style={tdCss}>
                             <button onClick={() => setInvestorsFor(v)}
@@ -438,12 +430,9 @@ export default function DstVendorsView({ desk = 'dst', onNavigate }: { desk?: De
                               style={{ border: 0, background: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
                               {mine.length === 0
                                 ? <span style={{ fontSize: 13, color: '#9ca3af' }}>+ Link</span>
-                                : <>
-                                    <div style={{ fontWeight: 600, fontSize: 14, color: '#0e7490' }}>
-                                      {mine.length} investor{mine.length > 1 ? 's' : ''}
-                                    </div>
-                                    {committed > 0 && <div style={{ fontSize: 12.5, color: '#0f766e', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(committed)}</div>}
-                                  </>}
+                                : <div style={{ fontWeight: 600, fontSize: 14, color: '#0e7490' }}>
+                                    {mine.length} investor{mine.length > 1 ? 's' : ''}
+                                  </div>}
                             </button>
                           </td>
                         )
@@ -764,7 +753,6 @@ function VendorInvestorsModal({ vendor, links, roster, onClose, onChanged, onOpe
 
   const direct = links.filter(l => l.direct)
   const inherited = links.filter(l => !l.direct)
-  const committed = links.reduce((s, l) => s + l.committed, 0)
 
   // Only accounts that stand for a person are usually somebody's advisor of record; for a
   // firm the advisor is a contact on it, so that is the role the picker opens on.
@@ -829,9 +817,6 @@ function VendorInvestorsModal({ vendor, links, roster, onClose, onChanged, onOpe
           {l.owner && <span style={{ fontSize: 12, color: '#9ca3af' }}>· {l.owner}</span>}
         </div>
       </div>
-      <div style={{ fontWeight: 600, fontSize: 14, color: l.committed ? '#0f766e' : '#d1d5db', fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
-        {fmtUsd(l.committed)}
-      </div>
       {l.direct && (
         <button onClick={() => detach(l)} disabled={busy === l.investor}
           title="Remove this account from the investor's record"
@@ -845,21 +830,12 @@ function VendorInvestorsModal({ vendor, links, roster, onClose, onChanged, onOpe
       <div onClick={e => e.stopPropagation()} style={{ width: 'min(640px, 96vw)', maxHeight: '88vh', display: 'flex', flexDirection: 'column', background: '#fff', borderRadius: 14, boxShadow: '0 10px 40px rgba(0,0,0,.25)' }}>
         <div style={{ padding: '14px 18px', borderBottom: '1px solid #eef0f2', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>Investors placed through</div>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#9ca3af' }}>
+              {links.length ? `${links.length} investor${links.length > 1 ? 's' : ''} placed through` : 'Investors placed through'}
+            </div>
             <div style={{ fontSize: 15.5, fontWeight: 700, color: '#1a2233', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{vendor.name}</div>
           </div>
           <button onClick={onClose} style={{ border: 0, background: 'none', fontSize: 18, cursor: 'pointer', color: '#9ca3af' }}>✕</button>
-        </div>
-
-        <div style={{ display: 'flex', gap: 24, padding: '12px 18px', borderBottom: '1px solid #f0f1f3', background: '#fbfcfd' }}>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Investors</div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: '#1a2233', fontVariantNumeric: 'tabular-nums' }}>{links.length}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: '#9ca3af' }}>Committed</div>
-            <div style={{ fontSize: 19, fontWeight: 700, color: '#0f766e', fontVariantNumeric: 'tabular-nums' }}>{fmtUsd(committed)}</div>
-          </div>
         </div>
 
         <div style={{ padding: 18, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
